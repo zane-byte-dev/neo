@@ -1,0 +1,43 @@
+{
+    "name": "inkbrain-sentinel",
+    "version": "2.0.0",
+    "description": "InkBrain Sentinel - Intelligent note monitoring service (Node.js version)",
+    "type": "module",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "clean": "rm -rf dist",
+        "dev:bot": "tsx src/telegram-bot.ts",
+        "dev:get-chat-id": "tsx src/get-chat-id.ts",
+        "start:bot": "node dist/telegram-bot.js",
+        "pm2:start": "npm run build && pm2 start ecosystem.config.js",
+        "pm2:stop": "pm2 stop all",
+        "pm2:restart": "pm2 restart all",
+        "pm2:logs": "pm2 logs",
+        "pm2:status": "pm2 status"
+    },
+    "keywords": [
+        "telegram",
+        "bot",
+        "obsidian",
+        "notes",
+        "sentinel",
+        "gemini"
+    ],
+    "author": "Zhengchao",
+    "license": "MIT",
+    "dependencies": {
+        "dotenv": "^16.4.5",
+        "execa": "^9.0.0",
+        "p-queue": "^8.0.1",
+        "telegraf": "^4.16.3"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.0",
+        "tsx": "^4.7.0",
+        "typescript": "^5.3.3"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}

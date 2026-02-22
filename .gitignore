@@ -1,0 +1,23 @@
+/.DS_Store
+node_modules/
+.env
+.state/
+logs/
+
+# Obsidian 配置目录
+.obsidian/
+
+# Obsidian 特有文件格式
+*.canvas
+*.excalidraw
+*.excalidraw.svg
+
+# 临时录音文件
+*.wav
+.typeless_recording.wav
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/

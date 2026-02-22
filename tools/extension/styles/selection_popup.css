@@ -1,0 +1,93 @@
+/* Mind Extension - Selection Popup Styles (Shadow DOM) */
+
+:host {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #333;
+  --primary-color: #667eea;
+  --z-index: 2147483647;
+}
+
+/* 容器 */
+.mind-popup-container {
+  position: absolute;
+  z-index: var(--z-index);
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15));
+}
+
+/* 划选工具栏 */
+.mind-selection-toolbar {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  gap: 2px;
+}
+
+.mind-toolbar-btn {
+  background: none;
+  border: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.2s;
+  color: #333;
+}
+
+.mind-toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  transform: scale(1.1);
+}
+
+.mind-toolbar-btn.btn-save:hover {
+  color: #34a853;
+}
+
+.mind-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.1);
+  margin: 0 4px;
+}
+
+/* 深色模式 */
+@media (prefers-color-scheme: dark) {
+  .mind-selection-toolbar {
+    background: rgba(30, 30, 30, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .mind-toolbar-btn {
+    color: #eee;
+  }
+
+  .mind-toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .mind-toolbar-divider {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* 动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "audio-refinery",
+  "display_name": "Audio Refinery",
+  "version": "2.0.0",
+  "description": "Convert Markdown to Podcast-style Audio",
+  "type": "script",
+  "tags": ["audio", "tts"],
+  "entrypoint": "script.py",
+  "args": [
+    {
+      "name": "target",
+      "description": "File or Directory to process",
+      "required": true
+    },
+    {
+      "name": "voice",
+      "description": "Voice ID (default: zh-CN-XiaoxiaoNeural)",
+      "required": false
+    }
+  ],
+  "dependencies": ["edge-tts"]
+}

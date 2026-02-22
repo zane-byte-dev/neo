@@ -1,0 +1,22 @@
+{
+  "name": "ebook-refinery",
+  "display_name": "Ebook Refinery",
+  "version": "1.0.0",
+  "description": "Convert EPUB to atomic Markdown chapters",
+  "type": "script",
+  "tags": ["ebook", "etl"],
+  "entrypoint": "script.py",
+  "args": [
+    {
+      "name": "epub_path",
+      "description": "Path to the .epub file",
+      "required": true
+    },
+    {
+      "name": "output_dir",
+      "description": "Base output directory (default: 03_文章)",
+      "required": false
+    }
+  ],
+  "dependencies": ["pandoc"]
+}
