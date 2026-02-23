@@ -1,11 +1,3 @@
----
-title: 架构设计：FaaS 平台 VPC 隔离部署方案 (Private Cloud Edition)
-type: architecture-design
-tags: [FaaS, VPC, Network, Architecture, Distributed-System]
-date: 2026-01-28
-status: draft
----
-
 # 架构设计：FaaS 平台 VPC 隔离部署方案
 
 > **Uncle Torvalds 批注**：

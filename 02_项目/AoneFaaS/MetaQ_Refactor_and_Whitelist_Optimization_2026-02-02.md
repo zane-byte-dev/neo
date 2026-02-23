@@ -1,11 +1,3 @@
----
-type: technical-decision
-date: 2026-02-02
-project: AoneFaaS
-status: draft
-tags: [refactor, go, apiserver, architecture]
----
-
 # 🚀 AoneFaaS: MetaQ 重构与 ApiServer 治理方案 (2026-02-02)
 
 > **背景**: 2026-02-02 经历了一次曲折的发布与 Debug 过程。预发环境 MetaQ 链路过重导致调试失败，ApiServer 环境不稳引发回滚，以及白名单机制僵硬导致业务变更效率低下。

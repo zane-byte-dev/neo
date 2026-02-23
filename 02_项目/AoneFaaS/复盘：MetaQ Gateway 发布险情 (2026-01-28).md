@@ -1,11 +1,3 @@
----
-title: 复盘：MetaQ Gateway 发布险情 (2026-01-28)
-type: post-mortem
-tags: [Incident, Ops, SRE, Lessons-Learned]
-date: 2026-01-28
-severity: high
----
-
 # 复盘：MetaQ Gateway 发布险情
 
 > **Uncle Torvalds 点评**: "No monitoring, no deploy. This is Engineering 101. You got lucky today, but luck is not a strategy."
