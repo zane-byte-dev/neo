@@ -80,7 +80,7 @@ H -.->|Dataview 自动聚合| D
 ```markdown
 # 📅 {{date}}
 
-## 🟢 记录与思考 (Log & Reflection)
+## 🟢 流水
 > 见闻、感想、行动在这里自由书写。
 
 ## 🍎 知识增量 (Knowledge Assets)
