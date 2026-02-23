@@ -143,10 +143,8 @@ class InkBrainBot {
             // Add assistant message to cache
             await chatHistoryCache.addMessage('assistant', responseText);
 
-            // Save to vault (optional, only if CONVERSATION_SAVE_DIR is configured)
-            if (conversationSaver.isEnabled()) {
-                await conversationSaver.saveConversation(question, responseText, userName);
-            }
+            // Append to daily verbatim transcript in vault (01_日记/会话/)
+            await conversationSaver.saveConversation(question, responseText, userName);
 
             // Send reply to user
             await this.sendReply(chatId, responseText);

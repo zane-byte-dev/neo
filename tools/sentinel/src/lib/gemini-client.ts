@@ -11,12 +11,69 @@ const GEMINI_CLI_PATH = process.env.GEMINI_CLI_PATH || 'gemini';
 const GEMINI_TIMEOUT = parseInt(process.env.GEMINI_TIMEOUT || '180', 10) * 1000; // Convert to ms
 const GEMINI_WORK_DIR = process.env.GEMINI_WORK_DIR; // Optional working directory
 
+// ==================== Persona Router ====================
+
+/**
+ * Persona 定义：关键词 → Persona 文件名（不含扩展名）
+ */
+const PERSONA_RULES: { keywords: string[]; file: string; name: string }[] = [
+    {
+        name: '🌋 Deep Builder',
+        file: 'Persona_DeepBuilder',
+        keywords: ['整理', '写文章', '哲学', '意义', '深度', '白皮书', '知识', '方法论', '框架', '系统性'],
+    },
+    {
+        name: '🎩 西风 West Wind',
+        file: 'Persona_WestWind',
+        keywords: ['方向', '决策', '怎么看', '人性', '分析', '战略', '选择', '判断', '审视', '反思'],
+    },
+    {
+        name: '🧢 Pieter Levels',
+        file: 'Persona_PieterLevels',
+        keywords: ['搞钱', '变现', 'mvp', 'MVP', '上线', '用户', '产品', '快速', '独立开发', '功能'],
+    },
+    {
+        name: '⌨️ Torvalds',
+        file: 'Persona_UncleTorvalds',
+        keywords: ['写代码', '报错', '重构', '架构', '配置', 'bug', 'debug', '性能', '代码', '函数', '实现', '怎么写'],
+    },
+    {
+        name: '🕰️ Curator',
+        file: 'Persona_Curator',
+        keywords: ['/pulse', '回顾', '灵感', '推荐', '随机', '漫步', '发现'],
+    },
+];
+
+/**
+ * 无触发词时的默认 Persona（fallback）
+ * 设计选择：西风（West Wind）作为全能默认视角 ——
+ * 日常聊天大多带有判断/分析色彩，且西风的 prompt 中有「优先使用中文」的明确指令。
+ */
+const DEFAULT_PERSONA = { file: 'Persona_WestWind', name: '🎩 西风 West Wind (default)' };
+
+/**
+ * 根据消息内容检测应使用的 Persona
+ * 无匹配时返回 DEFAULT_PERSONA（而非 null）
+ */
+function detectPersona(message: string): { file: string; name: string } {
+    const lower = message.toLowerCase();
+    for (const rule of PERSONA_RULES) {
+        if (rule.keywords.some(kw => lower.includes(kw.toLowerCase()))) {
+            return { file: rule.file, name: rule.name };
+        }
+    }
+    return DEFAULT_PERSONA;
+}
+
+// ==================== GeminiClient ====================
+
 export class GeminiClient {
     private enabled: boolean = false;
     private cliPath: string;
     private timeout: number;
     private workDir?: string;
     private systemContext: string = '';
+    private personasDir?: string;
 
     constructor() {
         this.cliPath = GEMINI_CLI_PATH;
@@ -28,6 +85,7 @@ export class GeminiClient {
             console.log(`[Gemini] ✅ Using CLI at: ${this.cliPath}`);
             if (this.workDir) {
                 console.log(`[Gemini] 📂 Working directory: ${this.workDir}`);
+                this.personasDir = join(this.workDir, '99_系统', 'Personas');
                 this.loadSystemContext();
             }
             console.log('[Gemini] ⚠️  CLI mode can be slow (~17s per query)');
@@ -38,22 +96,20 @@ export class GeminiClient {
     }
 
     /**
-     * Load system context from GEMINI.md
+     * Load base system context from GEMINI.md
      */
     private loadSystemContext() {
         if (!this.workDir) return;
 
-        // Try to find GEMINI.md in likely locations
         const locations = [
             join(this.workDir, '99_系统', 'GEMINI.md'),
-            join(this.workDir, 'GEMINI.md')
+            join(this.workDir, 'GEMINI.md'),
         ];
 
         for (const loc of locations) {
             if (existsSync(loc)) {
                 try {
-                    const content = readFileSync(loc, 'utf-8');
-                    this.systemContext = content;
+                    this.systemContext = readFileSync(loc, 'utf-8');
                     console.log(`[Gemini] ✅ Loaded system context from: ${loc}`);
                     return;
                 } catch (err) {
@@ -63,6 +119,27 @@ export class GeminiClient {
         }
 
         console.log('[Gemini] ℹ️ No GEMINI.md context found. Using default.');
+    }
+
+    /**
+     * Dynamically load a Persona's prompt file.
+     * Returns empty string if not found.
+     */
+    private loadPersonaContext(file: string): string {
+        if (!this.personasDir) return '';
+        const loc = join(this.personasDir, `${file}.md`);
+        if (!existsSync(loc)) {
+            console.warn(`[Gemini] ⚠️ Persona file not found: ${loc}`);
+            return '';
+        }
+        try {
+            const content = readFileSync(loc, 'utf-8');
+            console.log(`[Gemini] 🎭 Loaded persona: ${file}`);
+            return content;
+        } catch (err) {
+            console.warn(`[Gemini] ⚠️ Failed to read persona ${file}: ${err}`);
+            return '';
+        }
     }
 
     /**
@@ -88,50 +165,52 @@ export class GeminiClient {
     }
 
     /**
-     * Call Gemini CLI to generate a response
+     * Call Gemini CLI to generate a response.
+     * Optionally accepts a detected persona to inject.
      */
-    async generateResponse(prompt: string): Promise<string | null> {
+    async generateResponse(prompt: string, persona?: { file: string; name: string } | null): Promise<string | null> {
         if (!this.enabled) {
             return null;
         }
 
         try {
-            // Inject current date and time to prevent model confusion
             const today = new Date().toISOString().split('T')[0];
-            const weekday = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+            const weekday = new Date().toLocaleDateString('zh-CN', { weekday: 'long' });
 
-            // Construct the full prompt with context
             let fullPrompt = '';
 
-            // 1. Inject System Context (GEMINI.md) if available
+            // 1. Base system context (GEMINI.md)
             if (this.systemContext) {
                 fullPrompt += `[System Context]\n${this.systemContext}\n\n`;
             }
 
-            // 2. Add current context lines
+            // 2. Persona-specific context (dynamically loaded)
+            if (persona) {
+                const personaContent = this.loadPersonaContext(persona.file);
+                if (personaContent) {
+                    fullPrompt += `[Active Persona: ${persona.name}]\n${personaContent}\n\n`;
+                }
+            }
+
+            // 3. Current time
             fullPrompt += `[Current Time]\nToday is ${today} (${weekday}).\n\n`;
 
-            // 3. Add User Query
+            // 4. User query
             fullPrompt += `[User Query]\n${prompt}\n\n`;
 
-            // 4. Add Output Instructions
+            // 5. Output instructions
             fullPrompt += `[Instructions]\n(Important: Please respond in CHINESE (中文). Please EXECUTE the necessary tools and PRINT the final result/answer directly.)`;
 
-            // Build command: gemini run "prompt" --yolo --output-format text
             const args = ['run', fullPrompt, '-y', '--output-format', 'text'];
 
-            console.log(`[Gemini] Executing: ${this.cliPath} run ... (prompt length: ${fullPrompt.length})`);
-            if (this.workDir) {
-                // console.log(`[Gemini] Working directory: ${this.workDir}`);
-            }
+            console.log(`[Gemini] Executing: ${this.cliPath} run ... (prompt length: ${fullPrompt.length}, persona: ${persona?.name || 'default'})`);
 
             const { stdout, stderr, exitCode } = await execa(this.cliPath, args, {
                 timeout: this.timeout,
-                reject: false, // Don't throw on non-zero exit
-                cwd: this.workDir, // Set working directory if specified
+                reject: false,
+                cwd: this.workDir,
             });
 
-            // Clean output by removing noise
             const cleanOutput = this.cleanOutput(stdout);
 
             if (!cleanOutput) {
@@ -165,21 +244,17 @@ export class GeminiClient {
             'Loaded cached',
             'Server \t',
             'Hook registry',
-            // 'I will check' - keep thinking process for transparency
         ];
 
         const lines = rawOutput.split('\n');
         const cleanLines: string[] = [];
 
         for (const line of lines) {
-            // Skip lines containing noise markers
             if (noiseMarkers.some((marker) => line.includes(marker))) {
                 continue;
             }
 
-            // Handle empty lines (preserve paragraph structure)
             if (!line.trim()) {
-                // Avoid consecutive empty lines
                 if (cleanLines.length > 0 && cleanLines[cleanLines.length - 1] !== '') {
                     cleanLines.push(line);
                 }
@@ -193,27 +268,30 @@ export class GeminiClient {
     }
 
     /**
-     * Chat interface (simplified)
-     */
-    async chat(message: string, systemInstruction?: string): Promise<string | null> {
-        // The systemContext is now handled internally in generateResponse
-        // We can ignore systemInstruction or append it if needed, 
-        // but for now let's just use the message as the prompt source.
-        return this.generateResponse(message);
-    }
-
-    /**
-     * Chat with conversation context
+     * Chat with conversation context.
+     * Auto-detects persona from the latest user message.
      */
     async chatWithContext(message: string, conversationHistory: string): Promise<string | null> {
-        // Inject conversation history before the user query
-        let promptWithContext = message;
+        // Detect persona from the incoming user message
+        const persona = detectPersona(message);
+        if (persona) {
+            console.log(`[Gemini] 🎭 Persona activated: ${persona.name}`);
+        }
 
+        let promptWithContext = message;
         if (conversationHistory && conversationHistory.trim()) {
             promptWithContext = `[Previous Conversation]\n${conversationHistory}\n\n[New Question]\n${message}`;
         }
 
-        return this.generateResponse(promptWithContext);
+        return this.generateResponse(promptWithContext, persona);
+    }
+
+    /**
+     * Simple chat (no history context)
+     */
+    async chat(message: string, systemInstruction?: string): Promise<string | null> {
+        const persona = detectPersona(message);
+        return this.generateResponse(message, persona);
     }
 
     /**

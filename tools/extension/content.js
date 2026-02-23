@@ -13,7 +13,7 @@
   // ==================== 配置 ====================
   const CONFIG = {
     POPUP_HOST_ID: 'mind-selection-popup-host',
-    DEFAULT_FOLDER: '04_Buffer',
+    DEFAULT_FOLDER: '00_收集',
   };
 
   // ==================== 统一 Toast 提示 ====================
@@ -225,40 +225,46 @@
   }
 
   async function initXIntegration() {
-
-    // 使用防抖优化性能
     let debounceTimer = null;
-    const debounceDelay = 300;
+    let stabilityTimer = null;
+    const DEBOUNCE_DELAY = 300;
+    const STABILITY_TIMEOUT = 10_000; // 10s 无变化后停止 Observer
 
     const processContent = () => {
       XSaver.addSaveButtons();
     };
 
-    const debouncedProcess = () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(processContent, debounceDelay);
+    const resetStabilityTimer = () => {
+      if (stabilityTimer) clearTimeout(stabilityTimer);
+      stabilityTimer = setTimeout(() => {
+        observer.disconnect();
+        // Observer 停止后，仍保留 scroll 监听以应对无限滚动
+      }, STABILITY_TIMEOUT);
     };
 
-    // 监听 DOM 变化
+    const debouncedProcess = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(processContent, DEBOUNCE_DELAY);
+      resetStabilityTimer();
+    };
+
     const observer = new MutationObserver(debouncedProcess);
+    observer.observe(document.body, { childList: true, subtree: true });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    // 监听滚动事件（用于捕获动态加载的内容）
+    // scroll 用于捕获 X.com 无限滚动追加的推文
     let scrollTimer = null;
     window.addEventListener('scroll', () => {
       if (scrollTimer) clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(processContent, 500);
+      scrollTimer = setTimeout(() => {
+        processContent();
+        // 滚动说明页面还在活动，重新监听
+        if (!observer) return;
+        resetStabilityTimer();
+      }, 500);
     }, { passive: true });
 
     // 初始执行
-    setTimeout(processContent, 1000);
-
-    // 定期检查（兜底方案，每5秒检查一次）
-    setInterval(processContent, 5000);
+    setTimeout(() => { processContent(); resetStabilityTimer(); }, 1000);
   }
 
   // ==================== X 保存模块 ====================
@@ -534,33 +540,32 @@
   }
 
   function initFeishuIntegration() {
-
-    // 使用防抖优化性能
     let debounceTimer = null;
-    const debounceDelay = 300;
+    let stabilityTimer = null;
+    const DEBOUNCE_DELAY = 300;
+    const STABILITY_TIMEOUT = 10_000;
 
     const processContent = () => {
       FeishuSaver.addSaveButton();
     };
 
+    const resetStabilityTimer = () => {
+      if (stabilityTimer) clearTimeout(stabilityTimer);
+      stabilityTimer = setTimeout(() => observer.disconnect(), STABILITY_TIMEOUT);
+    };
+
     const debouncedProcess = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(processContent, debounceDelay);
+      debounceTimer = setTimeout(processContent, DEBOUNCE_DELAY);
+      resetStabilityTimer();
     };
 
     // 监听 DOM 变化（飞书是 SPA）
     const observer = new MutationObserver(debouncedProcess);
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
 
     // 初始执行
-    setTimeout(processContent, 1000);
-
-    // 定期检查（兜底方案）
-    setInterval(processContent, 5000);
+    setTimeout(() => { processContent(); resetStabilityTimer(); }, 1000);
   }
 
   // ==================== 飞书 Wiki 保存模块 ====================

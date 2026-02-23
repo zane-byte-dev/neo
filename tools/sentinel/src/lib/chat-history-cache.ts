@@ -15,6 +15,11 @@ const CHAT_MAX_HISTORY_MESSAGES = parseInt(
     process.env.CHAT_MAX_HISTORY_MESSAGES || '20',
     10
 );
+// ~4 chars per token; 3000 tokens leaves room for Persona + system context + response
+const CHAT_MAX_CONTEXT_TOKENS = parseInt(
+    process.env.CHAT_MAX_CONTEXT_TOKENS || '3000',
+    10
+);
 
 interface Message {
     role: 'user' | 'assistant';
@@ -128,7 +133,9 @@ export class ChatHistoryCache {
     }
 
     /**
-     * Format conversation history for Gemini context
+     * Format conversation history for Gemini context.
+     * Applies a token budget (chars / 4 ≈ tokens) so the context string
+     * never exceeds CHAT_MAX_CONTEXT_TOKENS, dropping oldest messages first.
      */
     getContextForGemini(): string {
         const messages = this.getCurrentSessionHistory();
@@ -137,19 +144,33 @@ export class ChatHistoryCache {
             return '';
         }
 
-        // Only include the most recent messages up to maxHistoryMessages
+        // Start with the most recent messages subset
         const recentMessages = messages.slice(-this.maxHistoryMessages);
 
-        return recentMessages
-            .map((msg) => {
-                if (msg.role === 'user') {
-                    const userLabel = msg.userName ? `${msg.userName}` : 'User';
-                    return `${userLabel}: ${msg.content}`;
-                } else {
-                    return `Assistant: ${msg.content}`;
-                }
-            })
-            .join('\n\n');
+        // Format each message
+        const formatted = recentMessages.map((msg) => {
+            if (msg.role === 'user') {
+                const userLabel = msg.userName ?? 'User';
+                return `${userLabel}: ${msg.content}`;
+            } else {
+                return `Assistant: ${msg.content}`;
+            }
+        });
+
+        // Apply token budget: drop from the front until within budget
+        const maxChars = CHAT_MAX_CONTEXT_TOKENS * 4;
+        let totalChars = formatted.reduce((sum, s) => sum + s.length, 0);
+        let start = 0;
+        while (totalChars > maxChars && start < formatted.length - 1) {
+            totalChars -= formatted[start].length;
+            start++;
+        }
+
+        if (start > 0) {
+            console.log(`[ChatHistoryCache] ✂️  Token budget hit: dropped ${start} oldest messages`);
+        }
+
+        return formatted.slice(start).join('\n\n');
     }
 
     /**
