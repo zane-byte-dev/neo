@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Configuration
 SERVER_URL = "http://localhost:52345"
-CONFIG_FILE = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/99_系统/Skills/.env"
+CONFIG_FILE = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills/.env"
 
 class TypelessMenuBar(rumps.App):
     def __init__(self):
@@ -177,13 +177,13 @@ class TypelessMenuBar(rumps.App):
     @rumps.clicked("Open Output Folder")
     def open_output(self, _):
         """Open output folder in Finder"""
-        output_dir = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/00_收集"
+        output_dir = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/00_收集"
         os.system(f'open "{output_dir}"')
     
     @rumps.clicked("Open Logs")
     def open_logs(self, _):
         """Open logs folder"""
-        logs_dir = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/99_系统/Skills/logs"
+        logs_dir = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills/logs"
         os.system(f'open "{logs_dir}"')
     
     @rumps.clicked("Edit Config")

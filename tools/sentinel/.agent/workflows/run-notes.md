@@ -1,8 +1,8 @@
 ---
-description: Run InkBrain Sentinel in Notes mode
+description: Run NeoAgent Sentinel in Notes mode
 ---
 
-# Run InkBrain Sentinel (Mac Notes Mode)
+# Run NeoAgent Sentinel (Mac Notes Mode)
 
 Quick commands to start the sentinel service for Mac Notes app.
 

@@ -5,7 +5,7 @@
 ### 方法 1：一键安装（推荐）
 
 ```bash
-cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/99_系统/Skills"
+cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills"
 pip3 install python-dotenv
 ```
 
@@ -22,7 +22,7 @@ pip3 install sounddevice scipy numpy google-generativeai pynput requests faster-
 ### 方法 1：使用启动脚本（推荐）✨
 
 ```bash
-cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/99_系统/Skills"
+cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills"
 ./start_typeless.sh
 ```
 
@@ -31,14 +31,14 @@ cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbr
 ### 方法 2：直接启动（使用系统 Python）
 
 ```bash
-cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/99_系统/Skills"
+cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills"
 /opt/homebrew/opt/python@3.12/bin/python3.12 typeless_server.py
 ```
 
 ### 方法 3：后台运行
 
 ```bash
-cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/99_系统/Skills"
+cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills"
 nohup /opt/homebrew/opt/python@3.12/bin/python3.12 typeless_server.py > logs/server.log 2>&1 &
 ```
 

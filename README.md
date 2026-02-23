@@ -19,7 +19,7 @@ neo/
 │   ├── GEMINI.md     # AI 系统提示词 + 智能路由配置
 │   └── Personas/     # 6 个 AI 人格定义
 ├── tools/            # 自动化工具
-│   ├── inkbrain-sentinel/   # Telegram Bot + 所有工具实现（TypeScript）
+│   ├── NeoAgent-sentinel/   # Telegram Bot + 所有工具实现（TypeScript）
 │   │   └── src/lib/tools/   # clipper / audio-refinery / ebook-refinery
 │   ├── extension/           # Chrome 划词保存
 │   └── typeless/            # 语音输入服务（Python）
@@ -44,8 +44,8 @@ neo/
 
 ## 🛠 Tools
 
-### 🔭 InkBrain Sentinel（Telegram Bot）
-**路径**：`tools/inkbrain-sentinel/`
+### 🔭 NeoAgent Sentinel（Telegram Bot）
+**路径**：`tools/NeoAgent-sentinel/`
 
 主要 AI 交互入口。在 Telegram 发消息 → 调用本地 Gemini CLI → 回复并保留多轮上下文。
 
@@ -61,7 +61,7 @@ neo/
 **快速启动**：
 
 ```bash
-cd tools/inkbrain-sentinel
+cd tools/NeoAgent-sentinel
 cp .env.example .env  # 填入 Token
 npm install
 npm run dev:bot        # 开发模式
@@ -85,7 +85,7 @@ npm run pm2:start      # 生产模式
 
 **安装**：`chrome://extensions/` → 开发者模式 → 加载已解压扩展程序 → 选择 `tools/extension/`
 
-保存路径：`~/Downloads/InkBrain/00_收集/`（直接对应 vault 收集入口）
+保存路径：`~/Downloads/NeoAgent/00_收集/`（直接对应 vault 收集入口）
 
 ---
 
@@ -104,7 +104,7 @@ python typeless_menubar.py  # 启动 Menu Bar 控制面板
 
 | 工具 | 要求 |
 |------|------|
-| InkBrain Sentinel | Node.js ≥ 18, Gemini CLI, Telegram Bot Token |
+| NeoAgent Sentinel | Node.js ≥ 18, Gemini CLI, Telegram Bot Token |
 | Mind Extension | Chrome / Chromium |
 | Typeless（语音）| Python 3.12, macOS |
 
@@ -125,13 +125,13 @@ python typeless_menubar.py  # 启动 Menu Bar 控制面板
 ## 🗺 架构图
 
 ```
-[Telegram] ──→ [inkbrain-sentinel] ──→ [gemini CLI]
+[Telegram] ──→ [NeoAgent-sentinel] ──→ [gemini CLI]
                         │
                 [chat-history-cache]   ← 本地 JSON session
                         │
               [conversation-saver]     → 03_收集/ (可选)
 
-[Chrome] ──→ [Mind Extension] ──→ Downloads/Inkbrain/04_Buffer/
+[Chrome] ──→ [Mind Extension] ──→ Downloads/NeoAgent/04_Buffer/
 
 [macOS 语音] → [Typeless Server] → 系统粘贴板
 ```

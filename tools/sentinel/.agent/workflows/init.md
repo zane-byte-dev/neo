@@ -1,10 +1,10 @@
 ---
-description: Initialize InkBrain Sentinel project
+description: Initialize NeoAgent Sentinel project
 ---
 
-# Initialize InkBrain Sentinel
+# Initialize NeoAgent Sentinel
 
-This workflow sets up the InkBrain Sentinel project from scratch.
+This workflow sets up the NeoAgent Sentinel project from scratch.
 
 ## Steps
 

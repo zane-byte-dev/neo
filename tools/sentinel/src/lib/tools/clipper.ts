@@ -47,7 +47,7 @@ async function fetchViaJina(url: string): Promise<{ title: string; content: stri
  */
 async function fetchViaLocal(url: string): Promise<{ title: string; content: string }> {
     const res = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; InkBrain-Clipper/1.0)' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent-Clipper/1.0)' },
         signal: AbortSignal.timeout(20_000),
     });
 

@@ -110,4 +110,4 @@ graph TD
 *   `Redis` 仅允许 ApiServer, Consoler, FiberAgent 访问。
 
 ---
-*Architected by Uncle Torvalds for Inkbrain Systems*
+*Architected by Uncle Torvalds for NeoAgent Systems*

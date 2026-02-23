@@ -16,7 +16,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('[Mind Extension] Received message', { action: request.action, sender: sender.tab?.id });
 
-  // 处理保存到 InkBrain vault 的请求
+  // 处理保存到 NeoAgent vault 的请求
   if (request.action === 'saveToVault') {
     const { content, filename } = request;
 
@@ -26,8 +26,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const base64Content = btoa(unescape(encodeURIComponent(content)));
     const dataUrl = `data:text/markdown;base64,${base64Content}`;
 
-    // 下载到 Downloads/InkBrain/00_收集/ 目录（与 vault 入口保持一致）
-    const downloadPath = `InkBrain/00_收集/${filename}`;
+    // 下载到 Downloads/NeoAgent/00_收集/ 目录（与 vault 入口保持一致）
+    const downloadPath = `NeoAgent/00_收集/${filename}`;
 
     console.log('[Mind Extension] Download path:', downloadPath);
 

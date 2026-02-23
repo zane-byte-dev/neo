@@ -1,7 +1,7 @@
 module.exports = {
     apps: [
         {
-            name: 'inkbrain-bot',
+            name: 'NeoAgent-bot',
             script: './dist/telegram-bot.js',
             instances: 1,
             autorestart: true,

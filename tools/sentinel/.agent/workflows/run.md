@@ -1,8 +1,8 @@
 ---
-description: Run InkBrain Sentinel
+description: Run NeoAgent Sentinel
 ---
 
-# Run InkBrain Sentinel
+# Run NeoAgent Sentinel
 
 Quick commands to start the sentinel service.
 

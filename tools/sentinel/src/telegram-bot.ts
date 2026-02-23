@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Telegram Bot 对话模式 (Async Worker Edition)
- * 集成 InkBrain CLI (Gemini CLI) 进行深度思考
+ * 集成 NeoAgent CLI (Gemini CLI) 进行深度思考
  */
 
 import { config } from 'dotenv';
@@ -46,7 +46,7 @@ interface Task {
     userName: string;
 }
 
-class InkBrainBot {
+class NeoAgentBot {
     private bot: Telegraf;
 
     constructor(token: string) {
@@ -168,7 +168,7 @@ class InkBrainBot {
 
         // Convert Markdown to Telegram-friendly format
         const telegramText = markdownToTelegram(text);
-        const replyText = `🤖 InkBrain (${timestamp})\n\n${telegramText}`;
+        const replyText = `🤖 NeoAgent (${timestamp})\n\n${telegramText}`;
 
         // Split long messages (Telegram limit is 4096 characters)
         const chunks = this.splitMessage(replyText, 4000);
@@ -249,7 +249,7 @@ class InkBrainBot {
         switch (command) {
             case '/start':
                 await ctx.reply(
-                    '🔭 **InkBrain Connector Ready**\n' +
+                    '🔭 **NeoAgent Connector Ready**\n' +
                     'Send any message to chat, or use a command:\n\n' +
                     '`/clip <url>` — 抓取网页保存到 vault\n' +
                     '`/audioify <file_or_dir>` — Markdown → MP3\n' +
@@ -343,5 +343,5 @@ class InkBrainBot {
 }
 
 // Start the bot
-const bot = new InkBrainBot(BOT_TOKEN);
+const bot = new NeoAgentBot(BOT_TOKEN);
 bot.run();

@@ -6,7 +6,7 @@ last_updated: 2026-02-21 16:30
 
 # 📍 当前语境锚点 (Current Context)
 
-> **Note**: 本文件由 InkBrain 自动维护，供“策展人”等主动式 Agent 参考。
+> **Note**: 本文件由 NeoAgent 自动维护，供“策展人”等主动式 Agent 参考。
 
 ## 1. 🎭 当前心态 (Current Mood)
 - **Status**: 觉醒状态 / 自由人模式

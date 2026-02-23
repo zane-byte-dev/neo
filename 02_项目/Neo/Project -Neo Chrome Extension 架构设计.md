@@ -1,5 +1,5 @@
 ---
-title: Project - Inkbrain Chrome Extension 架构设计
+title: Project - NeoAgent Chrome Extension 架构设计
 type: technical-spec
 tags: [Dev, ChromeExtension, Architecture, AI, Plasmo]
 date: 2026-01-28
@@ -9,7 +9,7 @@ status: in-progress
 # 项目文档：Neo Chrome Extension (极简结构化剪藏器)
 
 ## 1. 产品定位 (USP)
-**"手术刀级别的 AI 结构化剪藏"**。不同于通用的网页快照工具，Inkbrain 专注于对特定站点（Gemini, Twitter, GitHub）进行深度 DOM 解析，并结合边缘 AI 处理，直接产出成品笔记。
+**"手术刀级别的 AI 结构化剪藏"**。不同于通用的网页快照工具，NeoAgent 专注于对特定站点（Gemini, Twitter, GitHub）进行深度 DOM 解析，并结合边缘 AI 处理，直接产出成品笔记。
 
 ## 2. 交互设计：无界面 (Headless) 哲学
 *   **弃用侧边栏**: 拒绝臃肿的 Chat 面板。

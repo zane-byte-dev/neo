@@ -92,7 +92,7 @@ export class ConversationSaver {
         return `---
 date: ${dateStr}
 source: Telegram Bot
-tags: [日记, 会话实录, inkbrain]
+tags: [日记, 会话实录, NeoAgent]
 ---
 
 # ${dateStr} 会话实录
@@ -115,7 +115,7 @@ tags: [日记, 会话实录, inkbrain]
 
 ${question}
 
-**[InkBrain]**
+**[NeoAgent]**
 
 ${answer}
 

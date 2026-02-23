@@ -1,18 +1,18 @@
 ---
 type: spec
-project: InkBrain
+project: NeoAgent
 feature: The Curator
 status: draft
 target_agent: Antigravity / Gemini 3
 ---
 
-# 🏗️ Specification: InkBrain "The Curator" Agent
+# 🏗️ Specification: NeoAgent "The Curator" Agent
 
 > **Goal**: Implement an AI-First "Serendipity Engine" that autonomously explores the local Obsidian vault and pushes relevant insights to the user via Telegram.
 
 ## 1. System Architecture
 
-The Curator is a sub-agent within the InkBrain Node.js service. It operates on an **Agentic Loop** (Perceive -> Plan -> Act -> Reflect).
+The Curator is a sub-agent within the NeoAgent Node.js service. It operates on an **Agentic Loop** (Perceive -> Plan -> Act -> Reflect).
 
 ### 1.1 Trigger Points
 *   **Manual**: User sends `/pulse` command in Telegram.

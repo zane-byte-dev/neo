@@ -11,7 +11,7 @@ tags:
   - efficiency
 ---
 
-# 🎙️ Tool: Typeless (Inkbrain Edition)
+# 🎙️ Tool: Typeless (NeoAgent Edition)
 
 > **一句话定位**: 你的 AI 随身速记员。基于 Gemini 1.5 Flash 的本地语音转文字 + 智能润色工具。
 
@@ -66,7 +66,7 @@ export GEMINI_API_KEY="your_api_key_here"
 3.  添加 **Run AppleScript** 操作，填入以下代码：
     ```applescript
     on run {input, parameters}
-        do shell script "\"/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/99_系统/Skills/typeless_client.sh\""
+        do shell script "\"/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills/typeless_client.sh\""
         return input
     end run
     ```
@@ -85,10 +85,10 @@ export GEMINI_API_KEY="your_api_key_here"
     ```bash
     #!/bin/bash
     # @raycast.title Typeless Voice Note
-    # @raycast.author Inkbrain
+    # @raycast.author NeoAgent
     # @raycast.mode fullOutput
     
-    "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/inkbrain/99_系统/Skills/typeless_launcher.sh"
+    "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills/typeless_launcher.sh"
     ```
 
 ## 📜 源代码 (Source Code)

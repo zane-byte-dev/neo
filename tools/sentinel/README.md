@@ -1,6 +1,6 @@
-# 🔭 InkBrain Sentinel
+# 🔭 NeoAgent Sentinel
 
-InkBrain Sentinel 是一个 Telegram Bot 智能助手，通过 Gemini CLI 提供 AI 回复，并自动将对话保存到 Obsidian 笔记库。
+NeoAgent Sentinel 是一个 Telegram Bot 智能助手，通过 Gemini CLI 提供 AI 回复，并自动将对话保存到 Obsidian 笔记库。
 
 ## 功能特性
 
@@ -96,7 +96,7 @@ Bot 立即回复：
 ```
 🧠 Thinking...
 
-🤖 InkBrain (13:46)
+🤖 NeoAgent (13:46)
 
 您可以使用 async/await 或 Promise 来处理异步任务...
 ```
@@ -106,7 +106,7 @@ Bot 立即回复：
 ## 项目结构
 
 ```
-inkbrain-sentinel/
+NeoAgent-sentinel/
 ├── src/
 │   ├── lib/
 │   │   ├── gemini-client.ts      # Gemini CLI 客户端
@@ -159,4 +159,4 @@ MIT
 
 ## 作者
 
-Zhengchao - InkBrain Project
+Zhengchao - NeoAgent Project

@@ -1,11 +1,11 @@
 ---
 type: system-protocol
-name: Inkbrain_Digest_Protocol
+name: NeoAgent_Digest_Protocol
 version: 1.0
 status: active
 ---
 
-# 🧠 InkBrain 自动消化协议 (v1.0)
+# 🧠 NeoAgent 自动消化协议 (v1.0)
 
 > **核心目标**：实现 Inbox (00_收集) 零存留，所有入库信息必须在 24 小时内被分配到具体的知识维度。
 

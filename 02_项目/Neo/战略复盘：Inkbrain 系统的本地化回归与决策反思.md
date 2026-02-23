@@ -1,14 +1,14 @@
 ---
-title: 战略复盘：Inkbrain 系统的本地化回归与决策反思
+title: 战略复盘：NeoAgent 系统的本地化回归与决策反思
 type: strategy-note
-tags: [Inkbrain, Pivot, Strategy, Reflection]
+tags: [NeoAgent, Pivot, Strategy, Reflection]
 date: 2026-01-26
 ---
 
 # 战略复盘：从 "Google Docs" 回撤到 "Local Obsidian"
 
 ## 1. 核心决策：Pivot (转折点)
-经过与 Gemini (西风人格) 的深度对谈，我决定**停止** Inkbrain 在 Google Docs 上的 SaaS 化/大众化尝试，**回归** Obsidian 本地化构建。
+经过与 Gemini (西风人格) 的深度对谈，我决定**停止** NeoAgent 在 Google Docs 上的 SaaS 化/大众化尝试，**回归** Obsidian 本地化构建。
 *   **Old Way**: 试图做一个通用的、漂亮的 Google Docs 插件（产品经理思维）。
 *   **New Way**: 打造一个极度个性化、高复杂度的本地知识炼油厂（黑客思维）。
 
@@ -22,7 +22,7 @@ date: 2026-01-26
 2.  **周度/项目复盘**: 停止关注每日流水账。编写脚本遍历过去 1-3 年的笔记，寻找“非理性决策模式”或“项目瓶颈”。
 3.  **哑铃策略**: 
     *   **保守端**: 维持体制内工作提供现金流。
-    *   **激进端**: Inkbrain 作为私人军火库，寻找不对称收益（认知溢价）。
+    *   **激进端**: NeoAgent 作为私人军火库，寻找不对称收益（认知溢价）。
 
 ## 4. 行为纠偏
 *   **停止折腾工具**: 不再纠结 Mac Air vs Pro 的几百块差价，不再纠结 Notion vs Obsidian 的 UI。工具是用来用的，不是用来玩的。

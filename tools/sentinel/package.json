@@ -1,7 +1,7 @@
 {
-    "name": "inkbrain-sentinel",
+    "name": "NeoAgent-sentinel",
     "version": "2.0.0",
-    "description": "InkBrain Sentinel - Intelligent note monitoring service (Node.js version)",
+    "description": "NeoAgent Sentinel - Intelligent note monitoring service (Node.js version)",
     "type": "module",
     "main": "dist/index.js",
     "scripts": {

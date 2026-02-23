@@ -2,7 +2,7 @@
 
 > **来源**: [github.com/gavrielc/nanoclaw](https://github.com/gavrielc/nanoclaw)
 > **状态**: 核心参考 (Architectural Benchmark)
-> **对齐方向**: InkBrain v5 "脏电脑" 物理隔离与自动化架构
+> **对齐方向**: NeoAgent v5 "脏电脑" 物理隔离与自动化架构
 
 ## 1. 核心哲学 (Philosophy)
 
@@ -17,7 +17,7 @@
 - **挂载策略**: 严格按需挂载 (Least Privilege)。
     - `Main Group`: 挂载整个项目根目录，具备管理权限。
     - `Sub Groups`: 仅挂载自身的文件夹 + 只读的全局配置。
-- **启示**: InkBrain 的爬虫或第三方脚本应在容器内运行，挂载 `00_收集` 目录作为输出口，与 `01_日记` 物理隔离。
+- **启示**: NeoAgent 的爬虫或第三方脚本应在容器内运行，挂载 `00_收集` 目录作为输出口，与 `01_日记` 物理隔离。
 
 ### B. 文件系统 IPC (Filesystem-based Inter-Process Communication)
 - **机制**: 进程间通信不使用 Socket/HTTP，而是通过监听特定文件夹。
@@ -32,9 +32,9 @@
 - **机制**: 每个 Group 拥有独立的 `.claude/` 目录和 `CLAUDE.md` 记忆文件。
 - **效果**: 彻底防止不同项目间的上下文污染（Context Poisoning）。
 
-## 3. 对 InkBrain 的技术映射
+## 3. 对 NeoAgent 的技术映射
 
-| NanoClaw 概念 | InkBrain 对应/升级方向 | 备注 |
+| NanoClaw 概念 | NeoAgent 对应/升级方向 | 备注 |
 | :--- | :--- | :--- |
 | **Container Runner** | `Skills/Sandbox_Runner.py` | 用于运行不受信任的 Python 脚本或爬虫。 |
 | **IPC Watcher** | `Skills/Folder_Watcher.py` | 监控 `00_收集/Queue` 目录，实现任务自动触发。 |
@@ -44,8 +44,8 @@
 ## 4. 待落地动作 (Backlog)
 
 1. [ ] **建立隔离运行环境**: 编写一个脚本，支持在 Docker 中启动 Gemini CLI 并只挂载特定的 `03_文章` 子目录。
-2. [ ] **标准化 Skill 模板**: 参考 NanoClaw 的 `SKILL.md`，为 InkBrain 编写第一个“自动重构技能”。
-3. [ ] **实现文件夹信箱**: 允许 Obsidian 插件通过向 `99_系统/IPC/Inbox` 写入 JSON 来调用 InkBrain 核心能力。
+2. [ ] **标准化 Skill 模板**: 参考 NanoClaw 的 `SKILL.md`，为 NeoAgent 编写第一个“自动重构技能”。
+3. [ ] **实现文件夹信箱**: 允许 Obsidian 插件通过向 `99_系统/IPC/Inbox` 写入 JSON 来调用 NeoAgent 核心能力。
 
 ---
 *2026-02-02 架构审计完成 - By Builder Persona*

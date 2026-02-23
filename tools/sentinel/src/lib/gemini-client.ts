@@ -217,7 +217,7 @@ export class GeminiClient {
                 if (exitCode !== 0) {
                     return `⚠️ CLI Error: ${stderr.trim()}`;
                 }
-                return '⚠️ InkBrain 似乎执行了操作，但没有返回文本结果。';
+                return '⚠️ NeoAgent 似乎执行了操作，但没有返回文本结果。';
             }
 
             return cleanOutput;

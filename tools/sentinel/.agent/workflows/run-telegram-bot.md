@@ -1,14 +1,14 @@
 ---
-description: Run InkBrain Telegram Chat Bot
+description: Run NeoAgent Telegram Chat Bot
 ---
 
-# Run InkBrain Telegram Chat Bot
+# Run NeoAgent Telegram Chat Bot
 
 Interactive conversation mode - ask questions directly in Telegram.
 
 ## Features
 
-- 💬 Direct conversation with InkBrain
+- 💬 Direct conversation with NeoAgent
 - 🤖 Instant replies to your questions
 - 📱 Works on iPhone, Mac, and any device with Telegram
 - 🔄 Long polling for real-time responses
@@ -55,7 +55,7 @@ tail -f telegram_bot.log
 
 - `/start` - Welcome message
 - `/help` - Show help
-- `/about` - About InkBrain
+- `/about` - About NeoAgent
 
 ## Example Conversation
 
@@ -64,7 +64,7 @@ You: 如何使用 Python 处理文件？
 
 Bot: 🤔 正在思考...
 
-Bot: 🤖 InkBrain Reply
+Bot: 🤖 NeoAgent Reply
 你的问题：如何使用 Python 处理文件？
 [AI generated response]
 ⏰ 2026-02-09 23:35:00

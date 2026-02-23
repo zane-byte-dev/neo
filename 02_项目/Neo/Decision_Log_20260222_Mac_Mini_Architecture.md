@@ -8,7 +8,7 @@ status: approved
 # ADR-03: 拒绝硬件过度工程，维持云端优先架构
 
 ## 1. 背景 (Context)
-随着 InkBrain 系统在 Telegram 链路上的打通，以及本地笔记量级的增加，用户（Zhengchao）考虑购入一台 Mac mini 作为 24/7 在线的 AI 服务器，用于部署本地模型并作为 Telegram Bot 的宿主。
+随着 NeoAgent 系统在 Telegram 链路上的打通，以及本地笔记量级的增加，用户（Zhengchao）考虑购入一台 Mac mini 作为 24/7 在线的 AI 服务器，用于部署本地模型并作为 Telegram Bot 的宿主。
 
 ## 2. 方案对比 (Comparison)
 
