@@ -27,6 +27,7 @@
     "author": "Zhengchao",
     "license": "MIT",
     "dependencies": {
+        "@travisvn/edge-tts": "^1.0.2",
         "dotenv": "^16.4.5",
         "execa": "^9.0.0",
         "p-queue": "^8.0.1",

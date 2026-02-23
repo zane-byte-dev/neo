@@ -182,10 +182,12 @@ export class ChatHistoryCache {
             return true;
         }
 
-        const sessionStartTime = new Date(this.currentSession.startTime).getTime();
-        const sessionDuration = Date.now() - sessionStartTime;
+        // Use last message time (endTime) instead of session start time
+        // This prevents breaking long active conversations
+        const lastActivityTime = new Date(this.currentSession.endTime).getTime();
+        const idleDuration = Date.now() - lastActivityTime;
 
-        return sessionDuration > this.sessionTimeoutMs;
+        return idleDuration > this.sessionTimeoutMs;
     }
 
     /**

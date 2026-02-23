@@ -1,6 +1,6 @@
 # Mind Extension
 
-简洁的划词保存工具 - 快速保存网页内容到 Obsidian。
+简洁的划词保存工具 - 快速保存网页内容到 InkBrain vault。
 
 ## ✨ 功能
 
@@ -38,7 +38,7 @@ extension/
 | 普通网页 | 选中文本 → 点击浮窗保存按钮 |
 | X.com | 点击推文右下角的保存按钮 |
 | Gemini | 点击回答区域的保存按钮 |
-| 飞书 Wiki | 点击页面右上角的"保存到 Obsidian"按钮 |
+| 飞书 Wiki | 点击页面右上角的"保存到 InkBrain"按钮 |
 
 ## 📄 License
 

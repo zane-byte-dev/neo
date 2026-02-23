@@ -6,11 +6,13 @@
 
 import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
-import { message } from 'telegraf/filters';
+import { message } from 'telegraf/filters.js';
 import PQueue from 'p-queue';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
+import { ConversationSaver } from './lib/conversation-saver.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
+import { runClipper, runAudioRefinery, runEbookRefinery } from './lib/tool-runner.js';
 
 // Load environment variables
 config();
@@ -31,6 +33,9 @@ const geminiClient = new GeminiClient();
 
 // Initialize chat history cache
 const chatHistoryCache = new ChatHistoryCache();
+
+// Initialize conversation saver (optional, saves Q&A to vault)
+const conversationSaver = new ConversationSaver();
 
 // Task queue (Producer-Consumer model)
 const taskQueue = new PQueue({ concurrency: 1 });
@@ -138,6 +143,11 @@ class InkBrainBot {
             // Add assistant message to cache
             await chatHistoryCache.addMessage('assistant', responseText);
 
+            // Save to vault (optional, only if CONVERSATION_SAVE_DIR is configured)
+            if (conversationSaver.isEnabled()) {
+                await conversationSaver.saveConversation(question, responseText, userName);
+            }
+
             // Send reply to user
             await this.sendReply(chatId, responseText);
         } catch (error) {
@@ -232,30 +242,90 @@ class InkBrainBot {
      * Handle bot commands
      */
     private async handleCommand(ctx: any) {
-        const command = ctx.message.text;
+        const text = ctx.message.text as string;
+        const [command, ...argParts] = text.split(' ');
+        const arg = argParts.join(' ').trim();
+
         console.log(`[Command] Received: ${command}`);
 
-        if (command === '/start') {
-            await ctx.reply(
-                '🔭 **InkBrain Connector Ready**\nSend any message to trigger CLI.',
-                { parse_mode: 'Markdown' }
-            );
-        } else if (command === '/clear') {
-            await chatHistoryCache.clearHistory();
-            await ctx.reply('🗑️ Chat history cleared. Starting fresh!');
-        } else if (command === '/newsession') {
-            await chatHistoryCache.createNewSession();
-            await ctx.reply('📝 New session created!');
-        } else if (command === '/stats') {
-            const stats = chatHistoryCache.getStats();
-            await ctx.reply(
-                `📊 **Chat Statistics**\n` +
-                `Total sessions: ${stats.totalSessions}\n` +
-                `Current messages: ${stats.currentMessages}\n` +
-                `Session ID: ${stats.sessionId || 'N/A'}`
-            );
-        } else {
-            await ctx.reply('Unknown command.');
+        switch (command) {
+            case '/start':
+                await ctx.reply(
+                    '🔭 **InkBrain Connector Ready**\n' +
+                    'Send any message to chat, or use a command:\n\n' +
+                    '`/clip <url>` — 抓取网页保存到 vault\n' +
+                    '`/audioify <file_or_dir>` — Markdown → MP3\n' +
+                    '`/epub <file>` — EPUB → Markdown 章节\n' +
+                    '`/clear` — 清空对话历史\n' +
+                    '`/newsession` — 开启新会话\n' +
+                    '`/stats` — 查看统计',
+                    { parse_mode: 'Markdown' }
+                );
+                break;
+
+            case '/clear':
+                await chatHistoryCache.clearHistory();
+                await ctx.reply('🗑️ Chat history cleared. Starting fresh!');
+                break;
+
+            case '/newsession':
+                await chatHistoryCache.createNewSession();
+                await ctx.reply('📝 New session created!');
+                break;
+
+            case '/stats': {
+                const stats = chatHistoryCache.getStats();
+                await ctx.reply(
+                    `📊 **Chat Statistics**\n` +
+                    `Total sessions: ${stats.totalSessions}\n` +
+                    `Current messages: ${stats.currentMessages}\n` +
+                    `Session ID: ${stats.sessionId || 'N/A'}`
+                );
+                break;
+            }
+
+            case '/clip': {
+                if (!arg) { await ctx.reply('Usage: /clip <url>'); break; }
+                await ctx.reply(`✂️ Clipping: ${arg}`);
+                taskQueue.add(async () => {
+                    const result = await runClipper(arg);
+                    const reply = result.success
+                        ? `✅ Clipped!\n\n${result.output}`
+                        : `❌ Clip failed:\n${result.error}`;
+                    await this.sendReply(ctx.chat.id, reply);
+                });
+                break;
+            }
+
+            case '/audioify': {
+                if (!arg) { await ctx.reply('Usage: /audioify <file_or_dir> [voice]'); break; }
+                const [target, voice] = arg.split(' ');
+                await ctx.reply(`🎧 Audioifying: ${target}\n(这可能需要几分钟...)`);
+                taskQueue.add(async () => {
+                    const result = await runAudioRefinery(target, voice);
+                    const reply = result.success
+                        ? `✅ Done!\n\n${result.output}`
+                        : `❌ Audio failed:\n${result.error}`;
+                    await this.sendReply(ctx.chat.id, reply);
+                });
+                break;
+            }
+
+            case '/epub': {
+                if (!arg) { await ctx.reply('Usage: /epub <file.epub>'); break; }
+                await ctx.reply(`📚 Refining EPUB: ${arg}`);
+                taskQueue.add(async () => {
+                    const result = await runEbookRefinery(arg);
+                    const reply = result.success
+                        ? `✅ Done!\n\n${result.output}`
+                        : `❌ EPUB failed:\n${result.error}`;
+                    await this.sendReply(ctx.chat.id, reply);
+                });
+                break;
+            }
+
+            default:
+                await ctx.reply('Unknown command. Try /start for help.');
         }
     }
 

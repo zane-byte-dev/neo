@@ -1,7 +1,7 @@
 /**
  * Mind Extension - Content Script (精简版)
  * 
- * 只保留保存到 Obsidian 的核心功能：
+ * 只保留保存到 InkBrain 的核心功能：
  * 1. 划词保存
  * 2. X.com 推文保存
  * 3. Gemini 对话保存
@@ -13,7 +13,7 @@
   // ==================== 配置 ====================
   const CONFIG = {
     POPUP_HOST_ID: 'mind-selection-popup-host',
-    OBSIDIAN_DEFAULT_FOLDER: '04_Buffer',
+    DEFAULT_FOLDER: '04_Buffer',
   };
 
   // ==================== 统一 Toast 提示 ====================
@@ -201,7 +201,7 @@
       const content = formatContent(text, window.location.href);
       const filename = generateFilename(text);
 
-      const success = await saveToObsidian(content, filename);
+      const success = await saveToVault(content, filename);
       if (success) {
         showToast(`✅ 已保存: ${filename}`, 'success');
       } else {
@@ -393,7 +393,7 @@
 
         const filename = generateFilename(`X推文-${author}-${tweetText.substring(0, 30)}`);
 
-        const success = await saveToObsidian(content, filename);
+        const success = await saveToVault(content, filename);
         if (success) {
           showToast(`✅ 已保存: ${filename}`, 'success');
         } else {
@@ -590,7 +590,7 @@
     createSaveButton() {
       const button = document.createElement('button');
       button.setAttribute('data-mind-feishu-save-btn', 'true');
-      button.setAttribute('title', '保存到 Obsidian');
+      button.setAttribute('title', '保存到 InkBrain');
       button.style.cssText = `
         display: inline-flex;
         align-items: center;
@@ -614,7 +614,7 @@
           <polyline points="17 21 17 13 7 13 7 21"/>
           <polyline points="7 3 7 8 15 8"/>
         </svg>
-        <span>保存到 Obsidian</span>
+        <span>保存到 InkBrain</span>
       `;
 
       // Hover 效果
@@ -654,7 +654,7 @@
 
         const filename = generateFilename(`飞书Wiki-${title}`);
 
-        const success = await saveToObsidian(content, filename);
+        const success = await saveToVault(content, filename);
         if (success) {
           showToast(`✅ 已保存: ${filename}`, 'success');
         } else {
@@ -1004,7 +1004,7 @@
     createResponseSaveButton() {
       const button = document.createElement('button');
       button.setAttribute('data-mind-save-response-btn', 'true');
-      button.setAttribute('title', '保存此段对话到 Obsidian');
+      button.setAttribute('title', '保存此段对话到 InkBrain');
       button.style.cssText = `
         display: inline-flex;
         align-items: center;
@@ -1135,7 +1135,7 @@
 
 
         const filename = generateFilename('Gemini完整对话');
-        const success = await saveToObsidian(content, filename);
+        const success = await saveToVault(content, filename);
         if (success) {
           showToast(`✅ 已保存: ${filename}`, 'success');
         } else {
@@ -1194,7 +1194,7 @@
 
 
         const filename = generateFilename('Gemini对话片段');
-        const success = await saveToObsidian(content, filename);
+        const success = await saveToVault(content, filename);
         if (success) {
           showToast(`✅ 已保存: ${filename}`, 'success');
         } else {
@@ -1311,11 +1311,11 @@
     return `${cleanText}-${dateStr}.md`;
   }
 
-  async function saveToObsidian(content, filename) {
+  async function saveToVault(content, filename) {
     try {
 
       const response = await chrome.runtime.sendMessage({
-        action: 'saveToObsidian',
+        action: 'saveToVault',
         content: content,
         filename: filename
       });
@@ -1328,7 +1328,7 @@
         return false;
       }
     } catch (error) {
-      console.error('[Mind Extension] 保存到 Obsidian 失败:', error);
+      console.error('[Mind Extension] 保存到 InkBrain 失败:', error);
       return false;
     }
   }
