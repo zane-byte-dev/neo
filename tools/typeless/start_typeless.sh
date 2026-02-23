@@ -1,12 +1,13 @@
 #!/bin/bash
 
 # ==========================================
-# 🎙️ Typeless 启动脚本 (Python 3.12)
+# 🎙️ Typeless 启动脚本 (Local Mode)
 # ==========================================
 
-echo "🚀 启动 Typeless Server (Python 3.12 + Local Mode)..."
+echo "🚀 启动 Typeless Server (Local Mode)..."
 
-cd "/Users/zhengchao/Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills"
+# 自动进入本脚本所在目录
+cd "$(dirname "$0")" || exit 1
 
-# 使用 Python 3.12 启动
-/opt/homebrew/opt/python@3.12/bin/python3.12 typeless_server.py
+# 使用 python3 启动
+python3 typeless_server.py

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Typeless Menu Bar App
-macOS menu bar interface for Typeless voice memo server
+macOS menu bar interface for Typeless voice memo server (Local Only)
 """
 
 import rumps
@@ -12,7 +12,11 @@ from pathlib import Path
 
 # Configuration
 SERVER_URL = "http://localhost:52345"
-CONFIG_FILE = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills/.env"
+
+# Dynamically find paths based on the script location
+SCRIPT_DIR = Path(__file__).parent.resolve()
+CONFIG_FILE = SCRIPT_DIR / ".env"
+LOGS_DIR = SCRIPT_DIR / "logs"
 
 class TypelessMenuBar(rumps.App):
     def __init__(self):
@@ -21,6 +25,15 @@ class TypelessMenuBar(rumps.App):
         # State
         self.status = "ready"  # ready / recording / processing / done
         self.config = self.load_config()
+        
+        # Determine Output Directory
+        self.output_dir = Path.home() / "mox/neo/00_收集"
+        if 'OUTPUT_DIR' in self.config:
+            custom_output = Path(self.config['OUTPUT_DIR'])
+            if custom_output.is_absolute():
+                self.output_dir = custom_output
+            else:
+                self.output_dir = SCRIPT_DIR.parent.parent / custom_output
         
         # Build menu
         self.build_menu()
@@ -32,7 +45,6 @@ class TypelessMenuBar(rumps.App):
     def load_config(self):
         """Load configuration from .env file"""
         config = {
-            'mode': 'local',
             'asr_engine': 'auto',
             'llm_model': 'qwen2.5:3b'
         }
@@ -43,8 +55,8 @@ class TypelessMenuBar(rumps.App):
                     line = line.strip()
                     if '=' in line and not line.startswith('#'):
                         key, value = line.split('=', 1)
-                        if key == 'MODE':
-                            config['mode'] = value
+                        if key == 'OUTPUT_DIR':
+                            config['OUTPUT_DIR'] = value
                         elif key == 'ASR_ENGINE':
                             config['asr_engine'] = value
                         elif key == 'LOCAL_LLM_MODEL':
@@ -77,19 +89,10 @@ class TypelessMenuBar(rumps.App):
         self.menu.add(rumps.separator)
         
         # Configuration display
-        mode_display = "Cloud (Gemini)" if self.config['mode'] == 'cloud' else f"Local ({self.config['llm_model']})"
-        self.menu.add(rumps.MenuItem(f"📡 Mode: {mode_display}", callback=None))
+        self.menu.add(rumps.MenuItem(f"💻 Mode: Local ({self.config['llm_model']})", callback=None))
         
         asr_display = self.config['asr_engine'].upper() if self.config['asr_engine'] != 'auto' else "Auto (FunASR→Whisper)"
         self.menu.add(rumps.MenuItem(f"🎤 ASR: {asr_display}", callback=None))
-        
-        self.menu.add(rumps.separator)
-        
-        # Actions
-        if self.config['mode'] == 'local':
-            self.menu.add(rumps.MenuItem("⚡ Switch to Cloud Mode", callback=self.switch_to_cloud))
-        else:
-            self.menu.add(rumps.MenuItem("💻 Switch to Local Mode", callback=self.switch_to_local))
         
         self.menu.add(rumps.separator)
         
@@ -101,11 +104,6 @@ class TypelessMenuBar(rumps.App):
         self.menu.add(prefs)
         
         self.menu.add(rumps.separator)
-        
-        # Statistics (placeholder for future)
-        # stats = rumps.MenuItem("📊 Statistics")
-        # self.menu.add(stats)
-        # self.menu.add(rumps.separator)
         
         # Quit
         self.menu.add(rumps.MenuItem("Quit Typeless", callback=rumps.quit_application))
@@ -137,54 +135,15 @@ class TypelessMenuBar(rumps.App):
             # Server not responding, keep current status
             pass
     
-    @rumps.clicked("Switch to Cloud Mode")
-    def switch_to_cloud(self, _):
-        """Switch to cloud mode"""
-        self.update_config('MODE', 'cloud')
-        self.config['mode'] = 'cloud'
-        self.build_menu()
-        rumps.notification("Typeless", "Mode Switched", "Now using Cloud (Gemini)")
-    
-    @rumps.clicked("Switch to Local Mode")
-    def switch_to_local(self, _):
-        """Switch to local mode"""
-        self.update_config('MODE', 'local')
-        self.config['mode'] = 'local'
-        self.build_menu()
-        rumps.notification("Typeless", "Mode Switched", "Now using Local Mode")
-    
-    def update_config(self, key, value):
-        """Update configuration in .env file"""
-        if not CONFIG_FILE.exists():
-            return
-        
-        with open(CONFIG_FILE, 'r') as f:
-            lines = f.readlines()
-        
-        updated = False
-        for i, line in enumerate(lines):
-            if line.strip().startswith(f"{key}="):
-                lines[i] = f"{key}={value}\n"
-                updated = True
-                break
-        
-        if not updated:
-            lines.append(f"{key}={value}\n")
-        
-        with open(CONFIG_FILE, 'w') as f:
-            f.writelines(lines)
-    
     @rumps.clicked("Open Output Folder")
     def open_output(self, _):
         """Open output folder in Finder"""
-        output_dir = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/00_收集"
-        os.system(f'open "{output_dir}"')
+        os.system(f'open "{self.output_dir}"')
     
     @rumps.clicked("Open Logs")
     def open_logs(self, _):
         """Open logs folder"""
-        logs_dir = Path.home() / "Library/Mobile Documents/iCloud~md~obsidian/Documents/NeoAgent/99_系统/Skills/logs"
-        os.system(f'open "{logs_dir}"')
+        os.system(f'open "{LOGS_DIR}"')
     
     @rumps.clicked("Edit Config")
     def edit_config(self, _):

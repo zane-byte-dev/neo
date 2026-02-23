@@ -14,7 +14,6 @@ import requests
 import json
 import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from google import genai  # 新版 google-genai 包
 from pynput import keyboard
 
 # Conditional FunASR import
@@ -93,10 +92,7 @@ RETRY_DELAY = 1  # 重试延迟（秒）
 PTT_KEY = keyboard.Key.alt_r
 
 # Mode Configuration
-MODE = os.getenv('MODE', 'cloud')  # "cloud" or "local"
-
-# Cloud Config (Gemini)
-GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
+MODE = "local"
 
 # Local Config (Ollama + ASR)
 OLLAMA_API_URL = os.getenv('OLLAMA_API_URL', 'http://localhost:11434/api/generate')
@@ -173,7 +169,6 @@ keyboard_controller = keyboard.Controller() # For simulating paste
 processing_state = "ready"  # Track state: ready, recording, processing, done
 
 # Thread locks for shared resources
-client_lock = threading.Lock()
 whisper_lock = threading.Lock()
 funasr_lock = threading.Lock()
 
@@ -229,13 +224,6 @@ def generate_system_prompt(lang_config: dict) -> str:
             target_lang = lang_config['output_lang_name']
             return f"You are an elite editor. Convert the spoken input into high-quality {target_lang} text. Remove fillers, fix logic, keep it concise. Output ONLY the refined text in {target_lang}."
 
-
-def get_api_key() -> str:
-    """从环境变量获取 API Key"""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable not set!")
-    return api_key
 
 def send_notification(title: str, message: str) -> None:
     """发送 macOS 通知"""
@@ -319,41 +307,6 @@ def paste_text_via_clipboard(text: str) -> bool:
     except Exception as e:
         logging.error(f"Paste error: {e}")
         return False
-
-def compress_audio(input_wav: str, output_ogg: str) -> str:
-    """压缩音频文件以减少上传时间
-    
-    Args:
-        input_wav: 输入 WAV 文件路径
-        output_ogg: 输出 OGG 文件路径
-        
-    Returns:
-        str: 成功时返回压缩后文件路径，失败时返回原文件路径
-    """
-    try:
-        cmd = [
-            'ffmpeg', '-y', '-i', input_wav,
-            '-c:a', 'libvorbis', '-b:a', '64k',
-            output_ogg
-        ]
-        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
-        
-        # 检查压缩后的文件是否存在且有效
-        if os.path.exists(output_ogg) and os.path.getsize(output_ogg) > 0:
-            original_size = os.path.getsize(input_wav)
-            compressed_size = os.path.getsize(output_ogg)
-            compression_ratio = (1 - compressed_size / original_size) * 100
-            logging.info(f"Audio compressed: {original_size} -> {compressed_size} bytes ({compression_ratio:.1f}% reduction)")
-            return output_ogg
-        else:
-            logging.warning("Compression failed, using original file")
-            return input_wav
-    except subprocess.CalledProcessError as e:
-        logging.error(f"FFmpeg compression error: {e.stderr.decode() if e.stderr else str(e)}")
-        return input_wav
-    except Exception as e:
-        logging.error(f"Unexpected compression error: {e}")
-        return input_wav
 
 # --- ASR Transcription Functions ---
 
@@ -571,102 +524,6 @@ def process_with_local(audio_path: str) -> str:
     finally:
         gc.collect()
 
-def process_with_gemini(audio_path: str, api_key: str) -> str:
-    """使用 Gemini API 处理音频
-    
-    Args:
-        audio_path: 音频文件路径
-        api_key: Gemini API Key
-        
-    Returns:
-        str: 处理后的文本，失败返回 None
-    """
-    global client
-    start_time = time.time()
-    lang_config = get_language_config()
-    
-    # Thread-safe client initialization
-    if client is None:
-        with client_lock:
-            # Double-check pattern
-            if client is None:
-                client = genai.Client(api_key=api_key)
-    
-    upload_path = None
-    try:
-        compress_start = time.time()
-        upload_path = compress_audio(audio_path, TEMP_COMPRESSED_FILE)
-        logging.info(f"  [Time] Compression: {time.time() - compress_start:.2f}s")
-        
-        upload_start = time.time()
-        logging.info(f"{Colors.BLUE}☁️  Uploading...{Colors.ENDC}")
-        
-        # Upload with retry logic
-        audio_file = None
-        last_error = None
-        
-        for attempt in range(GEMINI_UPLOAD_RETRIES):
-            try:
-                with open(upload_path, 'rb') as f:
-                    audio_file = client.files.upload(file=f)
-                break  # Success
-            except Exception as e:
-                last_error = e
-                if attempt < GEMINI_UPLOAD_RETRIES - 1:
-                    wait_time = RETRY_DELAY * (2 ** attempt)  # Exponential backoff
-                    logging.warning(f"Upload attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                else:
-                    raise last_error  # Final attempt failed
-        
-        if audio_file is None:
-            raise Exception("Upload failed after all retries")
-        
-        logging.info(f"  [Time] Gemini Upload: {time.time() - upload_start:.2f}s")
-        
-        model_start = time.time()
-        output_desc = lang_config['output_lang_name']
-        logging.info(f"{Colors.BLUE}✨  Refining to {output_desc}...{Colors.ENDC}")
-        
-        system_instruction = generate_system_prompt(lang_config)
-        
-        # 使用新 API 生成内容
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=audio_file,
-            config={
-                'system_instruction': system_instruction,
-                'temperature': 0.7,
-            }
-        )
-        
-        result = response.text.strip()
-        logging.info(f"  [Time] Gemini Refinement: {time.time() - model_start:.2f}s")
-        logging.info(f"  [Total] Processing took: {time.time() - start_time:.2f}s")
-        
-        return result
-        
-    except Exception as e:
-        logging.error(f"{Colors.FAIL}Gemini API Error: {e}{Colors.ENDC}")
-        logging.error(f"Gemini processing failed: {e}")
-        return None
-        
-    finally:
-        # Ensure cleanup happens
-        try:
-            if audio_path and os.path.exists(audio_path): 
-                os.remove(audio_path)
-        except Exception as e:
-            logging.error(f"Failed to remove audio file {audio_path}: {e}")
-        
-        try:
-            if os.path.exists(TEMP_COMPRESSED_FILE): 
-                os.remove(TEMP_COMPRESSED_FILE)
-        except Exception as e:
-            logging.error(f"Failed to remove compressed file: {e}")
-        
-        gc.collect()
-
 def save_note(text: str) -> str:
     """保存语音笔记为 Markdown 文件
     
@@ -721,14 +578,14 @@ def record_audio_thread():
         
         is_recording = False
         processing_state = "processing"  # Set to processing
-        logging.info(f"{Colors.GREEN}⏹️  STOPPED. Processing ({MODE})...{Colors.ENDC}")
+        logging.info(f"{Colors.GREEN}⏹️  STOPPED. Processing...{Colors.ENDC}")
         play_sound("Pop")
         return # Exit early if recording failed
     
     # 清除停止事件，为下次录音做准备
     stop_event.clear()
     
-    logging.info(f"{Colors.BLUE}⏹️  STOPPED. Processing ({MODE})...{Colors.ENDC}")
+    logging.info(f"{Colors.BLUE}⏹️  STOPPED. Processing...{Colors.ENDC}")
     play_sound("Pop")
     
     if full_recording:
@@ -769,10 +626,7 @@ def record_audio_thread():
         gc.collect()
         
         # Process
-        if MODE == "local":
-            result = process_with_local(TEMP_AUDIO_FILE)
-        else:
-            result = process_with_gemini(TEMP_AUDIO_FILE, get_api_key())
+        result = process_with_local(TEMP_AUDIO_FILE)
         
         # Handle Result
         if result:
@@ -783,7 +637,7 @@ def record_audio_thread():
             logging.info(f"{Colors.BLUE}📋  Pasting...{Colors.ENDC}")
             paste_text_via_clipboard(result)
             
-            send_notification("Typeless", f"✅ Inserted ({MODE})!")
+            send_notification("Typeless", f"✅ Inserted (local)!")
             processing_state = "done"
             logging.info(f"{Colors.GREEN}Done.{Colors.ENDC}")
             # Reset to ready after 2 seconds
@@ -833,15 +687,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"POST method not implemented for this path.")
 
     def do_GET(self):
-        global MODE
         """Handle GET requests for API endpoints"""
         if self.path == '/api/status':
             # Return current server status
             status_data = {
                 'state': processing_state,
-                'mode': MODE,
+                'mode': 'local',
                 'asr_engine': ASR_ENGINE,
-                'llm_model': LOCAL_LLM_MODEL if MODE == 'local' else GEMINI_MODEL,
+                'llm_model': LOCAL_LLM_MODEL,
                 'funasr_available': FUNASR_AVAILABLE
             }
             self.send_response(200)
@@ -850,14 +703,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(status_data).encode())
         elif self.path == '/toggle':
             self.send_response(200); self.end_headers(); self.wfile.write(b"Use PTT Key (Right Option)")
-        elif self.path == '/mode/local':
-            MODE = "local"; self.send_response(200); self.end_headers(); self.wfile.write(b"Local Mode")
-            logging.info(f"\n{Colors.HEADER}🔄 Switched to LOCAL mode{Colors.ENDC}")
-        elif self.path == '/mode/cloud':
-            MODE = "cloud"; self.send_response(200); self.end_headers(); self.wfile.write(b"Cloud Mode")
-            logging.info(f"\n{Colors.HEADER}🔄 Switched to CLOUD mode{Colors.ENDC}")
         elif self.path == '/status':
-            self.send_response(200); self.end_headers(); self.wfile.write(f"Mode: {MODE}".encode('utf-8'))
+            self.send_response(200); self.end_headers(); self.wfile.write(b"Mode: local")
         else: self.send_response(404); self.end_headers()
 
 def run_server():
@@ -868,7 +715,7 @@ def run_server():
     lang_display = f"{INPUT_LANGUAGE} → {lang_config['output_lang_name']}"
     
     logging.info(f"{Colors.HEADER}🚀 Typeless Server Running...{Colors.ENDC}")
-    logging.info(f"   Mode: {MODE} | PTT Key: Right Option (alt_r)")
+    logging.info(f"   Mode: local | PTT Key: Right Option (alt_r)")
     logging.info(f"   Language: {lang_display}")
     logging.info(f"{Colors.BLUE}💡 Tip: Edit .env to change language settings{Colors.ENDC}")
     
