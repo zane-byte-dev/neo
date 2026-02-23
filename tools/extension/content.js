@@ -967,7 +967,7 @@
     // 在每个 Gemini 回答区域添加保存按钮
     addResponseSaveButtons() {
       // 查找所有 Gemini 回答区域
-      const responses = document.querySelectorAll('model-response, [class*="model-response"], message-content[class*="model"]');
+      const responses = document.querySelectorAll('model-response');
 
       responses.forEach(response => {
         // 跳过已添加保存按钮的区域
@@ -997,6 +997,16 @@
           e.stopPropagation();
           this.handleSaveSingle(response);
         });
+
+        // Hover 回答区域时才显示按钮
+        response.addEventListener('mouseenter', () => {
+          saveBtn.style.opacity = '1';
+          saveBtn.style.pointerEvents = 'auto';
+        });
+        response.addEventListener('mouseleave', () => {
+          saveBtn.style.opacity = '0';
+          saveBtn.style.pointerEvents = 'none';
+        });
       });
     },
 
@@ -1004,7 +1014,7 @@
     createResponseSaveButton() {
       const button = document.createElement('button');
       button.setAttribute('data-mind-save-response-btn', 'true');
-      button.setAttribute('title', '保存此段对话到 InkBrain');
+      button.setAttribute('title', '保存');
       button.style.cssText = `
         display: inline-flex;
         align-items: center;
@@ -1017,7 +1027,9 @@
         color: rgb(95, 99, 104);
         font-size: 13px;
         cursor: pointer;
-        transition: background-color 0.2s, color 0.2s;
+        opacity: 0;
+        pointer-events: none;
+        transition: background-color 0.2s, color 0.2s, opacity 0.15s;
       `;
       button.innerHTML = `
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
