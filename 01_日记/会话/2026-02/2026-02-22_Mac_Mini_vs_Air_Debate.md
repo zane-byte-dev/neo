@@ -1,11 +1,3 @@
----
-title: 会话实录：Mac mini 架构决策与 UI 开发博弈
-date: 2026-02-22
-tags: [session, raw-log, architecture, neo]
-project: [[02_项目/Neo/00_Neo看板|Neo]]
-participants: [Zhengchao, Gemini CLI]
----
-
 # 📝 会话实录: Mac mini 架构决策与 UI 开发博弈
 
 > **TL;DR (决策结论)**: 

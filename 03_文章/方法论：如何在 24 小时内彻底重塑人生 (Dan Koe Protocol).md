@@ -1,10 +1,3 @@
----
-title: 方法论：如何在 24 小时内彻底重塑人生 (Dan Koe Protocol)
-type: methodology
-tags: [Life-Design, Mindset, Identity, DanKoe, Protocol]
-date: 2026-01-28
----
-
 # 方法论：如何在 24 小时内彻底重塑人生 (Dan Koe Protocol)
 
 > **导读**：大多数人的“新年决心”之所以失败，不是因为缺乏意志力，而是因为他们试图在一个腐烂的地基（旧身份）上建造新大楼。真正的改变，始于摧毁旧的自我。

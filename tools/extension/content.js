@@ -331,8 +331,52 @@
       try {
 
         // 提取主推文内容
-        const textElement = post.querySelector('[data-testid="tweetText"]');
-        const tweetText = textElement ? textElement.innerText : '';
+        let tweetText = '';
+        let articleTitle = '';
+        const isArticle = post.querySelector('[data-testid="twitterArticleReadView"]') !== null;
+
+        if (isArticle) {
+          const titleElem = post.querySelector('[data-testid="twitter-article-title"]');
+          if (titleElem) {
+            articleTitle = titleElem.innerText.trim();
+            tweetText += `# ${articleTitle}\n\n`;
+          }
+
+          const richTextElem = post.querySelector('[data-testid="twitterArticleRichTextView"]');
+          if (richTextElem) {
+            const blocks = richTextElem.querySelectorAll('[data-block="true"]');
+            if (blocks.length > 0) {
+              blocks.forEach(block => {
+                if (block.tagName.match(/^H[1-6]$/i)) {
+                  const level = block.tagName.charAt(1);
+                  tweetText += `\n${'#'.repeat(level)} ${block.innerText.trim()}\n\n`;
+                } else if (block.tagName.toLowerCase() === 'li') {
+                  const isOrdered = block.closest('ol') !== null;
+                  tweetText += `${isOrdered ? '1.' : '-'} ${block.innerText.trim()}\n`;
+                } else if (block.querySelector('pre')) {
+                  const codeElem = block.querySelector('code');
+                  const langClass = codeElem ? Array.from(codeElem.classList).find(c => c.startsWith('language-')) : null;
+                  const lang = langClass ? langClass.replace('language-', '') : '';
+                  const codeText = block.querySelector('pre').innerText.trim();
+                  tweetText += `\n\`\`\`${lang}\n${codeText}\n\`\`\`\n\n`;
+                } else if (block.querySelector('[data-testid="tweetPhoto"]')) {
+                  // 图片区块由 extractImages 统一处理，此处跳过
+                  return;
+                } else {
+                  const text = block.innerText.trim();
+                  if (text) {
+                    tweetText += `${text}\n\n`;
+                  }
+                }
+              });
+            } else {
+              tweetText += richTextElem.innerText;
+            }
+          }
+        } else {
+          const textElement = post.querySelector('[data-testid="tweetText"]');
+          tweetText = textElement ? textElement.innerText : '';
+        }
 
         // 提取图片
         const images = this.extractImages(post);
@@ -346,27 +390,28 @@
         const timestamp = timeElement ? timeElement.getAttribute('datetime') : new Date().toISOString();
 
         // 提取链接
-        const linkElement = post.querySelector('a[href*="/status/"]');
+        const linkElement = post.querySelector('a[href*="/status/"]') || post.querySelector('a[href*="/article/"]');
         const tweetUrl = linkElement ? `https://x.com${linkElement.getAttribute('href')}` : window.location.href;
 
         // 提取回复内容（包括推文线程）
         let repliesContent = '';
-        const replies = this.extractReplies(post);
+        if (!isArticle) {
+          const replies = this.extractReplies(post);
+          if (replies.length > 0) {
+            // 只保存作者的线程回复
+            const threadReplies = replies.filter(r => r.isThread);
 
-        if (replies.length > 0) {
-          // 只保存作者的线程回复
-          const threadReplies = replies.filter(r => r.isThread);
-
-          if (threadReplies.length > 0) {
-            repliesContent += '\n\n## 推文线程\n\n';
-            threadReplies.forEach((reply, index) => {
-              repliesContent += `### ${index + 1}. ${reply.text}\n\n`;
-              if (reply.images && reply.images.length > 0) {
-                reply.images.forEach((imageUrl, imgIndex) => {
-                  repliesContent += `![图片${imgIndex + 1}](${imageUrl})\n\n`;
-                });
-              }
-            });
+            if (threadReplies.length > 0) {
+              repliesContent += '\n\n## 推文线程\n\n';
+              threadReplies.forEach((reply, index) => {
+                repliesContent += `### ${index + 1}. ${reply.text}\n\n`;
+                if (reply.images && reply.images.length > 0) {
+                  reply.images.forEach((imageUrl, imgIndex) => {
+                    repliesContent += `![图片${imgIndex + 1}](${imageUrl})\n\n`;
+                  });
+                }
+              });
+            }
           }
         }
 
@@ -382,8 +427,8 @@
         // 提取引用推文
         let quoteContent = '';
         const quoteTweet = post.querySelector('[data-testid="quoteTweet"]') ||
-          post.querySelector('article[aria-labelledby]');
-        if (quoteTweet && quoteTweet !== post) {
+          (post.querySelector('article[aria-labelledby]') !== post ? post.querySelector('article[aria-labelledby]') : null);
+        if (quoteTweet && quoteTweet !== post && !isArticle) {
           const quoteTextElem = quoteTweet.querySelector('[data-testid="tweetText"]');
           const quoteAuthorElem = quoteTweet.querySelector('[data-testid="User-Name"]');
           if (quoteTextElem) {
@@ -394,10 +439,11 @@
         }
 
         // 构建内容
-        const content = `# X推文-${author}\n\n${tweetText}${quoteContent}${imagesContent}${repliesContent}\n\n---\n\n作者: ${author}\n时间: ${timestamp}\n链接: ${tweetUrl}`;
+        const docType = isArticle ? 'X文章' : 'X推文';
+        const content = `# ${docType}-${author}\n\n${tweetText}${quoteContent}${imagesContent}${repliesContent}\n\n---\n\n作者: ${author}\n时间: ${timestamp}\n链接: ${tweetUrl}`;
 
-
-        const filename = generateFilename(`X推文-${author}-${tweetText.substring(0, 30)}`);
+        const displayTitle = (isArticle && articleTitle) ? articleTitle : tweetText.replace(/^#\s.*\n+/, '');
+        const filename = generateFilename(`${docType}-${author}-${displayTitle.substring(0, 30)}`);
 
         const success = await saveToVault(content, filename);
         if (success) {

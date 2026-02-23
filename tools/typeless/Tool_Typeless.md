@@ -1,16 +1,3 @@
----
-type: tool
-name: Typeless
-language: python
-version: 1.0.0
-dependencies: [sounddevice, scipy, numpy, google-generativeai, ffmpeg]
-tags:
-  - tool
-  - audio
-  - stt
-  - efficiency
----
-
 # 🎙️ Tool: Typeless (NeoAgent Edition)
 
 > **一句话定位**: 你的 AI 随身速记员。基于 Gemini 1.5 Flash 的本地语音转文字 + 智能润色工具。

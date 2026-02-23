@@ -1,11 +1,3 @@
----
-title: Repo - nanoclaw (Personal Claude Assistant in Apple Containers)
-url: https://github.com/gavrielc/nanoclaw
-type: technical-reference
-tags: [AI, Claude, macOS, Security, WhatsApp, Personal-Assistant]
-date: 2026-02-03
----
-
 # NanoClaw
 
 > **Core Philosophy**: Small enough to understand. Secure by isolation. Built for one user.
