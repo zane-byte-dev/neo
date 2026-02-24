@@ -31,8 +31,8 @@ WhatsApp (baileys) --> SQLite --> Polling loop --> Container (Claude Agent SDK) 
 - `src/db.ts`: SQLite operations.
 - `groups/*/CLAUDE.md`: Per-group memory.
 
-## Skills (The NanoClaw way)
-Instead of adding features to the core, users contribute **Skills**.
+## skill (The NanoClaw way)
+Instead of adding features to the core, users contribute **skill**.
 - `/add-telegram`: Add Telegram support.
 - `/add-slack`: Add Slack support.
 - `/convert-to-docker`: Use Docker instead of Apple Containers.

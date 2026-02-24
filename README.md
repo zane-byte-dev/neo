@@ -17,7 +17,7 @@ neo/
 ├── source/          # 已完成或待发布的文章
 ├── system/          # 系统配置、人格、技能
 │   ├── GEMINI.md     # AI 系统提示词 + 智能路由配置
-│   └── Personas/     # 6 个 AI 人格定义
+│   └── persona/     # 6 个 AI 人格定义
 ├── tools/            # 自动化工具
 │   ├── NeoAgent-sentinel/   # Telegram Bot + 所有工具实现（TypeScript）
 │   │   └── src/lib/tools/   # clipper / audio-refinery / ebook-refinery

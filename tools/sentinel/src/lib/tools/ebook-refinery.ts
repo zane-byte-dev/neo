@@ -95,7 +95,7 @@ export async function ebookRefinery(epubPath: string, outputBaseDir?: string): P
     }
 
     // 3. Write TOC
-    await writeFile(join(outputDir, '00_目录.md'), tocLines.join('\n'), 'utf-8');
+    await writeFile(join(outputDir, '目录.md'), tocLines.join('\n'), 'utf-8');
 
     return `📚 炼制完成！共 ${chapterCount} 个章节\n📂 输出目录：${outputDir}`;
 }

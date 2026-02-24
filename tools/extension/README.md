@@ -29,7 +29,7 @@ extension/
 
 ## 💾 保存路径
 
-文件保存到：`Downloads/NeoAgent/04_Buffer/`
+文件保存到：`Downloads/NeoAgent/inbox/`
 
 ## 📋 使用方式
 

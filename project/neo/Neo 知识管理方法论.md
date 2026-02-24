@@ -12,9 +12,9 @@
 - 避免复杂的云端协作依赖，确保数据的绝对拥有权。
 
 ### 2. ETL over Storage（提取-转换-加载）
-- **Extract（提取）**：从各种来源收集信息（Web Clipper、摘抄等）至 `04_Buffer`。
+- **Extract（提取）**：从各种来源收集信息（Web Clipper、摘抄等）至 `inbox`。
 - **Transform（转换）**：使用 Gemini CLI 清洗、结构化、关联信息。
-- **Load（加载）**：将处理后的知识加载到 `05_Archive/Structured` 或 `03_Library`。
+- **Load（加载）**：将处理后的知识加载到 `source` 或相关项目文件夹。
 
 ### 3. Interactive Automation（交互式自动化）
 - **Human-in-the-loop**：不完全依赖后台静默脚本，而是通过与 Gemini CLI 对话触发处理。
@@ -22,9 +22,9 @@
 
 ### 4. State as Filesystem（文件即状态）
 - 摒弃复杂的 `.json` 状态文件。
-- **04_Buffer** = 待处理 (Inbox)
-- **05_Archive/Raw** = 已处理 (Processed)
-- **05_Archive/Structured** = 知识产物 (Output)
+- **inbox** = 待处理 (Inbox)
+- **inbox/Archive** = 已处理 (Processed)
+- **source** = 知识产物 (Output)
 
 ## 🚫 反模式 (Anti-Patterns)
 > 记录已验证的错误路径，避免重蹈覆辙。
@@ -43,32 +43,29 @@
 ### 📂 目录结构
 
 ```
-NeoAgent/
-├── 01_Execution/
-│   ├── Journal/          # 📅 日记 (Daily Notes)
-│   │   └── YYYY-MM-DD.md
-│   └── Project/          # 🚀 项目笔记
-├── 02_Kernel/            # 🧠 核心思考 (Core Beliefs/Profile)
-├── 03_Library/           # 📚 知识库 (Permanent Notes)
-├── 04_Buffer/            # 📥 Inbox (Web Clipper/摘抄入口)
-│   └── *.md
-└── 05_Archive/           # 🗄️ Archive (归档)
-    ├── Raw/              # 🗑️ 原始文件归档 (Processed Originals)
-    └── Structured/       # ✨ AI 结构化后的知识 (Structured Knowledge)
+neo/
+├── inbox/          # 原始素材、网页剪藏、临时输入
+│   └── Archive/      # 原 05_归档，已结束项目和历史资料
+├── history/          # 日记、周记、会话实录
+│   └── 会话/         # AI 对话逐字实录
+├── project/          # 进行中的项目
+├── source/          # 已完成或待发布的文章
+├── system/          # 系统配置、人格、技能
+└── tools/            # 自动化工具
 ```
 
 ### 🔄 处理流程 (ETL Pipeline)
 
 ```mermaid
 graph TD
-A[信息输入] -->|Web Clipper/手动| B[04_Buffer]
-C[每日日记] -->|手动创建| D[01_Execution/Journal]
-B -->|对话: '处理 Buffer'| E[Gemini CLI]
+A[信息输入] -->|Web Clipper/手动| B[inbox]
+C[每日日记] -->|手动创建| D[history/日记]
+B -->|对话: '清理收集'| E[Gemini CLI]
 D -->|读取上下文| E
 E -->|1. 分析与结构化| F[生成 Markdown]
-E -->|2. 搜索关联| G[03_Library/05_Archive]
-F -->|保存| H[05_Archive/Structured]
-B -->|移动归档| I[05_Archive/Raw]
+E -->|2. 搜索关联| G[source/project]
+F -->|保存| H[source]
+B -->|移动归档| I[inbox/Archive]
 H -.->|Dataview 自动聚合| D
 ```
 
@@ -126,17 +123,17 @@ tags: [type/insight, topic/AI]
 
 ## 💡 最佳实践
 
-### 1. 随手丢进 Buffer
-- 不要在意格式，只要是 Markdown 文本，丢进 `04_Buffer` 即可。
+### 1. 随手丢进 Inbox
+- 不要在意格式，只要是 Markdown 文本，丢进 `inbox` 即可。
 - 网页文章使用 Clipper 剪藏；零碎想法直接新建文件。
 
 ### 2. 交互式处理
-- 建议每天（或累积一定量后）对 Gemini 说：“处理一下 Buffer”。
+- 建议每天（或累积一定量后）对 Gemini 说：“清理一下 inbox”。
 - 可以在对话中补充特殊指令，例如：“重点关注关于 AI Agent 的内容”。
 
 ### 3. 定期复盘
-- 每周日查看本周生成的 Structured 笔记。
-- 将高质量的 Structured 笔记移动到 `03_Library` 并进行更深度的加工（如果是作为永久笔记）。
+- 每周日查看本周在 `source` 生成的笔记。
+- 将高质量笔记进行更深度的加工（可以发布或者存档在对应 project 中）。
 
 ## 🎓 总结
 
