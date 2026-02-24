@@ -39,7 +39,7 @@
 ### 7. ⚡️ 技能节点
 *   **场景**：处理特定任务（如分拣、写日记、做总结）。
 *   **核心指令**：根据任务加载 `system/Skills/` 下的规则：
-    - [[system/Skills/清理收集.md]]：整理文件或清理 `00_收集`。
+    - [[system/Skills/清理收集.md]]：整理文件或清理 `inbox`。
     - [[system/Skills/写日记.md]]：记录或提炼日记。
     - [[system/Skills/写总结.md]]：做周月度总结。
     - [[system/Skills/写Wiki.md]]：产出带体感、实操性的 Wiki 文章。

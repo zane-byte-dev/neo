@@ -13,7 +13,7 @@
   // ==================== 配置 ====================
   const CONFIG = {
     POPUP_HOST_ID: 'mind-selection-popup-host',
-    DEFAULT_FOLDER: '00_收集',
+    DEFAULT_FOLDER: 'inbox',
   };
 
   // ==================== 统一 Toast 提示 ====================

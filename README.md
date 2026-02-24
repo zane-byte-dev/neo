@@ -9,11 +9,11 @@
 
 ```
 neo/
-├── 00_收集/          # 原始素材、网页剪藏、临时输入
+├── inbox/          # 原始素材、网页剪藏、临时输入
 │   └── Archive/      # 原 05_归档，已结束项目和历史资料
 ├── 01_日记/          # 日记、周记、会话实录
 │   └── 会话/         # AI 对话逐字实录（Verbatim Transcript）
-├── 02_项目/          # 进行中的项目（Neo、AoneFaaS、家庭软着陆等）
+├── project/          # 进行中的项目（Neo、AoneFaaS、家庭软着陆等）
 ├── resource/          # 已完成或待发布的文章
 ├── system/          # 系统配置、人格、技能
 │   ├── GEMINI.md     # AI 系统提示词 + 智能路由配置
@@ -85,7 +85,7 @@ npm run pm2:start      # 生产模式
 
 **安装**：`chrome://extensions/` → 开发者模式 → 加载已解压扩展程序 → 选择 `tools/extension/`
 
-保存路径：`~/Downloads/NeoAgent/00_收集/`（直接对应 vault 收集入口）
+保存路径：`~/Downloads/NeoAgent/inbox/`（直接对应 vault 收集入口）
 
 ---
 

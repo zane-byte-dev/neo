@@ -26,8 +26,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const base64Content = btoa(unescape(encodeURIComponent(content)));
     const dataUrl = `data:text/markdown;base64,${base64Content}`;
 
-    // 下载到 Downloads/NeoAgent/00_收集/ 目录（与 vault 入口保持一致）
-    const downloadPath = `NeoAgent/00_收集/${filename}`;
+    // 下载到 Downloads/NeoAgent/inbox/ 目录（与 vault 入口保持一致）
+    const downloadPath = `NeoAgent/inbox/${filename}`;
 
     console.log('[Mind Extension] Download path:', downloadPath);
 

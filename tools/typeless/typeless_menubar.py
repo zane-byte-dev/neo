@@ -27,7 +27,7 @@ class TypelessMenuBar(rumps.App):
         self.config = self.load_config()
         
         # Determine Output Directory
-        self.output_dir = Path.home() / "mox/neo/00_收集"
+        self.output_dir = Path.home() / "mox/neo/inbox"
         if 'OUTPUT_DIR' in self.config:
             custom_output = Path(self.config['OUTPUT_DIR'])
             if custom_output.is_absolute():

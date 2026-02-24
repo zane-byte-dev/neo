@@ -115,7 +115,7 @@ export async function clipUrl(url: string, targetDir?: string): Promise<string> 
     } else if (targetDir && vaultDir) {
         saveDir = join(vaultDir, targetDir);
     } else if (vaultDir) {
-        saveDir = join(vaultDir, '00_收集');
+        saveDir = join(vaultDir, 'inbox');
     } else {
         throw new Error('GEMINI_WORK_DIR not set and no absolute targetDir provided');
     }

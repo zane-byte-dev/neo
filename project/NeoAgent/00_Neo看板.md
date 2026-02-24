@@ -8,7 +8,7 @@
 *   📖 [[Neo 知识管理方法论.md]]
 *   ⚙️ [[system/System_Neo_Digest_Protocol.md]] (自动消化协议)
 *   ✍️ [[我的 AI 剪藏工具折腾记.md]]
-*   🔥 [[02_项目/小红书运营/00_小红书看板.md]] (小红书排期)
+*   🔥 [[project/小红书运营/00_小红书看板.md]] (小红书排期)
 
 ## 2. 🎯 当前战役
 > **Goal**: 激活主动式 Agent (The Curator)，让知识库活起来。
