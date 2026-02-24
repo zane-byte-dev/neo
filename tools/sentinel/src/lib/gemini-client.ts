@@ -85,7 +85,7 @@ export class GeminiClient {
             console.log(`[Gemini] ✅ Using CLI at: ${this.cliPath}`);
             if (this.workDir) {
                 console.log(`[Gemini] 📂 Working directory: ${this.workDir}`);
-                this.personasDir = join(this.workDir, '99_系统', 'Personas');
+                this.personasDir = join(this.workDir, 'system', 'Personas');
                 this.loadSystemContext();
             }
             console.log('[Gemini] ⚠️  CLI mode can be slow (~17s per query)');
@@ -102,7 +102,7 @@ export class GeminiClient {
         if (!this.workDir) return;
 
         const locations = [
-            join(this.workDir, '99_系统', 'GEMINI.md'),
+            join(this.workDir, 'system', 'GEMINI.md'),
             join(this.workDir, 'GEMINI.md'),
         ];
 

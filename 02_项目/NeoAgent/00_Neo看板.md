@@ -4,9 +4,9 @@
 > **状态**: 🟢 活跃开发中
 
 ## 1. 🗺️ 导航
-*   🧠 [[99_系统/GEMINI.md]] (v5.0 智能路由)
+*   🧠 [[system/GEMINI.md]] (v5.0 智能路由)
 *   📖 [[Neo 知识管理方法论.md]]
-*   ⚙️ [[99_系统/System_Neo_Digest_Protocol.md]] (自动消化协议)
+*   ⚙️ [[system/System_Neo_Digest_Protocol.md]] (自动消化协议)
 *   ✍️ [[我的 AI 剪藏工具折腾记.md]]
 *   🔥 [[02_项目/小红书运营/00_小红书看板.md]] (小红书排期)
 

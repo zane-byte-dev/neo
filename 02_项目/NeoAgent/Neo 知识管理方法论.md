@@ -122,7 +122,7 @@ tags: [type/insight, topic/AI]
 - **核心 Agent**：Gemini CLI / Antigravity (AI 推理、内容生成、文件操作)
 - **存储与展示**：标准 Markdown + 任意编辑器 (Antigravity / Working Copy + Editor)
 - **动态视图**：由 Neo Agent 回写（无插件依赖）
-- **模板引擎**：固定模板文件 (99_系统/Templates/)
+- **模板引擎**：固定模板文件 (system/Templates/)
 
 ## 💡 最佳实践
 

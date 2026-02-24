@@ -54,7 +54,7 @@ export async function ebookRefinery(epubPath: string, outputBaseDir?: string): P
     const vaultDir = process.env.GEMINI_WORK_DIR;
     const bookName = basename(epubPath, extname(epubPath));
     const baseDir = outputBaseDir
-        ?? (vaultDir ? join(vaultDir, '03_文章') : '03_文章');
+        ?? (vaultDir ? join(vaultDir, 'resource') : 'resource');
     const outputDir = join(baseDir, `${bookName}全集`);
 
     await mkdir(outputDir, { recursive: true });
