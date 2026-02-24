@@ -33,9 +33,9 @@
   "action": {
     "default_title": "Mind Extension"
   },
-  "web_accessible_resources": [
+  "web_accessible_sources": [
     {
-      "resources": [
+      "sources": [
         "styles/*"
       ],
       "matches": [

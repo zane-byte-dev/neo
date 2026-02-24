@@ -17,7 +17,7 @@ import re
 import sys
 from pathlib import Path
 
-DIARY_DIR = Path("/Users/zhengchao/mox/neo/01_日记")
+DIARY_DIR = Path("/Users/zhengchao/mox/neo/history")
 
 # Sections to completely remove (matched by heading line)
 REMOVE_SECTIONS = [

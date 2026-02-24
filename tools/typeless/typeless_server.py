@@ -168,7 +168,7 @@ funasr_model = None # FunASR Model
 keyboard_controller = keyboard.Controller() # For simulating paste
 processing_state = "ready"  # Track state: ready, recording, processing, done
 
-# Thread locks for shared resources
+# Thread locks for shared sources
 whisper_lock = threading.Lock()
 funasr_lock = threading.Lock()
 

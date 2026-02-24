@@ -11,10 +11,10 @@
 neo/
 ├── inbox/          # 原始素材、网页剪藏、临时输入
 │   └── Archive/      # 原 05_归档，已结束项目和历史资料
-├── 01_日记/          # 日记、周记、会话实录
+├── history/          # 日记、周记、会话实录
 │   └── 会话/         # AI 对话逐字实录（Verbatim Transcript）
 ├── project/          # 进行中的项目（Neo、AoneFaaS、家庭软着陆等）
-├── resource/          # 已完成或待发布的文章
+├── source/          # 已完成或待发布的文章
 ├── system/          # 系统配置、人格、技能
 │   ├── GEMINI.md     # AI 系统提示词 + 智能路由配置
 │   └── Personas/     # 6 个 AI 人格定义

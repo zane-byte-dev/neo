@@ -15,7 +15,7 @@ const CONVERSATION_SAVE_ENABLED = process.env.CONVERSATION_SAVE_ENABLED !== 'fal
  *
  * 保存路径优先级：
  *   1. CONVERSATION_SAVE_DIR（显式配置）
- *   2. GEMINI_WORK_DIR/01_日记/会话/（从 vault 自动推导）
+ *   2. GEMINI_WORK_DIR/history/会话/（从 vault 自动推导）
  *   3. 禁用
  *
  * 格式：每天一个 Markdown 文件，按时间追加对话记录（逐字实录）。
@@ -30,7 +30,7 @@ export class ConversationSaver {
         if (CONVERSATION_SAVE_DIR) {
             this.saveDir = CONVERSATION_SAVE_DIR;
         } else if (GEMINI_WORK_DIR) {
-            this.saveDir = join(GEMINI_WORK_DIR, '01_日记', '会话');
+            this.saveDir = join(GEMINI_WORK_DIR, 'history', '会话');
         }
 
         this.enabled = CONVERSATION_SAVE_ENABLED && !!this.saveDir;

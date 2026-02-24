@@ -14,7 +14,7 @@
 **[核心动作]**：
 打开手机 Gemini App，点击右下角的 **Gemini Live** 图标。别把它当成录音机，直接把它当成一个真人。对着它说：“我现在的项目架构遇到个死结，你听我唠叨几分钟，帮我理理线索。”
 
-![Gemini Live 动态波纹界面](/resource/Images/wiki-placeholder-live.png)
+![Gemini Live 动态波纹界面](/source/Images/wiki-placeholder-live.png)
 > *此处建议补一张手机端 Live 模式的波纹截图，展示它实时交互的状态。*
 
 **[体感总结]**：
@@ -34,7 +34,7 @@
 写个脚本，把整个项目 40MB 的源码和 Markdown 全拼成一个巨大的 `.txt` 文件。
 直接拖进网页版，发指令：“我不看代码。直接给我梳理依赖树，指出核心的启动文件在哪。”
 
-![文件上传与解析进度截图](/resource/Images/wiki-placeholder-upload.png)
+![文件上传与解析进度截图](/source/Images/wiki-placeholder-upload.png)
 > *此处必须补一张网页版正在解析几十 MB txt 文件的截图。*
 
 **[极限连招/折腾实录]**：
@@ -59,7 +59,7 @@
 **[核心动作]**：
 直接用手机拍一张屏幕报错的照片，或者网页版直接粘贴截图。配上一句：“这代码报啥错呢？怎么修最快？”
 
-![手机拍照识别报错界面](/resource/Images/wiki-placeholder-vision.png)
+![手机拍照识别报错界面](/source/Images/wiki-placeholder-vision.png)
 > *此处建议补一张手机对着屏幕拍照识别代码报错的场景图，展示它的视觉理解力。*
 
 **[体感总结]**：
@@ -78,7 +78,7 @@
 **[核心动作]**：
 在网页侧边栏点击 **Gems**，创建一个名为“大白话助手”的专属机器人。在设置里把咱们的 `GEMINI.md` 通讯协议直接塞进去。
 
-![Gems 设置界面展示](/resource/Images/wiki-placeholder-gems.png)
+![Gems 设置界面展示](/source/Images/wiki-placeholder-gems.png)
 > *此处建议补一张 Gems 的 System Instructions 设置截图，展示你的“去油协议”是怎么生效的。*
 
 **[体感总结]**：
@@ -97,7 +97,7 @@
 **[核心动作]**：
 在对话框输入 `@Google Drive`，然后直接搜：“帮我找找去年那篇 MetaQ 的文档，总结下核心结论。”
 
-![Workspace 插件调用截图](/resource/Images/wiki-placeholder-workspace.png)
+![Workspace 插件调用截图](/source/Images/wiki-placeholder-workspace.png)
 > *此处建议补一张在对话框里艾特 Drive 并获取文件摘要的截图。*
 
 **[体感总结]**：

@@ -143,7 +143,7 @@ class NeoAgentBot {
             // Add assistant message to cache
             await chatHistoryCache.addMessage('assistant', responseText);
 
-            // Append to daily verbatim transcript in vault (01_日记/会话/)
+            // Append to daily verbatim transcript in vault (history/会话/)
             await conversationSaver.saveConversation(question, responseText, userName);
 
             // Send reply to user
