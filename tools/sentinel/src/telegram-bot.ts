@@ -6,7 +6,7 @@
 
 import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
-import { message } from 'telegraf/filters.js';
+import { message } from 'telegraf/filters';
 import PQueue from 'p-queue';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
