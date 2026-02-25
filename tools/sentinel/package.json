@@ -29,6 +29,7 @@
     "author": "Zhengchao",
     "license": "MIT",
     "dependencies": {
+        "@google/generative-ai": "^0.24.1",
         "@travisvn/edge-tts": "^1.0.2",
         "dotenv": "^16.4.5",
         "execa": "^9.0.0",
