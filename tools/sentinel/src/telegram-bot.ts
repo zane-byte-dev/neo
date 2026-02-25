@@ -13,6 +13,7 @@ import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { ConversationSaver } from './lib/conversation-saver.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
 import { runClipper, runAudioRefinery, runEbookRefinery, runButler } from './lib/tool-runner.js';
+import cron from 'node-cron';
 
 // Load environment variables
 config();
@@ -52,7 +53,36 @@ class NeoAgentBot {
     constructor(token: string) {
         this.bot = new Telegraf(token);
         this.setupHandlers();
+        this.setupCronJobs();
         console.log('[System] Background worker queue started.');
+    }
+
+    /**
+     * Setup scheduled cron jobs
+     */
+    private setupCronJobs() {
+        if (!AUTHORIZED_CHAT_ID) {
+            console.log('[System] No AUTHORIZED_CHAT_ID found. Cron jobs disabled.');
+            return;
+        }
+
+        // Run every day at 02:00 AM
+        cron.schedule('0 2 * * *', async () => {
+            console.log('[Cron] Execution starting: Butler daily maintenance');
+            try {
+                const result = await runButler();
+                const report = result.success
+                    ? `📅 **每日管家巡检报告**:\n\n${result.output}`
+                    : `❌ **每日巡检发生错误**:\n${result.error}`;
+
+                // Directly send to the configured authorized chat ID
+                await this.sendReply(AUTHORIZED_CHAT_ID, report);
+            } catch (error) {
+                console.error(`[Cron Error] ${error}`);
+            }
+        });
+
+        console.log('[System] Cron jobs configured (Butler: 02:00 AM daily).');
     }
 
     /**
