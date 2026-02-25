@@ -1,6 +1,7 @@
 import { FunctionDeclaration, Schema, SchemaType } from "@google/generative-ai";
 import fs from "fs/promises";
 import path from "path";
+import { execa } from "execa";
 
 // Define the schema for our agentic tools
 export const sentinelToolDeclarations: FunctionDeclaration[] = [
@@ -53,6 +54,20 @@ export const sentinelToolDeclarations: FunctionDeclaration[] = [
             },
             required: ["query"],
         },
+    },
+    {
+        name: "execute_git_commit",
+        description: "Execute a git commit on the workspace. This adds all current changes and commits them with the provided message.",
+        parameters: {
+            type: SchemaType.OBJECT,
+            properties: {
+                message: {
+                    type: SchemaType.STRING,
+                    description: "The commit message.",
+                }
+            },
+            required: ["message"],
+        },
     }
 ];
 
@@ -79,6 +94,8 @@ export class SentinelToolExecutor {
                     return await this.readMarkdownFile(args.relativePath);
                 case "search_files":
                     return await this.searchFiles(args.query);
+                case "execute_git_commit":
+                    return await this.executeGitCommit(args.message);
                 case "append_diary_entry":
                     return await this.appendDiaryEntry(args.section, args.content, args.dateOverride);
                 default:
@@ -151,6 +168,20 @@ export class SentinelToolExecutor {
             };
         } catch (error: any) {
             return { error: `Search failed: ${error.message}` };
+        }
+    }
+
+    private async executeGitCommit(message: string): Promise<any> {
+        if (!message) {
+            return { error: "Commit message is required." };
+        }
+        try {
+            await execa('git', ['add', '.'], { cwd: this.workDir });
+            const { stdout } = await execa('git', ['commit', '-m', message], { cwd: this.workDir });
+            return { success: true, result: stdout };
+        } catch (error: any) {
+            // Sometimes git commit fails if there is nothing to commit
+            return { error: error.message || "Git commit failed (perhaps no changes to commit)." };
         }
     }
 
