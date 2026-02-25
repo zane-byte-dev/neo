@@ -2,6 +2,7 @@ import { clipUrl } from './tools/clipper.js';
 import { audioRefinery } from './tools/audio-refinery.js';
 import { ebookRefinery } from './tools/ebook-refinery.js';
 import { runMaintenance } from './tools/butler.js';
+import { runCurator as curatorAction } from './tools/curator.js';
 
 export interface ToolResult {
     success: boolean;
@@ -33,4 +34,9 @@ export function runEbookRefinery(epubPath: string, outputDir?: string): Promise<
 /** /butler (No args needed) */
 export function runButler(): Promise<ToolResult> {
     return wrap(() => runMaintenance());
+}
+
+/** /curate (No args needed) */
+export function runCurator(): Promise<ToolResult> {
+    return wrap(() => curatorAction());
 }

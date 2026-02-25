@@ -12,7 +12,7 @@ import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { ConversationSaver } from './lib/conversation-saver.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
-import { runClipper, runAudioRefinery, runEbookRefinery, runButler } from './lib/tool-runner.js';
+import { runClipper, runAudioRefinery, runEbookRefinery, runButler, runCurator } from './lib/tool-runner.js';
 import cron from 'node-cron';
 
 // Load environment variables
@@ -82,7 +82,22 @@ class NeoAgentBot {
             }
         });
 
-        console.log('[System] Cron jobs configured (Butler: 02:00 AM daily).');
+        // Run every day at 09:30 AM (Curator)
+        cron.schedule('30 9 * * *', async () => {
+            console.log('[Cron] Execution starting: Curator daily briefing');
+            try {
+                const result = await runCurator();
+                if (result.success && !result.output.includes('未在归档库')) {
+                    await this.sendReply(AUTHORIZED_CHAT_ID, result.output);
+                } else if (result.error) {
+                    await this.sendReply(AUTHORIZED_CHAT_ID, `❌ **每日策展发生错误**:\n${result.error}`);
+                }
+            } catch (error) {
+                console.error(`[Cron Error Curator] ${error}`);
+            }
+        });
+
+        console.log('[System] Cron jobs configured (Butler: 02:00, Curator: 09:30).');
     }
 
     /**
@@ -285,6 +300,7 @@ class NeoAgentBot {
                     '`/audioify <file_or_dir>` — Markdown → MP3\n' +
                     '`/epub <file>` — EPUB → Markdown 章节\n' +
                     '`/butler` — 🤖 召唤管家打扫知识库\n' +
+                    '`/curate` — 🕰️ 唤醒策展人，随机推荐旧笔记\n' +
                     '`/clear` — 清空对话历史\n' +
                     '`/newsession` — 开启新会话\n' +
                     '`/stats` — 查看统计',
@@ -360,6 +376,18 @@ class NeoAgentBot {
                     const reply = result.success
                         ? `✅ 打扫完毕:\n\n${result.output}`
                         : `❌ 巡检失败:\n${result.error}`;
+                    await this.sendReply(ctx.chat.id, reply);
+                });
+                break;
+            }
+
+            case '/curate': {
+                await ctx.reply(`🕰️ 策展人正在历史的星河中漫游探索，请稍候...`);
+                taskQueue.add(async () => {
+                    const result = await runCurator();
+                    const reply = result.success
+                        ? result.output
+                        : `❌ 策展失败:\n${result.error}`;
                     await this.sendReply(ctx.chat.id, reply);
                 });
                 break;
