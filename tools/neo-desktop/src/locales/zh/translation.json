@@ -1,0 +1,33 @@
+{
+    "translation": {
+        "vault_explorer": "知识库目录",
+        "empty_vault": "文档库为空",
+        "edit": "编辑",
+        "save": "保存",
+        "select_markdown": "请选择或创建一个 Markdown 文件以阅览",
+        "neo_assistant": "Neo 智能助理",
+        "ready": "就绪",
+        "offline": "离线",
+        "loading": "加载中",
+        "clear_memory": "清除记忆",
+        "hi_ready": "你好！请问有什么我可以帮你的？",
+        "thinking": "思考中...",
+        "ask_neo": "问问 Neo...",
+        "initializing": "初始化中...",
+        "settings": "设置",
+        "workspace": "工作区",
+        "system_config": "系统配置",
+        "local_vault_path": "本地知识库路径",
+        "local_vault_desc": "你的 Markdown 文件夹的绝对路径",
+        "gemini_api_key": "Gemini API 密钥",
+        "gemini_api_desc": "Neo 核心 AI 引擎所必须的密钥",
+        "save_config": "保存配置",
+        "setup_required": "需要初始化设置",
+        "setup_desc": "在开始使用之前，请先配置您的本地知识库路径和 API 密钥。",
+        "go_to_settings": "前往设置",
+        "go_back": "后退",
+        "toggle_explorer": "切换文件树显示",
+        "toggle_assistant": "切换智能助手显示",
+        "search_placeholder": "搜索笔记或命令..."
+    }
+}
