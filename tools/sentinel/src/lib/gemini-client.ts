@@ -1,15 +1,14 @@
 import { config } from 'dotenv';
-import { execa } from 'execa';
-import { spawnSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { GoogleGenerativeAI, GenerativeModel, Content } from '@google/generative-ai';
 
 // Load environment variables
 config();
 
-const GEMINI_CLI_PATH = process.env.GEMINI_CLI_PATH || 'gemini';
-const GEMINI_TIMEOUT = parseInt(process.env.GEMINI_TIMEOUT || '180', 10) * 1000; // Convert to ms
-const GEMINI_WORK_DIR = process.env.GEMINI_WORK_DIR; // Optional working directory
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_WORK_DIR = process.env.GEMINI_WORK_DIR; // Required working directory for loading personas/system prompts
 
 // ==================== Persona Router ====================
 
@@ -65,33 +64,33 @@ function detectPersona(message: string): { file: string; name: string } {
     return DEFAULT_PERSONA;
 }
 
-// ==================== GeminiClient ====================
+import { sentinelToolDeclarations, SentinelToolExecutor } from './gemini-tools.js';
+
+// ==================== GeminiClient (Direct SDK) ====================
 
 export class GeminiClient {
     private enabled: boolean = false;
-    private cliPath: string;
-    private timeout: number;
     private workDir?: string;
     private systemContext: string = '';
     private personasDir?: string;
 
+    private genAI?: GoogleGenerativeAI;
+    private cachedModels: Map<string, GenerativeModel> = new Map();
+    private toolExecutor?: SentinelToolExecutor;
+
     constructor() {
-        this.cliPath = GEMINI_CLI_PATH;
-        this.timeout = GEMINI_TIMEOUT;
         this.workDir = GEMINI_WORK_DIR;
 
-        if (this.checkCli()) {
+        if (GEMINI_API_KEY && this.workDir) {
             this.enabled = true;
-            console.log(`[Gemini] ✅ Using CLI at: ${this.cliPath}`);
-            if (this.workDir) {
-                console.log(`[Gemini] 📂 Working directory: ${this.workDir}`);
-                this.personasDir = join(this.workDir, 'system', 'persona');
-                this.loadSystemContext();
-            }
-            console.log('[Gemini] ⚠️  CLI mode can be slow (~17s per query)');
+            this.genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+            this.toolExecutor = new SentinelToolExecutor(this.workDir);
+            console.log(`[Gemini SDK] ✅ Initialized with standard API key.`);
+            console.log(`[Gemini SDK] 📂 Working directory: ${this.workDir}`);
+            this.personasDir = join(this.workDir, 'system', 'persona');
+            this.loadSystemContext();
         } else {
-            console.log('[Gemini] ❌ CLI not available');
-            console.log('[Gemini] Please install Gemini CLI or check GEMINI_CLI_PATH');
+            console.log('[Gemini SDK] ❌ Disabled. Missing GEMINI_API_KEY or GEMINI_WORK_DIR in .env');
         }
     }
 
@@ -101,24 +100,17 @@ export class GeminiClient {
     private loadSystemContext() {
         if (!this.workDir) return;
 
-        const locations = [
-            join(this.workDir, 'system', 'GEMINI.md'),
-            join(this.workDir, 'GEMINI.md'),
-        ];
-
-        for (const loc of locations) {
-            if (existsSync(loc)) {
-                try {
-                    this.systemContext = readFileSync(loc, 'utf-8');
-                    console.log(`[Gemini] ✅ Loaded system context from: ${loc}`);
-                    return;
-                } catch (err) {
-                    console.warn(`[Gemini] ⚠️ Failed to read context from ${loc}: ${err}`);
-                }
+        const loc = join(this.workDir, 'system', 'GEMINI.md');
+        if (existsSync(loc)) {
+            try {
+                this.systemContext = readFileSync(loc, 'utf-8');
+                console.log(`[Gemini SDK] ✅ Loaded system context from: ${loc}`);
+                return;
+            } catch (err) {
+                console.warn(`[Gemini SDK] ⚠️ Failed to read context from ${loc}: ${err}`);
             }
         }
-
-        console.log('[Gemini] ℹ️ No GEMINI.md context found. Using default.');
+        console.log('[Gemini SDK] ℹ️ No GEMINI.md context found. Working in naked mode.');
     }
 
     /**
@@ -129,196 +121,153 @@ export class GeminiClient {
         if (!this.personasDir) return '';
         const loc = join(this.personasDir, `${file}.md`);
         if (!existsSync(loc)) {
-            console.warn(`[Gemini] ⚠️ Persona file not found: ${loc}`);
+            console.warn(`[Gemini SDK] ⚠️ Persona file not found: ${loc}`);
             return '';
         }
         try {
-            const content = readFileSync(loc, 'utf-8');
-            console.log(`[Gemini] 🎭 Loaded persona: ${file}`);
-            return content;
+            return readFileSync(loc, 'utf-8');
         } catch (err) {
-            console.warn(`[Gemini] ⚠️ Failed to read persona ${file}: ${err}`);
+            console.warn(`[Gemini SDK] ⚠️ Failed to read persona ${file}: ${err}`);
             return '';
         }
     }
 
     /**
-     * Check if Gemini CLI is available
+     * Get or create a generative model configured with the global system context
+     * and the specific persona.
      */
-    private checkCli(): boolean {
-        try {
-            console.log(`[Gemini] Checking CLI at: ${this.cliPath}`);
-            const result = spawnSync(this.cliPath, ['--help'], {
-                timeout: 5000,
-                encoding: 'utf-8',
-            });
-            console.log(`[Gemini] CLI check result - status: ${result.status}, error: ${result.error}`);
-            if (result.error) {
-                console.log(`[Gemini] CLI error details: ${result.error.message}`);
-                return false;
-            }
-            return result.status === 0;
-        } catch (error) {
-            console.log(`[Gemini] CLI check exception: ${error}`);
-            return false;
+    private getModelForPersona(persona: { file: string; name: string }): GenerativeModel {
+        if (!this.genAI) throw new Error('GenerativeAI not initialized');
+
+        // Cache mapping key
+        const cacheKey = persona.file;
+        if (this.cachedModels.has(cacheKey)) {
+            return this.cachedModels.get(cacheKey)!;
         }
+
+        const personaContent = this.loadPersonaContext(persona.file);
+
+        // Combine Base Context (GEMINI.md) + Persona Details
+        let finalInstruction = this.systemContext ? `[Master System Alignment]\n${this.systemContext}\n\n` : '';
+        if (personaContent) {
+            finalInstruction += `[Your Persona Profile: ${persona.name}]\n${personaContent}\n\n`;
+        }
+
+        // Hardcoded critical behaviors
+        finalInstruction += `[Critical System Rules]\n- You MUST respond strictly in CHINESE (简体中文).\n- NEVER output repetitive reasoning logs or think out loud formatting.\n- Be direct, concise, and professional without generic AI phrases.\n- Current Time Context: ${new Date().toLocaleString('zh-CN')}`;
+
+        const model = this.genAI.getGenerativeModel({
+            model: GEMINI_MODEL,
+            systemInstruction: finalInstruction,
+            tools: [{ functionDeclarations: sentinelToolDeclarations }]
+        });
+
+        this.cachedModels.set(cacheKey, model);
+        console.log(`[Gemini SDK] 🎭 Generated model instance for persona: ${persona.name}`);
+        return model;
     }
 
     /**
-     * Call Gemini CLI to generate a response.
-     * Optionally accepts a detected persona to inject.
+     * Call SDK to generate a response.
      */
-    async generateResponse(prompt: string, persona?: { file: string; name: string } | null): Promise<string | null> {
-        if (!this.enabled) {
+    async generateResponse(prompt: string, persona?: { file: string; name: string } | null, history?: string): Promise<string | null> {
+        if (!this.enabled || !this.genAI) {
             return null;
         }
 
         try {
-            const today = new Date().toISOString().split('T')[0];
-            const weekday = new Date().toLocaleDateString('zh-CN', { weekday: 'long' });
+            const activePersona = persona || DEFAULT_PERSONA;
+            const model = this.getModelForPersona(activePersona);
 
-            let fullPrompt = '';
-
-            // 1. Base system context (GEMINI.md)
-            if (this.systemContext) {
-                fullPrompt += `[System Context]\n${this.systemContext}\n\n`;
+            // Note: Since our current ConversationHistory string block is just an aggregate string, 
+            // for migration simplicity we merge it into the user prompt. 
+            // In a better multi-turn, you would parse history into Role: user/model arrays.
+            let finalPrompt = prompt;
+            if (history && history.trim()) {
+                finalPrompt = `[Previous Conversation History]\n${history}\n\n[New Message]\n${prompt}`;
             }
 
-            // 2. Persona-specific context (dynamically loaded)
-            if (persona) {
-                const personaContent = this.loadPersonaContext(persona.file);
-                if (personaContent) {
-                    fullPrompt += `[Active Persona: ${persona.name}]\n${personaContent}\n\n`;
-                }
-            }
+            console.log(`[Gemini SDK] Sending request to ${GEMINI_MODEL} (persona: ${activePersona.name})`);
+            const startTime = Date.now();
 
-            // 3. Current time
-            fullPrompt += `[Current Time]\nToday is ${today} (${weekday}).\n\n`;
-
-            // 4. User query
-            fullPrompt += `[User Query]\n${prompt}\n\n`;
-
-            // 5. Output instructions
-            fullPrompt += `[Instructions]\n(Important: Please respond in CHINESE (中文). Please EXECUTE the necessary tools and PRINT the final result/answer directly.)`;
-
-            const args = ['run', fullPrompt, '-y', '--output-format', 'text'];
-
-            console.log(`[Gemini] Executing: ${this.cliPath} run ... (prompt length: ${fullPrompt.length}, persona: ${persona?.name || 'default'})`);
-
-            const { stdout, stderr, exitCode } = await execa(this.cliPath, args, {
-                timeout: this.timeout,
-                reject: false,
-                cwd: this.workDir,
+            // We use startChat so we can easily append tool responses back
+            const chat = model.startChat({
+                history: [
+                    { role: "user", parts: [{ text: finalPrompt }] }
+                ]
             });
 
-            const cleanOutput = this.cleanOutput(stdout);
+            // Initial generic send (we just pass an empty string because the payload is in history)
+            let result = await chat.sendMessage("");
 
-            if (!cleanOutput) {
-                if (exitCode !== 0) {
-                    return `⚠️ CLI Error: ${stderr.trim()}`;
+            // Recursively evaluate if the model wants to call tools
+            let maxTurns = 5;
+            let currentResponseText = "";
+            let functionCallReports: string[] = [];
+
+            while (maxTurns > 0) {
+                const call = result.response.functionCalls() && result.response.functionCalls()![0];
+
+                if (call) {
+                    console.log(`[Gemini SDK] 🛠️  Model requested tool call: ${call.name}`);
+
+                    // Execute the local tool
+                    const apiResponse = await this.toolExecutor?.executeToolCall(call.name, call.args);
+
+                    if (apiResponse && apiResponse.success) {
+                        functionCallReports.push(`✅ 执行动作: [${call.name}] 成功。`);
+                    } else if (apiResponse && apiResponse.error) {
+                        functionCallReports.push(`❌ 执行动作: [${call.name}] 失败 (${apiResponse.error})。`);
+                    }
+
+                    // Send the tool result back to the model
+                    result = await chat.sendMessage([{
+                        functionResponse: {
+                            name: call.name,
+                            response: apiResponse
+                        }
+                    }]);
+
+                } else {
+                    // No more function calls, extract text
+                    currentResponseText = result.response.text();
+                    break;
                 }
-                return '⚠️ NeoAgent 似乎执行了操作，但没有返回文本结果。';
+                maxTurns--;
             }
 
-            return cleanOutput;
+            const ms = Date.now() - startTime;
+            console.log(`[Gemini SDK] ✅ Received final response in ${ms}ms`);
+
+            // Combine any backend reports with the final text
+            if (functionCallReports.length > 0) {
+                return `> _*系统通知*_\n> ${functionCallReports.join('\n> ')}\n\n${currentResponseText}`;
+            }
+
+            return currentResponseText;
         } catch (error) {
+            console.error(`[Gemini SDK Error]`, error);
             if (error instanceof Error) {
-                if (error.message.includes('timed out')) {
-                    return `⏱️ Error: Thinking timed out (${this.timeout / 1000}s).`;
-                }
-                return `🔥 System Error: ${error.message}`;
+                return `🔥 System Error (SDK): ${error.message}`;
             }
-            return '🔥 Unknown error occurred';
+            return '🔥 Unknown SDK error occurred';
         }
     }
 
     /**
-     * Clean CLI output by removing noise
-     */
-    private cleanOutput(rawOutput: string): string {
-        const noiseMarkers = [
-            '[ERROR]',
-            '[INFO]',
-            'Loading extension',
-            'YOLO mode',
-            'Loaded cached',
-            'Server \t',
-            'Hook registry',
-        ];
-
-        const lines = rawOutput.split('\n');
-        const cleanLines: string[] = [];
-
-        for (const line of lines) {
-            if (noiseMarkers.some((marker) => line.includes(marker))) {
-                continue;
-            }
-
-            if (!line.trim()) {
-                if (cleanLines.length > 0 && cleanLines[cleanLines.length - 1] !== '') {
-                    cleanLines.push(line);
-                }
-                continue;
-            }
-
-            cleanLines.push(line);
-        }
-
-        return cleanLines.join('\n').trim();
-    }
-
-    /**
-     * Chat with conversation context.
-     * Auto-detects persona from the latest user message.
+     * Chat with conversation context (legacy wrapper support)
      */
     async chatWithContext(message: string, conversationHistory: string): Promise<string | null> {
-        // Detect persona from the incoming user message
         const persona = detectPersona(message);
-        if (persona) {
-            console.log(`[Gemini] 🎭 Persona activated: ${persona.name}`);
-        }
-
-        let promptWithContext = message;
-        if (conversationHistory && conversationHistory.trim()) {
-            promptWithContext = `[Previous Conversation]\n${conversationHistory}\n\n[New Question]\n${message}`;
-        }
-
-        return this.generateResponse(promptWithContext, persona);
+        return this.generateResponse(message, persona, conversationHistory);
     }
 
     /**
-     * Simple chat (no history context)
+     * Simple chat (legacy wrapper support)
      */
-    async chat(message: string, systemInstruction?: string): Promise<string | null> {
+    async chat(message: string): Promise<string | null> {
         const persona = detectPersona(message);
         return this.generateResponse(message, persona);
-    }
-
-    /**
-     * Test the Gemini CLI connection
-     */
-    async testConnection(): Promise<boolean> {
-        if (!this.enabled) {
-            console.log('[Gemini] ❌ Client not configured');
-            return false;
-        }
-
-        console.log('[Gemini] 🧪 Testing CLI connection...');
-        const response = await this.generateResponse(
-            "Hi! Please respond with 'OK' to confirm."
-        );
-
-        if (response && !response.startsWith('⚠️') && !response.startsWith('🔥')) {
-            console.log('[Gemini] ✅ CLI test successful');
-            console.log(`[Gemini] Response preview: ${response.substring(0, 100)}...`);
-            return true;
-        } else {
-            console.log('[Gemini] ❌ CLI test failed');
-            if (response) {
-                console.log(`[Gemini] Error: ${response}`);
-            }
-            return false;
-        }
     }
 
     /**
@@ -326,6 +275,32 @@ export class GeminiClient {
      */
     isEnabled(): boolean {
         return this.enabled;
+    }
+    /**
+     * Test the Gemini SDK connection
+     */
+    async testConnection(): Promise<boolean> {
+        if (!this.enabled) {
+            console.log('[Gemini SDK] ❌ Client not configured');
+            return false;
+        }
+
+        console.log('[Gemini SDK] 🧪 Testing SDK connection...');
+        const response = await this.generateResponse(
+            "Hi! Please respond with 'OK' to confirm."
+        );
+
+        if (response && !response.startsWith('⚠️') && !response.startsWith('🔥')) {
+            console.log('[Gemini SDK] ✅ SDK test successful');
+            console.log(`[Gemini SDK] Response preview: ${response.substring(0, 100)}...`);
+            return true;
+        } else {
+            console.log('[Gemini SDK] ❌ SDK test failed');
+            if (response) {
+                console.log(`[Gemini SDK] Error: ${response}`);
+            }
+            return false;
+        }
     }
 }
 
@@ -338,20 +313,16 @@ export function createGeminiClient(): GeminiClient {
 
 // Test script when run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-    console.log('Testing Gemini Client...\n');
+    console.log('Testing Gemini SDK Client...\n');
 
     const client = createGeminiClient();
 
     if (client.isEnabled()) {
         const startTime = Date.now();
-        await client.testConnection();
-        const elapsed = (Date.now() - startTime) / 1000;
-        console.log(`\n⏱️  Response time: ${elapsed.toFixed(2)}s`);
-    } else {
-        console.log('\n📝 Setup Instructions:');
-        console.log('\nCLI Mode:');
-        console.log('  1. Install Gemini CLI');
-        console.log('  2. Add to .env: GEMINI_CLI_PATH=/path/to/gemini');
-        console.log('  3. Optional: GEMINI_TIMEOUT=180');
+        console.log('[Gemini SDK] 🧪 Testing Tool Calling...');
+        client.generateResponse("帮我在今天的流水日记里记一笔：刚刚把底层重构成SDK+FunctionCalling了，很快！").then(res => {
+            const elapsed = (Date.now() - startTime) / 1000;
+            console.log(`\n[Agent Response]\n${res}\n\n⏱️  Response time: ${elapsed.toFixed(2)}s`);
+        });
     }
 }
