@@ -1,10 +1,13 @@
 import { config } from 'dotenv';
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { GoogleGenerativeAI, GenerativeModel, Content } from '@google/generative-ai';
 
-// Load environment variables
-config();
+// Load environment variables relative to the library regardless of execution directory
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+config({ path: join(__dirname, '../../.env') });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';

@@ -4,6 +4,9 @@
     "description": "NeoAgent Sentinel - Intelligent note monitoring service (Node.js version)",
     "type": "module",
     "main": "dist/index.js",
+    "bin": {
+        "neo": "dist/neo-cli.js"
+    },
     "scripts": {
         "build": "tsc",
         "clean": "rm -rf dist",
