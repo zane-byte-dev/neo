@@ -17,30 +17,15 @@ const GEMINI_WORK_DIR = process.env.GEMINI_WORK_DIR; // Required working directo
  */
 const PERSONA_RULES: { keywords: string[]; file: string; name: string }[] = [
     {
-        name: '🌋 深度构建者 Deep Builder',
-        file: '深度构建者',
-        keywords: ['整理', '写文章', '哲学', '意义', '深度', '白皮书', '知识', '方法论', '框架', '系统性'],
+        name: '🌋 作家 Writer',
+        file: '作家',
+        keywords: ['写文章', '沉淀', '系统化', '长文', '整理', '笔记', '总结', '输出'],
     },
     {
         name: '🎩 西风 West Wind',
         file: '西风',
         keywords: ['方向', '决策', '怎么看', '人性', '分析', '战略', '选择', '判断', '审视', '反思'],
-    },
-    {
-        name: '💻 独立黑客 Indie Hacker',
-        file: '独立黑客',
-        keywords: ['搞钱', '变现', 'mvp', 'MVP', '上线', '用户', '产品', '快速', '独立开发', '功能'],
-    },
-    {
-        name: '⌨️ 技术教父 Tech Godfather',
-        file: '技术教父',
-        keywords: ['写代码', '报错', '重构', '架构', '配置', 'bug', 'debug', '性能', '代码', '函数', '实现', '怎么写'],
-    },
-    {
-        name: '🕰️ 策展人 Curator',
-        file: '策展人',
-        keywords: ['/pulse', '回顾', '灵感', '推荐', '随机', '漫步', '发现'],
-    },
+    }
 ];
 
 /**
