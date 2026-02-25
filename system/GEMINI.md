@@ -43,6 +43,7 @@
     - [[system/skill/写日记.md]]：记录或提炼日记。
     - [[system/skill/写总结.md]]：做周月度总结。
     - [[system/skill/写Wiki.md]]：产出带体感、实操性的 Wiki 文章。
+    - [[system/skill/归档日记.md]]：把不是今天的历史日记按月移动到归档目录。
 
 ---
 
