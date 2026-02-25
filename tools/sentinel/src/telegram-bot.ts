@@ -154,9 +154,6 @@ class NeoAgentBot {
             return;
         }
 
-        // Quick ACK to user
-        await ctx.reply('🧠 Thinking...');
-
         // Add task to queue for async processing
         const task: Task = { chatId, question: text, userName };
         taskQueue.add(() => this.processTask(task));
