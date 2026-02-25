@@ -9,6 +9,7 @@
         "clean": "rm -rf dist",
         "dev:bot": "tsx src/telegram-bot.ts",
         "dev:get-chat-id": "tsx src/get-chat-id.ts",
+        "butler": "tsx src/run-butler.ts",
         "start:bot": "node dist/telegram-bot.js",
         "pm2:start": "npm run build && pm2 start ecosystem.config.js",
         "pm2:stop": "pm2 stop all",

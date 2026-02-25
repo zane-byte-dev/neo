@@ -12,7 +12,7 @@ import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { ConversationSaver } from './lib/conversation-saver.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
-import { runClipper, runAudioRefinery, runEbookRefinery } from './lib/tool-runner.js';
+import { runClipper, runAudioRefinery, runEbookRefinery, runButler } from './lib/tool-runner.js';
 
 // Load environment variables
 config();
@@ -254,6 +254,7 @@ class NeoAgentBot {
                     '`/clip <url>` — 抓取网页保存到 vault\n' +
                     '`/audioify <file_or_dir>` — Markdown → MP3\n' +
                     '`/epub <file>` — EPUB → Markdown 章节\n' +
+                    '`/butler` — 🤖 召唤管家打扫知识库\n' +
                     '`/clear` — 清空对话历史\n' +
                     '`/newsession` — 开启新会话\n' +
                     '`/stats` — 查看统计',
@@ -317,6 +318,18 @@ class NeoAgentBot {
                     const reply = result.success
                         ? `✅ Done!\n\n${result.output}`
                         : `❌ EPUB failed:\n${result.error}`;
+                    await this.sendReply(ctx.chat.id, reply);
+                });
+                break;
+            }
+
+            case '/butler': {
+                await ctx.reply(`🤖 管家开始日常巡检，打扫知识库...`);
+                taskQueue.add(async () => {
+                    const result = await runButler();
+                    const reply = result.success
+                        ? `✅ 打扫完毕:\n\n${result.output}`
+                        : `❌ 巡检失败:\n${result.error}`;
                     await this.sendReply(ctx.chat.id, reply);
                 });
                 break;
