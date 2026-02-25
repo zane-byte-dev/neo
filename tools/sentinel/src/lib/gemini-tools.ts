@@ -214,12 +214,10 @@ export class SentinelToolExecutor {
             // Inject right below the target header (plus a newline)
             const injectionPoint = headerIndex + targetHeader.length + 1;
 
-            // Format content properly for injection (bullet point logic enforced)
+            // Format content properly for injection
             let formattedContent = content;
             if (!content.trim().startsWith('-')) {
-                formattedContent = `- > *(AI 整理，非原话)*\n\n- ${content}`;
-            } else {
-                formattedContent = `> *(AI 整理，非原话)*\n\n${content}`;
+                formattedContent = `- ${content}`;
             }
 
             const newContent = fileContent.slice(0, injectionPoint) +
