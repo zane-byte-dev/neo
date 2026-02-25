@@ -10,23 +10,13 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_WORK_DIR = process.env.GEMINI_WORK_DIR; // Required working directory for loading personas/system prompts
 
-// ==================== Persona Router ====================
+// ==================== Persona Router Data ====================
 
-/**
- * Persona 定义：关键词 → Persona 文件名（不含扩展名）
- */
-const PERSONA_RULES: { keywords: string[]; file: string; name: string }[] = [
-    {
-        name: '🌋 作家 Writer',
-        file: '作家',
-        keywords: ['写文章', '沉淀', '系统化', '长文', '整理', '笔记', '总结', '输出'],
-    },
-    {
-        name: '🎩 西风 West Wind',
-        file: '西风',
-        keywords: ['方向', '决策', '怎么看', '人性', '分析', '战略', '选择', '判断', '审视', '反思'],
-    }
-];
+export interface PersonaRule {
+    keywords: string[];
+    file: string;
+    name: string;
+}
 
 /**
  * 无触发词时的默认 Persona（fallback）
@@ -35,19 +25,7 @@ const PERSONA_RULES: { keywords: string[]; file: string; name: string }[] = [
  */
 const DEFAULT_PERSONA = { file: '西风', name: '🎩 西风 West Wind (default)' };
 
-/**
- * 根据消息内容检测应使用的 Persona
- * 无匹配时返回 DEFAULT_PERSONA（而非 null）
- */
-function detectPersona(message: string): { file: string; name: string } {
-    const lower = message.toLowerCase();
-    for (const rule of PERSONA_RULES) {
-        if (rule.keywords.some(kw => lower.includes(kw.toLowerCase()))) {
-            return { file: rule.file, name: rule.name };
-        }
-    }
-    return DEFAULT_PERSONA;
-}
+
 
 import { sentinelToolDeclarations, SentinelToolExecutor } from './gemini-tools.js';
 
@@ -58,6 +36,7 @@ export class GeminiClient {
     private workDir?: string;
     private systemContext: string = '';
     private personasDir?: string;
+    private dynamicPersonaRules: PersonaRule[] = [];
 
     private genAI?: GoogleGenerativeAI;
     private cachedModels: Map<string, GenerativeModel> = new Map();
@@ -80,7 +59,7 @@ export class GeminiClient {
     }
 
     /**
-     * Load base system context from GEMINI.md
+     * Load base system context from GEMINI.md and extract persona keywords dynamically
      */
     private loadSystemContext() {
         if (!this.workDir) return;
@@ -90,12 +69,69 @@ export class GeminiClient {
             try {
                 this.systemContext = readFileSync(loc, 'utf-8');
                 console.log(`[Gemini SDK] ✅ Loaded system context from: ${loc}`);
+                this.parsePersonaRules(this.systemContext);
                 return;
             } catch (err) {
                 console.warn(`[Gemini SDK] ⚠️ Failed to read context from ${loc}: ${err}`);
             }
         }
         console.log('[Gemini SDK] ℹ️ No GEMINI.md context found. Working in naked mode.');
+    }
+
+    /**
+     * Parse systemContext to dynamically extract routing rules.
+     * Looks for markdown patterns like:
+     * ### 2. 🎩 西风（决策/审计） - [[system/persona/西风.md]]
+     * *   **关键词**：方向、决策、怎么看、审计、分析。
+     */
+    private parsePersonaRules(text: string) {
+        this.dynamicPersonaRules = [];
+        const blocks = text.split('### ');
+
+        for (const block of blocks) {
+            // Check if this block defines a persona link
+            const fileMatch = block.match(/\[\[system\/persona\/(.+?)\.md\]\]/);
+            if (!fileMatch) continue;
+
+            const file = fileMatch[1];
+
+            // Extract display name from the title line
+            const firstLine = block.split('\n')[0];
+            let name = file;
+            const nameMatch = firstLine.match(/\d+\.\s+([^（(]+)/);
+            if (nameMatch) {
+                name = nameMatch[1].trim();
+            }
+
+            // Extract keywords
+            const keywordMatch = block.match(/\*\*关键词\*\*[:：]\s*(.+)/);
+            let keywords: string[] = [];
+            if (keywordMatch) {
+                // remove trailing punctuation, then split by common separators
+                const raw = keywordMatch[1].replace(/[。.\s]+$/, '');
+                keywords = raw.split(/[,，、]+/).map(k => k.trim()).filter(Boolean);
+            }
+
+            if (keywords.length > 0) {
+                this.dynamicPersonaRules.push({ name, file, keywords });
+            }
+        }
+
+        console.log(`[Gemini SDK] 🎭 Dynamically discovered ${this.dynamicPersonaRules.length} personas from GEMINI.md`);
+        this.dynamicPersonaRules.forEach(r => console.log(`   - ${r.name}: [${r.keywords.join(', ')}]`));
+    }
+
+    /**
+     * 根据消息内容检测应使用的 Persona (从动态词库中)
+     */
+    public detectPersona(message: string): { file: string; name: string } {
+        const lower = message.toLowerCase();
+        for (const rule of this.dynamicPersonaRules) {
+            if (rule.keywords.some(kw => lower.includes(kw.toLowerCase()))) {
+                return { file: rule.file, name: rule.name };
+            }
+        }
+        return DEFAULT_PERSONA;
     }
 
     /**
@@ -243,7 +279,7 @@ export class GeminiClient {
      * Chat with conversation context (legacy wrapper support)
      */
     async chatWithContext(message: string, conversationHistory: string): Promise<string | null> {
-        const persona = detectPersona(message);
+        const persona = this.detectPersona(message);
         return this.generateResponse(message, persona, conversationHistory);
     }
 
@@ -251,7 +287,7 @@ export class GeminiClient {
      * Simple chat (legacy wrapper support)
      */
     async chat(message: string): Promise<string | null> {
-        const persona = detectPersona(message);
+        const persona = this.detectPersona(message);
         return this.generateResponse(message, persona);
     }
 
