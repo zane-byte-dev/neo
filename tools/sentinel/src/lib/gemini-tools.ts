@@ -12,7 +12,7 @@ export const sentinelToolDeclarations: FunctionDeclaration[] = [
             properties: {
                 section: {
                     type: SchemaType.STRING,
-                    description: "The targeted section to append to. Must be either '流水' (streams of events) or '深度思考' (deep thoughts).",
+                    description: "The targeted section to append to. Must contain '流水' (streams of events) or '深度思考' (deep thoughts).",
                 },
                 content: {
                     type: SchemaType.STRING,
@@ -39,6 +39,20 @@ export const sentinelToolDeclarations: FunctionDeclaration[] = [
             },
             required: ["relativePath"],
         },
+    },
+    {
+        name: "search_files",
+        description: "Search for markdown files in the workspace by filename or keyword in filename. Use this when you don't know the exact relative path.",
+        parameters: {
+            type: SchemaType.OBJECT,
+            properties: {
+                query: {
+                    type: SchemaType.STRING,
+                    description: "The keyword or filename to search for (e.g., 'tasks', 'dashboard').",
+                }
+            },
+            required: ["query"],
+        },
     }
 ];
 
@@ -63,6 +77,8 @@ export class SentinelToolExecutor {
             switch (functionName) {
                 case "read_markdown_file":
                     return await this.readMarkdownFile(args.relativePath);
+                case "search_files":
+                    return await this.searchFiles(args.query);
                 case "append_diary_entry":
                     return await this.appendDiaryEntry(args.section, args.content, args.dateOverride);
                 default:
@@ -87,7 +103,54 @@ export class SentinelToolExecutor {
             const content = await fs.readFile(targetPath, 'utf-8');
             return { content };
         } catch (error: any) {
-            return { error: `Failed to read file: ${error.message}` };
+            return { error: `Failed to read file: ${error.message}. TIP: You might want to use 'search_files' tool to find the correct path first.` };
+        }
+    }
+
+    private async searchFiles(query: string): Promise<any> {
+        if (!query || query.trim().length === 0) {
+            return { error: "Search query cannot be empty." };
+        }
+
+        const excludeDirs = ['.git', 'node_modules', 'dist', 'node_modules', '.obsidian'];
+        const results: string[] = [];
+        const self = this;
+
+        async function walk(dir: string) {
+            let entries;
+            try {
+                entries = await fs.readdir(dir, { withFileTypes: true });
+            } catch (err) {
+                return; // Suppress permission/access errors gracefully
+            }
+
+            for (const entry of entries) {
+                if (entry.isDirectory()) {
+                    if (!excludeDirs.includes(entry.name) && !entry.name.startsWith('.')) {
+                        await walk(path.join(dir, entry.name));
+                    }
+                } else if (entry.name.endsWith('.md')) {
+                    if (entry.name.toLowerCase().includes(query.toLowerCase())) {
+                        results.push(path.relative(self.workDir, path.join(dir, entry.name)));
+                    }
+                }
+            }
+        }
+
+        try {
+            await walk(this.workDir);
+
+            if (results.length === 0) {
+                return { error: `No markdown files found whose names contain '${query}'` };
+            }
+
+            // Limit to top 20 to avoid exceeding context window
+            return {
+                matches: results.slice(0, 20),
+                totalFound: results.length,
+            };
+        } catch (error: any) {
+            return { error: `Search failed: ${error.message}` };
         }
     }
 
@@ -103,14 +166,15 @@ export class SentinelToolExecutor {
             fileContent = `# 📝 ${targetDate}\n\n## 🟢 流水\n\n## 🧠 深度思考\n\n## 🍎 知识增量\n`;
         }
 
-        const sectionHeaderMap: Record<string, string> = {
-            '流水': '## 🟢 流水',
-            '深度思考': '## 🧠 深度思考'
-        };
+        let targetHeader = "";
+        if (section.includes('流水')) {
+            targetHeader = '## 🟢 流水';
+        } else if (section.includes('思考') || section.includes('深度思考')) {
+            targetHeader = '## 🧠 深度思考';
+        }
 
-        const targetHeader = sectionHeaderMap[section];
         if (!targetHeader) {
-            return { error: `Invalid section '${section}'. Must be '流水' or '深度思考'` };
+            return { error: `Invalid section '${section}'. Must contain '流水' or '深度思考'` };
         }
 
         // Find where to inject
