@@ -377,7 +377,18 @@ class NeoAgentBot {
         console.log(`🤖 Bot started. Auth Chat ID: ${AUTHORIZED_CHAT_ID || 'ALL'}`);
         console.log(`🛠  Gemini CLI enabled: ${geminiClient.isEnabled()}`);
 
-        this.bot.launch();
+        this.bot.launch().then(() => {
+            if (AUTHORIZED_CHAT_ID) {
+                const timeStr = new Date().toLocaleString('zh-CN');
+                this.bot.telegram.sendMessage(
+                    AUTHORIZED_CHAT_ID,
+                    `🤖 **NeoAgent (Sentinel)** 已于 ${timeStr} 启动/重启。\n` +
+                    `✅ 守护进程在线\n` +
+                    `✅ 管家定时巡检已激活 (每日凌晨 2:00)`,
+                    { parse_mode: 'Markdown' }
+                ).catch(err => console.error('[Startup Message Failed]', err));
+            }
+        });
 
         // Enable graceful stop
         process.once('SIGINT', () => this.bot.stop('SIGINT'));
