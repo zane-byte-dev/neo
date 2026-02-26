@@ -28,6 +28,14 @@
         "go_back": "后退",
         "toggle_explorer": "切换文件树显示",
         "toggle_assistant": "切换智能助手显示",
-        "search_placeholder": "搜索笔记或命令..."
+        "search_placeholder": "搜索笔记或命令...",
+        "new_file": "新建文件",
+        "new_folder": "新建目录",
+        "cut": "剪切",
+        "copy": "复制",
+        "paste": "粘贴",
+        "rename": "重命名",
+        "delete": "删除",
+        "delete_confirm": "你确定要删除吗"
     }
 }

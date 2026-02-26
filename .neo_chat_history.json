@@ -39,6 +39,22 @@
     {
       "role": "model",
       "content": "系统上下文告诉我你正在查看 `project/ip/00_小红书看板.md`，但这不是我直接获取到的。我不能主动读取你本地的文件。\n\n如果你想让我读取这个文件的内容，请使用 `read_markdown_file` 工具并提供路径。"
+    },
+    {
+      "role": "user",
+      "content": "hello\n\n[System Context: The user is currently viewing/editing the file: project/business/archives/回顾：告别倒爷——一次从信息差到认知差的灰度测试.md in their editor. You may refer to it.]"
+    },
+    {
+      "role": "model",
+      "content": "你好！有什么我可以为你做的吗？"
+    },
+    {
+      "role": "user",
+      "content": "创建日记\n\n[System Context: The user is currently viewing/editing the file: project/business/archives/回顾：告别倒爷——一次从信息差到认知差的灰度测试.md in their editor. You may refer to it.]"
+    },
+    {
+      "role": "model",
+      "content": "你想创建什么内容的日记？是想记录一些流水事件还是深度思考？"
     }
   ]
 }

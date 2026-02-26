@@ -247,3 +247,90 @@ pub async fn write_markdown_file(
 
     fs::write(&target_path, content).map_err(|e| format!("Failed to write file: {}", e))
 }
+
+#[tauri::command]
+pub async fn create_directory(
+    state: State<'_, AppState>,
+    relative_path: String,
+) -> Result<(), String> {
+    let config = state.config.lock().await;
+    let vault_path = &config.vault_path;
+    if vault_path.is_empty() { return Err("Vault path is not configured".into()); }
+    let target_path = Path::new(vault_path).join(&relative_path);
+    if !target_path.starts_with(vault_path) { return Err("Security violation".into()); }
+    fs::create_dir_all(&target_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_path(
+    state: State<'_, AppState>,
+    relative_path: String,
+) -> Result<(), String> {
+    let config = state.config.lock().await;
+    let vault_path = &config.vault_path;
+    if vault_path.is_empty() { return Err("Vault path is not configured".into()); }
+    let target_path = Path::new(vault_path).join(&relative_path);
+    if !target_path.starts_with(vault_path) { return Err("Security violation".into()); }
+    if target_path.is_dir() {
+        fs::remove_dir_all(&target_path).map_err(|e| e.to_string())
+    } else {
+        fs::remove_file(&target_path).map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn move_path(
+    state: State<'_, AppState>,
+    from_path: String,
+    to_path: String,
+) -> Result<(), String> {
+    let config = state.config.lock().await;
+    let vault_path = &config.vault_path;
+    if vault_path.is_empty() { return Err("Vault path is not configured".into()); }
+    let source = Path::new(vault_path).join(&from_path);
+    let target = Path::new(vault_path).join(&to_path);
+    if !source.starts_with(vault_path) || !target.starts_with(vault_path) { return Err("Security violation".into()); }
+    
+    if let Some(parent) = target.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::rename(&source, &target).map_err(|e| e.to_string())
+}
+
+fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> std::io::Result<()> {
+    fs::create_dir_all(&destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let target = destination.as_ref().join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_recursively(entry.path(), target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn copy_path(
+    state: State<'_, AppState>,
+    from_path: String,
+    to_path: String,
+) -> Result<(), String> {
+    let config = state.config.lock().await;
+    let vault_path = &config.vault_path;
+    if vault_path.is_empty() { return Err("Vault path is not configured".into()); }
+    let source = Path::new(vault_path).join(&from_path);
+    let target = Path::new(vault_path).join(&to_path);
+    if !source.starts_with(vault_path) || !target.starts_with(vault_path) { return Err("Security violation".into()); }
+    
+    if let Some(parent) = target.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    
+    if source.is_dir() {
+        copy_recursively(&source, &target).map_err(|e| e.to_string())
+    } else {
+        fs::copy(&source, &target).map_err(|e| e.to_string()).map(|_| ())
+    }
+}

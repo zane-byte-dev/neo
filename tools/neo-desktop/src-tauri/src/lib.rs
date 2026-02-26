@@ -22,6 +22,10 @@ pub fn run() {
             file_ops::search_files,
             file_ops::append_diary_entry,
             file_ops::list_directory,
+            file_ops::create_directory,
+            file_ops::delete_path,
+            file_ops::move_path,
+            file_ops::copy_path,
             chat::load_chat_history,
             chat::save_chat_history,
             chat::clear_chat_history

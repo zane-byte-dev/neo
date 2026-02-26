@@ -21,12 +21,14 @@ function FileTreeItem({
   node,
   depth = 0,
   selectedPath,
-  onSelectFile
+  onSelectFile,
+  onContextMenu
 }: {
   node: { name: string, path: string, is_dir: boolean };
   depth?: number;
   selectedPath: string | null;
   onSelectFile: (path: string) => void;
+  onContextMenu?: (e: React.MouseEvent, node: { name: string, path: string, is_dir: boolean }) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [children, setChildren] = useState<{ name: string, path: string, is_dir: boolean }[]>([]);
@@ -57,6 +59,7 @@ function FileTreeItem({
     <div>
       <div
         onClick={handleClick}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu && onContextMenu(e, node); }}
         className={`flex items-center gap-1.5 py-1.5 pr-3 cursor-pointer select-none text-sm group transition-colors 
           ${isSelected && !node.is_dir ? "bg-black text-white" : "hover:bg-gray-200 text-gray-700"}`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
@@ -88,6 +91,7 @@ function FileTreeItem({
               depth={depth + 1}
               selectedPath={selectedPath}
               onSelectFile={onSelectFile}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>
@@ -169,6 +173,104 @@ function App() {
 
   const [showExplorer, setShowExplorer] = useState(true);
   const [showAssistant, setShowAssistant] = useState(true);
+
+  // Context Menu States
+  const [contextMenu, setContextMenu] = useState<{ x: number, y: number, node: { name: string, path: string, is_dir: boolean } | null } | null>(null);
+  const [clipboard, setClipboard] = useState<{ path: string, isCut: boolean } | null>(null);
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
+
+  const handleContextMenu = (e: React.MouseEvent, node: { name: string, path: string, is_dir: boolean } | null) => {
+    e.preventDefault();
+    setContextMenu({ x: e.pageX, y: e.pageY, node });
+  };
+
+  const handleNewFile = async () => {
+    const parentPath = contextMenu?.node ? (contextMenu.node.is_dir ? contextMenu.node.path : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'))) : "";
+    const fileName = prompt(t("new_file"));
+    if (fileName) {
+      const fullPath = parentPath ? `${parentPath}/${fileName}${fileName.endsWith('.md') ? '' : '.md'}` : `${fileName}${fileName.endsWith('.md') ? '' : '.md'}`;
+      try {
+        await invoke("write_markdown_file", { relativePath: fullPath, content: "" });
+        loadRootFiles();
+      } catch (e) { alert(e); }
+    }
+  };
+
+  const handleNewFolder = async () => {
+    const parentPath = contextMenu?.node ? (contextMenu.node.is_dir ? contextMenu.node.path : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'))) : "";
+    const folderName = prompt(t("new_folder"));
+    if (folderName) {
+      const fullPath = parentPath ? `${parentPath}/${folderName}` : folderName;
+      try {
+        await invoke("create_directory", { relativePath: fullPath });
+        loadRootFiles();
+      } catch (e) { alert(e); }
+    }
+  };
+
+  const handleCut = () => {
+    if (contextMenu?.node) setClipboard({ path: contextMenu.node.path, isCut: true });
+  };
+
+  const handleCopy = () => {
+    if (contextMenu?.node) setClipboard({ path: contextMenu.node.path, isCut: false });
+  };
+
+  const handlePaste = async () => {
+    if (!clipboard) return;
+    const parentPath = contextMenu?.node ? (contextMenu.node.is_dir ? contextMenu.node.path : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'))) : "";
+    const itemName = clipboard.path.split('/').pop() || "";
+    const targetPath = parentPath ? `${parentPath}/${itemName}` : itemName;
+
+    try {
+      if (clipboard.isCut) {
+        await invoke("move_path", { fromPath: clipboard.path, toPath: targetPath });
+        setClipboard(null);
+      } else {
+        await invoke("copy_path", { fromPath: clipboard.path, toPath: targetPath });
+      }
+      loadRootFiles();
+    } catch (e) { alert(e); }
+  };
+
+  const handleRename = async () => {
+    if (!contextMenu?.node) return;
+    const currentName = contextMenu.node.name;
+    const parentPath = contextMenu.node.is_dir ? contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/')) : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'));
+
+    // Prompt for new name
+    const newName = prompt(t("rename"), currentName);
+    if (newName && newName !== currentName) {
+      const targetName = contextMenu.node.is_dir ? newName : (newName.endsWith('.md') ? newName : `${newName}.md`);
+      const targetPath = parentPath ? `${parentPath}/${targetName}` : targetName;
+      try {
+        await invoke("move_path", { fromPath: contextMenu.node.path, toPath: targetPath });
+        if (selectedFile === contextMenu.node.path) {
+          setSelectedFile(targetPath); // Auto update selection
+        }
+        loadRootFiles();
+      } catch (e) { alert(e); }
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!contextMenu?.node) return;
+    if (confirm(`${t("delete_confirm")} '${contextMenu.node.name}'?`)) {
+      try {
+        await invoke("delete_path", { relativePath: contextMenu.node.path });
+        if (selectedFile === contextMenu.node.path) {
+          setSelectedFile(null);
+          setFileContent("");
+        }
+        loadRootFiles();
+      } catch (e) { alert(e); }
+    }
+  };
 
   useEffect(() => {
     async function loadConfig() {
@@ -607,13 +709,17 @@ function App() {
                           <span className="font-semibold text-xs tracking-wide uppercase">{t("vault_explorer")}</span>
                         </div>
                       </div>
-                      <div className="flex-1 overflow-y-auto py-2">
+                      <div
+                        className="flex-1 overflow-y-auto py-2"
+                        onContextMenu={(e) => handleContextMenu(e, null)}
+                      >
                         {rootNodes.map((node, idx) => (
                           <FileTreeItem
                             key={`${node.path}-${idx}`}
                             node={node}
                             selectedPath={selectedFile}
                             onSelectFile={handleSelectFile}
+                            onContextMenu={handleContextMenu}
                           />
                         ))}
                         {rootNodes.length === 0 && (
@@ -804,6 +910,34 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Context Menu */}
+        {contextMenu && (
+          <div
+            className="fixed z-50 bg-white border border-gray-200 shadow-xl rounded-lg py-1 w-48 text-sm"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+          >
+            <button onClick={handleNewFile} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("new_file")}</button>
+            <button onClick={handleNewFolder} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("new_folder")}</button>
+            {contextMenu.node && (
+              <>
+                <div className="h-px bg-gray-100 my-1"></div>
+                <button onClick={handleCut} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("cut")}</button>
+                <button onClick={handleCopy} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("copy")}</button>
+                <div className="h-px bg-gray-100 my-1"></div>
+                <button onClick={handleRename} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("rename")}</button>
+              </>
+            )}
+            <button onClick={handlePaste} disabled={!clipboard} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-black">{t("paste")}</button>
+            {contextMenu.node && (
+              <>
+                <div className="h-px bg-gray-100 my-1"></div>
+                <button onClick={handleDelete} className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-600 hover:text-white transition-colors">{t("delete")}</button>
+              </>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );

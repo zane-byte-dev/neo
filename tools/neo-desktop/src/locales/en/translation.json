@@ -28,6 +28,14 @@
         "go_back": "Go Back",
         "toggle_explorer": "Toggle Explorer",
         "toggle_assistant": "Toggle Assistant",
-        "search_placeholder": "Search notes or commands..."
+        "search_placeholder": "Search notes or commands...",
+        "new_file": "New File",
+        "new_folder": "New Folder",
+        "cut": "Cut",
+        "copy": "Copy",
+        "paste": "Paste",
+        "rename": "Rename",
+        "delete": "Delete",
+        "delete_confirm": "Are you sure you want to delete"
     }
 }
