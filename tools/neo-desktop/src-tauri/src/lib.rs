@@ -1,12 +1,19 @@
 mod config;
 mod file_ops;
 mod chat;
+mod cli;
+mod genai;
+mod tg_bot;
 
 use config::{AppState, load_config_sync};
 use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if cli::handle_cli_args() {
+        std::process::exit(0);
+    }
+
     let initial_config = load_config_sync();
     
     tauri::Builder::default()
