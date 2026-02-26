@@ -21,7 +21,7 @@ pub fn handle_cli_args() -> bool {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
             let start_time = std::time::Instant::now();
-            match crate::genai::run_skill(&skill_name, extra_args).await {
+            match crate::genai::run_skill(skill_name.clone(), extra_args).await {
                 Ok(response) => {
                     let elapsed = start_time.elapsed().as_secs_f64();
                     println!("=========================================\n");

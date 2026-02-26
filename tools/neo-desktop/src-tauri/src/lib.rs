@@ -35,7 +35,9 @@ pub fn run() {
             file_ops::copy_path,
             chat::load_chat_history,
             chat::save_chat_history,
-            chat::clear_chat_history
+            chat::clear_chat_history,
+            genai::run_skill,
+            genai::chat
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

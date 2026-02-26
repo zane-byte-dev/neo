@@ -1,5 +1,5 @@
 use crate::config::AppState;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::State;

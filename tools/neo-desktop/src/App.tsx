@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { useState, useEffect, useRef } from "react";
 import { Settings, User, Bot, Send, Loader2, Trash2, FileText, ChevronRight, ChevronDown, Folder, File as FileIcon, Edit3, Save, ArrowLeft, PanelLeft, PanelRight, Search } from "lucide-react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useTranslation } from "react-i18next";
@@ -273,49 +272,6 @@ interface AppConfig {
   vault_path: string;
   gemini_api_key: string;
 }
-
-export const sentinelToolDeclarations = [
-  {
-    name: "append_diary_entry",
-    description: "Append a new entry to today's diary. Forces writing under specific sections like '流水' or '深度思考' without overwriting existing content. Use this to safely log information for the user.",
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        section: { type: "STRING", description: "The targeted section to append to. Must contain '流水' (streams of events) or '深度思考' (deep thoughts)." },
-        content: { type: "STRING", description: "The markdown content to append. Should be concise and use bullet points." },
-        dateOverride: { type: "STRING", description: "Optional. 'YYYY-MM-DD' if you need to append to a specific past date. Defaults to today." }
-      },
-      required: ["section", "content"],
-    }
-  },
-  {
-    name: "read_markdown_file",
-    description: "Read the content of a markdown file from the knowledge base safely. Provide a relative path like 'history/2026-02-24.md' or 'system/skill/写日记.md'.",
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        relativePath: { type: "STRING", description: "Relative path to the markdown file from the root vault workspace." }
-      },
-      required: ["relativePath"],
-    }
-  },
-  {
-    name: "search_files",
-    description: "Search for markdown files in the workspace by filename or keyword in filename. Use this when you don't know the exact relative path.",
-    parameters: {
-      type: "OBJECT",
-      properties: {
-        query: { type: "STRING", description: "The keyword or filename to search for (e.g., 'tasks', 'dashboard')." }
-      },
-      required: ["query"],
-    }
-  }
-];
-
-interface AppConfig {
-  vault_path: string;
-  gemini_api_key: string;
-}
 function App() {
   const { t, i18n } = useTranslation();
   const [vaultPath, setVaultPath] = useState("");
@@ -557,7 +513,7 @@ function App() {
         setApiKey(config.gemini_api_key);
 
         if (config.vault_path && config.gemini_api_key) {
-          initGemini(config.gemini_api_key);
+          initGemini();
         } else {
           setActiveTab("settings");
         }
@@ -669,29 +625,9 @@ function App() {
     }
   };
 
-  const initGemini = async (key: string) => {
+  const initGemini = async () => {
     try {
       setInitError(null);
-      console.log("initGemini starting API check...");
-      const genAI = new GoogleGenerativeAI(key);
-      let sysInstruction = "You are Neo Sentinel, a helpful assistant managing the user's Markdown vault. You are currently interacting through the Neo Desktop application being developed. Relax your persona slightly and be conversational, helpful, and concise.\n\n";
-
-      try {
-        console.log("Fetching GEMINI.md system prompt...");
-        const content: string = await invoke("read_markdown_file", { relativePath: "system/GEMINI.md" });
-        if (content) sysInstruction += "\n\nCRITICAL KNOWLEDGE AND PERSONA DEFINITIONS:\n\n" + content;
-      } catch (e) {
-        console.log("No custom system/GEMINI.md found or read failed, using default.");
-      }
-
-      sysInstruction += `\n\n[Critical System Rules]\n- You MUST respond strictly in CHINESE (简体中文).\n- NEVER output repetitive reasoning logs or think out loud formatting.\n- Be direct, concise, and professional without generic AI phrases.\n- Current Time Context: ${new Date().toLocaleString('zh-CN')}\n`;
-
-      const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
-        systemInstruction: sysInstruction,
-        tools: [{ functionDeclarations: sentinelToolDeclarations as any }],
-      });
-
       // Load history
       const historyRes: any = await invoke("load_chat_history").catch((e) => {
         console.warn("Failed to load history:", e);
@@ -699,12 +635,7 @@ function App() {
       });
       const pastMessages = historyRes.messages || [];
 
-      console.log("Starting chat with history length:", pastMessages.length);
-      const session = model.startChat({
-        history: pastMessages.map((m: any) => ({ role: m.role, parts: [{ text: m.content || "" }] }))
-      });
-      setChatSession(session);
-      console.log("Chat session initialized successfully");
+      setChatSession(true); // Flag to say AI is ready
       setMessages(pastMessages.map((m: any) => ({ role: m.role, text: m.content || "" })));
     } catch (err: any) {
       console.error("Failed init gemini:", err);
@@ -721,7 +652,7 @@ function App() {
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
     if (!chatSession) {
-      console.error("Cannot send message: chatSession is null");
+      console.error("Cannot send message: AI is not initialized");
       alert("AI is not initialized properly. Please check API key and restart.");
       return;
     }
@@ -737,76 +668,34 @@ function App() {
     const finalPrompt = userMsg + promptContext;
 
     try {
-      const result = await chatSession.sendMessage(finalPrompt);
-      const calls = result.response.functionCalls();
+      let responseText = "";
 
-      if (calls && calls.length > 0) {
-        setMessages(prev => [...prev, { role: "model", text: `> Using tool: ${calls[0].name}...` }]);
-        const call = calls[0];
+      // Format history
+      const formattedHistory = messages.map(m => ({
+        role: m.role,
+        parts: [{ text: m.text }]
+      }));
 
-        let toolResultStr = "";
-        try {
-          if (call.name === "read_markdown_file") {
-            const relPath = (call.args as any).relativePath;
-            const res = await invoke("read_markdown_file", { relativePath: relPath });
-            toolResultStr = JSON.stringify({ content: res });
-            // Auto open the file in the UI
-            setSelectedFile(relPath);
-            setEditorMode("view");
-            setFileContent(res as string);
-          } else if (call.name === "search_files") {
-            const res = await invoke("search_files", { query: (call.args as any).query });
-            toolResultStr = JSON.stringify(res);
-          } else if (call.name === "append_diary_entry") {
-            const args = call.args as any;
-            const res = await invoke("append_diary_entry", {
-              section: args.section,
-              content: args.content,
-              dateOverride: args.dateOverride || null
-            });
-            toolResultStr = JSON.stringify({ success: res });
-
-            // Auto open the diary file after appending
-            const targetDate = args.dateOverride || new Date().toISOString().split('T')[0];
-            const year = targetDate.split('-')[0];
-            const month = targetDate.split('-')[1];
-            const relPath = `history/${year}/${month}/${targetDate}.md`;
-            try {
-              const newContent = await invoke("read_markdown_file", { relativePath: relPath });
-              setSelectedFile(relPath);
-              setEditorMode("view");
-              setFileContent(newContent as string);
-            } catch (e) {
-              console.error("Failed to auto-open diary after append", e);
-            }
-          } else {
-            toolResultStr = JSON.stringify({ error: "Unknown tool" });
-          }
-        } catch (e: any) {
-          toolResultStr = JSON.stringify({ error: e.toString() });
-        }
-
-        const toolResponseResult = await chatSession.sendMessage([{
-          functionResponse: { name: call.name, response: JSON.parse(toolResultStr) }
-        }]);
-
-        setMessages(prev => {
-          const newMsg = [...prev];
-          newMsg[newMsg.length - 1] = { role: "model", text: toolResponseResult.response.text() };
-          return newMsg;
-        });
-
+      if (userMsg.trim().startsWith("/skill ")) {
+        const parts = userMsg.trim().split(" ");
+        const skillName = parts[1];
+        const args = parts.slice(2);
+        responseText = await invoke("run_skill", { skillName, args });
       } else {
-        setMessages(prev => [...prev, { role: "model", text: result.response.text() }]);
+        responseText = await invoke("chat", { prompt: finalPrompt, history: formattedHistory });
       }
 
-      // Save history
-      const currentHistory = await chatSession.getHistory();
-      const storableHistory = currentHistory.map((m: any) => ({ role: m.role, content: m.parts[0].text }));
+      setMessages(prev => [...prev, { role: "model", text: responseText }]);
+
+      // Save history incrementally
+      const storableHistory = [...messages, { role: "user", text: finalPrompt }, { role: "model", text: responseText }].map(m => ({
+        role: m.role,
+        content: m.text
+      }));
       await invoke("save_chat_history", { history: { messages: storableHistory } }).catch(console.error);
 
     } catch (error: any) {
-      setMessages(prev => [...prev, { role: "model", text: `Error: ${error.message}` }]);
+      setMessages(prev => [...prev, { role: "model", text: `Error: ${error.message || error.toString()}` }]);
     } finally {
       setIsTyping(false);
     }
@@ -817,7 +706,7 @@ function App() {
       await invoke("clear_chat_history");
       setMessages([]);
       if (apiKey) {
-        initGemini(apiKey); // Re-initialize a blank session
+        initGemini(); // Re-initialize a blank session
       }
     } catch (e) {
       alert(`Failed to clear history: ${e}`);

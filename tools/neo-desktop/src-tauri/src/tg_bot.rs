@@ -53,7 +53,7 @@ async fn commands_handler(bot: Bot, msg: Message, cmd: Command) -> ResponseResul
 
             bot.send_message(msg.chat.id, format!("💭 正在执行技能 [{}]...", skill_name)).await?;
 
-            match genai::run_skill(skill_name, extra_args).await {
+            match genai::run_skill(skill_name.to_string(), extra_args).await {
                 Ok(response) => {
                     bot.send_message(msg.chat.id, response).await?;
                 }
@@ -79,7 +79,7 @@ async fn message_handler(bot: Bot, msg: Message) -> ResponseResult<()> {
         // For now, let's treat general chat as a skill call to "chat" or just a direct Gemini call
         // Since we don't have a dedicated "chat" skill yet, we can either implement one 
         // or just use a default prompt. For integration, let's try calling "chat" skill if it exists.
-        match genai::run_skill("chat", vec![text.to_string()]).await {
+        match genai::run_skill("chat".to_string(), vec![text.to_string()]).await {
             Ok(response) => {
                 bot.send_message(msg.chat.id, response).await?;
             }
