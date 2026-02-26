@@ -8,8 +8,8 @@
 *   📝 [[tasks]]
 
 ## 2. 本周任务（限定2个）
-*   [ ] MTOP Gateway 支持 Proxy 能力。
-*   [ ] metaq-poller-go 上预发。
+*   [ ] MTOP Gateway 支持 Proxy 能力。（今日：修复 proxy port 配置）
+*   [x] metaq-poller-go 上预发。（今日：推灰度发布）
 
 ## 3. 📈 决策与里程碑
 *   **2026-02-08**: 完成千问独立集群部署与 6 域名分片，彻底解决 Redis 热点 Key 引发的 RT 超时。

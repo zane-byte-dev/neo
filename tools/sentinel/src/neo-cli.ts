@@ -82,6 +82,33 @@ async function main() {
         return; // 进入事件循环，等待输入
     }
 
+    // Skill 执行模式 (Run mode)
+    if (args[0] === 'run' && args.length >= 2) {
+        const skillName = args[1];
+        const skillArgs = args.slice(2);
+
+        try {
+            console.log(`[Neo] 💭 技能 [${skillName}] 执行中...\n`);
+            const startTime = Date.now();
+
+            const response = await client.runSkill(skillName, skillArgs);
+
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+
+            console.log("=========================================\n");
+            if (response) {
+                console.log(response);
+            } else {
+                console.log("⚠️ （技能执行无返回数据或技能不存在）");
+            }
+            console.log(`\n========================================= (⏱️  ${elapsed}s)`);
+        } catch (e: any) {
+            console.error("🔥 技能执行异常:", e.message || e);
+            process.exit(1);
+        }
+        return;
+    }
+
     // 单次执行模式 (Shot mode)
     const message = args.join(' ');
 

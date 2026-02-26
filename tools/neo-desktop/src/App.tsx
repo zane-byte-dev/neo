@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { useState, useEffect, useRef } from "react";
 import { Settings, User, Bot, Send, Loader2, Trash2, FileText, ChevronRight, ChevronDown, Folder, File as FileIcon, Edit3, Save, ArrowLeft, PanelLeft, PanelRight, Search } from "lucide-react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -16,38 +17,154 @@ const ResizeHandle = () => (
   </PanelResizeHandle>
 );
 
-// --- File Tree Component ---
+function FileTreeInput({
+  initialValue,
+  type,
+  depth = 0,
+  onSubmit,
+  onCancel
+}: {
+  initialValue: string;
+  type: 'rename' | 'new_file' | 'new_folder';
+  depth?: number;
+  onSubmit: (val: string) => void;
+  onCancel: () => void;
+}) {
+  const [val, setVal] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isCanceled = useRef(false);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    if (type !== 'new_folder' && val.endsWith('.md')) {
+      inputRef.current?.setSelectionRange(0, val.length - 3);
+    } else {
+      inputRef.current?.select();
+    }
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      if (val.trim()) {
+        onSubmit(val.trim());
+      } else {
+        isCanceled.current = true;
+        onCancel();
+      }
+    } else if (e.key === 'Escape') {
+      isCanceled.current = true;
+      onCancel();
+    }
+  };
+
+  const handleBlur = () => {
+    if (!isCanceled.current) {
+      if (val.trim()) {
+        onSubmit(val.trim());
+      } else {
+        onCancel();
+      }
+    }
+  };
+
+  return (
+    <div
+      className="flex items-center gap-1.5 py-1.5 pr-3 text-sm bg-blue-50/50"
+      style={{ paddingLeft: `${depth * 12 + 8}px` }}
+    >
+      <span className="w-4 flex-shrink-0" />
+      {type === 'new_folder' ? (
+        <Folder size={14} className="flex-shrink-0 text-blue-500" />
+      ) : (
+        <FileIcon size={14} className="flex-shrink-0 text-gray-400" />
+      )}
+      <input
+        ref={inputRef}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
+        className="flex-1 bg-white border border-blue-400 rounded px-1 text-sm outline-none w-full shadow-sm"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </div>
+  );
+}
+
 function FileTreeItem({
   node,
   depth = 0,
   selectedPath,
   onSelectFile,
-  onContextMenu
+  onContextMenu,
+  refreshTrigger,
+  editAction,
+  onEditSubmit,
+  onEditCancel,
+  onDropNode
 }: {
   node: { name: string, path: string, is_dir: boolean };
   depth?: number;
   selectedPath: string | null;
   onSelectFile: (path: string) => void;
   onContextMenu?: (e: React.MouseEvent, node: { name: string, path: string, is_dir: boolean }) => void;
+  refreshTrigger?: number;
+  editAction?: { id: string, type: 'rename' | 'new_file' | 'new_folder', path: string, initialValue: string } | null;
+  onEditSubmit?: (val: string, action: any) => void;
+  onEditCancel?: () => void;
+  onDropNode?: (sourcePath: string, targetPath: string) => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [children, setChildren] = useState<{ name: string, path: string, is_dir: boolean }[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const isSelected = selectedPath === node.path;
+
+  const loadChildren = async () => {
+    setIsLoading(true);
+    try {
+      const nodes: any = await invoke("list_directory", { relativePath: node.path });
+      setChildren(nodes);
+    } catch (e) {
+      console.error("Failed to load directory", node.path, e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isExpanded && node.is_dir) {
+      loadChildren();
+    }
+  }, [refreshTrigger, node.path]);
+
+  useEffect(() => {
+    if (editAction && editAction.path === node.path && node.is_dir && !isExpanded) {
+      if (children.length === 0) {
+        loadChildren().then(() => setIsExpanded(true));
+      } else {
+        setIsExpanded(true);
+      }
+    }
+  }, [editAction, node.path, node.is_dir]);
+
+  if (editAction?.type === 'rename' && editAction.path === node.path) {
+    return (
+      <FileTreeInput
+        type="rename"
+        initialValue={editAction.initialValue}
+        depth={depth}
+        onSubmit={(val) => onEditSubmit && onEditSubmit(val, editAction)}
+        onCancel={() => onEditCancel && onEditCancel()}
+      />
+    );
+  }
 
   const handleClick = async () => {
     if (node.is_dir) {
       if (!isExpanded && children.length === 0) {
-        setIsLoading(true);
-        try {
-          const nodes: any = await invoke("list_directory", { relativePath: node.path });
-          setChildren(nodes);
-        } catch (e) {
-          console.error("Failed to load directory", node.path, e);
-        } finally {
-          setIsLoading(false);
-        }
+        await loadChildren();
       }
       setIsExpanded(!isExpanded);
     } else {
@@ -55,13 +172,50 @@ function FileTreeItem({
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData("text/plain", node.path);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (node.is_dir) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = () => {
+    if (node.is_dir) {
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (node.is_dir) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      const sourcePath = e.dataTransfer.getData("text/plain");
+      if (sourcePath && onDropNode) {
+        onDropNode(sourcePath, node.path);
+      }
+    }
+  };
+
   return (
     <div>
       <div
+        draggable
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         onClick={handleClick}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu && onContextMenu(e, node); }}
         className={`flex items-center gap-1.5 py-1.5 pr-3 cursor-pointer select-none text-sm group transition-colors 
-          ${isSelected && !node.is_dir ? "bg-black text-white" : "hover:bg-gray-200 text-gray-700"}`}
+          ${isSelected && !node.is_dir ? "bg-black text-white" : "hover:bg-gray-200 text-gray-700"}
+          ${isDragOver ? "bg-blue-100 ring-2 ring-blue-400 ring-inset" : ""}`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         title={node.name}
       >
@@ -82,16 +236,31 @@ function FileTreeItem({
         <span className="truncate leading-tight">{node.name}</span>
       </div>
 
-      {isExpanded && node.is_dir && children.length > 0 && (
+      {isExpanded && node.is_dir && (children.length > 0 || (editAction && editAction.path === node.path)) && (
         <div className="flex flex-col">
-          {children.map((child, idx) => (
+          {editAction && (editAction.type === 'new_file' || editAction.type === 'new_folder') && editAction.path === node.path && (
+            <FileTreeInput
+              key={editAction.id}
+              type={editAction.type}
+              initialValue={editAction.initialValue}
+              depth={depth + 1}
+              onSubmit={(val) => onEditSubmit && onEditSubmit(val, editAction)}
+              onCancel={() => onEditCancel && onEditCancel()}
+            />
+          )}
+          {children.map(child => (
             <FileTreeItem
-              key={`${child.path}-${idx}`}
+              key={child.path}
               node={child}
               depth={depth + 1}
               selectedPath={selectedPath}
               onSelectFile={onSelectFile}
               onContextMenu={onContextMenu}
+              refreshTrigger={refreshTrigger}
+              editAction={editAction}
+              onEditSubmit={onEditSubmit}
+              onEditCancel={onEditCancel}
+              onDropNode={onDropNode}
             />
           ))}
         </div>
@@ -166,6 +335,13 @@ function App() {
 
   // File Explorer & Editor States
   const [rootNodes, setRootNodes] = useState<{ name: string, path: string, is_dir: boolean }[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [editAction, setEditAction] = useState<{
+    id: string;
+    type: 'rename' | 'new_file' | 'new_folder';
+    path: string;
+    initialValue: string;
+  } | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileHistory, setFileHistory] = useState<string[]>([]);
   const [fileContent, setFileContent] = useState<string>("");
@@ -177,53 +353,93 @@ function App() {
   // Context Menu States
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, node: { name: string, path: string, is_dir: boolean } | null } | null>(null);
   const [clipboard, setClipboard] = useState<{ path: string, isCut: boolean } | null>(null);
+  const [deleteConfirmNode, setDeleteConfirmNode] = useState<{ name: string, path: string, is_dir: boolean } | null>(null);
 
   useEffect(() => {
-    const handleClick = () => setContextMenu(null);
-    window.addEventListener('click', handleClick);
-    return () => window.removeEventListener('click', handleClick);
+    // Unused
   }, []);
 
-  const handleContextMenu = (e: React.MouseEvent, node: { name: string, path: string, is_dir: boolean } | null) => {
+  const handleContextMenu = async (e: React.MouseEvent, node: { name: string, path: string, is_dir: boolean } | null) => {
     e.preventDefault();
     setContextMenu({ x: e.pageX, y: e.pageY, node });
-  };
 
-  const handleNewFile = async () => {
-    const parentPath = contextMenu?.node ? (contextMenu.node.is_dir ? contextMenu.node.path : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'))) : "";
-    const fileName = prompt(t("new_file"));
-    if (fileName) {
-      const fullPath = parentPath ? `${parentPath}/${fileName}${fileName.endsWith('.md') ? '' : '.md'}` : `${fileName}${fileName.endsWith('.md') ? '' : '.md'}`;
-      try {
-        await invoke("write_markdown_file", { relativePath: fullPath, content: "" });
-        loadRootFiles();
-      } catch (e) { alert(e); }
+    try {
+      const items = [];
+      const newFileItem = await MenuItem.new({ text: t("new_file"), action: () => handleNewFile(node) });
+      const newFolderItem = await MenuItem.new({ text: t("new_folder"), action: () => handleNewFolder(node) });
+
+      items.push(newFileItem, newFolderItem);
+
+      if (node) {
+        items.push(await PredefinedMenuItem.new({ item: 'Separator' }));
+        const cutItem = await MenuItem.new({ text: t("cut"), action: () => handleCut(node) });
+        const copyItem = await MenuItem.new({ text: t("copy"), action: () => handleCopy(node) });
+        items.push(cutItem, copyItem);
+
+        items.push(await PredefinedMenuItem.new({ item: 'Separator' }));
+        const renameItem = await MenuItem.new({ text: t("rename"), action: () => handleRename(node) });
+        items.push(renameItem);
+      }
+
+      // Check if we have anything in state clipboard right now
+      // Note: we might want to pass clipboard state via a ref if it's stale in closure, 
+      // but for now context menu is built on click so it captures current state
+      const pasteItem = await MenuItem.new({ text: t("paste"), enabled: !!clipboard, action: () => handlePaste(node) });
+      items.push(pasteItem);
+
+      if (node) {
+        items.push(await PredefinedMenuItem.new({ item: 'Separator' }));
+        const deleteItem = await MenuItem.new({ text: t("delete"), action: () => handleDelete(node) });
+        items.push(deleteItem);
+      }
+
+      const menu = await Menu.new({ items });
+      await menu.popup();
+    } catch (err) {
+      console.error("Failed to create native menu:", err);
     }
   };
 
-  const handleNewFolder = async () => {
-    const parentPath = contextMenu?.node ? (contextMenu.node.is_dir ? contextMenu.node.path : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'))) : "";
-    const folderName = prompt(t("new_folder"));
-    if (folderName) {
-      const fullPath = parentPath ? `${parentPath}/${folderName}` : folderName;
-      try {
-        await invoke("create_directory", { relativePath: fullPath });
-        loadRootFiles();
-      } catch (e) { alert(e); }
-    }
+  const handleNewFile = (menuNode?: { name: string, path: string, is_dir: boolean } | null) => {
+    const targetNode = menuNode || contextMenu?.node;
+    const parentPath = targetNode ? (targetNode.is_dir ? targetNode.path : targetNode.path.substring(0, targetNode.path.lastIndexOf('/'))) : "";
+    setEditAction({
+      id: Date.now().toString(),
+      type: 'new_file',
+      path: parentPath,
+      initialValue: ""
+    });
+    setContextMenu(null);
   };
 
-  const handleCut = () => {
-    if (contextMenu?.node) setClipboard({ path: contextMenu.node.path, isCut: true });
+  const handleNewFolder = (menuNode?: { name: string, path: string, is_dir: boolean } | null) => {
+    const targetNode = menuNode || contextMenu?.node;
+    const parentPath = targetNode ? (targetNode.is_dir ? targetNode.path : targetNode.path.substring(0, targetNode.path.lastIndexOf('/'))) : "";
+    setEditAction({
+      id: Date.now().toString(),
+      type: 'new_folder',
+      path: parentPath,
+      initialValue: ""
+    });
+    setContextMenu(null);
   };
 
-  const handleCopy = () => {
-    if (contextMenu?.node) setClipboard({ path: contextMenu.node.path, isCut: false });
+  const handleCut = (menuNode?: { name: string, path: string, is_dir: boolean } | null) => {
+    const targetNode = menuNode || contextMenu?.node;
+    if (targetNode) setClipboard({ path: targetNode.path, isCut: true });
+    setContextMenu(null);
   };
 
-  const handlePaste = async () => {
+  const handleCopy = (menuNode?: { name: string, path: string, is_dir: boolean } | null) => {
+    const targetNode = menuNode || contextMenu?.node;
+    if (targetNode) setClipboard({ path: targetNode.path, isCut: false });
+    setContextMenu(null);
+  };
+
+  const handlePaste = async (menuNode?: { name: string, path: string, is_dir: boolean } | null) => {
     if (!clipboard) return;
-    const parentPath = contextMenu?.node ? (contextMenu.node.is_dir ? contextMenu.node.path : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'))) : "";
+    const targetNode = menuNode || contextMenu?.node;
+    const parentPath = targetNode ? (targetNode.is_dir ? targetNode.path : targetNode.path.substring(0, targetNode.path.lastIndexOf('/'))) : "";
     const itemName = clipboard.path.split('/').pop() || "";
     const targetPath = parentPath ? `${parentPath}/${itemName}` : itemName;
 
@@ -236,40 +452,101 @@ function App() {
       }
       loadRootFiles();
     } catch (e) { alert(e); }
+    setContextMenu(null);
   };
 
-  const handleRename = async () => {
-    if (!contextMenu?.node) return;
-    const currentName = contextMenu.node.name;
-    const parentPath = contextMenu.node.is_dir ? contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/')) : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'));
+  const handleRename = (menuNode?: { name: string, path: string, is_dir: boolean } | null) => {
+    const targetNode = menuNode || contextMenu?.node;
+    if (!targetNode) return;
+    setEditAction({
+      id: Date.now().toString(),
+      type: 'rename',
+      path: targetNode.path,
+      initialValue: targetNode.name
+    });
+    setContextMenu(null);
+  };
 
-    // Prompt for new name
-    const newName = prompt(t("rename"), currentName);
-    if (newName && newName !== currentName) {
-      const targetName = contextMenu.node.is_dir ? newName : (newName.endsWith('.md') ? newName : `${newName}.md`);
+  const handleDropNode = async (sourcePath: string, targetDirPath: string | null) => {
+    if (sourcePath === targetDirPath) return;
+
+    // Prevent dragging a folder into itself or its own subdirectories
+    if (targetDirPath && targetDirPath.startsWith(sourcePath + '/')) {
+      alert(t("cannot_move_into_self") || "Cannot move a folder into itself or its subdirectories");
+      return;
+    }
+
+    const itemName = sourcePath.split('/').pop() || "";
+    const targetPath = targetDirPath ? `${targetDirPath}/${itemName}` : itemName;
+
+    if (sourcePath === targetPath) return;
+
+    try {
+      await invoke("move_path", { fromPath: sourcePath, toPath: targetPath });
+      if (selectedFile === sourcePath) setSelectedFile(targetPath);
+      loadRootFiles();
+    } catch (e) {
+      alert(`Error moving file: ${e}`);
+    }
+  };
+
+  const handleEditSubmit = async (val: string, action: any) => {
+    const parentPath = action.type === 'rename'
+      ? action.path.substring(0, action.path.lastIndexOf('/'))
+      : action.path; // for new_file/folder, action.path is parentPath
+
+    if (action.type === 'rename') {
+      if (val === action.initialValue) {
+        setEditAction(null);
+        return;
+      }
+      const isDir = !action.initialValue.endsWith('.md');
+      const targetName = isDir ? val : (val.endsWith('.md') ? val : `${val}.md`);
       const targetPath = parentPath ? `${parentPath}/${targetName}` : targetName;
+
       try {
-        await invoke("move_path", { fromPath: contextMenu.node.path, toPath: targetPath });
-        if (selectedFile === contextMenu.node.path) {
-          setSelectedFile(targetPath); // Auto update selection
-        }
+        await invoke("move_path", { fromPath: action.path, toPath: targetPath });
+        if (selectedFile === action.path) setSelectedFile(targetPath);
+        setEditAction(null);
         loadRootFiles();
-      } catch (e) { alert(e); }
+      } catch (e) { alert(`Error renaming: ${e}`); setEditAction(null); }
+    } else if (action.type === 'new_file') {
+      const fileName = val.endsWith('.md') ? val : `${val}.md`;
+      const fullPath = action.path ? `${action.path}/${fileName}` : fileName;
+      try {
+        await invoke("write_markdown_file", { relativePath: fullPath, content: "" });
+        setEditAction(null);
+        loadRootFiles();
+        handleSelectFile(fullPath);
+      } catch (e) { alert(`Error creating file: ${e}`); setEditAction(null); }
+    } else if (action.type === 'new_folder') {
+      const fullPath = action.path ? `${action.path}/${val}` : val;
+      try {
+        await invoke("create_directory", { relativePath: fullPath });
+        setEditAction(null);
+        loadRootFiles();
+      } catch (e) { alert(`Error creating folder: ${e}`); setEditAction(null); }
     }
   };
 
-  const handleDelete = async () => {
-    if (!contextMenu?.node) return;
-    if (confirm(`${t("delete_confirm")} '${contextMenu.node.name}'?`)) {
-      try {
-        await invoke("delete_path", { relativePath: contextMenu.node.path });
-        if (selectedFile === contextMenu.node.path) {
-          setSelectedFile(null);
-          setFileContent("");
-        }
-        loadRootFiles();
-      } catch (e) { alert(e); }
-    }
+  const handleDelete = (menuNode?: { name: string, path: string, is_dir: boolean } | null) => {
+    const targetNode = menuNode || contextMenu?.node;
+    if (!targetNode) return;
+    setDeleteConfirmNode(targetNode);
+    setContextMenu(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmNode) return;
+    try {
+      await invoke("delete_path", { relativePath: deleteConfirmNode.path });
+      if (selectedFile === deleteConfirmNode.path) {
+        setSelectedFile(null);
+        setFileContent("");
+      }
+      loadRootFiles();
+    } catch (e) { alert(e); }
+    setDeleteConfirmNode(null);
   };
 
   useEffect(() => {
@@ -295,6 +572,7 @@ function App() {
     try {
       const nodes: any = await invoke("list_directory", { relativePath: null });
       setRootNodes(nodes);
+      setRefreshTrigger(prev => prev + 1);
     } catch (e) {
       console.error("Failed to load root directory:", e);
     }
@@ -712,20 +990,47 @@ function App() {
                       <div
                         className="flex-1 overflow-y-auto py-2"
                         onContextMenu={(e) => handleContextMenu(e, null)}
+                        onClick={() => { if (editAction) setEditAction(null); }}
                       >
-                        {rootNodes.map((node, idx) => (
+                        {editAction && (editAction.type === 'new_file' || editAction.type === 'new_folder') && editAction.path === "" && (
+                          <FileTreeInput
+                            key={editAction.id}
+                            type={editAction.type}
+                            initialValue={editAction.initialValue}
+                            depth={0}
+                            onSubmit={(val) => handleEditSubmit(val, editAction)}
+                            onCancel={() => setEditAction(null)}
+                          />
+                        )}
+                        {rootNodes.map(node => (
                           <FileTreeItem
-                            key={`${node.path}-${idx}`}
+                            key={node.path}
                             node={node}
                             selectedPath={selectedFile}
                             onSelectFile={handleSelectFile}
                             onContextMenu={handleContextMenu}
+                            refreshTrigger={refreshTrigger}
+                            editAction={editAction}
+                            onEditSubmit={handleEditSubmit}
+                            onEditCancel={() => setEditAction(null)}
+                            onDropNode={handleDropNode}
                           />
                         ))}
-                        {rootNodes.length === 0 && (
-                          <div className="p-4 text-center text-sm text-gray-400">{t("empty_vault")}</div>
-                        )}
                       </div>
+
+                      {/* Root Drop Zone Padding */}
+                      <div
+                        className="flex-1 min-h-[100px]"
+                        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const sourcePath = e.dataTransfer.getData("text/plain");
+                          if (sourcePath) {
+                            handleDropNode(sourcePath, null);
+                          }
+                        }}
+                        onContextMenu={(e) => handleContextMenu(e, null)}
+                      />
                     </Panel>
                   )}
 
@@ -910,35 +1215,35 @@ function App() {
             </div>
           </div>
         )}
-
-        {/* Context Menu */}
-        {contextMenu && (
-          <div
-            className="fixed z-50 bg-white border border-gray-200 shadow-xl rounded-lg py-1 w-48 text-sm"
-            style={{ top: contextMenu.y, left: contextMenu.x }}
-          >
-            <button onClick={handleNewFile} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("new_file")}</button>
-            <button onClick={handleNewFolder} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("new_folder")}</button>
-            {contextMenu.node && (
-              <>
-                <div className="h-px bg-gray-100 my-1"></div>
-                <button onClick={handleCut} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("cut")}</button>
-                <button onClick={handleCopy} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("copy")}</button>
-                <div className="h-px bg-gray-100 my-1"></div>
-                <button onClick={handleRename} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors">{t("rename")}</button>
-              </>
-            )}
-            <button onClick={handlePaste} disabled={!clipboard} className="w-full text-left px-4 py-2 hover:bg-black hover:text-white transition-colors disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-black">{t("paste")}</button>
-            {contextMenu.node && (
-              <>
-                <div className="h-px bg-gray-100 my-1"></div>
-                <button onClick={handleDelete} className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-600 hover:text-white transition-colors">{t("delete")}</button>
-              </>
-            )}
-          </div>
-        )}
-
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmNode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm transition-opacity">
+          <div className="bg-white rounded-xl shadow-2xl w-[360px] overflow-hidden border border-gray-100 flex flex-col">
+            <div className="p-5">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{t("delete") || "Confirm Deletion"}</h3>
+              <p className="text-sm text-gray-500 line-clamp-2">
+                {t("delete_confirm")} <strong>'{deleteConfirmNode.name}'</strong>?
+              </p>
+            </div>
+            <div className="flex bg-gray-50 border-t border-gray-100 px-5 py-3 justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmNode(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300 rounded-lg transition-colors cursor-pointer"
+              >
+                {t("cancel") || "Cancel"}
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg transition-colors cursor-pointer shadow-sm"
+              >
+                {t("delete") || "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

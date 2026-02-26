@@ -42,6 +42,20 @@ export const sentinelToolDeclarations: FunctionDeclaration[] = [
         },
     },
     {
+        name: "search_content",
+        description: "Search for specific text content across all markdown files in the workspace (full-text search). Use this to find knowledge base articles or past notes containing specific concepts.",
+        parameters: {
+            type: SchemaType.OBJECT,
+            properties: {
+                query: {
+                    type: SchemaType.STRING,
+                    description: "The text snippet, concept, or keyword to search for inside files.",
+                }
+            },
+            required: ["query"],
+        },
+    },
+    {
         name: "search_files",
         description: "Search for markdown files in the workspace by filename or keyword in filename. Use this when you don't know the exact relative path.",
         parameters: {
@@ -94,6 +108,8 @@ export class SentinelToolExecutor {
                     return await this.readMarkdownFile(args.relativePath);
                 case "search_files":
                     return await this.searchFiles(args.query);
+                case "search_content":
+                    return await this.searchContent(args.query);
                 case "execute_git_commit":
                     return await this.executeGitCommit(args.message);
                 case "append_diary_entry":
@@ -168,6 +184,33 @@ export class SentinelToolExecutor {
             };
         } catch (error: any) {
             return { error: `Search failed: ${error.message}` };
+        }
+    }
+
+    private async searchContent(query: string): Promise<any> {
+        if (!query || query.trim().length === 0) {
+            return { error: "Search query cannot be empty." };
+        }
+        try {
+            const excludeDirs = ['.git', 'node_modules', 'dist', '.obsidian'];
+            const excludeArgs = excludeDirs.map(d => `--exclude-dir=${d}`);
+            const { stdout } = await execa('grep', ['-rin', ...excludeArgs, '--include=*.md', query, this.workDir]);
+            const lines = stdout.split('\n');
+            const matches = lines.slice(0, 30); // limit to 30 lines
+
+            // Format to show paths relative to workspace
+            const formattedMatches = matches.map(line => line.replace(this.workDir + '/', ''));
+
+            return {
+                matches: formattedMatches,
+                totalFound: lines.length,
+                note: lines.length > 30 ? "Results truncated to top 30 matches. Please use read_markdown_file on specific files for more details." : ""
+            };
+        } catch (error: any) {
+            if (error.exitCode === 1) { // grep exits with 1 if no lines are found
+                return { matches: [], message: `No content found matching '${query}'` };
+            }
+            return { error: `Search content failed: ${error.message}` };
         }
     }
 

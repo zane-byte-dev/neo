@@ -295,6 +295,89 @@ export class GeminiClient {
     }
 
     /**
+     * Run a specific skill defined in system/skill/*.md
+     */
+    async runSkill(skillName: string, args: string[]): Promise<string | null> {
+        if (!this.enabled || !this.genAI) return null;
+
+        const skillPath = join(this.workDir || '', 'system', 'skill', `${skillName}.md`);
+        if (!existsSync(skillPath)) {
+            console.error(`❌ 技能文件未找到: ${skillPath}\n请检查 ${skillName} 是否存在于 system/skill/ 目录下。`);
+            return null;
+        }
+
+        const skillContent = readFileSync(skillPath, 'utf-8');
+
+        let finalInstruction = this.systemContext ? `[Master System Alignment]\n${this.systemContext}\n\n` : '';
+        finalInstruction += `[Skill Profile: ${skillName}]\nYou are an autonomous agent executing this specific skill. Read the skill instructions below carefully and strictly follow the execution steps.\n${skillContent}\n\n`;
+        finalInstruction += `[Critical System Rules]\n- You MUST respond strictly in CHINESE (简体中文).\n- NEVER output repetitive reasoning logs or think out loud formatting.\n- Be direct, concise, and professional without generic AI phrases.\n- Current Time Context: ${new Date().toLocaleString('zh-CN')}`;
+
+        const model = this.genAI.getGenerativeModel({
+            model: GEMINI_MODEL,
+            systemInstruction: finalInstruction,
+            tools: [{ functionDeclarations: sentinelToolDeclarations }]
+        });
+
+        const prompt = `Please execute the skill **${skillName}**.\n\nAdditional user input/arguments: ${args.join(' ')}`;
+
+        console.log(`[Gemini SDK] 🎯 Executing skill: ${skillName}`);
+        const startTime = Date.now();
+
+        try {
+            const chat = model.startChat({
+                history: [
+                    { role: "user", parts: [{ text: prompt }] }
+                ]
+            });
+
+            let result = await chat.sendMessage("");
+            let maxTurns = 15; // Skills might need more turns
+            let currentResponseText = "";
+            let functionCallReports: string[] = [];
+
+            while (maxTurns > 0) {
+                const call = result.response.functionCalls() && result.response.functionCalls()![0];
+
+                if (call) {
+                    console.log(`[Gemini SDK] 🛠️  Skill requested tool call: ${call.name}`);
+                    const apiResponse = await this.toolExecutor?.executeToolCall(call.name, call.args);
+
+                    if (apiResponse && apiResponse.success) {
+                        functionCallReports.push(`✅ 执行动作: [${call.name}] 成功。`);
+                    } else if (apiResponse && apiResponse.error) {
+                        functionCallReports.push(`❌ 执行动作: [${call.name}] 失败 (${apiResponse.error})。`);
+                    }
+
+                    result = await chat.sendMessage([{
+                        functionResponse: {
+                            name: call.name,
+                            response: apiResponse
+                        }
+                    }]);
+                } else {
+                    currentResponseText = result.response.text();
+                    break;
+                }
+                maxTurns--;
+            }
+
+            const ms = Date.now() - startTime;
+            console.log(`[Gemini SDK] ✅ Completed skill execution in ${ms}ms`);
+
+            if (functionCallReports.length > 0) {
+                return `> _*系统通知*_\n> ${functionCallReports.join('\n> ')}\n\n${currentResponseText}`;
+            }
+            return currentResponseText;
+        } catch (error) {
+            console.error(`[Gemini SDK Error in runSkill]`, error);
+            if (error instanceof Error) {
+                return `🔥 System Error (Skill): ${error.message}`;
+            }
+            return '🔥 Unknown SDK error occurred finding skill.';
+        }
+    }
+
+    /**
      * Check if the client is enabled
      */
     isEnabled(): boolean {
