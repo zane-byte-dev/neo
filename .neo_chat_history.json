@@ -2,11 +2,11 @@
   "messages": [
     {
       "role": "user",
-      "content": "你好\n\n[System Context: The user is currently viewing/editing the file: history/2026/01/2026-01-19.md in their editor. You may refer to it.]"
+      "content": "霓虹啊"
     },
     {
       "role": "model",
-      "content": "你好。"
+      "content": "我在。有什么可以帮忙的吗？"
     }
   ]
 }
