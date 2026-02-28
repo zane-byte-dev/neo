@@ -11,6 +11,8 @@ const __dirname = dirname(__filename);
 config({ path: join(__dirname, '../.env') });
 
 import { GeminiClient } from './lib/gemini-client.js';
+import { runCurator } from './lib/tools/curator.js';
+import { runMaintenance } from './lib/tools/butler.js';
 
 async function main() {
     const client = new GeminiClient();
@@ -21,65 +23,40 @@ async function main() {
 
     const args = process.argv.slice(2);
 
-    // 如果没有参数，进入沉浸式交互模式
-    if (args.length === 0) {
-        console.log("=========================================");
-        console.log("🤖 已进入 Neo 交互模式。输入 'exit' 退出。");
-        console.log("   随时随地与知识库对接，享受极速原生体验。");
-        console.log("=========================================\n");
+    // 策展模式 (Curate mode)
+    if (args[0] === 'curate') {
+        try {
+            console.log(`[Neo] 🕰️  召唤策展人中...\n`);
+            const startTime = Date.now();
+            const response = await runCurator();
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
-        const rl = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout,
-            prompt: 'Neo> '
-        });
+            console.log("=========================================\n");
+            console.log(response);
+            console.log(`\n========================================= (⏱️  ${elapsed}s)`);
+        } catch (e: any) {
+            console.error("🔥 策展异常:", e.message || e);
+            process.exit(1);
+        }
+        return;
+    }
 
-        // 保存历史上下文
-        let sessionHistory = "";
+    // 管家维护模式 (Butler mode)
+    if (args[0] === 'butler') {
+        try {
+            console.log(`[Neo] 🤖 管家巡检中...\n`);
+            const startTime = Date.now();
+            const response = await runMaintenance();
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
 
-        rl.prompt();
-
-        rl.on('line', async (line) => {
-            const input = line.trim();
-            if (input.toLowerCase() === 'exit' || input.toLowerCase() === 'quit') {
-                rl.close();
-                return;
-            }
-            if (!input) {
-                rl.prompt();
-                return;
-            }
-
-            try {
-                process.stdout.write(`\n[Neo] 💭 思考中...\n`);
-                const startTime = Date.now();
-
-                const response = await client.chatWithContext(input, sessionHistory);
-
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-
-                // 将光标移回上一行并清除“思考中...”
-                readline.moveCursor(process.stdout, 0, -1);
-                readline.clearLine(process.stdout, 0);
-
-                if (response) {
-                    console.log(`\x1b[36mNeo\x1b[0m:\n${response}`);
-                    console.log(`\x1b[90m(⏱️  ${elapsed}s)\x1b[0m\n`);
-                    // 追加历史，供模型联系上下文
-                    sessionHistory += `\n[User]: ${input}\n[NeoAgent]: ${response}\n`;
-                } else {
-                    console.log("⚠️ （大模型无返回数据）\n");
-                }
-            } catch (e: any) {
-                console.error("\n🔥 执行异常:", e.message || e, "\n");
-            }
-            rl.prompt();
-        }).on('close', () => {
-            console.log('\n再见！');
-            process.exit(0);
-        });
-
-        return; // 进入事件循环，等待输入
+            console.log("=========================================\n");
+            console.log(response);
+            console.log(`\n========================================= (⏱️  ${elapsed}s)`);
+        } catch (e: any) {
+            console.error("🔥 管家异常:", e.message || e);
+            process.exit(1);
+        }
+        return;
     }
 
     // Skill 执行模式 (Run mode)
