@@ -344,6 +344,7 @@
 
           const richTextElem = post.querySelector('[data-testid="twitterArticleRichTextView"]');
           if (richTextElem) {
+            // 文章内容处理
             const blocks = richTextElem.querySelectorAll('[data-block="true"]');
             if (blocks.length > 0) {
               blocks.forEach(block => {
@@ -352,7 +353,7 @@
                   tweetText += `\n${'#'.repeat(level)} ${block.innerText.trim()}\n\n`;
                 } else if (block.tagName.toLowerCase() === 'li') {
                   const isOrdered = block.closest('ol') !== null;
-                  tweetText += `${isOrdered ? '1.' : '-'} ${block.innerText.trim()}\n`;
+                  tweetText += `${isOrdered ? '1.' : '-'} ${this.extractTextWithLinks(block)}\n`;
                 } else if (block.querySelector('pre')) {
                   const codeElem = block.querySelector('code');
                   const langClass = codeElem ? Array.from(codeElem.classList).find(c => c.startsWith('language-')) : null;
@@ -360,22 +361,21 @@
                   const codeText = block.querySelector('pre').innerText.trim();
                   tweetText += `\n\`\`\`${lang}\n${codeText}\n\`\`\`\n\n`;
                 } else if (block.querySelector('[data-testid="tweetPhoto"]')) {
-                  // 图片区块由 extractImages 统一处理，此处跳过
                   return;
                 } else {
-                  const text = block.innerText.trim();
+                  const text = this.extractTextWithLinks(block);
                   if (text) {
                     tweetText += `${text}\n\n`;
                   }
                 }
               });
             } else {
-              tweetText += richTextElem.innerText;
+              tweetText += this.extractTextWithLinks(richTextElem);
             }
           }
         } else {
           const textElement = post.querySelector('[data-testid="tweetText"]');
-          tweetText = textElement ? textElement.innerText : '';
+          tweetText = textElement ? this.extractTextWithLinks(textElement) : '';
         }
 
         // 提取图片
@@ -532,7 +532,7 @@
             const replyAuthorElem = article.querySelector('[data-testid="User-Name"]');
 
             if (replyTextElem && replyAuthorElem) {
-              const replyText = replyTextElem.innerText;
+              const replyText = this.extractTextWithLinks(replyTextElem);
               const replyAuthor = replyAuthorElem.innerText.split('\n')[0];
 
               // 提取回复中的图片
@@ -574,6 +574,78 @@
       }
 
       return replies;
+    },
+
+    /**
+     * 提取带链接的内容，转换为 Markdown 格式
+     */
+    extractTextWithLinks(element) {
+      if (!element) return '';
+
+      let result = '';
+
+      // 遍历所有子节点
+      const walk = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          result += node.textContent;
+          return;
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        const tagName = node.tagName.toLowerCase();
+
+        // 处理 X 的链接、提到和话题
+        if (tagName === 'a') {
+          const href = node.getAttribute('href');
+          const text = (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim();
+
+          if (href && text) {
+            let fullUrl = href;
+            if (href.startsWith('/')) {
+              fullUrl = `https://x.com${href}`;
+            }
+            result += `[${text}](${fullUrl})`;
+          } else if (text) {
+            result += text;
+          }
+          return;
+        }
+
+        // 处理表情图 (X 使用 img 标签渲染表情)
+        if (tagName === 'img' && node.getAttribute('alt')) {
+          result += node.getAttribute('alt');
+          return;
+        }
+
+        // 处理换行
+        if (tagName === 'br') {
+          result += '\n';
+          return;
+        }
+
+        // 处理其他块级元素
+        const isBlock = window.getComputedStyle(node).display === 'block' ||
+          ['p', 'div', 'article', 'section'].includes(tagName);
+
+        if (isBlock && result.length > 0 && !result.endsWith('\n')) {
+          result += '\n';
+        }
+
+        // 递归处理子节点
+        for (const child of node.childNodes) {
+          walk(child);
+        }
+
+        if (isBlock && !result.endsWith('\n')) {
+          result += '\n';
+        }
+      };
+
+      walk(element);
+
+      // 清理多余的空格和换行
+      return result.trim().replace(/\n{3,}/g, '\n\n');
     }
   };
 
@@ -1330,6 +1402,18 @@
       if (/^h[1-6]$/.test(tagName)) {
         const level = parseInt(tagName[1]);
         result += `\n${'#'.repeat(level)} ${node.textContent?.trim()}\n\n`;
+        return;
+      }
+
+      // 处理链接
+      if (tagName === 'a') {
+        const href = node.getAttribute('href');
+        const text = node.innerText || node.textContent;
+        if (href) {
+          result += `[${text}](${href})`;
+        } else {
+          result += text;
+        }
         return;
       }
 
