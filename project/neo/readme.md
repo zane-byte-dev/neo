@@ -1,7 +1,6 @@
 # 🚀 Neo (The Engine)
 
 > **定位**: 连接本地文件系统 (Vault)、浏览器 (Chrome) 和 AI 模型的中枢网关。
-> **状态**: 🟢 活跃开发中
 
 ## 1. 🗺️ 导航
 *   🧠 `system/GEMINI.md` (v5.0 智能路由)
