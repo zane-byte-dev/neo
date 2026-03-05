@@ -2,7 +2,6 @@
 node_modules/
 .env
 .state/
-logs/
 
 # Obsidian 配置目录
 .obsidian/
