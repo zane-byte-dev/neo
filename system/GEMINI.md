@@ -36,11 +36,10 @@
 *   **场景**：处理特定工作流任务。
 *   **核心指令**：根据任务加载 `system/skill/` 下的规则：
     - [[system/skill/清理收集.md]]：整理文件或清理 `inbox`。
-    - [[system/skill/写日记.md]]：记录或提炼日记。
     - [[system/skill/写总结.md]]：做周月度总结。
     - [[system/skill/写Wiki.md]]：产出带体感、实操性的 Wiki 文章。
-    - [[system/skill/归档日记.md]]：把不是今天的历史日记按月移动到归档目录。
     - [[system/skill/每日策展.md]]：结合语境，推送有价值的历史日记或烂尾项目。
+    - [[system/skill/风格进化.md]]：通过 git diff 反向学习修改习惯，进化 skill 风格。
     - [[system/skill/记忆归档.md]]：对话结束时，自动压缩摘要并分发资产。
 
 ---
