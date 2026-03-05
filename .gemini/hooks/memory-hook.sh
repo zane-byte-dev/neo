@@ -14,7 +14,6 @@ log() { echo "[memory-hook] $1" >&2; }
 # 找到 session 文件
 CHATS_DIR="$HOME/.gemini/tmp/neo/chats"
 if [ ! -d "$CHATS_DIR" ]; then
-    # 尝试用 project hash 目录
     CHATS_DIR=$(find "$HOME/.gemini/tmp" -type d -name "chats" 2>/dev/null | head -1)
 fi
 
@@ -24,7 +23,8 @@ if [ -z "$CHATS_DIR" ] || [ ! -d "$CHATS_DIR" ]; then
     exit 0
 fi
 
-# 找最新的 session 文件（如果有 SESSION_ID 就精确匹配，否则取最新的）
+# 找 session 文件：优先用 SESSION_ID 精确匹配
+SESSION_FILE=""
 if [ -n "$SESSION_ID" ]; then
     SESSION_FILE=$(find "$CHATS_DIR" -name "*${SESSION_ID}*" -type f 2>/dev/null | head -1)
 fi
@@ -58,9 +58,18 @@ memory_file = sys.argv[2]
 with open(session_file) as f:
     data = json.load(f)
 
+session_id = data.get('sessionId', '')
 messages = data.get('messages', [])
 start_time = data.get('startTime', '')
 summary = data.get('summary', '')
+
+# 去重：检查 memory 文件里是否已经有这个 session 的记录
+if session_id and os.path.exists(memory_file):
+    with open(memory_file) as f:
+        existing = f.read()
+    if session_id in existing:
+        print(f'session {session_id} 已存在，跳过', file=sys.stderr)
+        sys.exit(0)
 
 # 只提取 user 和 gemini 类型的消息
 lines = []
@@ -69,7 +78,6 @@ for m in messages:
     content = m.get('content', '')
     
     if msg_type == 'user':
-        # content 是 [{text: ...}] 格式
         if isinstance(content, list):
             for part in content:
                 if isinstance(part, dict) and 'text' in part:
@@ -81,14 +89,13 @@ for m in messages:
     
     elif msg_type == 'gemini':
         if isinstance(content, str) and content.strip():
-            # 截取前 200 字符
             text = content.strip().replace('\n', ' ')[:200]
             lines.append(f'- **Neo**: {text}')
 
-# 如果消息太少（少于 2 条有效对话），跳过
+# 如果消息太少，跳过
 user_count = sum(1 for l in lines if l.startswith('- **User**'))
 if user_count < 1:
-    print('SKIP', file=sys.stderr)
+    print('SKIP: 无有效对话', file=sys.stderr)
     sys.exit(0)
 
 # 生成时间戳
@@ -98,14 +105,13 @@ try:
 except:
     time_str = datetime.now().strftime('%H:%M')
 
-# 组装输出
+# 组装输出（带 session_id 用于去重）
 topic = summary if summary else '对话记录'
 output = f'\n## {time_str} {topic}\n'
-# 最多保留 20 条消息摘要
+output += f'<!-- session: {session_id} -->\n'
 for line in lines[:20]:
     output += line + '\n'
 
-# 追加到 memory 文件
 with open(memory_file, 'a') as f:
     f.write(output)
 
