@@ -22,12 +22,6 @@
 *   [ ] 🕸️ 基于 RAG 的主动知识库联想 (Semantic Serendipity Engine)。
 *   [ ] 💓 自动根据文件变更生成看板进度 (Live Project Pulse)。
 
-## 4. 📈 决策与里程碑 
-*   **2026-02-25**: **Neo Desktop v1 MVP 达成**。基于 Tauri + React 实现了原生的三栏桌面端 (VS Code 风格文件树 + Markdown 富文本编辑器/源码切换 + 深度绑定的 Gemini 侧边栏)。打通了本地文件与 AI 之间真正的无缝联动。
-*   **2026-02-23**: **极客到底，直面痛点 (Scratch your own itch)**。清理过度的架构设计与战略复盘文档，全面收敛至 v5.0 核心哲学（Root-Flat & Local-First），不再为“想象中的用户”做过度工程。
-*   **2026-02-22**: **拒绝硬件过度工程**。维持 Mac Air M1 为核心载体，利用其便携性配合 Gemini 云端推理。暂不购入 Mac mini，保持系统轻量化，待出现 24/7 背景代理刚需后再扩容。
-*   **2026-02-21**: **生产力正版化**。激活 Google AI Pro (US$19.99/mo)，移除学生优惠依赖，确保 API 与模型主权。
-*   **2026-02-10**: 全链路打通 (Telegram <-> Local Vault)；项目变更为 **Neo**。
-*   **2026-02-09**: 完成 Browser Plugin 链路与生图 (Imagine) 能力。
+## 4. ⚖️ 核心原则 
 *   **原则 1**: 坚守 **Human-in-the-loop**，拒绝全自动化黑盒。
 *   **原则 2**: **Markdown as Interface**，确保数据永久可读。
