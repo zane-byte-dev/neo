@@ -42,7 +42,7 @@ fi
 log "处理 session: $SESSION_FILE"
 
 # 用 python3 提取对话内容
-MEMORY_DIR="$PROJECT_DIR/history/logs/memory"
+MEMORY_DIR="$PROJECT_DIR/history/memory"
 mkdir -p "$MEMORY_DIR"
 
 TODAY=$(date +%Y-%m-%d)
