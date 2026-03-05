@@ -4,11 +4,11 @@
 > **状态**: 🟢 活跃开发中
 
 ## 1. 🗺️ 导航
-*   🧠 [[system/GEMINI.md]] (v5.0 智能路由)
-*   📖 [[Neo 知识管理方法论.md]]
-*   ⚙️ [[system/System_Neo_Digest_Protocol.md]] (自动消化协议)
-*   ✍️ [[我的 AI 剪藏工具折腾记.md]]
-*   🔥 [[project/小红书运营/00_小红书看板.md]] (小红书排期)
+*   🧠 `system/GEMINI.md` (v5.0 智能路由)
+*   📖 `Neo 知识管理方法论.md`
+*   ⚙️ `system/System_Neo_Digest_Protocol.md` (自动消化协议)
+*   ✍️ `我的 AI 剪藏工具折腾记.md`
+*   🔥 `project/小红书运营/00_小红书看板.md` (小红书排期)
 
 ## 2. 🎯 当前战役
 > **Goal**: 激活主动式 Agent (The Curator)，让知识库活起来。

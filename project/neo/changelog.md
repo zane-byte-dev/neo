@@ -21,5 +21,5 @@
 - **01-22**: [版本重构] NeoAgent Gardener v2.0 重构完成，集成语义混合检索（Embedding API）。
 - **01-26**: [架构大调] 废弃复杂脚本，转为 "Interactive Automation" 交互式模式，数据回归 Local-First。
 - **01-27**: [工具切换] 启用 Google Antigravity (Claude 4.5)，停用 Cursor 订阅；重构 Clipper 插件。
-- **01-28**: [身份宣言] 发布 [[Identity Manifesto]]，确立 Builder 身份与 2w/月净利目标。
+- **01-28**: [身份宣言] 发布 `Identity Manifesto`，确立 Builder 身份与 2w/月净利目标。
 - **01-29**: [倒爷清盘] 原价出掉 Pocket 3，完成“信息差到认知差”的灰度测试复盘。
