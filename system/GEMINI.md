@@ -35,7 +35,7 @@
 ### 2. 核心动作集
 *   **场景**：处理特定工作流任务。
 *   **核心指令**：根据任务加载 `system/skill/` 下的规则：
-    - [[system/skill/清理收集.md]]：整理文件或清理 `inbox`。
+    - [[system/skill/清理收集.md]]：整理文件或清理 `history/inbox`。
     - [[system/skill/写总结.md]]：做周月度总结。
     - [[system/skill/写Wiki.md]]：产出带体感、实操性的 Wiki 文章。
     - [[system/skill/每日策展.md]]：结合语境，推送有价值的历史日记或烂尾项目。
