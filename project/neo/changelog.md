@@ -1,4 +1,4 @@
-# changeLog
+# change log
 
 ## 2026-03-04
 彻底重构知识库物理与逻辑架构，确立“Logs + 维度账本 (Ledgers)”分发体系。
