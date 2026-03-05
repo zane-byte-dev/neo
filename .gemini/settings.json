@@ -1,0 +1,17 @@
+{
+    "hooks": {
+        "SessionEnd": [
+            {
+                "matcher": "*",
+                "hooks": [
+                    {
+                        "name": "memory-archive",
+                        "type": "command",
+                        "command": "$GEMINI_PROJECT_DIR/.gemini/hooks/memory-hook.sh",
+                        "timeout": 15000
+                    }
+                ]
+            }
+        ]
+    }
+}
