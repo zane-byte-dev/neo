@@ -41,19 +41,21 @@ fi
 
 log "处理 session: $SESSION_FILE"
 
-# 用 python3 提取对话内容
+# 用 python3 提取对话内容和语法审计
 MEMORY_DIR="$PROJECT_DIR/history/memory"
+ENGLISH_LOG="$PROJECT_DIR/project/neo/src/English_Learning_Log.md"
 mkdir -p "$MEMORY_DIR"
 
 TODAY=$(date +%Y-%m-%d)
 MEMORY_FILE="$MEMORY_DIR/$TODAY.md"
 
-python3 -c "
-import json, sys, os
+python3 - "$SESSION_FILE" "$MEMORY_FILE" "$ENGLISH_LOG" << 'EOF'
+import json, sys, os, re
 from datetime import datetime
 
 session_file = sys.argv[1]
 memory_file = sys.argv[2]
+english_log = sys.argv[3]
 
 with open(session_file) as f:
     data = json.load(f)
@@ -63,6 +65,28 @@ messages = data.get('messages', [])
 start_time = data.get('startTime', '')
 summary = data.get('summary', '')
 
+# --- 提取语法审计 ---
+audits = []
+for m in messages:
+    if m.get('type') == 'gemini':
+        content = m.get('content', '')
+        # 匹配模式: Grammar Audit: "**Original**" -> "**Corrected**" (Pattern)
+        # 支持多行匹配和各种变体
+        matches = re.findall(r'Grammar Audit: "\*\*?(.+?)\*\*?" -> "\*\*?(.+?)\*\*?"\s*(?:\((.+?)\))?', content)
+        for original, corrected, pattern in matches:
+            audits.append((original.strip(), corrected.strip(), pattern.strip() if pattern else "General Correction"))
+
+if audits and os.path.exists(english_log):
+    with open(english_log, 'a') as f:
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        for orig, corr, patt in audits:
+            # 简单去重：如果该条目已存在则跳过
+            entry = f"| {today_str} | {orig} | {corr} | {patt} |"
+            with open(english_log, 'r') as check_f:
+                if orig not in check_f.read():
+                    f.write(f"\n{entry}")
+
+# --- 提取对话归档 ---
 # 去重：检查 memory 文件里是否已经有这个 session 的记录
 if session_id and os.path.exists(memory_file):
     with open(memory_file) as f:
@@ -120,11 +144,11 @@ with open(memory_file, 'a') as f:
     f.write(output)
 
 print(f'写入 {len(lines)} 条消息到 {memory_file}', file=sys.stderr)
-" "$SESSION_FILE" "$MEMORY_FILE"
+EOF
 
 # git commit（静默，失败不阻塞）
 cd "$PROJECT_DIR"
-git add "history/logs/memory/" 2>/dev/null && \
+git add "history/memory/" 2>/dev/null && \
 git commit -m "chore: 自动归档对话记忆 $TODAY" --no-verify 2>/dev/null || true
 
 log "完成"
