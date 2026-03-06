@@ -109,15 +109,16 @@ tags: [日记, 会话实录, NeoAgent]
         userName: string,
         timeStr: string
     ): string {
+        const quotedAnswer = answer.split('\n').map(line => `> ${line}`).join('\n');
         return `---
 
-**[${timeStr}] ${userName}**
+### ${userName} (${timeStr})
 
 ${question}
 
-**[NeoAgent]**
+### Neo
 
-${answer}
+${quotedAnswer}
 
 `;
     }

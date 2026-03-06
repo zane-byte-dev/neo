@@ -83,17 +83,21 @@ for m in messages:
                 if isinstance(part, dict) and 'text' in part:
                     text = part['text'].strip()
                     if text:
-                        lines.append(f'- **User**: {text[:200]}')
+                        lines.append(f'### User\n{text[:200]}')
         elif isinstance(content, str) and content.strip():
-            lines.append(f'- **User**: {content.strip()[:200]}')
+            lines.append(f'### User\n{content.strip()[:200]}')
     
     elif msg_type == 'gemini':
         if isinstance(content, str) and content.strip():
-            text = content.strip().replace('\n', ' ')[:200]
-            lines.append(f'- **Neo**: {text}')
+            # 保留 Markdown 结构，但为了摘要简洁，限制总长度
+            raw_text = content.strip()
+            display_text = raw_text[:500] + "..." if len(raw_text) > 500 else raw_text
+            # 每一行都加上 > 前缀，使其成为引用块
+            quoted_text = "\n".join([f"> {line}" for line in display_text.split("\n")])
+            lines.append(f"### Neo\n{quoted_text}")
 
 # 如果消息太少，跳过
-user_count = sum(1 for l in lines if l.startswith('- **User**'))
+user_count = sum(1 for l in lines if l.startswith("### User"))
 if user_count < 1:
     print('SKIP: 无有效对话', file=sys.stderr)
     sys.exit(0)
@@ -110,7 +114,7 @@ topic = summary if summary else '对话记录'
 output = f'\n## {time_str} {topic}\n'
 output += f'<!-- session: {session_id} -->\n'
 for line in lines[:20]:
-    output += line + '\n'
+    output += line + '\n\n'
 
 with open(memory_file, 'a') as f:
     f.write(output)
