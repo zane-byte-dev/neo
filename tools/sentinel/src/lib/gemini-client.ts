@@ -2,14 +2,13 @@ import { config } from 'dotenv';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { GoogleGenerativeAI, GenerativeModel, Content } from '@google/generative-ai';
+import { AcpClient } from './acp-client.js';
 
 // Load environment variables relative to the library regardless of execution directory
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 config({ path: join(__dirname, '../../.env') });
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_WORK_DIR = process.env.GEMINI_WORK_DIR; // Required working directory for loading personas/system prompts
 
@@ -29,10 +28,7 @@ export interface PersonaRule {
 const DEFAULT_PERSONA = { file: '西风', name: '🎩 西风 West Wind (default)' };
 
 
-
-import { sentinelToolDeclarations, SentinelToolExecutor } from './gemini-tools.js';
-
-// ==================== GeminiClient (Direct SDK) ====================
+// ==================== GeminiClient (ACP CLI Wrapper) ====================
 
 export class GeminiClient {
     private enabled: boolean = false;
@@ -41,23 +37,22 @@ export class GeminiClient {
     private personasDir?: string;
     private dynamicPersonaRules: PersonaRule[] = [];
 
-    private genAI?: GoogleGenerativeAI;
-    private cachedModels: Map<string, GenerativeModel> = new Map();
-    private toolExecutor?: SentinelToolExecutor;
+    private acpClient?: AcpClient;
+    private initializationPromise?: Promise<void>;
 
     constructor() {
         this.workDir = GEMINI_WORK_DIR;
 
-        if (GEMINI_API_KEY && this.workDir) {
+        if (this.workDir) {
             this.enabled = true;
-            this.genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-            this.toolExecutor = new SentinelToolExecutor(this.workDir);
-            console.log(`[Gemini SDK] ✅ Initialized with standard API key.`);
+            console.log(`[Gemini SDK] ✅ Initialized natively via ACP CLI.`);
             console.log(`[Gemini SDK] 📂 Working directory: ${this.workDir}`);
             this.personasDir = join(this.workDir, 'system', 'persona');
+            this.acpClient = new AcpClient(this.workDir, GEMINI_MODEL);
+            this.initializationPromise = this.acpClient.start();
             this.loadSystemContext();
         } else {
-            console.log('[Gemini SDK] ❌ Disabled. Missing GEMINI_API_KEY or GEMINI_WORK_DIR in .env');
+            console.log('[Gemini SDK] ❌ Disabled. Missing GEMINI_WORK_DIR in .env');
         }
     }
 
@@ -157,124 +152,44 @@ export class GeminiClient {
     }
 
     /**
-     * Get or create a generative model configured with the global system context
-     * and the specific persona.
-     */
-    private getModelForPersona(persona: { file: string; name: string }): GenerativeModel {
-        if (!this.genAI) throw new Error('GenerativeAI not initialized');
-
-        // Cache mapping key
-        const cacheKey = persona.file;
-        if (this.cachedModels.has(cacheKey)) {
-            return this.cachedModels.get(cacheKey)!;
-        }
-
-        const personaContent = this.loadPersonaContext(persona.file);
-
-        // Combine Base Context (GEMINI.md) + Persona Details
-        let finalInstruction = this.systemContext ? `[Master System Alignment]\n${this.systemContext}\n\n` : '';
-        if (personaContent) {
-            finalInstruction += `[Your Persona Profile: ${persona.name}]\n${personaContent}\n\n`;
-        }
-
-        // Hardcoded critical behaviors
-        finalInstruction += `[Critical System Rules]\n- You MUST respond strictly in CHINESE (简体中文).\n- NEVER output repetitive reasoning logs or think out loud formatting.\n- Be direct, concise, and professional without generic AI phrases.\n- Current Time Context: ${new Date().toLocaleString('zh-CN')}`;
-
-        const model = this.genAI.getGenerativeModel({
-            model: GEMINI_MODEL,
-            systemInstruction: finalInstruction,
-            tools: [{ functionDeclarations: sentinelToolDeclarations }]
-        });
-
-        this.cachedModels.set(cacheKey, model);
-        console.log(`[Gemini SDK] 🎭 Generated model instance for persona: ${persona.name}`);
-        return model;
-    }
-
-    /**
-     * Call SDK to generate a response.
+     * Call SDK to generate a response via ACP Client.
      */
     async generateResponse(prompt: string, persona?: { file: string; name: string } | null, history?: string): Promise<string | null> {
-        if (!this.enabled || !this.genAI) {
-            return null;
-        }
+        if (!this.enabled || !this.acpClient) return null;
+
+        await this.initializationPromise; // Ensure ACP is connected
 
         try {
             const activePersona = persona || DEFAULT_PERSONA;
-            const model = this.getModelForPersona(activePersona);
+            const personaContent = this.loadPersonaContext(activePersona.file);
 
-            // Note: Since our current ConversationHistory string block is just an aggregate string, 
-            // for migration simplicity we merge it into the user prompt. 
-            // In a better multi-turn, you would parse history into Role: user/model arrays.
-            let finalPrompt = prompt;
-            if (history && history.trim()) {
-                finalPrompt = `[Previous Conversation History]\n${history}\n\n[New Message]\n${prompt}`;
+            let finalInstruction = this.systemContext ? `[Master System Alignment]\n${this.systemContext}\n\n` : '';
+            if (personaContent) {
+                finalInstruction += `[Your Persona Profile: ${activePersona.name}]\n${personaContent}\n\n`;
             }
+            finalInstruction += `[Critical System Rules]\n- You MUST respond strictly in CHINESE (简体中文).\n- NEVER output repetitive reasoning logs or think out loud formatting.\n- Be direct, concise, and professional without generic AI phrases.\n- Current Time Context: ${new Date().toLocaleString('zh-CN')}\n\n`;
 
-            console.log(`[Gemini SDK] Sending request to ${GEMINI_MODEL} (persona: ${activePersona.name})`);
+            let finalPrompt = `${finalInstruction}`;
+            if (history && history.trim()) {
+                finalPrompt += `[Previous Conversation History]\n${history}\n\n`;
+            }
+            finalPrompt += `[New Message]\n${prompt}`;
+
+            console.log(`[Gemini SDK] Sending request via ACP to ${GEMINI_MODEL} (persona: ${activePersona.name})`);
             const startTime = Date.now();
 
-            // We use startChat so we can easily append tool responses back
-            const chat = model.startChat({
-                history: [
-                    { role: "user", parts: [{ text: finalPrompt }] }
-                ]
-            });
-
-            // Initial generic send (we just pass an empty string because the payload is in history)
-            let result = await chat.sendMessage("");
-
-            // Recursively evaluate if the model wants to call tools
-            let maxTurns = 5;
-            let currentResponseText = "";
-            let functionCallReports: string[] = [];
-
-            while (maxTurns > 0) {
-                const call = result.response.functionCalls() && result.response.functionCalls()![0];
-
-                if (call) {
-                    console.log(`[Gemini SDK] 🛠️  Model requested tool call: ${call.name}`);
-
-                    // Execute the local tool
-                    const apiResponse = await this.toolExecutor?.executeToolCall(call.name, call.args);
-
-                    if (apiResponse && apiResponse.success) {
-                        functionCallReports.push(`✅ 执行动作: [${call.name}] 成功。`);
-                    } else if (apiResponse && apiResponse.error) {
-                        functionCallReports.push(`❌ 执行动作: [${call.name}] 失败 (${apiResponse.error})。`);
-                    }
-
-                    // Send the tool result back to the model
-                    result = await chat.sendMessage([{
-                        functionResponse: {
-                            name: call.name,
-                            response: apiResponse
-                        }
-                    }]);
-
-                } else {
-                    // No more function calls, extract text
-                    currentResponseText = result.response.text();
-                    break;
-                }
-                maxTurns--;
-            }
+            const currentResponseText = await this.acpClient.prompt(finalPrompt);
 
             const ms = Date.now() - startTime;
-            console.log(`[Gemini SDK] ✅ Received final response in ${ms}ms`);
-
-            // Combine any backend reports with the final text
-            if (functionCallReports.length > 0) {
-                return `> _*系统通知*_\n> ${functionCallReports.join('\n> ')}\n\n${currentResponseText}`;
-            }
+            console.log(`[Gemini SDK] ✅ Received final response via ACP in ${ms}ms`);
 
             return currentResponseText;
         } catch (error) {
             console.error(`[Gemini SDK Error]`, error);
             if (error instanceof Error) {
-                return `🔥 System Error (SDK): ${error.message}`;
+                return `🔥 System Error (ACP): ${error.message}`;
             }
-            return '🔥 Unknown SDK error occurred';
+            return '🔥 Unknown ACP SDK error occurred';
         }
     }
 
@@ -298,7 +213,9 @@ export class GeminiClient {
      * Run a specific skill defined in system/skill/*.md
      */
     async runSkill(skillName: string, args: string[]): Promise<string | null> {
-        if (!this.enabled || !this.genAI) return null;
+        if (!this.enabled || !this.acpClient) return null;
+
+        await this.initializationPromise; // Ensure ACP is connected
 
         const skillPath = join(this.workDir || '', 'system', 'skill', `${skillName}.md`);
         if (!existsSync(skillPath)) {
@@ -310,70 +227,26 @@ export class GeminiClient {
 
         let finalInstruction = this.systemContext ? `[Master System Alignment]\n${this.systemContext}\n\n` : '';
         finalInstruction += `[Skill Profile: ${skillName}]\nYou are an autonomous agent executing this specific skill. Read the skill instructions below carefully and strictly follow the execution steps.\n${skillContent}\n\n`;
-        finalInstruction += `[Critical System Rules]\n- You MUST respond strictly in CHINESE (简体中文).\n- NEVER output repetitive reasoning logs or think out loud formatting.\n- Be direct, concise, and professional without generic AI phrases.\n- Current Time Context: ${new Date().toLocaleString('zh-CN')}`;
+        finalInstruction += `[Critical System Rules]\n- You MUST respond strictly in CHINESE (简体中文).\n- NEVER output repetitive reasoning logs or think out loud formatting.\n- Be direct, concise, and professional without generic AI phrases.\n- Current Time Context: ${new Date().toLocaleString('zh-CN')}\n\n`;
 
-        const model = this.genAI.getGenerativeModel({
-            model: GEMINI_MODEL,
-            systemInstruction: finalInstruction,
-            tools: [{ functionDeclarations: sentinelToolDeclarations }]
-        });
+        const prompt = `${finalInstruction}Please execute the skill **${skillName}**.\n\nAdditional user input/arguments: ${args.join(' ')}`;
 
-        const prompt = `Please execute the skill **${skillName}**.\n\nAdditional user input/arguments: ${args.join(' ')}`;
-
-        console.log(`[Gemini SDK] 🎯 Executing skill: ${skillName}`);
+        console.log(`[Gemini SDK] 🎯 Executing skill via ACP: ${skillName}`);
         const startTime = Date.now();
 
         try {
-            const chat = model.startChat({
-                history: [
-                    { role: "user", parts: [{ text: prompt }] }
-                ]
-            });
-
-            let result = await chat.sendMessage("");
-            let maxTurns = 15; // Skills might need more turns
-            let currentResponseText = "";
-            let functionCallReports: string[] = [];
-
-            while (maxTurns > 0) {
-                const call = result.response.functionCalls() && result.response.functionCalls()![0];
-
-                if (call) {
-                    console.log(`[Gemini SDK] 🛠️  Skill requested tool call: ${call.name}`);
-                    const apiResponse = await this.toolExecutor?.executeToolCall(call.name, call.args);
-
-                    if (apiResponse && apiResponse.success) {
-                        functionCallReports.push(`✅ 执行动作: [${call.name}] 成功。`);
-                    } else if (apiResponse && apiResponse.error) {
-                        functionCallReports.push(`❌ 执行动作: [${call.name}] 失败 (${apiResponse.error})。`);
-                    }
-
-                    result = await chat.sendMessage([{
-                        functionResponse: {
-                            name: call.name,
-                            response: apiResponse
-                        }
-                    }]);
-                } else {
-                    currentResponseText = result.response.text();
-                    break;
-                }
-                maxTurns--;
-            }
+            const currentResponseText = await this.acpClient.prompt(prompt);
 
             const ms = Date.now() - startTime;
-            console.log(`[Gemini SDK] ✅ Completed skill execution in ${ms}ms`);
+            console.log(`[Gemini SDK] ✅ Completed skill execution via ACP in ${ms}ms`);
 
-            if (functionCallReports.length > 0) {
-                return `> _*系统通知*_\n> ${functionCallReports.join('\n> ')}\n\n${currentResponseText}`;
-            }
             return currentResponseText;
         } catch (error) {
             console.error(`[Gemini SDK Error in runSkill]`, error);
             if (error instanceof Error) {
                 return `🔥 System Error (Skill): ${error.message}`;
             }
-            return '🔥 Unknown SDK error occurred finding skill.';
+            return '🔥 Unknown ACP error occurred finding skill.';
         }
     }
 
@@ -392,22 +265,29 @@ export class GeminiClient {
             return false;
         }
 
-        console.log('[Gemini SDK] 🧪 Testing SDK connection...');
+        console.log('[Gemini SDK] 🧪 Testing ACP connection...');
         const response = await this.generateResponse(
             "Hi! Please respond with 'OK' to confirm."
         );
 
         if (response && !response.startsWith('⚠️') && !response.startsWith('🔥')) {
-            console.log('[Gemini SDK] ✅ SDK test successful');
+            console.log('[Gemini SDK] ✅ ACP SDK test successful');
             console.log(`[Gemini SDK] Response preview: ${response.substring(0, 100)}...`);
             return true;
         } else {
-            console.log('[Gemini SDK] ❌ SDK test failed');
+            console.log('[Gemini SDK] ❌ ACP SDK test failed');
             if (response) {
                 console.log(`[Gemini SDK] Error: ${response}`);
             }
             return false;
         }
+    }
+
+    /**
+     * Terminate the ACP underlying process cleanly
+     */
+    close(): void {
+        this.acpClient?.stop();
     }
 }
 
@@ -420,16 +300,15 @@ export function createGeminiClient(): GeminiClient {
 
 // Test script when run directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-    console.log('Testing Gemini SDK Client...\n');
+    console.log('Testing Gemini ACP SDK Client...\n');
 
     const client = createGeminiClient();
 
     if (client.isEnabled()) {
-        const startTime = Date.now();
-        console.log('[Gemini SDK] 🧪 Testing Tool Calling...');
-        client.generateResponse("帮我在今天的流水日记里记一笔：刚刚把底层重构成SDK+FunctionCalling了，很快！").then(res => {
-            const elapsed = (Date.now() - startTime) / 1000;
-            console.log(`\n[Agent Response]\n${res}\n\n⏱️  Response time: ${elapsed.toFixed(2)}s`);
+        console.log('[Gemini SDK] 🧪 Testing Chatting...');
+        client.generateResponse("帮我在今天的流水日记里记一笔：刚刚把底层重构成ACP了，很快！").then(res => {
+            console.log('\n💬 [Response]:\n' + res);
+            client.close();
         });
     }
 }
