@@ -1,14 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { GeminiClient } from '../gemini-client.js';
+import { execa } from 'execa';
 
 const getProjectRoot = (): string => {
-    // Priority 1: Environment variable set in .env
     if (process.env.GEMINI_WORK_DIR) {
         return process.env.GEMINI_WORK_DIR;
     }
-    // Fallback: Assume we are running from tools/sentinel/dist/lib/tools/ or tools/sentinel/src/lib/tools/
-    // Project root is 3 levels up from Sentinel root
     return path.resolve(process.cwd(), '../..');
 };
 
@@ -104,15 +101,10 @@ ${content}
 
         console.log(`[Curator] 正在召唤策展人... (精选文件: ${fileName})`);
 
-        // 4. 发起 Gemini 调用
-        const geminiCli = new GeminiClient();
-        if (!geminiCli.isEnabled()) {
-            return '❌ [策展人] 无法唤醒 Gemini 核心引擎，请检查 CLI 路径。';
-        }
+        // 4. 发起 Gemini 调用 (Native CLI)
+        const { stdout: response, exitCode } = await execa('gemini', ['-e', promptContext], { reject: false });
 
-        const response = await geminiCli.generateResponse(promptContext);
-
-        if (!response || response.includes("⚠️") || response.includes("🔥")) {
+        if (exitCode !== 0 || !response || response.includes("⚠️") || response.includes("🔥")) {
             return `❌ [策展人] 唤醒失败或无思考产出：${response}`;
         }
 
@@ -126,4 +118,9 @@ ${content}
     } catch (e: any) {
         return `❌ [策展人] 遭遇严重错误导致策展中断: ${e.message}`;
     }
+}
+
+// Run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+    runCurator().then(console.log).catch(console.error);
 }

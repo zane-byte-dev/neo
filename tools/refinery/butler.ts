@@ -177,3 +177,8 @@ export async function runMaintenance(): Promise<string> {
         return `❌ 管家巡检过程中发生严重错误: ${error.message || error}`;
     }
 }
+
+// Run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+    runMaintenance().then(console.log).catch(console.error);
+}

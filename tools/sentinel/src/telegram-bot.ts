@@ -8,11 +8,12 @@ import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import PQueue from 'p-queue';
+import { execa } from 'execa';
+import { join } from 'path';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { ConversationSaver } from './lib/conversation-saver.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
-import { runClipper, runAudioRefinery, runEbookRefinery, runButler, runCurator } from './lib/tool-runner.js';
 import cron from 'node-cron';
 
 // Load environment variables
@@ -58,7 +59,7 @@ class NeoAgentBot {
     }
 
     /**
-     * Setup scheduled cron jobs
+     * Setup scheduled cron jobs (delegating to independent refinery scripts)
      */
     private setupCronJobs() {
         if (!AUTHORIZED_CHAT_ID) {
@@ -66,19 +67,17 @@ class NeoAgentBot {
             return;
         }
 
-        // Run every day at 02:00 AM
+        const projectRoot = process.env.GEMINI_WORK_DIR || process.cwd();
+
+        // Run every day at 02:00 AM (Butler)
         cron.schedule('0 2 * * *', async () => {
             console.log('[Cron] Execution starting: Butler daily maintenance');
             try {
-                const result = await runButler();
-                const report = result.success
-                    ? `📅 **每日管家巡检报告**:\n\n${result.output}`
-                    : `❌ **每日巡检发生错误**:\n${result.error}`;
-
-                // Directly send to the configured authorized chat ID
-                await this.sendReply(AUTHORIZED_CHAT_ID, report);
-            } catch (error) {
+                const result = await execa('npx', ['tsx', join(projectRoot, 'tools/refinery/butler.ts')]);
+                await this.sendReply(AUTHORIZED_CHAT_ID, `📅 **每日管家巡检报告**:\n\n${result.stdout}`);
+            } catch (error: any) {
                 console.error(`[Cron Error] ${error}`);
+                await this.sendReply(AUTHORIZED_CHAT_ID, `❌ **每日巡检发生错误**:\n${error.message || error.stderr}`);
             }
         });
 
@@ -86,14 +85,13 @@ class NeoAgentBot {
         cron.schedule('30 9 * * *', async () => {
             console.log('[Cron] Execution starting: Curator daily briefing');
             try {
-                const result = await runCurator();
-                if (result.success && !result.output.includes('未在归档库')) {
-                    await this.sendReply(AUTHORIZED_CHAT_ID, result.output);
-                } else if (result.error) {
-                    await this.sendReply(AUTHORIZED_CHAT_ID, `❌ **每日策展发生错误**:\n${result.error}`);
+                const result = await execa('npx', ['tsx', join(projectRoot, 'tools/refinery/curator.ts')]);
+                if (!result.stdout.includes('未在归档库')) {
+                    await this.sendReply(AUTHORIZED_CHAT_ID, result.stdout);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error(`[Cron Error Curator] ${error}`);
+                await this.sendReply(AUTHORIZED_CHAT_ID, `❌ **每日策展发生错误**:\n${error.message || error.stderr}`);
             }
         });
 
@@ -248,7 +246,6 @@ class NeoAgentBot {
 
         const chunks: string[] = [];
         let currentChunk = '';
-
         const lines = message.split('\n');
 
         for (const line of lines) {
@@ -258,7 +255,6 @@ class NeoAgentBot {
                     currentChunk = '';
                 }
 
-                // If single line is too long, split it
                 if (line.length > maxLength) {
                     for (let i = 0; i < line.length; i += maxLength) {
                         chunks.push(line.substring(i, i + maxLength));
@@ -283,24 +279,18 @@ class NeoAgentBot {
      */
     private async handleCommand(ctx: any) {
         const text = ctx.message.text as string;
-        const [command, ...argParts] = text.split(' ');
-        const arg = argParts.join(' ').trim();
+        const [command] = text.split(' ');
 
         console.log(`[Command] Received: ${command}`);
 
         switch (command) {
             case '/start':
                 await ctx.reply(
-                    '🔭 **NeoAgent Connector Ready**\n' +
-                    'Send any message to chat, or use a command:\n\n' +
-                    '`/clip <url>` — 抓取网页保存到 vault\n' +
-                    '`/audioify <file_or_dir>` — Markdown → MP3\n' +
-                    '`/epub <file>` — EPUB → Markdown 章节\n' +
-                    '`/butler` — 🤖 召唤管家打扫知识库\n' +
-                    '`/curate` — 🕰️ 唤醒策展人，随机推荐旧笔记\n' +
-                    '`/clear` — 清空对话历史\n' +
+                    '🔭 **NeoAgent Connect Gateway**\n' +
+                    '这是一个极简的全能代理网关。发送任何消息，远端的 Gemini CLI 将接管思考过程。\n\n' +
+                    '`/clear`  — 清空上下文对话历史\n' +
                     '`/newsession` — 开启新会话\n' +
-                    '`/stats` — 查看统计',
+                    '`/stats`  — 查看会话统计数据',
                     { parse_mode: 'Markdown' }
                 );
                 break;
@@ -326,70 +316,6 @@ class NeoAgentBot {
                 break;
             }
 
-            case '/clip': {
-                if (!arg) { await ctx.reply('Usage: /clip <url>'); break; }
-                await ctx.reply(`✂️ Clipping: ${arg}`);
-                taskQueue.add(async () => {
-                    const result = await runClipper(arg);
-                    const reply = result.success
-                        ? `✅ Clipped!\n\n${result.output}`
-                        : `❌ Clip failed:\n${result.error}`;
-                    await this.sendReply(ctx.chat.id, reply);
-                });
-                break;
-            }
-
-            case '/audioify': {
-                if (!arg) { await ctx.reply('Usage: /audioify <file_or_dir> [voice]'); break; }
-                const [target, voice] = arg.split(' ');
-                await ctx.reply(`🎧 Audioifying: ${target}\n(这可能需要几分钟...)`);
-                taskQueue.add(async () => {
-                    const result = await runAudioRefinery(target, voice);
-                    const reply = result.success
-                        ? `✅ Done!\n\n${result.output}`
-                        : `❌ Audio failed:\n${result.error}`;
-                    await this.sendReply(ctx.chat.id, reply);
-                });
-                break;
-            }
-
-            case '/epub': {
-                if (!arg) { await ctx.reply('Usage: /epub <file.epub>'); break; }
-                await ctx.reply(`📚 Refining EPUB: ${arg}`);
-                taskQueue.add(async () => {
-                    const result = await runEbookRefinery(arg);
-                    const reply = result.success
-                        ? `✅ Done!\n\n${result.output}`
-                        : `❌ EPUB failed:\n${result.error}`;
-                    await this.sendReply(ctx.chat.id, reply);
-                });
-                break;
-            }
-
-            case '/butler': {
-                await ctx.reply(`🤖 管家开始日常巡检，打扫知识库...`);
-                taskQueue.add(async () => {
-                    const result = await runButler();
-                    const reply = result.success
-                        ? `✅ 打扫完毕:\n\n${result.output}`
-                        : `❌ 巡检失败:\n${result.error}`;
-                    await this.sendReply(ctx.chat.id, reply);
-                });
-                break;
-            }
-
-            case '/curate': {
-                await ctx.reply(`🕰️ 策展人正在历史的星河中漫游探索，请稍候...`);
-                taskQueue.add(async () => {
-                    const result = await runCurator();
-                    const reply = result.success
-                        ? result.output
-                        : `❌ 策展失败:\n${result.error}`;
-                    await this.sendReply(ctx.chat.id, reply);
-                });
-                break;
-            }
-
             default:
                 await ctx.reply('Unknown command. Try /start for help.');
         }
@@ -402,14 +328,13 @@ class NeoAgentBot {
         console.log(`🤖 Bot started. Auth Chat ID: ${AUTHORIZED_CHAT_ID || 'ALL'}`);
         console.log(`🛠  Gemini CLI enabled: ${geminiClient.isEnabled()}`);
 
-        // Send startup notification independently (API calls don't need polling to be fully started)
         if (AUTHORIZED_CHAT_ID) {
             const timeStr = new Date().toLocaleString('zh-CN');
             this.bot.telegram.sendMessage(
                 AUTHORIZED_CHAT_ID,
-                `🤖 **NeoAgent (Sentinel)** 已于 ${timeStr} 启动/重启。\n` +
-                `✅ 守护进程在线\n` +
-                `✅ 管家定时巡检已激活 (每日凌晨 2:00)`,
+                `🤖 **NeoAgent Gateway** 已于 ${timeStr} 启动/重启。\n` +
+                `✅ 纯净通信网关已上线\n` +
+                `✅ 引擎状态: gemini-3-pro-preview via ACP`,
                 { parse_mode: 'Markdown' }
             ).catch(err => console.error('[Startup Message Failed]', err));
         }
