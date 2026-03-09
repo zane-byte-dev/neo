@@ -1,4 +1,12 @@
 {
+    "mcpServers": {
+        "memory": {
+            "command": "node",
+            "args": [
+                "/Users/zhengchao/mox/neo/apps/mcps/memory-server/dist/index.js"
+            ]
+        }
+    },
     "hooks": {
         "SessionEnd": [
             {

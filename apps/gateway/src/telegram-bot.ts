@@ -1,18 +1,15 @@
 #!/usr/bin/env node
-/**
- * Telegram Bot 对话模式 (Async Worker Edition)
- * 集成 NeoAgent CLI (Gemini CLI) 进行深度思考
- */
 
 import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
-import { message } from 'telegraf/filters.js';
+import { message } from 'telegraf/filters';
 import PQueue from 'p-queue';
 import { execa } from 'execa';
 import { join } from 'path';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
+import { ConversationSaver } from './lib/conversation-saver.js';
 import cron from 'node-cron';
 
 // Load environment variables
@@ -34,6 +31,9 @@ const geminiClient = new GeminiClient();
 
 // Initialize chat history cache
 const chatHistoryCache = new ChatHistoryCache();
+
+// Initialize conversation saver (daily memory log)
+const conversationSaver = new ConversationSaver();
 
 // Task queue (Producer-Consumer model)
 const taskQueue = new PQueue({ concurrency: 1 });
@@ -181,6 +181,10 @@ class NeoAgentBot {
 
             // Send reply to user
             await this.sendReply(chatId, responseText);
+
+            // Log to memory (daily log format)
+            const stats = chatHistoryCache.getStats();
+            await conversationSaver.saveTurn(userName, question, responseText, stats.sessionId || undefined);
         } catch (error) {
             console.error(`[Worker Error] ${error}`);
             await this.sendReply(
