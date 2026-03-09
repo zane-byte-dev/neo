@@ -86,7 +86,7 @@ export async function runCurator(): Promise<string> {
             content = content.substring(0, 3000) + '... (内容已截断)';
         }
 
-        // 3. 构造请求给策展人人格
+        // 3. 构造请求
         const promptContext = `
 [任务：每日策展]
 时间线：这里有一篇尘封在历史归档中的旧日记，写于【${fileName}】。
@@ -104,16 +104,13 @@ ${content}
 
         console.log(`[Curator] 正在召唤策展人... (精选文件: ${fileName})`);
 
-        // 4. 发起 Gemini 调用，强制带上策展人人格
+        // 4. 发起 Gemini 调用
         const geminiCli = new GeminiClient();
         if (!geminiCli.isEnabled()) {
             return '❌ [策展人] 无法唤醒 Gemini 核心引擎，请检查 CLI 路径。';
         }
 
-        // 强行指定使用 策展人 Persona，而不是依赖文本内容被动 detect
-        const curatorPersona = { file: '策展人', name: '🕰️ 策展人 Curator' };
-
-        const response = await geminiCli.generateResponse(promptContext, curatorPersona);
+        const response = await geminiCli.generateResponse(promptContext);
 
         if (!response || response.includes("⚠️") || response.includes("🔥")) {
             return `❌ [策展人] 唤醒失败或无思考产出：${response}`;
