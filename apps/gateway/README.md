@@ -6,7 +6,6 @@ NeoAgent Sentinel 是一个 Telegram Bot 智能助手，通过 Gemini CLI 提供
 
 - 💬 Telegram Chat Bot 对话模式
 - 🤖 调用 Gemini CLI 进行深度思考
-- 📝 对话自动保存到 Obsidian vault
 - ⚡ 异步队列处理，快速响应
 - 📱 手机、电脑、网页全平台支持
 - 🚀 PM2 后台运行
@@ -103,7 +102,7 @@ Bot 立即回复：
 您可以使用 async/await 或 Promise 来处理异步任务...
 ```
 
-对话会自动保存为 Markdown 文件到 Obsidian vault（需配置 `CONVERSATION_SAVE_DIR`）。
+对话会由底层的 `memory-hook.sh` 自动归档为 Markdown 文件到 Obsidian vault 的 `history/memory/` 目录中。
 
 ## 项目结构
 
@@ -112,7 +111,6 @@ NeoAgent-sentinel/
 ├── src/
 │   ├── lib/
 │   │   ├── gemini-client.ts      # Gemini CLI 客户端
-│   │   ├── conversation-saver.ts # 对话保存到 Obsidian
 │   │   └── markdown-converter.ts # Markdown → Telegram 格式
 │   └── telegram-bot.ts           # Telegram Bot 主程序
 ├── ecosystem.config.js           # PM2 配置

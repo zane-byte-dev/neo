@@ -12,7 +12,6 @@ import { execa } from 'execa';
 import { join } from 'path';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
-import { ConversationSaver } from './lib/conversation-saver.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
 import cron from 'node-cron';
 
@@ -35,9 +34,6 @@ const geminiClient = new GeminiClient();
 
 // Initialize chat history cache
 const chatHistoryCache = new ChatHistoryCache();
-
-// Initialize conversation saver (optional, saves Q&A to vault)
-const conversationSaver = new ConversationSaver();
 
 // Task queue (Producer-Consumer model)
 const taskQueue = new PQueue({ concurrency: 1 });
@@ -73,7 +69,7 @@ class NeoAgentBot {
         cron.schedule('0 2 * * *', async () => {
             console.log('[Cron] Execution starting: Butler daily maintenance');
             try {
-                const result = await execa('npx', ['tsx', join(projectRoot, 'tools/refinery/butler.ts')]);
+                const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/butler.ts')]);
                 await this.sendReply(AUTHORIZED_CHAT_ID, `📅 **每日管家巡检报告**:\n\n${result.stdout}`);
             } catch (error: any) {
                 console.error(`[Cron Error] ${error}`);
@@ -85,7 +81,7 @@ class NeoAgentBot {
         cron.schedule('30 9 * * *', async () => {
             console.log('[Cron] Execution starting: Curator daily briefing');
             try {
-                const result = await execa('npx', ['tsx', join(projectRoot, 'tools/refinery/curator.ts')]);
+                const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/curator.ts')]);
                 if (!result.stdout.includes('未在归档库')) {
                     await this.sendReply(AUTHORIZED_CHAT_ID, result.stdout);
                 }
@@ -182,9 +178,6 @@ class NeoAgentBot {
 
             // Add assistant message to cache
             await chatHistoryCache.addMessage('assistant', responseText);
-
-            // Append to daily verbatim transcript in vault (history/会话/)
-            await conversationSaver.saveConversation(question, responseText, userName);
 
             // Send reply to user
             await this.sendReply(chatId, responseText);
