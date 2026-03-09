@@ -6,7 +6,7 @@
 
 import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
-import { message } from 'telegraf/filters';
+import { message } from 'telegraf/filters.js';
 import PQueue from 'p-queue';
 import { execa } from 'execa';
 import { join } from 'path';
