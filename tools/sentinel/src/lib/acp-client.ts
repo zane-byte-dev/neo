@@ -38,9 +38,10 @@ export class AcpClient extends EventEmitter {
     async start() {
         if (this.process) return;
 
-        console.log(`[ACP Client] Spawning gemini --experimental-acp --model ${this.model}`);
+        const geminiCommand = process.env.GEMINI_CLI_PATH || 'gemini';
+        console.log(`[ACP Client] Spawning ${geminiCommand} --experimental-acp --model ${this.model}`);
 
-        this.process = execa('gemini', ['--experimental-acp', '--model', this.model], {
+        this.process = execa(geminiCommand, ['--experimental-acp', '--model', this.model], {
             cwd: this.cwd,
             env: { ...process.env, PYTHONUNBUFFERED: '1' },
             reject: false,
@@ -162,6 +163,12 @@ export class AcpClient extends EventEmitter {
         return new Promise((resolve, reject) => {
             let fullResponse = '';
 
+            const timeoutSeconds = parseInt(process.env.GEMINI_TIMEOUT || '180', 10);
+            const timeoutHandler = setTimeout(() => {
+                this.off('notification', handleNotification);
+                reject(new Error(`🔥 [ACP Timeout] The request exceeded ${timeoutSeconds} seconds.`));
+            }, timeoutSeconds * 1000);
+
             const handleNotification = (msg: JSONRPCNotification) => {
                 if (msg.method === 'session/update') {
                     const updateData = msg.params?.update;
@@ -182,9 +189,11 @@ export class AcpClient extends EventEmitter {
                 sessionId: this.activeSessionId,
                 prompt: [{ type: 'text', text }]
             }).then(() => {
+                clearTimeout(timeoutHandler);
                 this.off('notification', handleNotification);
                 resolve(fullResponse);
             }).catch(err => {
+                clearTimeout(timeoutHandler);
                 this.off('notification', handleNotification);
                 reject(err);
             });

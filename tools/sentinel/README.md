@@ -45,11 +45,13 @@ TELEGRAM_CHAT_ID=your_chat_id       # 你的 Telegram Chat ID
 
 ### 3. 获取 Telegram Chat ID
 
+启动开发模式但先不配置 `TELEGRAM_CHAT_ID`：
+
 ```bash
-npm run dev:get-chat-id
+npm run dev:bot
 ```
 
-然后在 Telegram 中向你的 Bot 发送任意消息，即可获取 Chat ID。
+然后在 Telegram 中向你的 Bot 发送任意消息，查看终端控制台输出，即可获得类似 `[Message] From xxx (ID: 123456789)` 的日志信息，拿到 Chat ID 后填入 `.env` 并重启。
 
 ## 使用方法
 
@@ -112,8 +114,7 @@ NeoAgent-sentinel/
 │   │   ├── gemini-client.ts      # Gemini CLI 客户端
 │   │   ├── conversation-saver.ts # 对话保存到 Obsidian
 │   │   └── markdown-converter.ts # Markdown → Telegram 格式
-│   ├── telegram-bot.ts           # Telegram Bot 主程序
-│   └── get-chat-id.ts            # 获取 Chat ID 工具
+│   └── telegram-bot.ts           # Telegram Bot 主程序
 ├── ecosystem.config.js           # PM2 配置
 ├── tsconfig.json                 # TypeScript 配置
 └── .env                          # 环境变量配置
@@ -137,7 +138,7 @@ NeoAgent-sentinel/
 ### Telegram Bot 无响应
 
 - `TELEGRAM_BOT_TOKEN` 是否正确
-- `TELEGRAM_CHAT_ID` 是否正确（运行 `npm run dev:get-chat-id` 获取）
+- `TELEGRAM_CHAT_ID` 是否正确（通过终端日志查看你的真实 ID）
 - Bot 是否有网络连接
 
 ## 开发
