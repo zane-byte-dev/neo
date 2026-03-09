@@ -55,9 +55,9 @@ When performing default dialogues or specific actions, follow these standards:
 
 ## 🧠 Memory Protocol
 
-1. **At Startup**: Read the files from `history/memory/` for the current and previous day to understand the recent context.
-2. **During Conversation**: When involving specific projects, actively read the corresponding directory in `project/` for context.
-3. **At End**: Execute `system/skill/MemoryArchive.md` to compress the summary into the daily log and distribute assets.
+1. **At Startup**: Read the **compressed daily summaries** (e.g., `history/memory/YYYY-MM.md` or recent high-level digests) to understand project state. Raw `history/memory/YYYY-MM-DD.md` logs are treated as reference only.
+2. **During Conversation**: Use RAG/File Search or targeted `read_file` to query historical logs only when deep context is needed for specific tasks.
+3. **At End**: Execute `system/skill/MemoryArchive.md` to distill the session into 3-5 lines of knowledge increments and append to the monthly summary.
 
 ---
 

@@ -145,8 +145,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       let lines: string[] = [];
       for (const m of messages) {
         if (m.type === "user") {
-            const text = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.find((p: any) => p.text)?.text : "");
-            if (text) lines.push(`### User\n${text.trim().substring(0, 200)}`);
+            let text = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.find((p: any) => p.text)?.text : "");
+            if (text) {
+                // Filter out [System Override] blocks
+                text = text.replace(/\[System Override\][\s\S]*?(?=\n\n|$|\[)/g, "").trim();
+                if (text) lines.push(`### User\n${text.substring(0, 200)}`);
+            }
         } else if (m.type === "gemini") {
             const text = typeof m.content === 'string' ? m.content : "";
             if (text) {
