@@ -5,7 +5,7 @@
 ## 🚀 This Week's Tasks (Limit to 2)
 
 ### 1. MTOP Gateway Proxy Support
-*   **Status**: Full scale rollout completed; Entering 2-day **Network Freeze** [封网] (Monitoring stability).
+*   **Status**: Expected to complete production release today.
 
 ### 2. metaq-poller-go to Pre-release
 *   **Status**: Canary release completed; Production release scheduled for Next Week.
@@ -22,13 +22,13 @@
 *   [ ] 🧠 **Start "FaaS Turbo for LLM" Initiative** (Tongyi Qianwen stability governance).
     *   [x] Deploy physically isolated gateway clusters for core AI businesses.
     *   [ ] Establish the "High-Availability Architecture for FaaS Gateways in High-Concurrency LLM Scenarios" standard.
+*   [ ] ⚡ **API Server Redis Optimization**
+    *   [ ] `alifaas-api-server`: Modify cache logic to decouple user requests from Redis requests (Progress: 80%).
 
 ### 🗑️ Swamp Area (Backlog)
 > Tasks here are salvaged only when "boss is screaming for them" or "weekly limit tasks are cleared and you're bored to death."
 > Strictly forbid deep-diving or starting early here.
 
-*   [ ] **Post-Mortem Actions**:
-    *   [ ] `alifaas-api-server`: Modify cache logic to decouple user requests from Redis requests.
 *   [ ] **Other Optimizations**:
     *   [ ] `alifaas-api-server`: Add monitoring/alerts for expansion success rate; current alerts based on request count are unreasonable.
     *   [ ] `alifaas-api-server`: Research second-level rate limiting solutions; consider migrating all cases to this.
@@ -36,6 +36,10 @@
 ---
 
 ## 📜 Change Log
+
+### 2026-03-10
+*   **FC-MTOP Gateway**: Expected to complete production release today.
+*   **API Server**: Started optimizing Redis cache logic to decouple user requests; current progress 80%.
 
 ### 2026-03-06
 *   **FC-MTOP Gateway**: Full scale rollout completed; Entering 2-day **Network Freeze** [封网].
