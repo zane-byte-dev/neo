@@ -2,6 +2,10 @@ import { config } from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { AcpClient } from './acp-client.js';
+import { setupLogger } from './logger.js';
+
+// Initialize Logger
+setupLogger();
 
 // Load environment variables relative to the library regardless of execution directory
 const __filename = fileURLToPath(import.meta.url);

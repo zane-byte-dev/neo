@@ -9,8 +9,12 @@ import { join } from 'path';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
+import { setupLogger } from './lib/logger.js';
 import cron from 'node-cron';
 
+
+// Initialize Logger
+setupLogger();
 
 // Load environment variables
 config();
@@ -26,6 +30,12 @@ if (!BOT_TOKEN) {
     process.exit(1);
 }
 
+// Pre-flight: Clean up orphaned gemini processes to avoid pipe blockage
+try {
+    // Use a temporary direct execa call since geminiClient isn't ready
+    await execa('pkill', ['-f', 'gemini --experimental-acp']).catch(() => { });
+} catch (e) { }
+
 // Initialize Gemini client
 const geminiClient = new GeminiClient();
 
@@ -39,6 +49,7 @@ interface Task {
     chatId: number;
     question: string;
     userName: string;
+    messageId: number;
 }
 
 class NeoAgentBot {
@@ -127,11 +138,12 @@ class NeoAgentBot {
     private async processMessage(ctx: any) {
         const chatId = ctx.chat.id;
         const text = ctx.message.text;
+        const messageId = ctx.message.message_id;
         const userName = ctx.chat.first_name || 'User';
 
         // Log received message
         const preview = text.length > 50 ? `${text.substring(0, 50)}...` : text;
-        console.log(`[Message] From ${userName} (ID: ${chatId}): ${preview}`);
+        console.log(`[Message] From ${userName} (ID: ${chatId}, MsgID: ${messageId}): ${preview}`);
 
         // Authorization check
         if (!this.isAuthorized(chatId)) {
@@ -146,7 +158,7 @@ class NeoAgentBot {
         }
 
         // Add task to queue for async processing
-        const task: Task = { chatId, question: text, userName };
+        const task: Task = { chatId, question: text, userName, messageId };
         taskQueue.add(() => this.processTask(task));
     }
 
@@ -154,7 +166,7 @@ class NeoAgentBot {
      * Worker logic: process queued tasks
      */
     private async processTask(task: Task) {
-        const { chatId, question, userName } = task;
+        const { chatId, question, userName, messageId } = task;
 
         try {
             console.log(`[Worker] Processing task for ${userName}: ${question.substring(0, 20)}...`);
@@ -169,7 +181,7 @@ class NeoAgentBot {
             const responseText = await geminiClient.chatWithContext(question, context);
 
             if (!responseText) {
-                await this.sendReply(chatId, '⚠️ Failed to generate response.');
+                await this.sendReply(chatId, '⚠️ Failed to generate response.', 2, messageId);
                 return;
             }
 
@@ -177,12 +189,14 @@ class NeoAgentBot {
             await chatHistoryCache.addMessage('assistant', responseText);
 
             // Send reply to user
-            await this.sendReply(chatId, responseText);
+            await this.sendReply(chatId, responseText, 2, messageId);
         } catch (error) {
             console.error(`[Worker Error] ${error}`);
             await this.sendReply(
                 chatId,
-                '🔥 处理请求时出现错误，请稍后重试。'
+                '🔥 处理请求时出现错误，请稍后重试。',
+                2,
+                messageId
             );
         }
     }
@@ -190,7 +204,7 @@ class NeoAgentBot {
     /**
      * Send final reply to user with retry and timeout handling
      */
-    private async sendReply(chatId: number, text: string, retries: number = 2) {
+    private async sendReply(chatId: number, text: string, retries: number = 2, replyToMessageId?: number) {
         const timestamp = new Date().toLocaleTimeString('zh-CN', {
             hour: '2-digit',
             minute: '2-digit',
@@ -209,8 +223,10 @@ class NeoAgentBot {
 
             for (let attempt = 0; attempt <= retries; attempt++) {
                 try {
-                    // Send as plain text (no parse_mode)
-                    await this.bot.telegram.sendMessage(chatId, chunkPrefix + chunk);
+                    // Send message with reply_to_message_id if available
+                    await this.bot.telegram.sendMessage(chatId, chunkPrefix + chunk, {
+                        reply_to_message_id: replyToMessageId
+                    });
                     break; // Success, exit retry loop
                 } catch (error) {
                     if (attempt === retries) {
