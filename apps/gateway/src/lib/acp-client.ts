@@ -31,7 +31,7 @@ export class AcpClient extends EventEmitter {
     private pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
     private isReady = false;
 
-    constructor(private cwd: string, private model: string = 'gemini-2.5-flash') {
+    constructor(private cwd: string, private model: string = 'gemini-3-flash-preview') {
         super();
     }
 

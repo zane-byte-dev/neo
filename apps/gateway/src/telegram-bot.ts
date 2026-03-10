@@ -324,7 +324,7 @@ class NeoAgentBot {
                 AUTHORIZED_CHAT_ID,
                 `🤖 **NeoAgent Gateway** 已于 ${timeStr} 启动/重启。\n` +
                 `✅ 网关已上线\n` +
-                `✅ 引擎状态: gemini-3-pro-preview via ACP`,
+                `✅ 引擎状态: gemini-3-flash-preview via ACP`,
                 { parse_mode: 'Markdown' }
             ).catch(err => console.error('[Startup Message Failed]', err));
         }

@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 config({ path: join(__dirname, '../../.env') });
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-pro-preview';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
 const GEMINI_WORK_DIR = process.env.GEMINI_WORK_DIR; // Required working directory for context
 
 // ==================== GeminiClient (ACP CLI Thin Wrapper) ====================
