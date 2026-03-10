@@ -1,26 +1,26 @@
-# [Skill] Generate Weekly Report
+# [技能] 生成周报 (Generate Weekly Report)
 
-> **Goal**: Dehydrate and aggregate the fragments of the week, outputting a strategic weekly report that supports the **English Evolution Protocol**.
+> **目标**: 脱水并聚合本周的碎片，输出一份支持 **英语进化协议 (English Evolution Protocol)** 的战略周报。
 
-## 🚀 Aggregation Logic
+## 🚀 聚合逻辑
 
-1. **Multi-source Data Retrieval**:
-    - Scan all `.md` files under `history/memory/` for this week.
-    - Check the updates of `project/work/tasks.md`.
-    - Retrieve this week's records from `project/work/changelog.md`.
+1. **多源数据检索**:
+    - 扫描本周 `history/memory/` 下的所有 `.md` 文件。
+    - 检查 `project/work/tasks.md` 的更新。
+    - 检索 `project/work/changelog.md` 中本周的记录。
 
-2. **Core Section Extraction**:
-    - **Professional Engineering**: Alibaba's FaaS gateway, VPC isolation, release progress, stability governance.
-    - **System Building (Neo)**: Neo architecture reconstruction, AI workflow optimization, extension updates.
-    - **Personal Business**: Arbitrage [套利] profit and loss, principle establishment (Principles).
-    - **English Practice**: This week's learning progress, core error audit.
+2. **核心板块提取**:
+    - **职业工程 (Professional Engineering)**: 阿里 FaaS 网关、VPC 隔离、发布进度、稳定性治理。
+    - **系统构建 (System Building - Neo)**: Neo 架构重构、AI 工作流优化、插件更新。
+    - **个人业务 (Personal Business)**: 套利损益、原则建立 (Principles)。
+    - **英语练习 (English Practice)**: 本周学习进度、核心错误审计。
 
-3. **Bilingual Evolution Output**:
-    - Strictly follow the **English Evolution Protocol**.
-    - Summarize each item in English first, use `[brackets]` for inline Chinese translation of key terms.
-    - Output tone: Concise, professional, no AI-talk.
+3. **双语进化输出**:
+    - 严格遵循 **英语进化协议**。
+    - 每个条目先用英语总结，关键术语使用 `[方括号]` 嵌入中文翻译。
+    - 输出语气: 干练、专业，拒绝 AI 味。
 
-## ✍️ Output Structure
-- **Weekly Synthesis**: Contains the three core sections mentioned above.
-- **Strategy Audit (Persona: Xifeng)**: Use Xifeng's persona to conduct a "cold" [冷峻] downward-pressure audit on energy allocation and financial logic.
-- **Grammar Audit**: Summarize 3-5 typical grammar/spelling errors from the user's dialogues this week.
+## ✍️ 输出结构
+- **每周综合 (Weekly Synthesis)**: 包含上述三个核心板块。
+- **战略审计 (Persona: Xifeng)**: 使用“西风”人格，对精力分配和财务逻辑进行“冷峻”的下压式审计。
+- **语法审计 (Grammar Audit)**: 总结本周用户对话中 3-5 个典型的语法/拼写错误。

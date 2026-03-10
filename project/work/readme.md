@@ -1,83 +1,84 @@
 # 🏗️ Aone FaaS Platform
 
-> **Positioning**: The "Traffic Heart" of the group's Serverless platform. Inheriting AliyunFC historical traffic, achieving replacement and upgrade for multiple gateway entrances.
+> **定位**: 集团 Serverless 平台的“流量心脏”。承接 AliyunFC 历史流量，实现多个网关入口的平替与升级。
 
-## 🚀 This Week's Tasks (Limit to 2)
+## 🚀 本周任务 (限 2 项)
 
-### 1. MTOP Gateway Proxy Support
-*   **Status**: Expected to complete production release today.
+### 1. MTOP 网关代理支持
+*   **状态**: [已完成] 生产环境全量发布完成。
 
-### 2. metaq-poller-go to Pre-release
-*   **Status**: Canary release completed; Production release scheduled for Next Week.
-
----
-
-## 📝 Project Tracking
-
-### Active Initiatives
-*   [ ] 🛡️ **VPC Isolation Deployment Strategy**
-    *   [x] Ensure `x-fc-override-host` path is stable in production.
-    *   [x] Implement `afc-vpc-gateway` for production-to-VPC access.
-    *   [ ] Implement `alifaas-api-server-console` Redis write support to unblock the release pipeline (Scheduled for Next Week).
-*   [ ] 🧠 **Start "FaaS Turbo for LLM" Initiative** (Tongyi Qianwen stability governance).
-    *   [x] Deploy physically isolated gateway clusters for core AI businesses.
-    *   [ ] Establish the "High-Availability Architecture for FaaS Gateways in High-Concurrency LLM Scenarios" standard.
-*   [ ] ⚡ **API Server Redis Optimization**
-    *   [ ] `alifaas-api-server`: Modify cache logic to decouple user requests from Redis requests (Progress: 80%).
-
-### 🗑️ Swamp Area (Backlog)
-> Tasks here are salvaged only when "boss is screaming for them" or "weekly limit tasks are cleared and you're bored to death."
-> Strictly forbid deep-diving or starting early here.
-
-*   [ ] **Other Optimizations**:
-    *   [ ] `alifaas-api-server`: Add monitoring/alerts for expansion success rate; current alerts based on request count are unreasonable.
-    *   [ ] `alifaas-api-server`: Research second-level rate limiting solutions; consider migrating all cases to this.
+### 2. metaq-poller-go 预发上线
+*   **状态**: 灰度发布已完成；计划下周进行生产环境发布。
 
 ---
 
-## 📜 Change Log
+## 📝 项目追踪
+
+### 核心专项
+*   [ ] 🛡️ **VPC 隔离部署策略**
+    *   [x] 确保生产环境 `x-fc-override-host` 路径稳定。
+    *   [x] 完成 `afc-vpc-gateway` 生产到 VPC 访问的实现。
+    *   [x] 实现 `alifaas-api-server-console` 的 Redis 写入支持，以解除发布流水线阻塞。
+*   [ ] 🧠 **开启 "FaaS Turbo for LLM" 专项** (通义千问稳定性治理)。
+    *   [x] 为核心 AI 业务部署物理隔离的网关集群。
+    *   [ ] 建立“高并发 LLM 场景下的 FaaS 网关高可用架构设计”标准。
+*   [ ] ⚡ **API Server Redis 优化**
+    *   [ ] `alifaas-api-server`: 修改缓存逻辑，将用户请求与 Redis 请求彻底解耦 (进度: 90%)。
+
+### 🗑️ 沼泽区 (待办池)
+> 此处的任务仅在“老板在咆哮”或“本周核心任务已清空且你闲得发慌”时才捞出来处理。
+> 严禁在此处提前深挖或启动。
+
+*   [ ] **其他优化**:
+    *   [ ] `alifaas-api-server`: 增加扩容成功率的监控/告警；目前的告警基于请求量，不合理。
+    *   [ ] `alifaas-api-server`: 调研秒级限流方案；考虑将所有案例迁移至此。
+
+---
+
+## 📜 变更日志
 
 ### 2026-03-10
-*   **FC-MTOP Gateway**: Expected to complete production release today.
-*   **API Server**: Started optimizing Redis cache logic to decouple user requests; current progress 80%.
+*   **FC-MTOP 网关**: 全量生产发布完成。
+*   **API Server**: Redis 缓存逻辑解耦优化达到 90%；核心逻辑已验证。
+*   **基础设施**: 完成 `alifaas-api-server-console` Redis 写入支持，等待明日预发测试。
 
 ### 2026-03-06
-*   **FC-MTOP Gateway**: Full scale rollout completed; Entering 2-day **Network Freeze** [封网].
-*   **VPC**: `afc-vpc-gateway` implementation completed and verified.
-*   **Infrastructure**: Scheduled `alifaas-api-server-console` for next week.
+*   **FC-MTOP 网关**: 全量灰度完成；进入为期 2 天的 **封网期**。
+*   **VPC**: `afc-vpc-gateway` 实现完成并验证。
+*   **基础设施**: 计划下周处理 `alifaas-api-server-console`。
 
 ### 2026-03-04
-*   **FC-MTOP Gateway**: Gradual scale rollout.
-*   **Stability**: Optimized `alifaas-api-server` to decouple user requests from DB.
-*   **VPC**: Traffic flow path successfully established.
-*   **Performance Review**: Automated AI generation based on Git commits and OKRs.
-*   **Reporting**: Established the AI workflow for summarizing weekly reports via DingTalk documents.
-
-### 2026-02-02
-*   **Strategy**: Abandoned MetaQ debugging; decided on a Go rewrite.
-
-### 2026-02-07
-*   **Incident**: Tongyi Qianwen integration caused cascading failures (Redis counter overload, Hot Keys).
-*   **Action**: Deployed "Traffic Passthrough" version.
-
-### 2026-02-08
-*   **Architecture**: Completed isolated environment deployment for core AI business; split 6 independent domains to solve RT timeouts caused by Redis Hot Keys.
-
-### 2026-02-10
-*   **FaaS Review**: Executed "Consultant Mode" during the post-mortem to clearly define technical boundaries.
-
-### 2026-02-25
-*   **Task Management**: Established the `tasks.md` Swamp Area; limited focus to the "2 Life-Saving Tasks."
+*   **FC-MTOP 网关**: 逐步扩量发布。
+*   **稳定性**: 优化 `alifaas-api-server`，解耦用户请求与数据库。
+*   **VPC**: 成功建立流量路径。
+*   **绩效回顾**: 基于 Git Commit 和 OKR 自动生成 AI 报告。
+*   **汇报**: 建立了通过钉钉文档汇总周报的 AI 工作流。
 
 ### 2026-02-27
-*   **Focus**: Committed 100% work time to primary job; treated challenges as "Sharpening Stones" [磨刀石] for personal methodology.
+*   **专注**: 投入 100% 工作时间于主业；将挑战视为个人方法论的“磨刀石”。
 
-### 2026-01-28
-*   **Risk**: MetaQ Gateway release lacked monitoring, leading to a near-outage. Audited the risk of "Old-Timer" [老兵] overconfidence.
+### 2026-02-25
+*   **任务管理**: 建立 `tasks.md` 沼泽区；将精力锁定在“2 项保命任务”上。
 
-### 2026-01-29
-*   **VPC**: Completed VPC isolation design.
-*   **Protocol**: Released the "Legacy System Branch Isolation & Maintenance Protocol" to lock down legacy complexity.
+### 2026-02-10
+*   **FaaS 复盘**: 在复盘中执行“顾问模式”，清晰界定技术边界。
+
+### 2026-02-08
+*   **架构**: 为核心 AI 业务完成隔离环境部署；拆分 6 个独立域名以解决 Redis 热点 Key 导致的 RT 超时。
+
+### 2026-02-07
+*   **故障**: 通义千问接入导致级联故障（Redis 计数器过载，热点 Key）。
+*   **行动**: 发布“流量直通”版本。
+
+### 2026-02-02
+*   **策略**: 放弃 MetaQ 调试；决定使用 Go 重写。
 
 ### 2026-01-30
-*   **VPC**: Implemented `x-fc-override-host` capability; isolation link entering testing phase.
+*   **VPC**: 实现 `x-fc-override-host` 能力；隔离链路进入测试阶段。
+
+### 2026-01-29
+*   **VPC**: 完成 VPC 隔离设计。
+*   **协议**: 发布“遗留系统分支隔离与维护协议”，锁定遗留系统的复杂度。
+
+### 2026-01-28
+*   **风险**: MetaQ 网关发布缺乏监控，险些酿成事故。审计了“老兵”过度自信带来的风险。

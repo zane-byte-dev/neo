@@ -1,26 +1,26 @@
-# [Skill] Style Evolution
+# [技能] 风格进化 (Style Evolution)
 
-> **Goal**: Analyze the traces of my manual changes according to `git diff`, reverse-extract red lines, and directly update them in the original Skill files.
+> **目标**: 根据 `git diff` 分析我手动修改的痕迹，反向提取红线，并直接更新到原始技能（Skill）文件中。
 
-## Execution Logic
+## 执行逻辑
 
-1. **Scan Diff**:
-    Compare the AI draft with the content I modified.
-    - See which filler words and polite phrases I deleted.
-    - See which corporate buzzwords [黑话] were replaced with action descriptions.
-    - See how I broke down long articles into a mix of long and short sentences.
+1. **扫描 Diff**:
+    对比 AI 草稿与我修改后的内容。
+    - 查看我删除了哪些废话和客套话。
+    - 查看哪些大厂黑话被替换成了行动描述。
+    - 查看我如何将长篇大论拆解为长短句结合的形式。
 
-2. **Extract Red Lines**:
-    Extract a general rule from the differences identified above. Do not just capture specific words; capture the sense of language.
-    For example, refine "forbid saying 'deeply root'" to "forbid using corporate buzzwords, directly write how many years I've worked."
+2. **提取红线**:
+    从上述差异中总结出普适规则。不要只抓特定词汇，要抓“语感”。
+    例如：将“禁止说‘深耕’”提炼为“禁止使用大厂黑话，直接写工作了多少年”。
 
-3. **Update Configuration**:
-    Format the extracted general rules as prohibitions and write them directly into the `Style Audit` section of the corresponding Skill file.
+3. **更新配置**:
+    将提取出的普适规则格式化为禁令，直接写入对应技能文件的 `风格审计 (Style Audit)` 板块。
 
-## Machine Execution Instructions
+## 机器执行指令
 
-Upon receiving the "Execute Evolution" instruction, run following:
-1. Compare the original draft with my modified code.
-2. Filter out factual modifications; only analyze differences in layout, sentence structure, and word choice.
-3. Provide a Markdown patch block containing the new red lines.
-4. After receiving authorization, directly call the tool to overwrite the old Skill file.
+收到“执行进化 (Execute Evolution)”指令后，运行以下步骤：
+1. 对比原始草稿与我修改后的代码。
+2. 过滤掉事实性的修改；仅分析排版、句式和选词的差异。
+3. 提供一个包含新红线的 Markdown Patch 块。
+4. 获得授权后，直接调用工具覆盖旧的技能文件。

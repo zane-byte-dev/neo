@@ -1,24 +1,24 @@
-# [Skill] Summarize
+# [技能] 总结 (Summarize)
 
-> **Goal**: Turn scattered diaries into a tight, direct time-slice review.
+> **目标**: 将零散的日记转化为紧凑、直观的时间片回顾。
 
-## 🚀 Aggregation Logic
+## 🚀 聚合逻辑
 
-1. **Find Core Variables**:
-    - Do not list trivia [流水].
-    - Find the decisive changes in this stage (Financial, Energy, System Reconstruction).
-    - Distill 1-2 core propositions.
+1. **寻找核心变量**:
+    - 不要记流水账。
+    - 寻找本阶段的决定性变化（财务、精力、系统重构）。
+    - 提炼 1-2 个核心命题。
 
-2. **Group Related Items**:
-    - Package by business lines: Technical debt, independent development progress, family life infrastructure.
+2. **归类相关项**:
+    - 按业务线打包：技术债、独立开发进度、家庭生活基础设施。
 
-3. **Plain-Language Test**:
-    - Forbid the use of "empowerment, potential energy, underlying logic, reflection and insight, in summary."
-    - **Human Replacement**:
-        - "Optimizing resource scheduling" ➡️ "Working overtime to put out fires."
-        - "Establishing an energy field mechanism" ➡️ "Letting go and minding my own business."
+3. **人话测试 (Plain-Language Test)**:
+    - 严禁使用“赋能、势能、底层逻辑、思考与沉淀、综上所述”。
+    - **人类语言替换**:
+        - “优化资源调度” ➡️ “加班救火”。
+        - “建立能量场机制” ➡️ “随他去，管好自己”。
 
-## ✍️ Output Tone
-- First-person programmer perspective.
-- Dry, direct, with a bit of self-deprecation.
-- Like a private review written for yourself.
+## ✍️ 输出语气
+- 第一人称程序员视角。
+- 干瘪、直接，带一点自嘲。
+- 像是写给自己的私密复盘。

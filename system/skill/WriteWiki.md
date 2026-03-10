@@ -1,52 +1,52 @@
-# [Skill] Write Wiki
+# [技能] 撰写 Wiki (Write Wiki)
 
-> **Goal**: Produce pragmatic, experiential, and reusable Wiki knowledge assets. Reject "self-media" fluff [浮夸]; pursue programmer-like conciseness [干练].
+> **目标**: 产出务实、体验式、可复用的 Wiki 知识资产。拒绝“自媒体”浮夸风；追求程序员式的干练。
 
-## 🚀 Creative Workflow
+## 🚀 创作流
 
-### Step 1: Pain-point Extraction
-The starting point of writing is always **your current real pain points**. If it doesn't hurt you, don't pretend it does.
-- **Primary Input Source**: Your own error logs, a recent curse word, or a moment where you thought, "This design is fucking anti-human."
-- **Auxiliary Probe**: Check Reddit / X / GitHub Issues to see if others are also tripping over this.
-- **Output**: Distill an absolute pain point that would make a peer physically uncomfortable as the entry point for the article.
+### 第一步：痛点提取
+写作的起点永远是**你当前真实的痛点**。如果不痛，就不要装痛。
+- **主要输入源**: 你自己的错误日志、最近的一句粗口，或者某个让你觉得“这设计真他妈反人类”的瞬间。
+- **辅助探测**: 查看 Reddit / X / GitHub Issues，看看别人是否也在这里栽了跟头。
+- **输出**: 提炼一个让同行感到生理不适的绝对痛点，作为文章切入点。
 
-### Step 2: Five-Stage Body
-Follow this structure strictly, injecting real experience and traces of struggle:
-1. **[Background & Emotion]**: Describe that moment you wanted to smash your keyboard or the excitement of discovering a new feature.
-2. **[Core Action]**: The simplest, most direct operational steps or configuration code.
-3. **[Ultimate Combo/Struggle Record]**: *(High-level item)* What happened when you pushed it to the limit? Where did it fail? How did you break this bottleneck by combining other tools? (This proves the article is not a machine-translated manual).
-4. **[Physical Feedback]**: Describe the most intuitive "body feedback" after use (e.g., the smooth feeling of not needing to think).
-5. **[Avoid-Pitfall Tips]**: The most common hidden traps for others doing this.
+### 第二步：五段式正文
+严格遵循此结构，注入真实体验和挣扎痕迹：
+1. **[背景与情绪]**: 描述你想砸键盘的那个瞬间，或者发现新特性的兴奋感。
+2. **[核心行动]**: 最简单、最直接的操作步骤或配置代码。
+3. **[终极组合/挣扎记录]**: *(高级项)* 当你推到极限时发生了什么？在哪里失败了？你如何结合其他工具打破这个瓶颈的？（这证明文章不是机翻手册）。
+4. **[生理反馈]**: 描述使用后最直观的“身体反馈”（例如：不再需要动脑的丝滑感）。
+5. **[避坑指南]**: 别人做这件事时最常见的隐蔽陷阱。
 
-### Step 3: Formatting & Visual Anchors
-- **Visual Layout**:
-    - Paragraphs must be extremely short: no more than 4 lines.
-    - Key conclusions/data: Separate paragraph and **bold**.
-    - Code blocks: Padding before and after; clearly indicate which parameter is key.
-- **Image Placeholders**:
-    - After key actions, proactively insert `![Screenshot Description](path)`.
-    - Below, add a prompt: *"A real screenshot of XXX must be added here to verify the experience."*
+### 第三步：排版与视觉锚点
+- **视觉布局**:
+    - 段落必须极短：不超过 4 行。
+    - 关键结论/数据：独立成段并**加粗**。
+    - 代码块：前后留空；明确标出哪个参数是关键。
+- **图片占位符**:
+    - 在关键动作后，主动插入 `![截图描述](路径)`。
+    - 下方增加提示：*"此处必须增加一张 XXX 的真实截图以验证体验。"*
 
-### Step 4: Links & Wrap-up
-- **Reject Flourishes**: Do not write "In summary" or "This means."
-- **Conclusion-Oriented**: Provide 1-2 "What to do next" action instructions or "Related knowledge base links."
+### 第四步：链接与收尾
+- **拒绝修饰**: 不要写“综上所述”或“这意味着”。
+- **结论导向**: 提供 1-2 条“下一步该做什么”的行动指令，或“关联知识库链接”。
 
-## ✍️ Style Audit (Red Lines)
+## ✍️ 风格审计 (红线)
 
-- **De-grease**: Strictly forbid "miracle skill, hit article, 10x growth, don't miss out, underlying logic, empowerment" or other toxic vocabulary.
-- **Search-Friendly**: Titles must be straightforward (e.g., `Gemini Live Mode Pitfalls & Practice`), rejecting suspense or clickbait.
-- **Record Feel**: Retain the "roughness" and original context of your interaction with tools; treat it as an internal hacker experiment log, not a self-media script.
-- **Strong Assertions**: Forbid neutral "wait-and-see" nonsense (e.g., "this depends on the situation"); use "I think," "My experience is" to take a side and output strong opinions.
-- **Cut Connecting Words**: Delete all unnecessary logical connecting words (e.g., "therefore, first, this means"); let the sentences lean against each other through the logic itself.
-- **Aggressive Verbs & Minimal Emotion**: Block all "instructional/preachy" polite phrases (e.g., "you need to pay attention," "this truly makes"); replace all written actions with hacker-slang verbs full of execution tension (change "combine, input, try" to "do, stuff, feed, drop").
+- **去油腻**: 严禁使用“神技、爆文、10倍增长、不可错过、底层逻辑、赋能”等有毒词汇。
+- **搜索友好**: 标题必须直球（例如：`Gemini Live 模式踩坑与实践`），拒绝悬念或标题党。
+- **记录感**: 保留你与工具交互的“粗糙感”和原始语境；将其视为内部黑客实验日志，而非自媒体剧本。
+- **强断言**: 禁止中立的“观望”废话（如“这取决于情况”）；使用“我认为”、“我的经验是”来选边站队，输出强观点。
+- **切断连接词**: 删掉所有不必要的逻辑连接词（如“因此、首先、这意味着”）；让句子通过逻辑本身互相倚靠。
+- **攻击性动词与极简情绪**: 封杀所有“教导式/说教式”的客套话（如“需要注意”、“这确实让”）；将所有书面动作替换为充满执行张力的黑客黑话动词（将“结合、输入、尝试”改为“搞、塞、喂、扔”）。
 
-## 🛠️ AI Automatic Execution (Prompt Constraints)
+## 🛠️ AI 自动执行 (提示词约束)
 
-When the AI receives fragmented notes to rewrite as a Wiki, it must strictly follow this chain:
-1. **[Input Cleaning]**: Extract the error logs or oral complaints provided by the user as the core input source; do not invent pain.
-2. **[Structure Filling]**: Force the five-stage rendering (Background -> Action -> Struggle Record -> Physical Feedback -> Avoid Pitfall).
-3. **[Style Force Audit]**:
-   - Forbid large paragraphs; use a mix of long and short sentences with forced hard breaks.
-   - Replace all "we" with "I"; use first person with strong personal technical stances.
-   - Cut transitional paragraphs without information increment; treat bridging fluff ("All in all") as a grammar error and delete it.
-4. **[Visual Stream Preset]**: Preset at least two suggestive `![Placeholder Image]` instructions.
+当 AI 接收到碎片笔记并要求改写为 Wiki 时，必须严格遵循此链条：
+1. **[输入清洗]**: 提取用户提供的错误日志或口头吐槽作为核心输入源；不要臆造痛苦。
+2. **[结构填充]**: 强制进行五段式渲染（背景 -> 行动 -> 挣扎记录 -> 生理反馈 -> 避坑）。
+3. **[风格硬审计]**:
+   - 禁止大段文字；使用长短句错落排版，强制硬换行。
+   - 将所有“我们”改为“我”；使用带有强烈个人技术立场的第一人称。
+   - 砍掉没有信息增量的过渡段落；将承接废话（“总而言之”）视为语法错误予以删除。
+4. **[视觉流预置]**: 预置至少两个暗示性的 `![占位图片]` 指令。

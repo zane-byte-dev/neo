@@ -1,32 +1,32 @@
-# [Skill] Clean & Collect
+# [技能] 清理与收集 (Clean & Collect)
 
-> **Goal**: Rapidly digest fragments in `history/inbox`. Archive what needs archiving, and move what belongs in a project into its project.
+> **目标**: 快速消化 `history/inbox` 中的碎片。归档需要归档的内容，将属于项目的内容移至项目文件夹。
 
-## 🚀 Processing Logic
+## 🚀 处理逻辑
 
-1. **Value Judgment**:
-    - Delete useless items immediately.
-    - Pure inspiration fragments -> Save to the current day's diary file in `history/memory/`.
-      * **[Pre-dependency Check]**: Before saving, check if the daily log exists. **If it doesn't, you must first load and execute the `WriteDiary` skill to create a standard three-section (Stream/Thinking/Knowledge) diary structure.** Never write fragments in raw.
-    - Specific tasks -> Convert into a Kanban or file under `project/`.
-    - High-quality materials -> Save to the `project/@reference/` library.
+1. **价值判断**:
+    - 立即删除无用项。
+    - 纯灵感碎片 -> 保存到当天的日记文件 `history/memory/`。
+      * **[前置依赖检查]**: 在保存前检查当天日记是否存在。**如果不存在，必须先加载并执行 `WriteDiary` 技能以创建标准的三部分（意识流 Stream/深度思考 Thinking/知识增量 Knowledge）日记结构**。严禁使用生僻语言写日记。
+    - 具体任务 -> 转换为看板或 `project/` 下的文件。
+    - 高质量资料 -> 保存到 `project/@reference/` 库。
 
-2. **Formatted Injection**:
-    - **Diary Entry**: Append strictly following the `- [Time] [Source] Specific content` format.
-    - **Long-form Content**: Must include YAML anchors at the top of the file:
+2. **格式化注入**:
+    - **日记条目**: 严格按照 `- [时间] [来源] 具体内容` 格式追加。
+    - **长文**: 文件顶部必须包含 YAML 锚点:
       ```yaml
       ---
-      URL: URL
-      Collected: DATE
-      One-liner: Max 50 words explaining the core
-      Actionable: How this guides my current actions
+      URL: 链接地址
+      Collected: 采集日期
+      One-liner: 最多 50 字的核心说明
+      Actionable: 这如何指导我当前的行动
       ---
       ```
 
-3. **Cleanup Actions**:
-    - After successfully establishing bidirectional links or completing the transfer, **immediately delete the original file in `history/inbox/`**.
-    - If unsure where to categorize it, leave it in place. Assign "General Thinking" by default for non-project-specific thoughts.
+3. **清理动作**:
+    - 在成功建立双向链接或完成转移后，**立即删除 `history/inbox/` 中的原始文件**。
+    - 如果不确定如何分类，则保留它。默认将非特定项目的思考分类为“通用思考 (General Thinking)”。
 
-## ✍️ Writing Style
-- Keep it in plain language; no over-summarizing or sentimentalism.
-- Record only facts and next actions.
+## ✍️ 写作风格
+- 使用平实的语言；不要过度总结或矫揉造作。
+- 只记录事实和下一步行动。
