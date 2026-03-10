@@ -66,6 +66,13 @@ export class AcpClient extends EventEmitter {
         this.process.on('exit', (code: number) => {
             console.log(`[ACP Client] Process exited with code ${code}`);
             this.isReady = false;
+
+            // Reject all pending requests
+            for (const [id, pending] of this.pendingRequests.entries()) {
+                pending.reject(new Error(`ACP process exited with code ${code}.`));
+            }
+            this.pendingRequests.clear();
+
             this.process = undefined;
             this.emit('exit', code);
         });

@@ -2,7 +2,7 @@
  * 🎧 Audio Refinery — Convert Markdown files to MP3 via Edge TTS
  * Replaces tools/audio_refinery/script.py
  *
- * Usage (direct): tsx src/lib/tools/audio-refinery.ts <file_or_dir> [voice]
+ * Usage (direct): tsx apps/refinery/audio-refinery.ts <file_or_dir> [voice]
  */
 
 import { readFile, writeFile, mkdir, stat, readdir } from 'fs/promises';

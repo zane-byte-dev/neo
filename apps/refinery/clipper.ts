@@ -5,7 +5,7 @@
  *   1. Jina AI (r.jina.ai) — fast, handles most pages
  *   2. Local readability fallback via fetch + @mozilla/readability — works offline
  *
- * Usage (direct): tsx src/lib/tools/clipper.ts <url> [target_dir]
+ * Usage (direct): tsx apps/refinery/clipper.ts <url> [target_dir]
  */
 
 import { writeFile, mkdir } from 'fs/promises';

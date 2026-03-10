@@ -2,13 +2,13 @@ import fs from 'fs/promises';
 import path from 'path';
 import { execa } from 'execa';
 
-// Get the root of the entire vault (two levels up from tools/sentinel)
+// Get the root of the entire vault
 const getProjectRoot = (): string => {
     // Priority 1: Environment variable set in .env
     if (process.env.GEMINI_WORK_DIR) {
         return process.env.GEMINI_WORK_DIR;
     }
-    // Fallback: Assume we are running from tools/sentinel/dist/lib/tools/ or tools/sentinel/src/lib/tools/
+    // Fallback: Assume we are running from apps/refinery/
     return path.resolve(process.cwd(), '../..');
 };
 

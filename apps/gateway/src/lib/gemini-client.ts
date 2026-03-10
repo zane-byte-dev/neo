@@ -41,34 +41,63 @@ export class GeminiClient {
     async generateResponse(prompt: string, history?: string): Promise<string | null> {
         if (!this.enabled || !this.acpClient) return null;
 
-        await this.initializationPromise; // Ensure ACP is connected
-
+        // Try to ensure initialization/restart
         try {
-            // Optional: You can prepend system guards here if you want to enforce language or style 
-            // without reading the whole GEMINI.md manually.
-            let finalPrompt = `[System Override]\n- You MUST respond strictly in CHINESE (简体中文) unless specified.\n- Be direct, concise, and professional without generic AI phrases.\n- Current Time Context: ${new Date().toLocaleString('zh-CN')}\n\n`;
-
-            if (history && history.trim()) {
-                finalPrompt += `[Previous Conversation History]\n${history}\n\n`;
-            }
-            finalPrompt += `[New Message]\n${prompt}`;
-
-            console.log(`[Gemini SDK] Sending request via ACP to ${GEMINI_MODEL}`);
-            const startTime = Date.now();
-
-            const currentResponseText = await this.acpClient.prompt(finalPrompt);
-
-            const ms = Date.now() - startTime;
-            console.log(`[Gemini SDK] ✅ Received final response via ACP in ${ms}ms`);
-
-            return currentResponseText;
-        } catch (error) {
-            console.error(`[Gemini SDK Error]`, error);
-            if (error instanceof Error) {
-                return `🔥 System Error (ACP): ${error.message}`;
-            }
-            return '🔥 Unknown ACP SDK error occurred';
+            await this.initializationPromise;
+        } catch (e) {
+            console.error('[Gemini SDK] 🔄 Initialization failed, attempting restart...');
+            this.initializationPromise = this.acpClient.start();
+            await this.initializationPromise;
         }
+
+        // If the process is gone, restart it
+        // @ts-ignore - access private process for health check
+        if (!this.acpClient['process']) {
+            console.log('[Gemini SDK] 🔄 ACP Process missing, restarting...');
+            this.initializationPromise = this.acpClient.start();
+            await this.initializationPromise;
+        }
+
+        const maxRetries = 2;
+        let attempt = 0;
+
+        while (attempt <= maxRetries) {
+            try {
+                // Base system variables (Dynamic context only, static behavior rules are in system/GEMINI.md)
+                let finalPrompt = `[Runtime Context]\n- Current Time: ${new Date().toLocaleString('zh-CN')}\n\n`;
+
+                if (history && history.trim()) {
+                    finalPrompt += `[Previous Conversation History]\n${history}\n\n`;
+                }
+                finalPrompt += `[New Message]\n${prompt}`;
+
+                console.log(`[Gemini SDK] Sending request via ACP to ${GEMINI_MODEL} (Attempt ${attempt + 1})`);
+                const startTime = Date.now();
+
+                const currentResponseText = await this.acpClient.prompt(finalPrompt);
+
+                const ms = Date.now() - startTime;
+                console.log(`[Gemini SDK] ✅ Received final response via ACP in ${ms}ms`);
+
+                return currentResponseText;
+            } catch (error: any) {
+                attempt++;
+                console.error(`[Gemini SDK Error] Attempt ${attempt} failed:`, error.message || error);
+
+                if (attempt <= maxRetries && (error.message?.includes('exited') || error.message?.includes('close'))) {
+                    console.log('[Gemini SDK] 🔄 Connection lost, attempting to reconnect for retry...');
+                    this.initializationPromise = this.acpClient.start();
+                    await this.initializationPromise;
+                    continue;
+                }
+
+                if (error instanceof Error) {
+                    return `🔥 System Error (ACP): ${error.message}`;
+                }
+                return '🔥 Unknown ACP SDK error occurred';
+            }
+        }
+        return '🔥 Max retries exceeded';
     }
 
     /**

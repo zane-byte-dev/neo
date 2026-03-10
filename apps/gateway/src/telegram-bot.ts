@@ -9,8 +9,8 @@ import { join } from 'path';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
-import { ConversationSaver } from './lib/conversation-saver.js';
 import cron from 'node-cron';
+
 
 // Load environment variables
 config();
@@ -31,9 +31,6 @@ const geminiClient = new GeminiClient();
 
 // Initialize chat history cache
 const chatHistoryCache = new ChatHistoryCache();
-
-// Initialize conversation saver (daily memory log)
-const conversationSaver = new ConversationSaver();
 
 // Task queue (Producer-Consumer model)
 const taskQueue = new PQueue({ concurrency: 1 });
@@ -181,10 +178,6 @@ class NeoAgentBot {
 
             // Send reply to user
             await this.sendReply(chatId, responseText);
-
-            // Log to memory (daily log format)
-            const stats = chatHistoryCache.getStats();
-            await conversationSaver.saveTurn(userName, question, responseText, stats.sessionId || undefined);
         } catch (error) {
             console.error(`[Worker Error] ${error}`);
             await this.sendReply(
@@ -330,7 +323,7 @@ class NeoAgentBot {
             this.bot.telegram.sendMessage(
                 AUTHORIZED_CHAT_ID,
                 `🤖 **NeoAgent Gateway** 已于 ${timeStr} 启动/重启。\n` +
-                `✅ 纯净通信网关已上线\n` +
+                `✅ 网关已上线\n` +
                 `✅ 引擎状态: gemini-3-pro-preview via ACP`,
                 { parse_mode: 'Markdown' }
             ).catch(err => console.error('[Startup Message Failed]', err));

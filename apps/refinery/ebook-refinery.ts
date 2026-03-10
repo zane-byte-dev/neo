@@ -3,7 +3,7 @@
  * Replaces tools/ebook_refinery/script.py
  *
  * Requires: pandoc installed on system (brew install pandoc)
- * Usage (direct): tsx src/lib/tools/ebook-refinery.ts <file.epub> [output_dir]
+ * Usage (direct): tsx apps/refinery/ebook-refinery.ts <file.epub> [output_dir]
  */
 
 import { readFile, writeFile, mkdir, rm } from 'fs/promises';
