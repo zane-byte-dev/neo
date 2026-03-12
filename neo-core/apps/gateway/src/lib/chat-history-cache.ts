@@ -58,14 +58,12 @@ export class ChatHistoryCache {
             sessions: [],
             currentSessionId: null,
         };
-
-        this.init();
     }
 
     /**
-     * Initialize cache: load from file or create new
+     * Initialize cache: load from file or create new. Must be awaited before use.
      */
-    private async init() {
+    async init() {
         try {
             await this.ensureDirectory();
             await this.loadFromFile();

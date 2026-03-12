@@ -1,7 +1,9 @@
 import { config } from 'dotenv';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { AcpClient } from './acp-client.js';
+import { AcpClient, JSONRPCNotification, StreamChunk, StreamCallback } from './acp-client.js';
+
+export type { StreamChunk, StreamCallback } from './acp-client.js';
 import { setupLogger } from './logger.js';
 
 // Initialize Logger
@@ -42,7 +44,7 @@ export class GeminiClient {
      * Call SDK to generate a response via ACP Client.
      * Delegates pure context generation to the underlying CLI instance logic.
      */
-    async generateResponse(prompt: string, history?: string): Promise<string | null> {
+    async generateResponse(prompt: string, history?: string, onChunk?: StreamCallback): Promise<string | null> {
         if (!this.enabled || !this.acpClient) return null;
 
         // Try to ensure initialization/restart
@@ -55,8 +57,7 @@ export class GeminiClient {
         }
 
         // If the process is gone, restart it
-        // @ts-ignore - access private process for health check
-        if (!this.acpClient['process']) {
+        if (!this.acpClient.isAlive()) {
             console.log('[Gemini SDK] 🔄 ACP Process missing, restarting...');
             this.initializationPromise = this.acpClient.start();
             await this.initializationPromise;
@@ -78,7 +79,7 @@ export class GeminiClient {
                 console.log(`[Gemini SDK] Sending request via ACP to ${GEMINI_MODEL} (Attempt ${attempt + 1})`);
                 const startTime = Date.now();
 
-                const currentResponseText = await this.acpClient.prompt(finalPrompt);
+                const currentResponseText = await this.acpClient.prompt(finalPrompt, onChunk);
 
                 const ms = Date.now() - startTime;
                 console.log(`[Gemini SDK] ✅ Received final response via ACP in ${ms}ms`);
@@ -105,10 +106,63 @@ export class GeminiClient {
     }
 
     /**
+     * Spawn a fresh isolated AcpClient for a long-running async task.
+     * Each call gets its own gemini process — no shared session, no context pollution.
+     */
+    async generateAsyncResponse(
+        prompt: string,
+        onEvent: (msg: JSONRPCNotification) => { detach: boolean, result?: string }
+    ): Promise<string | null> {
+        if (!this.enabled || !this.workDir) return null;
+
+        const ephemeralClient = new AcpClient(this.workDir, GEMINI_MODEL);
+        console.log(`[Gemini SDK] 🚀 Spawning ephemeral ACP client for async task...`);
+
+        try {
+            await ephemeralClient.start();
+
+            const finalPrompt = `[Runtime Context]\n- Current Time: ${new Date().toLocaleString('zh-CN')}\n\n[New Message]\n${prompt}`;
+
+            console.log(`[Gemini SDK] Sending ASYNC request via ephemeral ACP to ${GEMINI_MODEL}`);
+            const result = await ephemeralClient.promptAsync(finalPrompt, onEvent);
+            return result;
+        } catch (error: any) {
+            console.error(`[Gemini SDK Error] Async request failed:`, error.message || error);
+            if (error instanceof Error) return `🔥 System Error (ACP Async): ${error.message}`;
+            return '🔥 Unknown ACP SDK error occurred in async request';
+        } finally {
+            ephemeralClient.stop();
+            console.log(`[Gemini SDK] 🛑 Ephemeral ACP client closed.`);
+        }
+    }
+
+    /**
      * Chat with conversation context
      */
     async chatWithContext(message: string, conversationHistory: string): Promise<string | null> {
         return this.generateResponse(message, conversationHistory);
+    }
+
+    /**
+     * Chat with context, streaming progress events (thought / tool_call / text) via onChunk.
+     */
+    async chatWithContextStreaming(
+        message: string,
+        conversationHistory: string,
+        onChunk: StreamCallback
+    ): Promise<string | null> {
+        return this.generateResponse(message, conversationHistory, onChunk);
+    }
+
+    /**
+     * Run an async task in a fully isolated ephemeral session (no shared history).
+     */
+    async chatAsyncWithContext(
+        message: string,
+        _conversationHistory: string,  // ignored — async tasks get a clean isolated session
+        onEvent: (msg: JSONRPCNotification) => { detach: boolean, result?: string }
+    ): Promise<string | null> {
+        return this.generateAsyncResponse(message, onEvent);
     }
 
     /**

@@ -24,6 +24,13 @@ export interface JSONRPCNotification {
 
 export type JSONRPCMessage = JSONRPCRequest | JSONRPCResponse | JSONRPCNotification;
 
+export type StreamChunk =
+    | { type: 'thought'; text: string }
+    | { type: 'tool_call'; toolName: string }
+    | { type: 'text'; text: string };
+
+export type StreamCallback = (chunk: StreamChunk) => void;
+
 export class AcpClient extends EventEmitter {
     private process: any;
     private rl?: readline.Interface;
@@ -164,7 +171,7 @@ export class AcpClient extends EventEmitter {
         console.log('[ACP Client] 🚀 Handshake complete, ACP ready.');
     }
 
-    async prompt(text: string): Promise<string> {
+    async prompt(text: string, onChunk?: StreamCallback): Promise<string> {
         if (!this.isReady || !this.activeSessionId) throw new Error('ACP Client is not fully initialized.');
 
         return new Promise((resolve, reject) => {
@@ -182,9 +189,15 @@ export class AcpClient extends EventEmitter {
                     if (updateData?.sessionUpdate === 'agent_message_chunk') {
                         if (updateData.content?.text) {
                             fullResponse += updateData.content.text;
+                            onChunk?.({ type: 'text', text: updateData.content.text });
                         }
                     } else if (updateData?.sessionUpdate === 'agent_thought_chunk') {
-                        // ignore thoughts for now, or log them
+                        if (updateData.content?.text) {
+                            onChunk?.({ type: 'thought', text: updateData.content.text });
+                        }
+                    } else if (updateData?.sessionUpdate === 'agent_tool_call') {
+                        const toolName = updateData.toolCall?.name ?? updateData.content?.name ?? 'unknown';
+                        onChunk?.({ type: 'tool_call', toolName });
                     }
                 }
             };
@@ -205,6 +218,80 @@ export class AcpClient extends EventEmitter {
                 reject(err);
             });
         });
+    }
+
+    /**
+     * Send a prompt but allow for early detachment based on an event callback.
+     * Useful for asynchronous or long-running tasks where we just want to launch it
+     * and capture that it has started (e.g. capturing a task ID from a tool call).
+     */
+    async promptAsync(
+        text: string, 
+        onEvent: (msg: JSONRPCNotification) => { detach: boolean, result?: string }
+    ): Promise<string> {
+        if (!this.isReady || !this.activeSessionId) throw new Error('ACP Client is not fully initialized.');
+
+        return new Promise((resolve, reject) => {
+            let fullResponse = '';
+            let hasDetached = false;
+
+            const timeoutSeconds = parseInt(process.env.GEMINI_TIMEOUT || '180', 10);
+            const timeoutHandler = setTimeout(() => {
+                if (!hasDetached) {
+                    this.off('notification', handleNotification);
+                    reject(new Error(`🔥 [ACP Timeout] The async request exceeded ${timeoutSeconds} seconds.`));
+                }
+            }, timeoutSeconds * 1000);
+
+            const handleNotification = (msg: JSONRPCNotification) => {
+                if (hasDetached) return;
+
+                const eventResult = onEvent(msg);
+                if (eventResult.detach) {
+                    hasDetached = true;
+                    clearTimeout(timeoutHandler);
+                    this.off('notification', handleNotification);
+                    resolve(eventResult.result || fullResponse || 'Detached');
+                    return;
+                }
+
+                if (msg.method === 'session/update') {
+                    const updateData = msg.params?.update;
+                    if (updateData?.sessionUpdate === 'agent_message_chunk') {
+                        if (updateData.content?.text) {
+                            fullResponse += updateData.content.text;
+                        }
+                    }
+                }
+            };
+
+            this.on('notification', handleNotification);
+
+            // Send standard ACP prompt
+            this.sendRequest('session/prompt', {
+                sessionId: this.activeSessionId,
+                prompt: [{ type: 'text', text }]
+            }).then(() => {
+                if (!hasDetached) {
+                    clearTimeout(timeoutHandler);
+                    this.off('notification', handleNotification);
+                    resolve(fullResponse);
+                }
+            }).catch(err => {
+                if (!hasDetached) {
+                    clearTimeout(timeoutHandler);
+                    this.off('notification', handleNotification);
+                    reject(err);
+                }
+            });
+        });
+    }
+
+    /**
+     * Check if the ACP process is running and ready.
+     */
+    isAlive(): boolean {
+        return !!this.process && this.isReady;
     }
 
     /**

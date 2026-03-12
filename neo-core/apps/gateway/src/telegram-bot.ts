@@ -2,7 +2,7 @@
 
 import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
-import { message } from 'telegraf/filters';
+import { message } from 'telegraf/filters.js';
 import PQueue from 'p-queue';
 import { execa } from 'execa';
 import { join } from 'path';
@@ -10,6 +10,7 @@ import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
 import { setupLogger } from './lib/logger.js';
+import { AsyncTaskManager } from './lib/async-task-manager.js';
 import cron from 'node-cron';
 
 
@@ -30,6 +31,11 @@ if (!BOT_TOKEN) {
     process.exit(1);
 }
 
+if (!AUTHORIZED_CHAT_ID) {
+    console.error('❌ TELEGRAM_CHAT_ID missing. Set it to restrict bot access to a specific user.');
+    process.exit(1);
+}
+
 // Pre-flight: Clean up orphaned gemini processes to avoid pipe blockage
 try {
     // Use a temporary direct execa call since geminiClient isn't ready
@@ -41,6 +47,14 @@ const geminiClient = new GeminiClient();
 
 // Initialize chat history cache
 const chatHistoryCache = new ChatHistoryCache();
+await chatHistoryCache.init();
+
+// Initialize async task manager
+const asyncTaskManager = new AsyncTaskManager(process.env.GEMINI_WORK_DIR || process.cwd());
+await asyncTaskManager.init();
+
+// Keywords that trigger background async tasks
+const ASYNC_TRIGGER_PREFIXES = ['调研', '重构'];
 
 // Task queue (Producer-Consumer model)
 const taskQueue = new PQueue({ concurrency: 1 });
@@ -54,12 +68,25 @@ interface Task {
 
 class NeoAgentBot {
     private bot: Telegraf;
+    private activeTaskIds = new Set<string>();
 
     constructor(token: string) {
         this.bot = new Telegraf(token);
         this.setupHandlers();
         this.setupCronJobs();
+        this.setupAsyncPolling();
         console.log('[System] Background worker queue started.');
+    }
+
+    /**
+     * Setup background polling for long-running tasks
+     */
+    private setupAsyncPolling() {
+        asyncTaskManager.startPolling(async (task, result) => {
+            if (this.activeTaskIds.has(task.id)) return; // already being handled by background worker
+            console.log(`[Poller] Task #${task.id} completed. Pushing result to user.`);
+            await this.sendReply(task.chatId, `✅ **后台任务 #${task.id} 异步完成:**\n\n${result}`);
+        });
     }
 
     /**
@@ -127,7 +154,7 @@ class NeoAgentBot {
      */
     private isAuthorized(chatId: number): boolean {
         if (AUTHORIZED_CHAT_ID === null) {
-            return true;
+            return false;
         }
         return chatId === AUTHORIZED_CHAT_ID;
     }
@@ -153,7 +180,18 @@ class NeoAgentBot {
 
         // Handle commands separately
         if (text.startsWith('/')) {
+            // Check if it's an async task command
+            if (text.startsWith('/research') || text.startsWith('/async')) {
+                await this.handleAsyncTask(ctx);
+                return;
+            }
             await this.handleCommand(ctx);
+            return;
+        }
+
+        // Detect implicit long tasks (triggered by keyword prefixes)
+        if (ASYNC_TRIGGER_PREFIXES.some(prefix => text.startsWith(prefix))) {
+            await this.handleAsyncTask(ctx);
             return;
         }
 
@@ -163,7 +201,90 @@ class NeoAgentBot {
     }
 
     /**
-     * Worker logic: process queued tasks
+     * Handle asynchronous long-running tasks
+     */
+    private async handleAsyncTask(ctx: any) {
+        const chatId = ctx.chat.id;
+        let text = ctx.message.text as string;
+        const messageId = ctx.message.message_id;
+        const userName = ctx.chat.first_name || 'User';
+
+        // Strip the command prefix so the AI gets a clean prompt
+        if (text.startsWith('/research ')) {
+            text = text.replace('/research ', '').trim();
+        } else if (text.startsWith('/async ')) {
+            text = text.replace('/async ', '').trim();
+        }
+
+        console.log(`[AsyncDispatcher] Intercepted long-running intent from ${userName}: ${text}`);
+
+        // 1. Create a task in the local DB
+        const task = await asyncTaskManager.createTask(chatId, text);
+
+        // 2. Reply instantly
+        await this.sendReply(
+            chatId,
+            `👌 任务已启动，ID: #${task.id}。\n正在进入独立引擎处理 (如 Deep Research)。\n你可以继续聊天，处理完我会主动推送结果。`,
+            2,
+            messageId
+        );
+
+        // 3. Kick off the GeminiClient in fire-and-forget mode
+        this.processAsyncTaskBackground(task, userName);
+    }
+
+    /**
+     * Launch the async task in the background without blocking the taskQueue
+     */
+    private async processAsyncTaskBackground(task: import('./lib/async-task-manager.js').AsyncTask, userName: string) {
+        this.activeTaskIds.add(task.id);
+        console.log(`[AsyncWorker] Executing task #${task.id} in background...`);
+
+        try {
+            await asyncTaskManager.updateTaskStatus(task.id, 'running');
+
+            // Async tasks run in a fully isolated ephemeral ACP session — no shared history.
+            const asyncPrompt = `[ASYNC TASK] Please execute the following long-running task. If you need to use tools like research_start or heavy filesystem manipulation, do it now.\n\nTask: ${task.prompt}`;
+
+            const responseText = await geminiClient.chatAsyncWithContext(asyncPrompt, '', (msg) => {
+                // If it's a ToolCall notification, and we see it's research_start, we detach 
+                if (msg.method === 'session/update') {
+                    const updateData = msg.params?.update;
+
+                    // Simple text-based heuristic for now. If the agent emits a tool call chunk or text 
+                    // that indicates it has fired off the deep research, we detach.
+                    if (updateData?.sessionUpdate === 'agent_tool_call') {
+                        // Example: Detach if we see any tool call in this async context
+                        // return { detach: true, result: '[Async] Tool execution started in background.' };
+                    }
+                }
+
+                // Allow exactly 120 seconds for the "thoughts" and "tool calls" to finish
+                // We'll rely on the AcpClient timeout or standard completion for now unless a specific tool is caught.
+                return { detach: false };
+            });
+
+            if (responseText) {
+                // We got a result (either detached early or completed synchronously)
+                await asyncTaskManager.updateTaskStatus(task.id, 'completed', { result: responseText });
+
+                // Active push back to Telegram
+                await this.sendReply(task.chatId, `✅ **后台任务 #${task.id} 完成:**\n\n${responseText}`);
+            } else {
+                await asyncTaskManager.updateTaskStatus(task.id, 'failed', { error: 'Empty response' });
+                await this.sendReply(task.chatId, `⚠️ **任务 #${task.id} 似乎没有返回有效结果。`);
+            }
+        } catch (error: any) {
+            console.error(`[AsyncWorker Error] Task #${task.id}:`, error);
+            await asyncTaskManager.updateTaskStatus(task.id, 'failed', { error: error.message || String(error) });
+            await this.sendReply(task.chatId, `🔥 **后台任务 #${task.id} 执行失败:**\n${error.message}`);
+        } finally {
+            this.activeTaskIds.delete(task.id);
+        }
+    }
+
+    /**
+     * Worker logic: process queued tasks with streaming progress indicator
      */
     private async processTask(task: Task) {
         const { chatId, question, userName, messageId } = task;
@@ -171,33 +292,81 @@ class NeoAgentBot {
         try {
             console.log(`[Worker] Processing task for ${userName}: ${question.substring(0, 20)}...`);
 
-            // Add user message to cache
             await chatHistoryCache.addMessage('user', question, userName);
-
-            // Get conversation context for Gemini
             const context = chatHistoryCache.getContextForGemini();
 
-            // Generate response with context
-            const responseText = await geminiClient.chatWithContext(question, context);
+            // Send placeholder message immediately — will be edited in-place as progress arrives
+            const timestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const extraArgs: any = messageId ? { reply_parameters: { message_id: messageId } } : {};
+            const placeholderMsg = await this.bot.telegram.sendMessage(
+                chatId, `⏳ NeoAgent (${timestamp})\n\n🤔 思考中...`, extraArgs
+            );
+            const placeholderMsgId = placeholderMsg.message_id;
+
+            // Streaming state
+            let lastEditMs = 0;
+            let thoughtAccum = '';
+            let lastToolCall = '';
+            let hasTextStarted = false;
+
+            const buildStatus = () => {
+                if (hasTextStarted) return `⏳ NeoAgent (${timestamp})\n\n✍️ 正在生成回复...`;
+                const parts: string[] = [`⏳ NeoAgent (${timestamp})`];
+                if (lastToolCall) parts.push(`🔧 调用工具: ${lastToolCall}`);
+                const thought = thoughtAccum.trim().replace(/\n+/g, ' ');
+                parts.push(thought.length > 100 ? '...' + thought.slice(-100) : (thought || '🤔 思考中...'));
+                return parts.join('\n\n');
+            };
+
+            const tryEdit = () => {
+                const now = Date.now();
+                if (now - lastEditMs < 1500) return;
+                lastEditMs = now;
+                this.bot.telegram.editMessageText(chatId, placeholderMsgId, undefined, buildStatus())
+                    .catch(() => { });
+            };
+
+            const responseText = await geminiClient.chatWithContextStreaming(question, context, (chunk) => {
+                if (chunk.type === 'thought') {
+                    thoughtAccum += chunk.text;
+                    tryEdit();
+                } else if (chunk.type === 'tool_call') {
+                    lastToolCall = chunk.toolName;
+                    tryEdit();
+                } else if (chunk.type === 'text' && !hasTextStarted) {
+                    hasTextStarted = true;
+                    tryEdit();
+                }
+            });
 
             if (!responseText) {
-                await this.sendReply(chatId, '⚠️ Failed to generate response.', 2, messageId);
+                await this.bot.telegram.editMessageText(chatId, placeholderMsgId, undefined, '⚠️ Failed to generate response.').catch(() => { });
                 return;
             }
 
-            // Add assistant message to cache
             await chatHistoryCache.addMessage('assistant', responseText);
 
-            // Send reply to user
-            await this.sendReply(chatId, responseText, 2, messageId);
+            // Replace placeholder with final formatted answer
+            const finalTimestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const telegramText = markdownToTelegram(responseText);
+            const finalText = `🤖 NeoAgent (${finalTimestamp})\n\n${telegramText}`;
+            const chunks = this.splitMessage(finalText, 4000);
+
+            if (chunks.length === 1) {
+                await this.bot.telegram.editMessageText(chatId, placeholderMsgId, undefined, finalText)
+                    .catch(async () => {
+                        // Fallback: if edit fails (e.g. message too old), send new message
+                        await this.sendReply(chatId, responseText, 2, messageId);
+                    });
+            } else {
+                // Response too long to fit in one edit — delete placeholder and send chunked
+                await this.bot.telegram.deleteMessage(chatId, placeholderMsgId).catch(() => { });
+                await this.sendReply(chatId, responseText, 2, messageId);
+            }
+
         } catch (error) {
             console.error(`[Worker Error] ${error}`);
-            await this.sendReply(
-                chatId,
-                '🔥 处理请求时出现错误，请稍后重试。',
-                2,
-                messageId
-            );
+            await this.sendReply(chatId, '🔥 处理请求时出现错误，请稍后重试。', 2, messageId);
         }
     }
 
@@ -223,10 +392,12 @@ class NeoAgentBot {
 
             for (let attempt = 0; attempt <= retries; attempt++) {
                 try {
-                    // Send message with reply_to_message_id if available
-                    await this.bot.telegram.sendMessage(chatId, chunkPrefix + chunk, {
-                        reply_to_message_id: replyToMessageId
-                    });
+                    // Send message with replyParameters if available (Telegraf 4.x style)
+                    const extraArgs: any = {};
+                    if (replyToMessageId) {
+                        extraArgs.reply_parameters = { message_id: replyToMessageId };
+                    }
+                    await this.bot.telegram.sendMessage(chatId, chunkPrefix + chunk, extraArgs);
                     break; // Success, exit retry loop
                 } catch (error) {
                     if (attempt === retries) {
@@ -296,6 +467,7 @@ class NeoAgentBot {
                     '这是一个极简的全能代理网关。发送任何消息，远端的 Gemini CLI 将接管思考过程。\n\n' +
                     '`/clear`  — 清空上下文对话历史\n' +
                     '`/newsession` — 开启新会话\n' +
+                    '`/async` 或 `/research` — 提交后台长任务 (不会阻塞后续对话)\n' +
                     '`/stats`  — 查看会话统计数据',
                     { parse_mode: 'Markdown' }
                 );
@@ -348,8 +520,8 @@ class NeoAgentBot {
         this.bot.launch();
 
         // Enable graceful stop
-        process.once('SIGINT', () => this.bot.stop('SIGINT'));
-        process.once('SIGTERM', () => this.bot.stop('SIGTERM'));
+        process.once('SIGINT', () => { geminiClient.close(); this.bot.stop('SIGINT'); });
+        process.once('SIGTERM', () => { geminiClient.close(); this.bot.stop('SIGTERM'); });
     }
 }
 
