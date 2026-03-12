@@ -93,7 +93,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { sessionPath, projectDir: providedDir } = ARCHIVE_SESSION_SCHEMA.parse(args);
       const projectDir = await getProjectDir(providedDir);
       const sessionData = JSON.parse(await fs.readFile(sessionPath, "utf-8"));
-      
+
       const sessionId = sessionData.sessionId || "";
       const messages = sessionData.messages || [];
       const startTime = sessionData.startTime || "";
@@ -103,7 +103,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const allContent = messages.map((m: any) => m.content).filter((c: any) => typeof c === 'string').join("\n");
       const audits = await extractGrammarAudits(allContent);
       const englishLogPath = path.join(projectDir, "project/neo/src/English_Learning_Log.md");
-      
+
       if (audits.length > 0) {
         try {
           const logContent = await fs.readFile(englishLogPath, "utf-8");
@@ -145,18 +145,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       let lines: string[] = [];
       for (const m of messages) {
         if (m.type === "user") {
-            let text = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.find((p: any) => p.text)?.text : "");
-            if (text) {
-                // Filter out [System Override] blocks
-                text = text.replace(/\[System Override\][\s\S]*?(?=\n\n|$|\[)/g, "").trim();
-                if (text) lines.push(`### User\n${text.substring(0, 200)}`);
-            }
+          let text = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? m.content.find((p: any) => p.text)?.text : "");
+          if (text) {
+            // Filter out [System Override] blocks
+            text = text.replace(/\[System Override\][\s\S]*?(?=\n\n|$|\[)/g, "").trim();
+            if (text) lines.push(`### User\n${text.substring(0, 200)}`);
+          }
         } else if (m.type === "gemini") {
-            const text = typeof m.content === 'string' ? m.content : "";
-            if (text) {
-                const quoted = text.trim().substring(0, 500).split("\n").map((l: string) => `> ${l}`).join("\n");
-                lines.push(`### Neo\n${quoted}`);
-            }
+          const text = typeof m.content === 'string' ? m.content : "";
+          if (text) {
+            const quoted = text.trim().substring(0, 500).split("\n").map((l: string) => `> ${l}`).join("\n");
+            lines.push(`### Neo\n${quoted}`);
+          }
         }
       }
 
@@ -167,7 +167,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         output += `<!-- session: ${sessionId} -->\n`;
         output += lines.join("\n\n") + "\n\n";
         await fs.appendFile(memoryFile, output);
-        
+
         // Git commit
         try {
           await execAsync(`git add history/memory/ project/neo/src/English_Learning_Log.md`, { cwd: projectDir });
