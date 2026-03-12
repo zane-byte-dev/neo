@@ -2,10 +2,11 @@
 
 import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
-import { message } from 'telegraf/filters.js';
+import { message } from 'telegraf/filters';
 import PQueue from 'p-queue';
 import { execa } from 'execa';
 import { join } from 'path';
+import { promises as fs } from 'fs';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
@@ -143,9 +144,199 @@ class NeoAgentBot {
             await this.processMessage(ctx);
         });
 
+        // Handle photo messages
+        this.bot.on(message('photo'), async (ctx) => {
+            await this.processPhotoMessage(ctx);
+        });
+
+        // Handle voice / audio messages
+        this.bot.on(message('voice'), async (ctx) => {
+            await this.processVoiceMessage(ctx);
+        });
+        this.bot.on(message('audio'), async (ctx) => {
+            await this.processVoiceMessage(ctx);
+        });
+
         // Error handling
         this.bot.catch((err, ctx) => {
             console.error(`[Bot Error] ${err}`);
+        });
+    }
+
+    /**
+     * Handle incoming voice / audio messages.
+     * Downloads the file, transcribes via Gemini File API, then processes as text.
+     */
+    private async processVoiceMessage(ctx: any) {
+        const chatId = ctx.chat.id;
+        const messageId = ctx.message.message_id;
+        const userName = ctx.chat.first_name || 'User';
+
+        if (!this.isAuthorized(chatId)) {
+            await ctx.reply('⛔ Unauthorized.');
+            return;
+        }
+
+        const fileId: string | undefined =
+            ctx.message.voice?.file_id ?? ctx.message.audio?.file_id;
+        if (!fileId) {
+            await ctx.reply('⚠️ 无法获取语音文件。');
+            return;
+        }
+
+        // Download to tmp dir
+        const tmpDir = join(process.env.GEMINI_WORK_DIR || process.cwd(), '.tmp');
+        await fs.mkdir(tmpDir, { recursive: true });
+        const tmpPath = join(tmpDir, `voice_${messageId}_${Date.now()}.ogg`);
+
+        try {
+            const fileLink = await this.bot.telegram.getFileLink(fileId);
+            const res = await fetch(fileLink.href);
+            if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+            await fs.writeFile(tmpPath, Buffer.from(await res.arrayBuffer()));
+            console.log(`[Voice] Saved to ${tmpPath}`);
+        } catch (err: any) {
+            console.error(`[Voice Error] ${err.message}`);
+            await ctx.reply('⚠️ 语音下载失败，请重试。');
+            return;
+        }
+
+        // Show interim status
+        const statusMsg = await this.bot.telegram.sendMessage(chatId, '🎙️ 正在识别语音...', {
+            reply_parameters: { message_id: messageId },
+        });
+
+        try {
+            const transcription = await this.transcribeVoice(tmpPath);
+            console.log(`[Voice] Transcription: ${transcription}`);
+
+            // Update status to show what was heard
+            await this.bot.telegram.editMessageText(
+                chatId, statusMsg.message_id, undefined,
+                `🎙️ 已识别: "${transcription}"\n\n⏳ 思考中...`
+            ).catch(() => {});
+
+            const task: Task = { chatId, question: transcription, userName, messageId };
+            taskQueue.add(async () => {
+                try {
+                    await this.processTask(task);
+                } finally {
+                    await this.bot.telegram.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+                }
+            });
+        } catch (err: any) {
+            console.error(`[Voice Error] Transcription failed: ${err.message}`);
+            await this.bot.telegram.editMessageText(
+                chatId, statusMsg.message_id, undefined,
+                `⚠️ 语音识别失败: ${err.message}`
+            ).catch(() => {});
+        } finally {
+            await fs.unlink(tmpPath).catch(() => {});
+        }
+    }
+
+    /**
+     * Transcribe an OGG voice file using Gemini File API + gemini-1.5-flash.
+     */
+    private async transcribeVoice(filePath: string): Promise<string> {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env');
+
+        // 1. Upload file to Gemini File API
+        const fileBuffer = await fs.readFile(filePath);
+        const uploadRes = await fetch(
+            `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'audio/ogg',
+                    'X-Goog-Upload-Command': 'upload, finalize',
+                    'X-Goog-Upload-Header-Content-Length': String(fileBuffer.length),
+                },
+                body: fileBuffer,
+            }
+        );
+        if (!uploadRes.ok) {
+            throw new Error(`File upload failed: ${uploadRes.status} ${await uploadRes.text()}`);
+        }
+        const uploadData = await uploadRes.json() as any;
+        const fileUri: string | undefined = uploadData.file?.uri;
+        if (!fileUri) throw new Error('No fileUri returned from Gemini upload');
+
+        // 2. Ask Gemini to transcribe
+        const transcribeRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { fileData: { mimeType: 'audio/ogg', fileUri } },
+                            { text: '请将这段语音转录为文字，只输出转录结果，不要任何额外解释。' },
+                        ],
+                    }],
+                }),
+            }
+        );
+        if (!transcribeRes.ok) {
+            throw new Error(`Transcription failed: ${transcribeRes.status} ${await transcribeRes.text()}`);
+        }
+        const data = await transcribeRes.json() as any;
+        const text: string | undefined = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Empty transcription result');
+        return text.trim();
+    }
+
+    /**
+     * Handle incoming photo messages
+     */
+    private async processPhotoMessage(ctx: any) {
+        const chatId = ctx.chat.id;
+        const messageId = ctx.message.message_id;
+        const userName = ctx.chat.first_name || 'User';
+        const caption: string = ctx.message.caption || '';
+
+        console.log(`[Photo] From ${userName} (ID: ${chatId}, MsgID: ${messageId})${caption ? ': ' + caption : ''}`);
+
+        if (!this.isAuthorized(chatId)) {
+            await ctx.reply('⛔ Unauthorized.');
+            return;
+        }
+
+        // Pick the highest resolution variant
+        const photos: Array<{ file_id: string; width: number; height: number }> = ctx.message.photo;
+        const largest = photos[photos.length - 1];
+
+        // Download image to a temp file inside the work dir so Gemini CLI can read it
+        const tmpDir = join(process.env.GEMINI_WORK_DIR || process.cwd(), '.tmp');
+        await fs.mkdir(tmpDir, { recursive: true });
+        const tmpPath = join(tmpDir, `photo_${messageId}_${Date.now()}.jpg`);
+
+        try {
+            const fileLink = await this.bot.telegram.getFileLink(largest.file_id);
+            const res = await fetch(fileLink.href);
+            if (!res.ok) throw new Error(`Failed to download photo: ${res.status}`);
+            const buffer = Buffer.from(await res.arrayBuffer());
+            await fs.writeFile(tmpPath, buffer);
+            console.log(`[Photo] Saved to ${tmpPath}`);
+        } catch (err: any) {
+            console.error(`[Photo Error] ${err.message}`);
+            await ctx.reply('⚠️ 图片下载失败，请重试。');
+            return;
+        }
+
+        const question = caption
+            ? `${caption}\n\n[用户附上了一张图片，文件路径: ${tmpPath}，请结合图片内容回答。]`
+            : `[用户发送了一张图片，文件路径: ${tmpPath}，请分析并详细描述这张图片的内容。]`;
+
+        const task: Task = { chatId, question, userName, messageId };
+        taskQueue.add(async () => {
+            try {
+                await this.processTask(task);
+            } finally {
+                await fs.unlink(tmpPath).catch(() => {});
+            }
         });
     }
 
@@ -164,13 +355,20 @@ class NeoAgentBot {
      */
     private async processMessage(ctx: any) {
         const chatId = ctx.chat.id;
-        const text = ctx.message.text;
         const messageId = ctx.message.message_id;
         const userName = ctx.chat.first_name || 'User';
 
+        // If the user replied to a specific message, prepend that quoted content to the question
+        const replyTo = ctx.message.reply_to_message;
+        const quotedText: string | null = replyTo?.text ?? replyTo?.caption ?? null;
+        const rawText: string = ctx.message.text;
+        const text = quotedText
+            ? `[引用消息]: ${quotedText}\n\n[我的问题]: ${rawText}`
+            : rawText;
+
         // Log received message
-        const preview = text.length > 50 ? `${text.substring(0, 50)}...` : text;
-        console.log(`[Message] From ${userName} (ID: ${chatId}, MsgID: ${messageId}): ${preview}`);
+        const preview = rawText.length > 50 ? `${rawText.substring(0, 50)}...` : rawText;
+        console.log(`[Message] From ${userName} (ID: ${chatId}, MsgID: ${messageId}${quotedText ? ', replying to msg' : ''}): ${preview}`);
 
         // Authorization check
         if (!this.isAuthorized(chatId)) {
@@ -179,9 +377,9 @@ class NeoAgentBot {
         }
 
         // Handle commands separately
-        if (text.startsWith('/')) {
+        if (rawText.startsWith('/')) {
             // Check if it's an async task command
-            if (text.startsWith('/research') || text.startsWith('/async')) {
+            if (rawText.startsWith('/research') || rawText.startsWith('/async')) {
                 await this.handleAsyncTask(ctx);
                 return;
             }
@@ -190,7 +388,7 @@ class NeoAgentBot {
         }
 
         // Detect implicit long tasks (triggered by keyword prefixes)
-        if (ASYNC_TRIGGER_PREFIXES.some(prefix => text.startsWith(prefix))) {
+        if (ASYNC_TRIGGER_PREFIXES.some(prefix => rawText.startsWith(prefix))) {
             await this.handleAsyncTask(ctx);
             return;
         }
