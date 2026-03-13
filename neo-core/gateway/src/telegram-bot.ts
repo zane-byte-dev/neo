@@ -6,7 +6,7 @@ import { message } from 'telegraf/filters';
 import { execa } from 'execa';
 import { join } from 'path';
 import { promises as fs } from 'fs';
-import { GeminiClient } from './lib/gemini-client.js';
+import { GeminiClient, geminiGenerate, geminiUploadFile } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
 import { setupLogger } from './lib/logger.js';
@@ -52,7 +52,7 @@ const chatHistoryCache = new ChatHistoryCache();
 await chatHistoryCache.init();
 
 // Initialize async task manager
-const asyncTaskManager = new AsyncTaskManager(process.env.GEMINI_WORK_DIR || process.cwd());
+const asyncTaskManager = new AsyncTaskManager(process.env.WORK_DIR || process.cwd());
 await asyncTaskManager.init();
 
 // Keywords that trigger background async tasks
@@ -82,6 +82,8 @@ interface Task {
     /** Gemini File API URI for already-uploaded binary files (PDF, audio, video). */
     fileUri?: string;
     fileMimeType?: string;
+    /** If true, this task is a /btw one-off — not saved to chat history. */
+    skipHistory?: boolean;
 }
 
 class NeoAgentBot {
@@ -104,7 +106,7 @@ class NeoAgentBot {
         await userProfile.init();
 
         // Archive expired Telegram sessions to history/memory/ via Gemini compression
-        const workDir = process.env.GEMINI_WORK_DIR;
+        const workDir = process.env.WORK_DIR;
         const archiveApiKey = process.env.GEMINI_API_KEY;
         if (workDir && archiveApiKey) {
             chatHistoryCache.setOnSessionExpire(async (session) => {
@@ -152,22 +154,15 @@ ${transcript}
 - 如果只是闲聊或简单问答，第一行写"闲聊/问答"，只保留 1-2 行关键点
 - 不要加 session_id 或时间戳，我会自动添加`;
 
-                    const res = await fetch(
-                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${archiveApiKey}`,
-                        {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [{ parts: [{ text: compressionPrompt }] }],
-                                generationConfig: { temperature: 0.2, maxOutputTokens: 300 },
-                            }),
-                        }
+                    const summaryText = await geminiGenerate(
+                        archiveApiKey,
+                        [{ parts: [{ text: compressionPrompt }] }],
+                        { generationConfig: { temperature: 0.2, maxOutputTokens: 300 } },
                     );
 
                     let summary: string;
-                    if (res.ok) {
-                        const data = await res.json() as any;
-                        summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+                    if (summaryText) {
+                        summary = summaryText;
                     } else {
                         // Fallback: simple first-message excerpt if API fails
                         const firstUser = session.messages.find(m => m.role === 'user');
@@ -280,7 +275,7 @@ ${transcript}
             return;
         }
 
-        const projectRoot = process.env.GEMINI_WORK_DIR || process.cwd();
+        const projectRoot = process.env.WORK_DIR || process.cwd();
 
         // Run every day at 02:00 AM (Butler)
         cron.schedule('0 2 * * *', async () => {
@@ -371,7 +366,7 @@ ${transcript}
         }
 
         // Download to tmp dir
-        const tmpDir = join(process.env.GEMINI_WORK_DIR || process.cwd(), '.tmp');
+        const tmpDir = join(process.env.WORK_DIR || process.cwd(), '.tmp');
         await fs.mkdir(tmpDir, { recursive: true });
         const tmpPath = join(tmpDir, `voice_${messageId}_${Date.now()}.ogg`);
 
@@ -430,48 +425,18 @@ ${transcript}
 
         // 1. Upload file to Gemini File API
         const fileBuffer = await fs.readFile(filePath);
-        const uploadRes = await fetch(
-            `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'audio/ogg',
-                    'X-Goog-Upload-Command': 'upload, finalize',
-                    'X-Goog-Upload-Header-Content-Length': String(fileBuffer.length),
-                },
-                body: fileBuffer,
-            }
-        );
-        if (!uploadRes.ok) {
-            throw new Error(`File upload failed: ${uploadRes.status} ${await uploadRes.text()}`);
-        }
-        const uploadData = await uploadRes.json() as any;
-        const fileUri: string | undefined = uploadData.file?.uri;
-        if (!fileUri) throw new Error('No fileUri returned from Gemini upload');
+        const fileUri = await geminiUploadFile(apiKey, fileBuffer, 'audio/ogg');
 
         // 2. Ask Gemini to transcribe
-        const transcribeRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { fileData: { mimeType: 'audio/ogg', fileUri } },
-                            { text: '请将这段语音转录为文字，只输出转录结果，不要任何额外解释。' },
-                        ],
-                    }],
-                }),
-            }
+        const text = await geminiGenerate(
+            apiKey,
+            [{ parts: [
+                { fileData: { mimeType: 'audio/ogg', fileUri } },
+                { text: '请将这段语音转录为文字，只输出转录结果，不要任何额外解释。' },
+            ] }],
         );
-        if (!transcribeRes.ok) {
-            throw new Error(`Transcription failed: ${transcribeRes.status} ${await transcribeRes.text()}`);
-        }
-        const data = await transcribeRes.json() as any;
-        const text: string | undefined = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error('Empty transcription result');
-        return text.trim();
+        return text;
     }
 
     /**
@@ -508,7 +473,7 @@ ${transcript}
             reply_parameters: { message_id: messageId },
         });
 
-        const tmpDir = join(process.env.GEMINI_WORK_DIR || process.cwd(), '.tmp');
+        const tmpDir = join(process.env.WORK_DIR || process.cwd(), '.tmp');
         await fs.mkdir(tmpDir, { recursive: true });
         const tmpPath = join(tmpDir, `doc_${messageId}_${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
 
@@ -698,23 +663,7 @@ ${transcript}
         if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env');
 
         const fileBuffer = await fs.readFile(filePath);
-        const res = await fetch(
-            `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': mimeType,
-                    'X-Goog-Upload-Command': 'upload, finalize',
-                    'X-Goog-Upload-Header-Content-Length': String(fileBuffer.length),
-                },
-                body: fileBuffer,
-            }
-        );
-        if (!res.ok) throw new Error(`File API upload failed: ${res.status} ${await res.text()}`);
-        const data = await res.json() as any;
-        const uri: string | undefined = data.file?.uri;
-        if (!uri) throw new Error('No fileUri returned from Gemini File API');
-        return uri;
+        return geminiUploadFile(apiKey, fileBuffer, mimeType);
     }
 
     /**
@@ -738,7 +687,7 @@ ${transcript}
         const largest = photos[photos.length - 1];
 
         // Download image to a temp file inside the work dir so Gemini CLI can read it
-        const tmpDir = join(process.env.GEMINI_WORK_DIR || process.cwd(), '.tmp');
+        const tmpDir = join(process.env.WORK_DIR || process.cwd(), '.tmp');
         await fs.mkdir(tmpDir, { recursive: true });
         const tmpPath = join(tmpDir, `photo_${messageId}_${Date.now()}.jpg`);
 
@@ -810,6 +759,11 @@ ${transcript}
             // Check if it's an async task command
             if (rawText.startsWith('/research') || rawText.startsWith('/async')) {
                 await this.handleAsyncTask(ctx);
+                return;
+            }
+            // /btw — one-off Q&A, not saved to chat history
+            if (rawText.startsWith('/btw')) {
+                await this.handleBtwMessage(ctx, rawText, chatId, messageId, userName);
                 return;
             }
             await this.handleCommand(ctx);
@@ -1026,7 +980,7 @@ ${transcript}
 
         // Save to history/inbox/YYYY-MM-DD-<domain>.md (consistent with CLI inbox convention)
         const inboxDir = join(
-            process.env.GEMINI_WORK_DIR || process.cwd(),
+            process.env.WORK_DIR || process.cwd(),
             'history', 'inbox'
         );
         await fs.mkdir(inboxDir, { recursive: true });
@@ -1129,6 +1083,19 @@ ${transcript}
     /**
      * Worker logic: process queued tasks with streaming progress indicator
      */
+    /**
+     * Handle /btw <question> — one-off Q&A that is never saved to chat history.
+     */
+    private async handleBtwMessage(ctx: any, rawText: string, chatId: number, messageId: number, userName: string) {
+        const question = rawText.replace(/^\/btw\s*/i, '').trim();
+        if (!question) {
+            await ctx.reply('用法: `/btw <问题>`\n\n临时问答，不计入对话上下文。', { parse_mode: 'Markdown' });
+            return;
+        }
+        const task: Task = { chatId, question, userName, messageId, skipHistory: true };
+        await messageQueue.enqueue(task, (t) => this.processTask(t));
+    }
+
     private async processTask(task: Task) {
         const { chatId, question, userName, messageId } = task;
 
@@ -1147,7 +1114,9 @@ ${transcript}
         try {
             console.log(`[Worker] Processing task for ${userName}: ${question.substring(0, 20)}...`);
 
-            await chatHistoryCache.addMessage('user', question, userName);
+            if (!task.skipHistory) {
+                await chatHistoryCache.addMessage('user', question, userName);
+            }
             const historyContext = chatHistoryCache.getContextForGemini();
 
             // Prepend user profile (city, timezone, interests etc.) if available
@@ -1158,10 +1127,11 @@ ${transcript}
 
             const timestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             const extraArgs: any = messageId ? { reply_parameters: { message_id: messageId } } : {};
+            const agentLabel = task.skipHistory ? 'btw' : 'NeoAgent';
 
             // Send placeholder — will become the first streaming message
             const placeholderMsg = await this.bot.telegram.sendMessage(
-                chatId, `⏳ NeoAgent (${timestamp})\n\n🤔 思考中...`, extraArgs
+                chatId, `⏳ ${agentLabel} (${timestamp})\n\n🤔 思考中...`, extraArgs
             );
 
             // ── Streaming state ──────────────────────────────────────────────
@@ -1181,7 +1151,7 @@ ${transcript}
             const EDIT_INTERVAL_MS = 1200;  // Telegram rate-limit safe interval
             const CHUNK_LIMIT = 3800;       // leave headroom for header
 
-            const header = () => `🤖 NeoAgent (${timestamp})\n\n`;
+            const header = () => `${task.skipHistory ? '💬' : '🤖'} ${agentLabel} (${timestamp})\n\n`;
 
             // Fire an editMessageText; silently ignore "message not modified" errors
             const doEdit = (msgId: number, body: string) => {
@@ -1267,7 +1237,9 @@ ${transcript}
                 return;
             }
 
-            await chatHistoryCache.addMessage('assistant', responseText);
+            if (!task.skipHistory) {
+                await chatHistoryCache.addMessage('assistant', responseText);
+            }
 
             const finalTimestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             const fullFormatted = markdownToTelegram(responseText);
@@ -1391,6 +1363,7 @@ ${transcript}
                 await ctx.reply(
                     '🔭 **NeoAgent Connect Gateway**\n' +
                     '这是一个极简的全能代理网关。发送任何消息，远端的 Gemini CLI 将接管思考过程。\n\n' +
+                    '`/btw <问题>` — 临时问答，不计入对话上下文\n' +
                     '`/clear`  — 清空上下文对话历史\n' +
                     '`/newsession` — 开启新会话\n' +
                     '`/stats`  — 查看会话统计数据\n' +
@@ -1616,7 +1589,7 @@ ${transcript}
                 AUTHORIZED_CHAT_ID,
                 `🤖 **NeoAgent Gateway** 已于 ${timeStr} 启动/重启。\n` +
                 `✅ 网关已上线\n` +
-                `✅ 引擎状态: ${process.env.GEMINI_MODEL ?? 'gemini-2.0-flash'} (Direct API + Agentic Loop)`,
+                `✅ 引擎状态: ${process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview'} (Direct API + Agentic Loop)`,
                 { parse_mode: 'Markdown' }
             ).catch(err => console.error('[Startup Message Failed]', err));
         }

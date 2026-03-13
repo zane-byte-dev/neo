@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import cron, { ScheduledTask as CronJob } from 'node-cron';
+import { geminiGenerate } from './gemini-client.js';
 
 export interface ScheduledTask {
     id: string;
@@ -48,21 +49,12 @@ export async function parseScheduledTask(
 只输出 JSON，不要任何其他文字。`;
 
     try {
-        const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: userPrompt }] }],
-                    generationConfig: { responseMimeType: 'application/json', temperature: 0 },
-                }),
-            }
+        const raw = await geminiGenerate(
+            apiKey,
+            [{ parts: [{ text: userPrompt }] }],
+            { generationConfig: { responseMimeType: 'application/json', temperature: 0 } },
         );
-        if (!res.ok) return null;
-
-        const data = await res.json() as any;
-        const raw: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        if (!raw) return null;
         const cleaned = raw.replace(/```(?:json)?/g, '').trim();
         const parsed = JSON.parse(cleaned);
 

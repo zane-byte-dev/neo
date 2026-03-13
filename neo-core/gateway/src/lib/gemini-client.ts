@@ -47,7 +47,7 @@ export interface JSONRPCNotification {
 
 type GeminiPart =
     | { text: string; thought?: boolean }
-    | { functionCall: { name: string; args: Record<string, unknown> } }
+    | { functionCall: { name: string; args: Record<string, unknown>; thought_signature?: string } }
     | { functionResponse: { name: string; response: Record<string, unknown> } }
     | { inlineData: { mimeType: string; data: string } }
     | { fileData: { mimeType: string; fileUri: string } };
@@ -229,7 +229,9 @@ async function executeTool(
 interface ApiChunk {
     thought?: string;
     text?: string;
-    functionCall?: { name: string; args: Record<string, unknown> };
+    functionCall?: { name: string; args: Record<string, unknown>; thoughtSignature?: string };
+    /** The unmodified part object from the API — preserved for history reconstruction. */
+    rawPart?: Record<string, unknown>;
 }
 
 /**
@@ -239,22 +241,69 @@ interface ApiChunk {
 function resolveModel(model: string): string {
     const ALIASES: Record<string, string> = {
         // Short convenience aliases → real Gemini API model IDs
-        'flash':   'gemini-2.5-flash',
-        'pro':     'gemini-2.5-pro',
-        // Gemini 2.5 stable
-        'gemini-3-flash': 'gemini-2.5-flash',
-        'gemini-3-pro':   'gemini-2.5-pro',
-        // Gemini 2.5 preview — pass through unchanged (real API names)
-        'gemini-3-flash-preview': 'gemini-2.5-flash-preview',
-        'gemini-3-pro-preview':   'gemini-2.5-pro-preview',
-        // Legacy date-stamped previews kept for backward compat
-        'gemini-2.5-flash-preview-05-20': 'gemini-2.5-flash-preview',
-        'gemini-2.5-pro-preview-05-06':   'gemini-2.5-pro-preview',
+        'flash':   'gemini-3-flash-preview',
+        'pro':     'gemini-3-pro-preview',
     };
     return ALIASES[model] ?? model;
 }
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_FILES_UPLOAD = 'https://generativelanguage.googleapis.com/upload/v1beta/files';
+
+/**
+ * Simple non-streaming generateContent call.
+ * Returns the text of the first candidate, or null on failure.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function geminiGenerate(
+    apiKey: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    contents: any[],
+    options: { model?: string; generationConfig?: Record<string, unknown> } = {},
+): Promise<string | null> {
+    const model = resolveModel(options.model ?? 'flash');
+    const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
+    const body: Record<string, unknown> = { contents };
+    if (options.generationConfig) body.generationConfig = options.generationConfig;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await res.json() as any;
+    return (data.candidates?.[0]?.content?.parts?.[0]?.text as string | undefined)?.trim() ?? null;
+}
+
+/**
+ * Upload a file to the Gemini File API.
+ * Returns the fileUri to reference in subsequent generateContent calls.
+ */
+export async function geminiUploadFile(
+    apiKey: string,
+    buffer: Buffer,
+    mimeType: string,
+): Promise<string> {
+    const res = await fetch(
+        `${GEMINI_FILES_UPLOAD}?uploadType=media&key=${apiKey}`,
+        {
+            method: 'POST',
+            headers: {
+                'Content-Type': mimeType,
+                'X-Goog-Upload-Command': 'upload, finalize',
+                'X-Goog-Upload-Header-Content-Length': String(buffer.length),
+            },
+            body: buffer,
+        }
+    );
+    if (!res.ok) throw new Error(`Gemini File API upload failed: ${res.status} ${await res.text()}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = await res.json() as any;
+    const uri: string | undefined = data.file?.uri;
+    if (!uri) throw new Error('No fileUri returned from Gemini File API');
+    return uri;
+}
 
 async function* streamGeminiApi(
     apiKey: string,
@@ -320,12 +369,12 @@ async function* streamGeminiApi(
 
                     for (const part of parts) {
                         if (part.thought && typeof part.text === 'string') {
-                            yield { thought: part.text as string };
+                            yield { thought: part.text as string, rawPart: part };
                         } else if (part.functionCall) {
-                            const fc = part.functionCall as { name: string; args?: Record<string, unknown> };
-                            yield { functionCall: { name: fc.name, args: fc.args ?? {} } };
+                            const fc = part.functionCall as { name: string; args?: Record<string, unknown>; thought_signature?: string };
+                            yield { functionCall: { name: fc.name, args: fc.args ?? {}, thoughtSignature: fc.thought_signature }, rawPart: part };
                         } else if (typeof part.text === 'string' && part.text) {
-                            yield { text: part.text as string };
+                            yield { text: part.text as string, rawPart: part };
                         }
                     }
                 } catch (parseErr: unknown) {
@@ -368,16 +417,21 @@ async function agentLoop(
     let finalText = '';
 
     for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
+        // modelRawParts accumulates every part EXACTLY as received from the API.
+        // This is critical for thinking models: thought parts and their associated
+        // thought_signatures on functionCall parts must be round-tripped verbatim.
+        const modelRawParts: Record<string, unknown>[] = [];
         const textParts: string[] = [];
         const functionCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
         // Consume one full model turn from the streaming API
         for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents)) {
+            if (chunk.rawPart) modelRawParts.push(chunk.rawPart);
             if (chunk.thought) {
                 // Thinking tokens: stream immediately — always safe to show live
                 onChunk?.({ type: 'thought', text: chunk.thought });
             } else if (chunk.functionCall) {
-                functionCalls.push(chunk.functionCall);
+                functionCalls.push({ name: chunk.functionCall.name, args: chunk.functionCall.args });
             } else if (chunk.text) {
                 textParts.push(chunk.text);
             }
@@ -403,13 +457,9 @@ async function agentLoop(
             onChunk?.({ type: 'tool_call', toolName: fc.name });
         }
 
-        // Build model turn with text + function calls
-        const modelParts: GeminiPart[] = [];
-        if (turnText) modelParts.push({ text: turnText });
-        for (const fc of functionCalls) {
-            modelParts.push({ functionCall: { name: fc.name, args: fc.args } });
-        }
-        contents.push({ role: 'model', parts: modelParts });
+        // Record the model turn using raw parts to preserve thought parts and
+        // thought_signatures required by the Gemini thinking model.
+        contents.push({ role: 'model', parts: modelRawParts as GeminiPart[] });
 
         // Execute all tools (parallel for speed)
         const results = await Promise.all(
@@ -439,15 +489,15 @@ export class GeminiClient {
 
     constructor() {
         this.apiKey = process.env.GEMINI_API_KEY ?? '';
-        this.model = resolveModel(process.env.GEMINI_MODEL ?? 'gemini-2.0-flash');
-        this.workDir = process.env.GEMINI_WORK_DIR ?? '';
+        this.model = resolveModel(process.env.GEMINI_MODEL ?? 'flash');
+        this.workDir = process.env.WORK_DIR ?? '';
 
         if (!this.apiKey) {
             console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
             return;
         }
         if (!this.workDir) {
-            console.log('[AgentRuntime] ❌ Disabled: GEMINI_WORK_DIR not set');
+            console.log('[AgentRuntime] ❌ Disabled: WORK_DIR not set');
             return;
         }
 

@@ -45,10 +45,10 @@ export class UserProfileManager {
 
     /**
      * Returns a compact context string to prepend to Gemini prompts.
-     * Priority: $GEMINI_WORK_DIR/user.md (canonical source) → JSON fields fallback.
+     * Priority: $WORK_DIR/user.md (canonical source) → JSON fields fallback.
      */
     async toContextString(): Promise<string> {
-        const workDir = process.env.GEMINI_WORK_DIR;
+        const workDir = process.env.WORK_DIR;
         if (workDir) {
             try {
                 const userMd = await fs.readFile(join(workDir, 'user.md'), 'utf8');

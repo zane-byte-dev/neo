@@ -37,10 +37,7 @@ cp .env.example .env
 编辑 `.env` 文件：
 
 ```bash
-# Gemini CLI 配置
-GEMINI_CLI_PATH=gemini              # Gemini CLI 可执行文件路径
-GEMINI_TIMEOUT=180                  # 超时时间（秒）
-GEMINI_WORK_DIR=/path/to/project    # 项目根目录（用于 Cron 脚本和异步任务）
+WORK_DIR=/path/to/project    # 项目根目录（用于 Cron 脚本和异步任务）
 
 # Telegram Bot 配置
 TELEGRAM_BOT_TOKEN=your_bot_token   # 从 @BotFather 获取
@@ -197,7 +194,7 @@ gateway/
 
 ### Cron 任务未执行
 
-- 确认 `GEMINI_WORK_DIR` 已正确设置，指向包含 `apps/refinery/butler.ts` 和 `apps/refinery/curator.ts` 的项目根目录
+- 确认 `WORK_DIR` 已正确设置，指向包含 `apps/refinery/butler.ts` 和 `apps/refinery/curator.ts` 的项目根目录
 
 ## 开发
 

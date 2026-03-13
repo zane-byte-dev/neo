@@ -1,6 +1,5 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { execa } from 'execa';
 
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -130,21 +129,22 @@ export class AsyncTaskManager {
     }
 
     /**
-     * Start a background polling interval to check on running tasks
-     * by spawning a quick specialized gemini CLI process.
+     * Start a background polling interval.
+     * Tasks are completed directly by processAsyncTaskBackground, so this loop
+     * only serves as a safety net: any task stuck in 'running' for more than
+     * 30 minutes is automatically marked failed.
      */
     startPolling(onComplete: (task: AsyncTask, result: string) => void) {
         if (this.pollingInterval) return;
 
-        console.log('[AsyncTaskManager] Starting polling loop for long-running tasks...');
-        
-        // Poll every 1 minute
+        console.log('[AsyncTaskManager] Starting stale-task watchdog...');
+
         this.pollingInterval = setInterval(() => {
             this.pollRunningTasks(onComplete);
         }, 60 * 1000);
     }
 
-    private async pollRunningTasks(onComplete: (task: AsyncTask, result: string) => void) {
+    private async pollRunningTasks(_onComplete: (task: AsyncTask, result: string) => void) {
         if (this.isPolling) return;
         this.isPolling = true;
 
@@ -152,47 +152,17 @@ export class AsyncTaskManager {
             const runningTasks = this.getTasksByStatus('running');
             if (runningTasks.length === 0) return;
 
-            console.log(`[AsyncTaskManager] Polling ${runningTasks.length} running tasks...`);
+            const STALE_MS = 30 * 60 * 1000; // 30 minutes
+            const now = Date.now();
 
             for (const task of runningTasks) {
-                // Determine if this is a research task (could add task type metadata in the future)
-                if (task.prompt.toLowerCase().includes('调研') || task.prompt.toLowerCase().includes('research')) {
-                    await this.checkDeepResearchStatus(task, onComplete);
+                if (now - task.updatedAt > STALE_MS) {
+                    console.log(`[AsyncTaskManager] Task #${task.id} is stale (>30 min), marking failed.`);
+                    await this.updateTaskStatus(task.id, 'failed', { error: '任务超时（超过30分钟无响应）' });
                 }
             }
         } finally {
             this.isPolling = false;
-        }
-    }
-
-    private async checkDeepResearchStatus(task: AsyncTask, onComplete: (task: AsyncTask, result: string) => void) {
-        // We spawn a short-lived gemini CLI process just to ask the status of the research.
-        // DeepResearch creates tracking files in the local filesystem, or the tool returns status.
-        try {
-            console.log(`[AsyncTaskManager] Checking status for task #${task.id}...`);
-            
-            const prompt = `Please check if there is any completed "Deep Research" report related to this task prompt: "${task.prompt}". If it's completed, summarize the findings. If it's still running, just reply with exactly "STILL_RUNNING". Use the research_status tool if necessary.`;
-            
-            const result = await execa(process.env.GEMINI_CLI_PATH || 'gemini', ['--model', 'gemini-2.5-flash-preview', prompt], {
-                cwd: this.workDir,
-                timeout: 30000 // 30s timeout so we don't hang the poller
-            });
-
-            const output = result.stdout.trim();
-            
-            if (output && !output.includes('STILL_RUNNING') && !output.toLowerCase().includes('not completed') && !output.toLowerCase().includes('no report found')) {
-                // It seems completed
-                console.log(`[AsyncTaskManager] Task #${task.id} appears completed.`);
-                await this.updateTaskStatus(task.id, 'completed', { result: output });
-                
-                // Trigger callback to notify the user via Telegram
-                onComplete(task, output);
-            } else {
-                console.log(`[AsyncTaskManager] Task #${task.id} is still running.`);
-            }
-
-        } catch (err: any) {
-            console.log(`[AsyncTaskManager] Error checking status for task #${task.id}:`, err.message);
         }
     }
 
