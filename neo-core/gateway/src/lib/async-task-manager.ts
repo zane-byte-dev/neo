@@ -111,6 +111,25 @@ export class AsyncTaskManager {
     }
 
     /**
+     * Get all tasks, sorted by createdAt descending
+     */
+    getAllTasks(): AsyncTask[] {
+        return Array.from(this.memoryCache.values())
+            .sort((a, b) => b.createdAt - a.createdAt);
+    }
+
+    /**
+     * Cancel a pending or running task by ID
+     */
+    async cancelTask(id: string): Promise<boolean> {
+        const task = this.memoryCache.get(id);
+        if (!task) return false;
+        if (task.status === 'completed' || task.status === 'failed') return false;
+        await this.updateTaskStatus(id, 'failed', { error: '用户手动取消' });
+        return true;
+    }
+
+    /**
      * Start a background polling interval to check on running tasks
      * by spawning a quick specialized gemini CLI process.
      */

@@ -3,7 +3,6 @@
 import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
-import PQueue from 'p-queue';
 import { execa } from 'execa';
 import { join } from 'path';
 import { promises as fs } from 'fs';
@@ -12,6 +11,8 @@ import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { markdownToTelegram } from './lib/markdown-converter.js';
 import { setupLogger } from './lib/logger.js';
 import { AsyncTaskManager } from './lib/async-task-manager.js';
+import { MessageQueue } from './lib/message-queue.js';
+import { ReminderManager, parseReminderTime } from './lib/reminder-manager.js';
 import cron from 'node-cron';
 
 
@@ -57,8 +58,12 @@ await asyncTaskManager.init();
 // Keywords that trigger background async tasks
 const ASYNC_TRIGGER_PREFIXES = ['调研', '重构'];
 
-// Task queue (Producer-Consumer model)
-const taskQueue = new PQueue({ concurrency: 1 });
+// Persistent message queue — survives bot restarts
+const CACHE_DIR = process.env.CHAT_CACHE_DIR || './cache';
+const messageQueue = new MessageQueue(CACHE_DIR);
+
+// Reminder manager
+const reminderManager = new ReminderManager(CACHE_DIR);
 
 interface Task {
     chatId: number;
@@ -77,6 +82,37 @@ class NeoAgentBot {
         this.setupCronJobs();
         this.setupAsyncPolling();
         console.log('[System] Background worker queue started.');
+    }
+
+    /**
+     * Load persisted queue from disk and replay any interrupted tasks.
+     */
+    async init() {
+        // Init reminder manager
+        await reminderManager.init(async (reminder) => {
+            console.log(`[Reminder] Firing #${reminder.id}: ${reminder.content}`);
+            await this.bot.telegram.sendMessage(
+                reminder.chatId,
+                `⏰ **提醒:** ${reminder.content}`,
+                { parse_mode: 'Markdown' }
+            ).catch(err => console.error('[Reminder] Send failed:', err.message));
+        });
+
+        // Replay interrupted message queue tasks
+        const pending = await messageQueue.init();
+        if (pending.length === 0) return;
+
+        console.log(`[MessageQueue] Replaying ${pending.length} interrupted task(s)...`);
+        for (const task of pending) {
+            messageQueue.schedule(task, (t) => this.processTask(t));
+        }
+
+        if (AUTHORIZED_CHAT_ID) {
+            this.bot.telegram.sendMessage(
+                AUTHORIZED_CHAT_ID,
+                `♻️ 检测到 ${pending.length} 条上次未完成的消息，已自动恢复处理。`
+            ).catch(() => {});
+        }
     }
 
     /**
@@ -157,6 +193,11 @@ class NeoAgentBot {
             await this.processVoiceMessage(ctx);
         });
 
+        // Handle document messages (PDF, TXT, MD, DOCX, etc.)
+        this.bot.on(message('document'), async (ctx) => {
+            await this.processDocumentMessage(ctx);
+        });
+
         // Error handling
         this.bot.catch((err, ctx) => {
             console.error(`[Bot Error] ${err}`);
@@ -217,9 +258,9 @@ class NeoAgentBot {
             ).catch(() => {});
 
             const task: Task = { chatId, question: transcription, userName, messageId };
-            taskQueue.add(async () => {
+            await messageQueue.enqueue(task, async (t) => {
                 try {
-                    await this.processTask(task);
+                    await this.processTask(t);
                 } finally {
                     await this.bot.telegram.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
                 }
@@ -289,6 +330,126 @@ class NeoAgentBot {
     }
 
     /**
+     * Handle incoming document messages (PDF, TXT, MD, DOCX, code files, etc.)
+     * - Plain text files: read directly as text and embed in prompt
+     * - PDF / binary: upload to Gemini File API for native understanding
+     */
+    private async processDocumentMessage(ctx: any) {
+        const chatId = ctx.chat.id;
+        const messageId = ctx.message.message_id;
+        const userName = ctx.chat.first_name || 'User';
+        const caption: string = ctx.message.caption || '';
+
+        if (!this.isAuthorized(chatId)) {
+            await ctx.reply('⛔ Unauthorized.');
+            return;
+        }
+
+        const doc = ctx.message.document;
+        const fileName: string = doc.file_name || 'document';
+        const mimeType: string = doc.mime_type || 'application/octet-stream';
+        const fileSizeBytes: number = doc.file_size || 0;
+
+        console.log(`[Document] From ${userName}: ${fileName} (${mimeType}, ${fileSizeBytes} bytes)`);
+
+        // Telegram Bot API free tier limit: 20 MB
+        if (fileSizeBytes > 20 * 1024 * 1024) {
+            await ctx.reply('⚠️ 文件超过 20MB，暂不支持。');
+            return;
+        }
+
+        const statusMsg = await this.bot.telegram.sendMessage(chatId, `📄 正在处理文件: ${fileName}...`, {
+            reply_parameters: { message_id: messageId },
+        });
+
+        const tmpDir = join(process.env.GEMINI_WORK_DIR || process.cwd(), '.tmp');
+        await fs.mkdir(tmpDir, { recursive: true });
+        const tmpPath = join(tmpDir, `doc_${messageId}_${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
+
+        try {
+            const fileLink = await this.bot.telegram.getFileLink(doc.file_id);
+            const res = await fetch(fileLink.href);
+            if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+            await fs.writeFile(tmpPath, Buffer.from(await res.arrayBuffer()));
+        } catch (err: any) {
+            console.error(`[Document Error] Download failed: ${err.message}`);
+            await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                `⚠️ 文件下载失败: ${err.message}`).catch(() => {});
+            return;
+        }
+
+        let question: string;
+
+        // Plain-text types: read directly, no File API needed
+        const TEXT_MIME_PREFIXES = ['text/'];
+        const TEXT_EXTENSIONS = ['.md', '.txt', '.csv', '.json', '.yaml', '.yml', '.xml',
+                                  '.ts', '.js', '.py', '.java', '.go', '.rs', '.sh'];
+        const ext = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+        const isPlainText = TEXT_MIME_PREFIXES.some(p => mimeType.startsWith(p)) || TEXT_EXTENSIONS.includes(ext);
+
+        try {
+            if (isPlainText) {
+                const content = await fs.readFile(tmpPath, 'utf8');
+                const truncated = content.length > 30000 ? content.slice(0, 30000) + '\n\n[...内容过长，已截断至前 30000 字符]' : content;
+                question = caption
+                    ? `${caption}\n\n[文件名: ${fileName}]\n\`\`\`\n${truncated}\n\`\`\``
+                    : `请分析以下文件内容并给出总结或见解。\n\n[文件名: ${fileName}]\n\`\`\`\n${truncated}\n\`\`\``;
+            } else {
+                // Binary / PDF: upload via Gemini File API
+                const fileUri = await this.uploadToGeminiFileApi(tmpPath, mimeType);
+                await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                    `📄 文件已上传，正在分析...`).catch(() => {});
+                question = caption
+                    ? `${caption}\n\n[用户上传了文件: ${fileName}，fileUri: ${fileUri}，mimeType: ${mimeType}，请结合文件内容回答。]`
+                    : `请分析以下文件并给出详细总结。\n\n[文件名: ${fileName}，fileUri: ${fileUri}，mimeType: ${mimeType}]`;
+            }
+        } catch (err: any) {
+            console.error(`[Document Error] Processing failed: ${err.message}`);
+            await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                `⚠️ 文件处理失败: ${err.message}`).catch(() => {});
+            await fs.unlink(tmpPath).catch(() => {});
+            return;
+        }
+
+        const task: Task = { chatId, question, userName, messageId };
+        await messageQueue.enqueue(task, async (t) => {
+            try {
+                await this.processTask(t);
+            } finally {
+                await this.bot.telegram.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+                await fs.unlink(tmpPath).catch(() => {});
+            }
+        });
+    }
+
+    /**
+     * Upload a binary file to Gemini File API and return its fileUri.
+     */
+    private async uploadToGeminiFileApi(filePath: string, mimeType: string): Promise<string> {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env');
+
+        const fileBuffer = await fs.readFile(filePath);
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=media&key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': mimeType,
+                    'X-Goog-Upload-Command': 'upload, finalize',
+                    'X-Goog-Upload-Header-Content-Length': String(fileBuffer.length),
+                },
+                body: fileBuffer,
+            }
+        );
+        if (!res.ok) throw new Error(`File API upload failed: ${res.status} ${await res.text()}`);
+        const data = await res.json() as any;
+        const uri: string | undefined = data.file?.uri;
+        if (!uri) throw new Error('No fileUri returned from Gemini File API');
+        return uri;
+    }
+
+    /**
      * Handle incoming photo messages
      */
     private async processPhotoMessage(ctx: any) {
@@ -331,9 +492,9 @@ class NeoAgentBot {
             : `[用户发送了一张图片，文件路径: ${tmpPath}，请分析并详细描述这张图片的内容。]`;
 
         const task: Task = { chatId, question, userName, messageId };
-        taskQueue.add(async () => {
+        await messageQueue.enqueue(task, async (t) => {
             try {
-                await this.processTask(task);
+                await this.processTask(t);
             } finally {
                 await fs.unlink(tmpPath).catch(() => {});
             }
@@ -393,9 +554,165 @@ class NeoAgentBot {
             return;
         }
 
+        // Detect reminder intent: "提醒我", "N分钟/小时后"
+        const isReminderIntent = rawText.includes('提醒我') ||
+            /^\d+\s*(分钟|小时|天)后/.test(rawText);
+        if (isReminderIntent) {
+            await this.handleReminderMessage(ctx, rawText, chatId, messageId);
+            return;
+        }
+
+        // Detect URLs — fetch, save and inject content into prompt
+        const urlMatch = rawText.match(/https?:\/\/[^\s]+/);
+        if (urlMatch) {
+            await this.handleUrlMessage(ctx, urlMatch[0], rawText, userName, chatId, messageId);
+            return;
+        }
+
         // Add task to queue for async processing
         const task: Task = { chatId, question: text, userName, messageId };
-        taskQueue.add(() => this.processTask(task));
+        await messageQueue.enqueue(task, (t) => this.processTask(t));
+    }
+
+    /**
+     * Parse and register a natural-language reminder
+     */
+    private async handleReminderMessage(ctx: any, text: string, chatId: number, messageId: number) {
+        const result = parseReminderTime(text);
+        if (!result || !result.content) {
+            await ctx.reply(
+                '⚠️ 无法解析提醒时间，请用以下格式：\n' +
+                '• `提醒我 10分钟后 xxx`\n' +
+                '• `提醒我 2小时后 xxx`\n' +
+                '• `提醒我 明天9点 xxx`\n' +
+                '• `提醒我 明天下午3点半 xxx`\n' +
+                '• `提醒我 今天22:30 xxx`',
+                { parse_mode: 'Markdown', reply_parameters: { message_id: messageId } }
+            );
+            return;
+        }
+
+        const reminder = await reminderManager.add(chatId, result.content, result.fireAt);
+        const fireStr = new Date(result.fireAt).toLocaleString('zh-CN', {
+            month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+        });
+        await ctx.reply(
+            `✅ 提醒已设置！\n\n` +
+            `📌 内容: ${result.content}\n` +
+            `🕐 时间: ${fireStr}\n` +
+            `🆔 ID: \`${reminder.id}\`\n\n` +
+            `用 /remindcancel \`${reminder.id}\` 取消`,
+            { parse_mode: 'Markdown', reply_parameters: { message_id: messageId } }
+        );
+    }
+
+    /**
+     * Fetch a URL, strip to plain text, save to web-cache, and queue as a normal task.
+     */
+    private async handleUrlMessage(
+        ctx: any,
+        url: string,
+        rawText: string,
+        userName: string,
+        chatId: number,
+        messageId: number
+    ) {
+        const statusMsg = await this.bot.telegram.sendMessage(
+            chatId, `🌐 正在抓取页面...\n${url}`,
+            { reply_parameters: { message_id: messageId } }
+        );
+
+        let pageText: string;
+        let savedPath: string | null = null;
+
+        try {
+            ({ text: pageText, savedPath } = await this.fetchAndSaveUrl(url));
+            await this.bot.telegram.editMessageText(
+                chatId, statusMsg.message_id, undefined,
+                `🌐 页面已抓取并保存\n${url}\n\n⏳ 正在分析...`
+            ).catch(() => {});
+        } catch (err: any) {
+            console.error(`[URL Error] ${err.message}`);
+            await this.bot.telegram.editMessageText(
+                chatId, statusMsg.message_id, undefined,
+                `⚠️ 页面抓取失败: ${err.message}`
+            ).catch(() => {});
+            return;
+        }
+
+        // Build prompt: if user added a question alongside the URL use it, otherwise summarize
+        const userQuestion = rawText.replace(url, '').trim();
+        const question = userQuestion
+            ? `${userQuestion}\n\n[网页内容 - ${url}]:\n${pageText}`
+            : `请对以下网页内容进行摘要，提炼核心观点和要点。\n\n[网页内容 - ${url}]:\n${pageText}`;
+
+        const task: Task = { chatId, question, userName, messageId };
+        await messageQueue.enqueue(task, async (t) => {
+            try {
+                await this.processTask(t);
+            } finally {
+                await this.bot.telegram.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+            }
+        });
+    }
+
+    /**
+     * Fetch URL content, strip HTML to plain text, save as .md to web-cache/.
+     * Returns the plain text and the saved file path.
+     */
+    private async fetchAndSaveUrl(url: string): Promise<{ text: string; savedPath: string }> {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+
+        let html: string;
+        try {
+            const res = await fetch(url, {
+                signal: controller.signal,
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent/2.0)' },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            html = await res.text();
+        } finally {
+            clearTimeout(timeout);
+        }
+
+        // Strip HTML to readable plain text
+        const plainText = html
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+
+        // Truncate to ~20k chars to stay within context limits
+        const truncated = plainText.length > 20000
+            ? plainText.slice(0, 20000) + '\n\n[...内容过长，已截断至前 20000 字符]'
+            : plainText;
+
+        // Save to web-cache/YYYY-MM-DD/<sanitized-domain>_<timestamp>.md
+        const cacheDir = join(
+            process.env.GEMINI_WORK_DIR || process.cwd(),
+            'web-cache',
+            new Date().toISOString().slice(0, 10)
+        );
+        await fs.mkdir(cacheDir, { recursive: true });
+
+        const domain = new URL(url).hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${domain}_${Date.now()}.md`;
+        const savedPath = join(cacheDir, fileName);
+
+        const fileContent = `# ${url}\n\n> 抓取时间: ${new Date().toLocaleString('zh-CN')}\n\n${truncated}`;
+        await fs.writeFile(savedPath, fileContent, 'utf8');
+        console.log(`[URL] Saved to ${savedPath}`);
+
+        return { text: truncated, savedPath };
     }
 
     /**
@@ -493,74 +810,115 @@ class NeoAgentBot {
             await chatHistoryCache.addMessage('user', question, userName);
             const context = chatHistoryCache.getContextForGemini();
 
-            // Send placeholder message immediately — will be edited in-place as progress arrives
             const timestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             const extraArgs: any = messageId ? { reply_parameters: { message_id: messageId } } : {};
+
+            // Send placeholder — will become the first streaming message
             const placeholderMsg = await this.bot.telegram.sendMessage(
                 chatId, `⏳ NeoAgent (${timestamp})\n\n🤔 思考中...`, extraArgs
             );
-            const placeholderMsgId = placeholderMsg.message_id;
 
-            // Streaming state
-            let lastEditMs = 0;
+            // ── Streaming state ──────────────────────────────────────────────
             let thoughtAccum = '';
             let lastToolCall = '';
+            let textAccum = '';          // accumulated reply text so far
             let hasTextStarted = false;
 
-            const buildStatus = () => {
-                if (hasTextStarted) return `⏳ NeoAgent (${timestamp})\n\n✍️ 正在生成回复...`;
+            // The "active" message being edited live; may be replaced when chunk splits
+            let activeMsgId = placeholderMsg.message_id;
+            // char count already committed to previous messages (for overflow detection)
+            let committedChars = 0;
+
+            let lastEditMs = 0;
+            let pendingEdit = false;
+
+            const EDIT_INTERVAL_MS = 1200;  // Telegram rate-limit safe interval
+            const CHUNK_LIMIT = 3800;       // leave headroom for header
+
+            const header = () => `🤖 NeoAgent (${timestamp})\n\n`;
+
+            // Fire an editMessageText; silently ignore "message not modified" errors
+            const doEdit = (msgId: number, body: string) => {
+                const now = Date.now();
+                if (now - lastEditMs < EDIT_INTERVAL_MS) {
+                    pendingEdit = true;
+                    return;
+                }
+                lastEditMs = now;
+                pendingEdit = false;
+                this.bot.telegram.editMessageText(chatId, msgId, undefined, body)
+                    .catch(() => {});
+            };
+
+            const buildThinkingStatus = () => {
                 const parts: string[] = [`⏳ NeoAgent (${timestamp})`];
                 if (lastToolCall) parts.push(`🔧 调用工具: ${lastToolCall}`);
                 const thought = thoughtAccum.trim().replace(/\n+/g, ' ');
-                parts.push(thought.length > 100 ? '...' + thought.slice(-100) : (thought || '🤔 思考中...'));
+                parts.push(thought.length > 120 ? '...' + thought.slice(-120) : (thought || '🤔 思考中...'));
                 return parts.join('\n\n');
             };
 
-            const tryEdit = () => {
-                const now = Date.now();
-                if (now - lastEditMs < 1500) return;
-                lastEditMs = now;
-                this.bot.telegram.editMessageText(chatId, placeholderMsgId, undefined, buildStatus())
-                    .catch(() => { });
-            };
-
-            const responseText = await geminiClient.chatWithContextStreaming(question, context, (chunk) => {
+            // ── Chunk handler ────────────────────────────────────────────────
+            const onChunk = async (chunk: import('./lib/gemini-client.js').StreamChunk) => {
                 if (chunk.type === 'thought') {
                     thoughtAccum += chunk.text;
-                    tryEdit();
+                    if (!hasTextStarted) doEdit(activeMsgId, buildThinkingStatus());
+
                 } else if (chunk.type === 'tool_call') {
                     lastToolCall = chunk.toolName;
-                    tryEdit();
-                } else if (chunk.type === 'text' && !hasTextStarted) {
-                    hasTextStarted = true;
-                    tryEdit();
-                }
-            });
+                    if (!hasTextStarted) doEdit(activeMsgId, buildThinkingStatus());
 
+                } else if (chunk.type === 'text') {
+                    hasTextStarted = true;
+                    textAccum += chunk.text;
+
+                    // Check if current slice for this message would overflow
+                    const slice = textAccum.slice(committedChars);
+                    if (slice.length > CHUNK_LIMIT) {
+                        // Seal current message at the last newline boundary
+                        const cutAt = slice.lastIndexOf('\n', CHUNK_LIMIT) > 0
+                            ? slice.lastIndexOf('\n', CHUNK_LIMIT)
+                            : CHUNK_LIMIT;
+                        const sealed = slice.slice(0, cutAt);
+                        await this.bot.telegram.editMessageText(
+                            chatId, activeMsgId, undefined, header() + markdownToTelegram(sealed)
+                        ).catch(() => {});
+
+                        committedChars += cutAt;
+                        // Start a new message for the overflow
+                        const newMsg = await this.bot.telegram.sendMessage(
+                            chatId, `⏳ NeoAgent (${timestamp})\n\n✍️ 续...`
+                        );
+                        activeMsgId = newMsg.message_id;
+                        lastEditMs = 0;
+                    } else {
+                        doEdit(activeMsgId, header() + markdownToTelegram(slice));
+                    }
+                }
+            };
+
+            const responseText = await geminiClient.chatWithContextStreaming(question, context, onChunk);
+
+            // ── Final flush ──────────────────────────────────────────────────
             if (!responseText) {
-                await this.bot.telegram.editMessageText(chatId, placeholderMsgId, undefined, '⚠️ Failed to generate response.').catch(() => { });
+                await this.bot.telegram.editMessageText(chatId, activeMsgId, undefined, '⚠️ Failed to generate response.').catch(() => {});
                 return;
             }
 
             await chatHistoryCache.addMessage('assistant', responseText);
 
-            // Replace placeholder with final formatted answer
             const finalTimestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-            const telegramText = markdownToTelegram(responseText);
-            const finalText = `🤖 NeoAgent (${finalTimestamp})\n\n${telegramText}`;
-            const chunks = this.splitMessage(finalText, 4000);
+            const fullFormatted = markdownToTelegram(responseText);
+            const finalSlice = fullFormatted.slice(
+                markdownToTelegram(responseText.slice(0, committedChars)).length
+            );
 
-            if (chunks.length === 1) {
-                await this.bot.telegram.editMessageText(chatId, placeholderMsgId, undefined, finalText)
-                    .catch(async () => {
-                        // Fallback: if edit fails (e.g. message too old), send new message
-                        await this.sendReply(chatId, responseText, 2, messageId);
-                    });
-            } else {
-                // Response too long to fit in one edit — delete placeholder and send chunked
-                await this.bot.telegram.deleteMessage(chatId, placeholderMsgId).catch(() => { });
-                await this.sendReply(chatId, responseText, 2, messageId);
-            }
+            // Edit the last active message with whatever remains
+            const finalBody = `🤖 NeoAgent (${finalTimestamp})\n\n${finalSlice || fullFormatted}`;
+            await this.bot.telegram.editMessageText(chatId, activeMsgId, undefined, finalBody)
+                .catch(async () => {
+                    await this.sendReply(chatId, responseText, 2, messageId);
+                });
 
         } catch (error) {
             console.error(`[Worker Error] ${error}`);
@@ -665,8 +1023,10 @@ class NeoAgentBot {
                     '这是一个极简的全能代理网关。发送任何消息，远端的 Gemini CLI 将接管思考过程。\n\n' +
                     '`/clear`  — 清空上下文对话历史\n' +
                     '`/newsession` — 开启新会话\n' +
-                    '`/async` 或 `/research` — 提交后台长任务 (不会阻塞后续对话)\n' +
-                    '`/stats`  — 查看会话统计数据',
+                    '`/stats`  — 查看会话统计数据\n' +
+                    '`/tasks`  — 查看所有后台任务状态\n' +
+                    '`/cancel <id>` — 取消某个任务\n' +
+                    '`/async` 或 `/research` — 提交后台长任务 (不会阻塞后续对话)',
                     { parse_mode: 'Markdown' }
                 );
                 break;
@@ -692,6 +1052,85 @@ class NeoAgentBot {
                 break;
             }
 
+            case '/tasks': {
+                const all = asyncTaskManager.getAllTasks();
+                if (all.length === 0) {
+                    await ctx.reply('📋 暂无任务记录。');
+                    break;
+                }
+                const STATUS_EMOJI: Record<string, string> = {
+                    pending: '⏳',
+                    running: '🔄',
+                    completed: '✅',
+                    failed: '❌',
+                };
+                const lines = all.slice(0, 20).map(t => {
+                    const emoji = STATUS_EMOJI[t.status] ?? '❓';
+                    const time = new Date(t.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                    const prompt = t.prompt.length > 40 ? t.prompt.slice(0, 40) + '...' : t.prompt;
+                    return `${emoji} \`#${t.id}\` [${time}]\n   ${prompt}`;
+                });
+                await ctx.reply(
+                    `📋 **任务列表** (最近 ${lines.length} 条)\n\n` + lines.join('\n\n'),
+                    { parse_mode: 'Markdown' }
+                );
+                break;
+            }
+
+            case '/cancel': {
+                const taskId = text.split(' ')[1]?.replace(/^#/, '').trim();
+                if (!taskId) {
+                    await ctx.reply('用法: `/cancel <任务ID>`', { parse_mode: 'Markdown' });
+                    break;
+                }
+                const cancelled = await asyncTaskManager.cancelTask(taskId);
+                if (cancelled) {
+                    await ctx.reply(`✅ 任务 \`#${taskId}\` 已取消。`, { parse_mode: 'Markdown' });
+                } else {
+                    const task = asyncTaskManager.getTask(taskId);
+                    if (!task) {
+                        await ctx.reply(`❌ 未找到任务 \`#${taskId}\`。`, { parse_mode: 'Markdown' });
+                    } else {
+                        await ctx.reply(`⚠️ 任务 \`#${taskId}\` 已是 ${task.status} 状态，无法取消。`, { parse_mode: 'Markdown' });
+                    }
+                }
+                break;
+            }
+
+            case '/reminders': {
+                const all = reminderManager.getAll();
+                if (all.length === 0) {
+                    await ctx.reply('📅 暂无活跃提醒。');
+                    break;
+                }
+                const lines = all.map(r => {
+                    const fireStr = new Date(r.fireAt).toLocaleString('zh-CN', {
+                        month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
+                    });
+                    return `⏰ \`${r.id}\` [${fireStr}]\n   ${r.content}`;
+                });
+                await ctx.reply(
+                    `📅 **活跃提醒 (${lines.length} 条)**\n\n` + lines.join('\n\n'),
+                    { parse_mode: 'Markdown' }
+                );
+                break;
+            }
+
+            case '/remindcancel': {
+                const remindId = text.split(' ')[1]?.replace(/^#/, '').trim();
+                if (!remindId) {
+                    await ctx.reply('用法: `/remindcancel <提醒ID>`', { parse_mode: 'Markdown' });
+                    break;
+                }
+                const ok = await reminderManager.cancel(remindId);
+                if (ok) {
+                    await ctx.reply(`✅ 提醒 \`#${remindId}\` 已取消。`, { parse_mode: 'Markdown' });
+                } else {
+                    await ctx.reply(`❌ 未找到提醒 \`#${remindId}\`。`, { parse_mode: 'Markdown' });
+                }
+                break;
+            }
+
             default:
                 await ctx.reply('Unknown command. Try /start for help.');
         }
@@ -703,6 +1142,20 @@ class NeoAgentBot {
     run() {
         console.log(`🤖 Bot started. Auth Chat ID: ${AUTHORIZED_CHAT_ID || 'ALL'}`);
         console.log(`🛠  Gemini CLI enabled: ${geminiClient.isEnabled()}`);
+
+        // Register command menu with Telegram
+        this.bot.telegram.setMyCommands([
+            { command: 'start',        description: '查看帮助与所有命令' },
+            { command: 'clear',        description: '清空当前对话历史' },
+            { command: 'newsession',   description: '开启新会话' },
+            { command: 'stats',        description: '查看会话统计' },
+            { command: 'tasks',        description: '查看所有后台任务状态' },
+            { command: 'cancel',       description: '取消某个任务 /cancel <id>' },
+            { command: 'reminders',    description: '查看所有提醒' },
+            { command: 'remindcancel', description: '取消提醒 /remindcancel <id>' },
+            { command: 'research',     description: '提交深度调研任务' },
+        ]).then(() => console.log('[System] Bot commands registered.'))
+          .catch(err => console.error('[System] Failed to register commands:', err));
 
         if (AUTHORIZED_CHAT_ID) {
             const timeStr = new Date().toLocaleString('zh-CN');
@@ -718,11 +1171,12 @@ class NeoAgentBot {
         this.bot.launch();
 
         // Enable graceful stop
-        process.once('SIGINT', () => { geminiClient.close(); this.bot.stop('SIGINT'); });
-        process.once('SIGTERM', () => { geminiClient.close(); this.bot.stop('SIGTERM'); });
+        process.once('SIGINT', () => { reminderManager.destroy(); geminiClient.close(); this.bot.stop('SIGINT'); });
+        process.once('SIGTERM', () => { reminderManager.destroy(); geminiClient.close(); this.bot.stop('SIGTERM'); });
     }
 }
 
 // Start the bot
 const bot = new NeoAgentBot(BOT_TOKEN);
+await bot.init();
 bot.run();
