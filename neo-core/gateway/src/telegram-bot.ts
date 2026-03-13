@@ -15,6 +15,7 @@ import { MessageQueue } from './lib/message-queue.js';
 import { ReminderManager, parseReminderTime } from './lib/reminder-manager.js';
 import { ScheduledTaskManager, parseScheduledTask } from './lib/scheduled-task-manager.js';
 import { UserProfileManager } from './lib/user-profile.js';
+import { setupSkills } from './lib/skills.js';
 import cron from 'node-cron';
 
 
@@ -40,11 +41,8 @@ if (!AUTHORIZED_CHAT_ID) {
     process.exit(1);
 }
 
-// Pre-flight: Clean up orphaned gemini processes to avoid pipe blockage
-try {
-    // Use a temporary direct execa call since geminiClient isn't ready
-    await execa('pkill', ['-f', 'gemini --experimental-acp']).catch(() => { });
-} catch (e) { }
+// Register pluggable skills (fetch_url, search_web, get_weather, http_request, get_datetime)
+setupSkills();
 
 // Initialize Gemini client
 const geminiClient = new GeminiClient();
@@ -78,6 +76,12 @@ interface Task {
     question: string;
     userName: string;
     messageId: number;
+    /** Local path to a downloaded image — read as base64 inline in processTask. */
+    imagePath?: string;
+    imageMimeType?: string;
+    /** Gemini File API URI for already-uploaded binary files (PDF, audio, video). */
+    fileUri?: string;
+    fileMimeType?: string;
 }
 
 class NeoAgentBot {
@@ -471,9 +475,11 @@ ${transcript}
     }
 
     /**
-     * Handle incoming document messages (PDF, TXT, MD, DOCX, code files, etc.)
-     * - Plain text files: read directly as text and embed in prompt
-     * - PDF / binary: upload to Gemini File API for native understanding
+     * Handle incoming document messages.
+     * - Plain text / code: read directly
+     * - Spreadsheets (.numbers/.xlsx/.xls/.ods): convert to CSV via system tools
+     * - Gemini-native binary (PDF, images, audio, video): upload to File API → fileData
+     * - Other unsupported binary: reject with helpful message
      */
     private async processDocumentMessage(ctx: any) {
         const chatId = ctx.chat.id;
@@ -493,7 +499,6 @@ ${transcript}
 
         console.log(`[Document] From ${userName}: ${fileName} (${mimeType}, ${fileSizeBytes} bytes)`);
 
-        // Telegram Bot API free tier limit: 20 MB
         if (fileSizeBytes > 20 * 1024 * 1024) {
             await ctx.reply('⚠️ 文件超过 20MB，暂不支持。');
             return;
@@ -519,30 +524,85 @@ ${transcript}
             return;
         }
 
-        let question: string;
+        const ext = fileName.includes('.') ? fileName.slice(fileName.lastIndexOf('.')).toLowerCase() : '';
 
-        // Plain-text types: read directly, no File API needed
+        // ── Category 1: Plain text / code ─────────────────────────────────────
         const TEXT_MIME_PREFIXES = ['text/'];
-        const TEXT_EXTENSIONS = ['.md', '.txt', '.csv', '.json', '.yaml', '.yml', '.xml',
-                                  '.ts', '.js', '.py', '.java', '.go', '.rs', '.sh'];
-        const ext = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
-        const isPlainText = TEXT_MIME_PREFIXES.some(p => mimeType.startsWith(p)) || TEXT_EXTENSIONS.includes(ext);
+        const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.csv', '.json', '.yaml', '.yml',
+            '.xml', '.ts', '.js', '.py', '.java', '.go', '.rs', '.sh', '.toml', '.ini',
+            '.html', '.htm', '.css', '.sql', '.r', '.swift', '.kt', '.rb', '.php']);
+        const isPlainText = TEXT_MIME_PREFIXES.some(p => mimeType.startsWith(p)) || TEXT_EXTENSIONS.has(ext);
+
+        // ── Category 2: Spreadsheets needing conversion ───────────────────────
+        const SPREADSHEET_EXTENSIONS = new Set(['.numbers', '.xlsx', '.xls', '.ods', '.xlsm']);
+        const isSpreadsheet = SPREADSHEET_EXTENSIONS.has(ext);
+
+        // ── Category 3: Gemini File API natively supported binary ─────────────
+        const GEMINI_NATIVE_MIMES = new Set([
+            'application/pdf',
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif',
+            'image/webp', 'image/heic', 'image/heif',
+            'audio/wav', 'audio/mp3', 'audio/mpeg', 'audio/aiff',
+            'audio/aac', 'audio/ogg', 'audio/flac',
+            'video/mp4', 'video/mpeg', 'video/mov', 'video/quicktime',
+            'video/avi', 'video/webm', 'video/wmv', 'video/3gpp',
+        ]);
+        const isGeminiNative = GEMINI_NATIVE_MIMES.has(mimeType);
+
+        let question: string;
+        let fileUri: string | undefined;
+        let fileMimeType: string | undefined;
 
         try {
             if (isPlainText) {
                 const content = await fs.readFile(tmpPath, 'utf8');
-                const truncated = content.length > 30000 ? content.slice(0, 30000) + '\n\n[...内容过长，已截断至前 30000 字符]' : content;
+                const truncated = content.length > 30000
+                    ? content.slice(0, 30000) + '\n\n[...内容过长，已截断至前 30000 字符]'
+                    : content;
                 question = caption
                     ? `${caption}\n\n[文件名: ${fileName}]\n\`\`\`\n${truncated}\n\`\`\``
                     : `请分析以下文件内容并给出总结或见解。\n\n[文件名: ${fileName}]\n\`\`\`\n${truncated}\n\`\`\``;
-            } else {
-                // Binary / PDF: upload via Gemini File API
-                const fileUri = await this.uploadToGeminiFileApi(tmpPath, mimeType);
+
+            } else if (isSpreadsheet) {
+                await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                    `📊 正在转换表格内容...`).catch(() => {});
+                const csvText = await this.convertSpreadsheetToText(tmpPath, ext);
+                if (!csvText) {
+                    await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                        `⚠️ 无法解析 **${ext}** 格式。\n\n` +
+                        `**解决方法：**\n` +
+                        `• 在 Numbers / Excel 中选「文件 → 导出 → CSV」\n` +
+                        `• 重新上传 **.csv** 文件\n\n` +
+                        `如已安装 LibreOffice，请确保 \`soffice\` 命令可用。`,
+                        { parse_mode: 'Markdown' }
+                    ).catch(() => {});
+                    await fs.unlink(tmpPath).catch(() => {});
+                    return;
+                }
+                const truncated = csvText.length > 30000
+                    ? csvText.slice(0, 30000) + '\n\n[...内容过长，已截断]'
+                    : csvText;
+                question = caption
+                    ? `${caption}\n\n[表格文件: ${fileName}]\n\`\`\`csv\n${truncated}\n\`\`\``
+                    : `请分析下表格数据并给出总结。\n\n[表格文件: ${fileName}]\n\`\`\`csv\n${truncated}\n\`\`\``;
+
+            } else if (isGeminiNative) {
+                await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                    `📄 正在上传文件...`).catch(() => {});
+                fileUri = await this.uploadToGeminiFileApi(tmpPath, mimeType);
+                fileMimeType = mimeType;
+                question = caption || `请分析这份文件并给出详细总结。[文件名: ${fileName}]`;
                 await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
                     `📄 文件已上传，正在分析...`).catch(() => {});
-                question = caption
-                    ? `${caption}\n\n[用户上传了文件: ${fileName}，fileUri: ${fileUri}，mimeType: ${mimeType}，请结合文件内容回答。]`
-                    : `请分析以下文件并给出详细总结。\n\n[文件名: ${fileName}，fileUri: ${fileUri}，mimeType: ${mimeType}]`;
+
+            } else {
+                const supported = 'PDF · 图片(JPG/PNG/WebP/HEIC) · 音频(MP3/WAV/OGG) · 视频(MP4/MOV)\n文本/代码(TXT/MD/CSV/JSON/...) · 表格(Numbers/Excel → 导出为 CSV)';
+                await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                    `⚠️ 暂不支持 **${ext || mimeType}** 格式。\n\n**支持的格式:**\n${supported}`,
+                    { parse_mode: 'Markdown' }
+                ).catch(() => {});
+                await fs.unlink(tmpPath).catch(() => {});
+                return;
             }
         } catch (err: any) {
             console.error(`[Document Error] Processing failed: ${err.message}`);
@@ -552,7 +612,7 @@ ${transcript}
             return;
         }
 
-        const task: Task = { chatId, question, userName, messageId };
+        const task: Task = { chatId, question, userName, messageId, fileUri, fileMimeType };
         await messageQueue.enqueue(task, async (t) => {
             try {
                 await this.processTask(t);
@@ -561,6 +621,73 @@ ${transcript}
                 await fs.unlink(tmpPath).catch(() => {});
             }
         });
+    }
+
+    /**
+     * Try to convert a spreadsheet file to CSV text using available system tools.
+     * Tries (in order): soffice (LibreOffice), python3+openpyxl, python3 zip extraction.
+     * Returns null if all methods fail.
+     */
+    private async convertSpreadsheetToText(filePath: string, ext: string): Promise<string | null> {
+        const outDir = join(filePath, '..');
+
+        // Method 1: LibreOffice (handles .numbers, .xlsx, .xls, .ods)
+        try {
+            await execa('soffice', ['--headless', '--convert-to', 'csv', '--outdir', outDir, filePath], { timeout: 30_000 });
+            const csvPath = filePath.replace(/\.[^.]+$/, '.csv');
+            const csv = await fs.readFile(csvPath, 'utf8');
+            await fs.unlink(csvPath).catch(() => {});
+            console.log(`[Document] Converted ${ext} → CSV via soffice (${csv.length} chars)`);
+            return csv;
+        } catch {
+            console.log(`[Document] soffice not available or failed for ${ext}`);
+        }
+
+        // Method 2: python3 + openpyxl (xlsx/xls only)
+        if (['.xlsx', '.xls', '.xlsm'].includes(ext)) {
+            try {
+                const script = [
+                    'import openpyxl, sys',
+                    `wb = openpyxl.load_workbook(r'${filePath}', read_only=True, data_only=True)`,
+                    'out = []',
+                    'for name in wb.sheetnames:',
+                    '    ws = wb[name]',
+                    '    out.append(f"## Sheet: {name}")',
+                    '    for row in ws.iter_rows(values_only=True):',
+                    '        out.append(",".join("" if v is None else str(v).replace(",",";") for v in row))',
+                    'print("\\n".join(out))',
+                ].join('\n');
+                const { stdout } = await execa('python3', ['-c', script], { timeout: 30_000 });
+                if (stdout.trim()) {
+                    console.log(`[Document] Converted ${ext} → CSV via python3+openpyxl`);
+                    return stdout;
+                }
+            } catch {
+                console.log('[Document] python3+openpyxl not available or failed');
+            }
+        }
+
+        // Method 3: python3 zip extraction (.numbers sometimes embeds CSV sheets)
+        if (ext === '.numbers') {
+            try {
+                const script = [
+                    'import zipfile, sys',
+                    `zf = zipfile.ZipFile(r'${filePath}')`,
+                    'names = [n for n in zf.namelist() if n.lower().endswith(".csv")]',
+                    'if not names: sys.exit(1)',
+                    'print("\\n\\n".join(zf.read(n).decode("utf-8", errors="replace") for n in names[:5]))',
+                ].join('\n');
+                const { stdout } = await execa('python3', ['-c', script], { timeout: 15_000 });
+                if (stdout.trim()) {
+                    console.log('[Document] Extracted CSV sheets from .numbers zip');
+                    return stdout;
+                }
+            } catch {
+                console.log('[Document] .numbers zip extraction found no embedded CSV');
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -629,10 +756,10 @@ ${transcript}
         }
 
         const question = caption
-            ? `${caption}\n\n[用户附上了一张图片，文件路径: ${tmpPath}，请结合图片内容回答。]`
-            : `[用户发送了一张图片，文件路径: ${tmpPath}，请分析并详细描述这张图片的内容。]`;
+            ? caption
+            : '请分析并详细描述这张图片的内容。';
 
-        const task: Task = { chatId, question, userName, messageId };
+        const task: Task = { chatId, question, userName, messageId, imagePath: tmpPath, imageMimeType: 'image/jpeg' };
         await messageQueue.enqueue(task, async (t) => {
             try {
                 await this.processTask(t);
@@ -1116,7 +1243,23 @@ ${transcript}
                 }
             };
 
-            const responseText = await geminiClient.chatWithContextStreaming(question, context, onChunk);
+            const responseText = task.imagePath && task.imageMimeType
+                ? await (async () => {
+                    const imageData = await fs.readFile(task.imagePath!);
+                    const imageInput: import('./lib/gemini-client.js').ImageInput = {
+                        type: 'inline',
+                        mimeType: task.imageMimeType!,
+                        data: imageData.toString('base64'),
+                    };
+                    return geminiClient.chatWithContextStreamingWithImage(question, context, imageInput, onChunk);
+                })()
+                : task.fileUri && task.fileMimeType
+                ? await geminiClient.chatWithContextStreamingWithFile(
+                    question, context,
+                    { type: 'fileUri', mimeType: task.fileMimeType, fileUri: task.fileUri },
+                    onChunk
+                  )
+                : await geminiClient.chatWithContextStreaming(question, context, onChunk);
 
             // ── Final flush ──────────────────────────────────────────────────
             if (!responseText) {
@@ -1135,7 +1278,11 @@ ${transcript}
             // Edit the last active message with whatever remains
             const finalBody = `🤖 NeoAgent (${finalTimestamp})\n\n${finalSlice || fullFormatted}`;
             await this.bot.telegram.editMessageText(chatId, activeMsgId, undefined, finalBody)
-                .catch(async () => {
+                .catch(async (err: any) => {
+                    // Telegram returns "message is not modified" when the streaming already
+                    // pushed identical content — this is not a real error, skip silently.
+                    const desc: string = err?.description ?? err?.message ?? '';
+                    if (desc.includes('message is not modified')) return;
                     await this.sendReply(chatId, responseText, 2, messageId);
                 });
 
@@ -1469,7 +1616,7 @@ ${transcript}
                 AUTHORIZED_CHAT_ID,
                 `🤖 **NeoAgent Gateway** 已于 ${timeStr} 启动/重启。\n` +
                 `✅ 网关已上线\n` +
-                `✅ 引擎状态: gemini-3-flash-preview via ACP`,
+                `✅ 引擎状态: ${process.env.GEMINI_MODEL ?? 'gemini-2.0-flash'} (Direct API + Agentic Loop)`,
                 { parse_mode: 'Markdown' }
             ).catch(err => console.error('[Startup Message Failed]', err));
         }

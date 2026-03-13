@@ -1,249 +1,599 @@
-import { config } from 'dotenv';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { AcpClient, JSONRPCNotification, StreamChunk, StreamCallback } from './acp-client.js';
+/**
+ * gemini-client.ts — Self-contained Agent Runtime
+ *
+ * Replaces the gemini-cli ACP dependency with a direct Gemini REST API call +
+ * agentic function-calling loop. No new npm packages required (uses native fetch).
+ *
+ * Same exported interface as before — telegram-bot.ts requires zero changes.
+ *
+ * Built-in tools available to the model:
+ *   bash       — execute shell commands in workDir
+ *   read_file  — read file contents
+ *   write_file — write / create files
+ *   list_dir   — list directory contents
+ */
 
-export type { StreamChunk, StreamCallback } from './acp-client.js';
+import { config } from 'dotenv';
+import { join, dirname, isAbsolute } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promises as fs } from 'node:fs';
+import { execa } from 'execa';
 import { setupLogger } from './logger.js';
 
-// Initialize Logger
 setupLogger();
 
-// Load environment variables relative to the library regardless of execution directory
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 config({ path: join(__dirname, '../../.env') });
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
-const GEMINI_WORK_DIR = process.env.GEMINI_WORK_DIR; // Required working directory for context
+// ── Types (kept for backward compat with telegram-bot.ts) ────────────────────
 
-// ==================== GeminiClient (ACP CLI Thin Wrapper) ====================
+export type StreamChunk =
+    | { type: 'thought'; text: string }
+    | { type: 'tool_call'; toolName: string }
+    | { type: 'text'; text: string };
 
-export class GeminiClient {
-    private enabled: boolean = false;
-    private workDir?: string;
-    private acpClient?: AcpClient;
-    private initializationPromise?: Promise<void>;
+export type StreamCallback = (chunk: StreamChunk) => void;
 
-    constructor() {
-        this.workDir = GEMINI_WORK_DIR;
+// Kept so existing callers (chatAsyncWithContext signature) still compile.
+export interface JSONRPCNotification {
+    jsonrpc: '2.0';
+    method: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    params?: any;
+}
 
-        if (this.workDir) {
-            this.enabled = true;
-            console.log(`[Gemini SDK] ✅ Initialized natively via ACP CLI.`);
-            console.log(`[Gemini SDK] 📂 Working directory: ${this.workDir}`);
+// ── Gemini REST API types ─────────────────────────────────────────────────────
 
-            this.acpClient = new AcpClient(this.workDir, GEMINI_MODEL);
-            this.initializationPromise = this.acpClient.start();
-        } else {
-            console.log('[Gemini SDK] ❌ Disabled. Missing GEMINI_WORK_DIR in .env');
-        }
-    }
+type GeminiPart =
+    | { text: string; thought?: boolean }
+    | { functionCall: { name: string; args: Record<string, unknown> } }
+    | { functionResponse: { name: string; response: Record<string, unknown> } }
+    | { inlineData: { mimeType: string; data: string } }
+    | { fileData: { mimeType: string; fileUri: string } };
 
-    /**
-     * Call SDK to generate a response via ACP Client.
-     * Delegates pure context generation to the underlying CLI instance logic.
-     */
-    async generateResponse(prompt: string, history?: string, onChunk?: StreamCallback): Promise<string | null> {
-        if (!this.enabled || !this.acpClient) return null;
+/** Image payload passed to the agent for vision tasks. */
+export type ImageInput =
+    | { type: 'inline'; mimeType: string; data: string }       // base64
+    | { type: 'fileUri'; mimeType: string; fileUri: string };  // Gemini File API
 
-        // Try to ensure initialization/restart
-        try {
-            await this.initializationPromise;
-        } catch (e) {
-            console.error('[Gemini SDK] 🔄 Initialization failed, attempting restart...');
-            this.initializationPromise = this.acpClient.start();
-            await this.initializationPromise;
-        }
+/** Generic file attachment — same structure as ImageInput, covers PDF/audio/video too. */
+export type FileInput = ImageInput;
 
-        // If the process is gone, restart it
-        if (!this.acpClient.isAlive()) {
-            console.log('[Gemini SDK] 🔄 ACP Process missing, restarting...');
-            this.initializationPromise = this.acpClient.start();
-            await this.initializationPromise;
-        }
+interface GeminiContent {
+    role: 'user' | 'model';
+    parts: GeminiPart[];
+}
 
-        const maxRetries = 2;
-        let attempt = 0;
+interface FunctionDeclaration {
+    name: string;
+    description: string;
+    parameters: {
+        type: string;
+        properties: Record<string, { type: string; description: string }>;
+        required?: string[];
+    };
+}
 
-        while (attempt <= maxRetries) {
-            try {
-                // Base system variables (Dynamic context only, static behavior rules are in system/GEMINI.md)
-                let finalPrompt = `[Runtime Context]\n- Current Time: ${new Date().toLocaleString('zh-CN')}\n\n`;
+// ── Skill registry ────────────────────────────────────────────────────────────
 
-                if (history && history.trim()) {
-                    finalPrompt += `[Previous Conversation History]\n${history}\n\n`;
+export interface Skill {
+    declaration: FunctionDeclaration;
+    handler: (args: Record<string, unknown>, workDir: string) => Promise<string>;
+}
+
+const skillRegistry = new Map<string, Skill>();
+
+export function registerSkill(skill: Skill): void {
+    skillRegistry.set(skill.declaration.name, skill);
+    console.log(`[AgentRuntime] 🔧 Skill registered: ${skill.declaration.name}`);
+}
+
+// ── Built-in tool declarations ────────────────────────────────────────────────
+
+const TOOL_DECLARATIONS: FunctionDeclaration[] = [
+    {
+        name: 'bash',
+        description:
+            'Execute a shell command in the working directory. ' +
+            'Use for file search, running scripts, git operations, web requests, etc.',
+        parameters: {
+            type: 'object',
+            properties: {
+                command: { type: 'string', description: 'Shell command to execute' },
+                timeout_ms: {
+                    type: 'number',
+                    description: 'Timeout in milliseconds (default 30000, max 120000)',
+                },
+            },
+            required: ['command'],
+        },
+    },
+    {
+        name: 'read_file',
+        description: 'Read the text contents of a file.',
+        parameters: {
+            type: 'object',
+            properties: {
+                path: {
+                    type: 'string',
+                    description: 'Absolute path, or path relative to the working directory',
+                },
+            },
+            required: ['path'],
+        },
+    },
+    {
+        name: 'write_file',
+        description: 'Write text content to a file, creating parent directories as needed.',
+        parameters: {
+            type: 'object',
+            properties: {
+                path: { type: 'string', description: 'File path (absolute or relative to workDir)' },
+                content: { type: 'string', description: 'Text content to write' },
+            },
+            required: ['path', 'content'],
+        },
+    },
+    {
+        name: 'list_dir',
+        description: 'List the contents of a directory (directories shown first with trailing /).',
+        parameters: {
+            type: 'object',
+            properties: {
+                path: { type: 'string', description: 'Directory path (default: working directory)' },
+            },
+        },
+    },
+];
+
+// ── Tool execution ────────────────────────────────────────────────────────────
+
+async function executeTool(
+    name: string,
+    args: Record<string, unknown>,
+    workDir: string,
+): Promise<string> {
+    console.log(`[AgentRuntime] Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
+    try {
+        switch (name) {
+            case 'bash': {
+                const command = String(args.command ?? '');
+                const timeoutMs = Math.min(Number(args.timeout_ms ?? 30_000), 120_000);
+                const proc = await execa('sh', ['-c', command], {
+                    cwd: workDir,
+                    timeout: timeoutMs,
+                    reject: false,
+                    all: true,
+                });
+                const out = [
+                    proc.stdout?.trim(),
+                    proc.stderr?.trim() ? `[stderr]\n${proc.stderr.trim()}` : '',
+                ]
+                    .filter(Boolean)
+                    .join('\n')
+                    .trim();
+                return out || '(no output)';
+            }
+
+            case 'read_file': {
+                const filePath = String(args.path ?? '');
+                const resolved = isAbsolute(filePath) ? filePath : join(workDir, filePath);
+                const content = await fs.readFile(resolved, 'utf8');
+                // Guard against enormous files flooding the context window
+                const LIMIT = 50_000;
+                if (content.length > LIMIT) {
+                    return (
+                        content.slice(0, LIMIT) +
+                        `\n\n[...truncated: ${content.length - LIMIT} additional chars omitted]`
+                    );
                 }
-                finalPrompt += `[New Message]\n${prompt}`;
+                return content;
+            }
 
-                console.log(`[Gemini SDK] Sending request via ACP to ${GEMINI_MODEL} (Attempt ${attempt + 1})`);
-                const startTime = Date.now();
+            case 'write_file': {
+                const filePath = String(args.path ?? '');
+                const content = String(args.content ?? '');
+                const resolved = isAbsolute(filePath) ? filePath : join(workDir, filePath);
+                await fs.mkdir(dirname(resolved), { recursive: true });
+                await fs.writeFile(resolved, content, 'utf8');
+                return `OK: wrote ${content.length} chars to ${resolved}`;
+            }
 
-                const currentResponseText = await this.acpClient.prompt(finalPrompt, onChunk);
+            case 'list_dir': {
+                const dirPath = String(args.path ?? '.');
+                const resolved = isAbsolute(dirPath) ? dirPath : join(workDir, dirPath);
+                const entries = await fs.readdir(resolved, { withFileTypes: true });
+                const sorted = entries.sort((a, b) => {
+                    if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+                    return a.name.localeCompare(b.name);
+                });
+                return sorted.map(e => (e.isDirectory() ? `${e.name}/` : e.name)).join('\n');
+            }
 
-                const ms = Date.now() - startTime;
-                console.log(`[Gemini SDK] ✅ Received final response via ACP in ${ms}ms`);
-
-                return currentResponseText;
-            } catch (error: any) {
-                attempt++;
-                console.error(`[Gemini SDK Error] Attempt ${attempt} failed:`, error.message || error);
-
-                if (attempt <= maxRetries && (error.message?.includes('exited') || error.message?.includes('close'))) {
-                    console.log('[Gemini SDK] 🔄 Connection lost, attempting to reconnect for retry...');
-                    this.initializationPromise = this.acpClient.start();
-                    await this.initializationPromise;
-                    continue;
-                }
-
-                if (error instanceof Error) {
-                    return `🔥 System Error (ACP): ${error.message}`;
-                }
-                return '🔥 Unknown ACP SDK error occurred';
+            default: {
+                const skill = skillRegistry.get(name);
+                if (skill) return skill.handler(args, workDir);
+                return `[Error] Unknown tool: ${name}`;
             }
         }
-        return '🔥 Max retries exceeded';
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[AgentRuntime] Tool error (${name}): ${msg}`);
+        return `[Error] ${name} failed: ${msg}`;
+    }
+}
+
+// ── Gemini SSE streaming ──────────────────────────────────────────────────────
+
+interface ApiChunk {
+    thought?: string;
+    text?: string;
+    functionCall?: { name: string; args: Record<string, unknown> };
+}
+
+/**
+ * Resolve internal model aliases to real Gemini API model names.
+ * (gemini-cli uses short aliases like "gemini-3-flash-preview")
+ */
+function resolveModel(model: string): string {
+    const ALIASES: Record<string, string> = {
+        // Short convenience aliases → real Gemini API model IDs
+        'flash':   'gemini-2.5-flash',
+        'pro':     'gemini-2.5-pro',
+        // Gemini 2.5 stable
+        'gemini-3-flash': 'gemini-2.5-flash',
+        'gemini-3-pro':   'gemini-2.5-pro',
+        // Gemini 2.5 preview — pass through unchanged (real API names)
+        'gemini-3-flash-preview': 'gemini-2.5-flash-preview',
+        'gemini-3-pro-preview':   'gemini-2.5-pro-preview',
+        // Legacy date-stamped previews kept for backward compat
+        'gemini-2.5-flash-preview-05-20': 'gemini-2.5-flash-preview',
+        'gemini-2.5-pro-preview-05-06':   'gemini-2.5-pro-preview',
+    };
+    return ALIASES[model] ?? model;
+}
+
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+
+async function* streamGeminiApi(
+    apiKey: string,
+    model: string,
+    systemInstruction: string,
+    contents: GeminiContent[],
+): AsyncGenerator<ApiChunk> {
+    const url = `${GEMINI_BASE}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+
+    const body: Record<string, unknown> = {
+        contents,
+        generationConfig: { temperature: 0.7 },
+        tools: [{ functionDeclarations: [...TOOL_DECLARATIONS, ...Array.from(skillRegistry.values()).map(s => s.declaration)] }],
+    };
+    if (systemInstruction) {
+        body.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
-    /**
-     * Spawn a fresh isolated AcpClient for a long-running async task.
-     * Each call gets its own gemini process — no shared session, no context pollution.
-     */
-    async generateAsyncResponse(
-        prompt: string,
-        onEvent: (msg: JSONRPCNotification) => { detach: boolean, result?: string }
-    ): Promise<string | null> {
-        if (!this.enabled || !this.workDir) return null;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
 
-        const ephemeralClient = new AcpClient(this.workDir, GEMINI_MODEL);
-        console.log(`[Gemini SDK] 🚀 Spawning ephemeral ACP client for async task...`);
+    if (!res.ok || !res.body) {
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Gemini API ${res.status}: ${errText.slice(0, 300)}`);
+    }
 
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith('data: ')) continue;
+                const data = trimmed.slice(6).trim();
+                if (!data || data === '[DONE]') continue;
+
+                try {
+                    const json = JSON.parse(data);
+
+                    // Surface any server-side error embedded in the stream
+                    if (json.error) {
+                        throw new Error(
+                            typeof json.error === 'object'
+                                ? (json.error.message ?? JSON.stringify(json.error))
+                                : String(json.error),
+                        );
+                    }
+
+                    const parts: Array<Record<string, unknown>> =
+                        json.candidates?.[0]?.content?.parts ?? [];
+
+                    for (const part of parts) {
+                        if (part.thought && typeof part.text === 'string') {
+                            yield { thought: part.text as string };
+                        } else if (part.functionCall) {
+                            const fc = part.functionCall as { name: string; args?: Record<string, unknown> };
+                            yield { functionCall: { name: fc.name, args: fc.args ?? {} } };
+                        } else if (typeof part.text === 'string' && part.text) {
+                            yield { text: part.text as string };
+                        }
+                    }
+                } catch (parseErr: unknown) {
+                    // Re-throw only real API errors; skip malformed SSE chunks
+                    const msg = parseErr instanceof Error ? parseErr.message : '';
+                    if (msg.startsWith('Gemini API')) throw parseErr;
+                }
+            }
+        }
+    } finally {
+        reader.releaseLock();
+    }
+}
+
+// ── Agentic loop ─────────────────────────────────────────────────────────────
+
+const MAX_TOOL_ITERATIONS = 15;
+
+async function agentLoop(
+    apiKey: string,
+    model: string,
+    systemInstruction: string,
+    initialContents: GeminiContent[],
+    workDir: string,
+    onChunk?: StreamCallback,
+    imageInput?: ImageInput,
+): Promise<string> {
+    // Inject image into the first user turn when provided
+    if (imageInput && initialContents.length > 0 && initialContents[0].role === 'user') {
+        const imagePart: GeminiPart =
+            imageInput.type === 'inline'
+                ? { inlineData: { mimeType: imageInput.mimeType, data: imageInput.data } }
+                : { fileData: { mimeType: imageInput.mimeType, fileUri: imageInput.fileUri } };
+        initialContents = [
+            { ...initialContents[0], parts: [...initialContents[0].parts, imagePart] },
+            ...initialContents.slice(1),
+        ];
+    }
+    const contents: GeminiContent[] = [...initialContents];
+    let finalText = '';
+
+    for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
+        const textParts: string[] = [];
+        const functionCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+
+        // Consume one full model turn from the streaming API
+        for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents)) {
+            if (chunk.thought) {
+                // Thinking tokens: stream immediately — always safe to show live
+                onChunk?.({ type: 'thought', text: chunk.thought });
+            } else if (chunk.functionCall) {
+                functionCalls.push(chunk.functionCall);
+            } else if (chunk.text) {
+                textParts.push(chunk.text);
+            }
+        }
+
+        const turnText = textParts.join('');
+
+        if (functionCalls.length === 0) {
+            // ── Final turn: no more tool calls ──────────────────────────────
+            finalText = turnText;
+            if (turnText) {
+                onChunk?.({ type: 'text', text: turnText });
+            }
+            break;
+        }
+
+        // ── Intermediate turn: model wants to call tools ─────────────────────
+        // Text before tool calls is "thinking aloud" — show as thought
+        if (turnText) {
+            onChunk?.({ type: 'thought', text: turnText });
+        }
+        for (const fc of functionCalls) {
+            onChunk?.({ type: 'tool_call', toolName: fc.name });
+        }
+
+        // Build model turn with text + function calls
+        const modelParts: GeminiPart[] = [];
+        if (turnText) modelParts.push({ text: turnText });
+        for (const fc of functionCalls) {
+            modelParts.push({ functionCall: { name: fc.name, args: fc.args } });
+        }
+        contents.push({ role: 'model', parts: modelParts });
+
+        // Execute all tools (parallel for speed)
+        const results = await Promise.all(
+            functionCalls.map(fc => executeTool(fc.name, fc.args, workDir)),
+        );
+
+        // Add function responses
+        contents.push({
+            role: 'user',
+            parts: functionCalls.map((fc, i) => ({
+                functionResponse: { name: fc.name, response: { output: results[i] } },
+            })),
+        });
+    }
+
+    return finalText;
+}
+
+// ── GeminiClient (same public interface as before) ────────────────────────────
+
+export class GeminiClient {
+    private enabled = false;
+    private apiKey = '';
+    private model = '';
+    private workDir = '';
+    private systemInstruction = '';
+
+    constructor() {
+        this.apiKey = process.env.GEMINI_API_KEY ?? '';
+        this.model = resolveModel(process.env.GEMINI_MODEL ?? 'gemini-2.0-flash');
+        this.workDir = process.env.GEMINI_WORK_DIR ?? '';
+
+        if (!this.apiKey) {
+            console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
+            return;
+        }
+        if (!this.workDir) {
+            console.log('[AgentRuntime] ❌ Disabled: GEMINI_WORK_DIR not set');
+            return;
+        }
+
+        this.enabled = true;
+        console.log(`[AgentRuntime] ✅ Initialized. Model: ${this.model}`);
+        console.log(`[AgentRuntime] 📂 WorkDir: ${this.workDir}`);
+
+        // Load system instruction in the background (non-blocking)
+        this.loadSystemInstruction().then(si => {
+            this.systemInstruction = si;
+            if (si) {
+                console.log(`[AgentRuntime] 📜 GEMINI.md loaded (${si.length} chars)`);
+            } else {
+                console.log('[AgentRuntime] ⚠️  No GEMINI.md found in workDir');
+            }
+        }).catch(err => console.error('[AgentRuntime] Failed to load GEMINI.md:', err.message));
+    }
+
+    private async loadSystemInstruction(): Promise<string> {
+        const mdPath = join(this.workDir, 'GEMINI.md');
         try {
-            await ephemeralClient.start();
-
-            const finalPrompt = `[Runtime Context]\n- Current Time: ${new Date().toLocaleString('zh-CN')}\n\n[New Message]\n${prompt}`;
-
-            console.log(`[Gemini SDK] Sending ASYNC request via ephemeral ACP to ${GEMINI_MODEL}`);
-            const result = await ephemeralClient.promptAsync(finalPrompt, onEvent);
-            return result;
-        } catch (error: any) {
-            console.error(`[Gemini SDK Error] Async request failed:`, error.message || error);
-            if (error instanceof Error) return `🔥 System Error (ACP Async): ${error.message}`;
-            return '🔥 Unknown ACP SDK error occurred in async request';
-        } finally {
-            ephemeralClient.stop();
-            console.log(`[Gemini SDK] 🛑 Ephemeral ACP client closed.`);
+            return await fs.readFile(mdPath, 'utf8');
+        } catch {
+            return '';
         }
     }
 
-    /**
-     * Chat with conversation context
-     */
-    async chatWithContext(message: string, conversationHistory: string): Promise<string | null> {
-        return this.generateResponse(message, conversationHistory);
+    private buildPrompt(message: string, history?: string): string {
+        const now = new Date().toLocaleString('zh-CN');
+        let prompt = `[Runtime Context]\n- Current Time: ${now}\n\n`;
+        if (history?.trim()) {
+            prompt += `[Previous Conversation History]\n${history}\n\n`;
+        }
+        prompt += `[New Message]\n${message}`;
+        return prompt;
     }
 
-    /**
-     * Chat with context, streaming progress events (thought / tool_call / text) via onChunk.
-     */
+    private async runAgent(
+        message: string,
+        history?: string,
+        onChunk?: StreamCallback,
+        imageInput?: ImageInput,
+    ): Promise<string | null> {
+        if (!this.enabled) return null;
+
+        const prompt = this.buildPrompt(message, history);
+        const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: prompt }] }];
+
+        try {
+            const start = Date.now();
+            console.log(`[AgentRuntime] → ${this.model}: ${message.slice(0, 60).replace(/\n/g, ' ')}${imageInput ? ' [+image]' : ''}...`);
+            const result = await agentLoop(
+                this.apiKey,
+                this.model,
+                this.systemInstruction,
+                contents,
+                this.workDir,
+                onChunk,
+                imageInput,
+            );
+            console.log(`[AgentRuntime] ✅ Done in ${Date.now() - start}ms`);
+            return result || null;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`[AgentRuntime] Error: ${msg}`);
+            return `🔥 Agent error: ${msg}`;
+        }
+    }
+
+    // ── Public API (same signatures as the old ACP-based GeminiClient) ────────
+
     async chatWithContextStreaming(
         message: string,
         conversationHistory: string,
-        onChunk: StreamCallback
+        onChunk: StreamCallback,
     ): Promise<string | null> {
-        return this.generateResponse(message, conversationHistory, onChunk);
+        return this.runAgent(message, conversationHistory, onChunk);
+    }
+
+    /** Multimodal variant — same as chatWithContextStreaming but attaches an image. */
+    async chatWithContextStreamingWithImage(
+        message: string,
+        conversationHistory: string,
+        imageInput: ImageInput,
+        onChunk: StreamCallback,
+    ): Promise<string | null> {
+        return this.runAgent(message, conversationHistory, onChunk, imageInput);
+    }
+
+    /** Same as WithImage but semantically for documents (PDF, audio, video via File API). */
+    async chatWithContextStreamingWithFile(
+        message: string,
+        conversationHistory: string,
+        fileInput: FileInput,
+        onChunk: StreamCallback,
+    ): Promise<string | null> {
+        return this.runAgent(message, conversationHistory, onChunk, fileInput);
+    }
+
+    async chatWithContext(message: string, conversationHistory: string): Promise<string | null> {
+        return this.runAgent(message, conversationHistory);
+    }
+
+    async chat(message: string): Promise<string | null> {
+        return this.runAgent(message);
     }
 
     /**
-     * Run an async task in a fully isolated ephemeral session (no shared history).
+     * Async isolated task — same agentic loop, fresh context (no shared history).
+     * The onEvent parameter is accepted for API compatibility but is unused.
      */
     async chatAsyncWithContext(
         message: string,
-        _conversationHistory: string,  // ignored — async tasks get a clean isolated session
-        onEvent: (msg: JSONRPCNotification) => { detach: boolean, result?: string }
+        _conversationHistory: string,
+        _onEvent?: (msg: JSONRPCNotification) => { detach: boolean; result?: string },
     ): Promise<string | null> {
-        return this.generateAsyncResponse(message, onEvent);
+        return this.runAgent(message);
     }
 
-    /**
-     * Simple chat 
-     */
-    async chat(message: string): Promise<string | null> {
-        return this.generateResponse(message);
-    }
-
-    /**
-     * Ask the underlying agent to explicitly execute a specific skill.
-     * Does not manually mount the skill file, relies on the agent's filesystem capabilities or CLI context.
-     */
     async runSkill(skillName: string, args: string[]): Promise<string | null> {
-        if (!this.enabled || !this.acpClient) return null;
-
-        // Simply ask the native CLI to run the skill by name
-        const prompt = `Please execute the skill **${skillName}**.\n\nAdditional user input/arguments: ${args.join(' ')}\n\n(Tip: Look for system/skill/${skillName}.md if you need instructions.)`;
-
-        console.log(`[Gemini SDK] 🎯 Triggering skill via ACP: ${skillName}`);
-        return this.generateResponse(prompt);
+        const prompt =
+            `Please execute the skill **${skillName}**.\n\n` +
+            `Arguments: ${args.join(' ')}\n\n` +
+            `(Skill file: system/skill/${skillName}.md)`;
+        return this.runAgent(prompt);
     }
 
-    /**
-     * Check if the client is enabled
-     */
     isEnabled(): boolean {
         return this.enabled;
     }
 
-    /**
-     * Test the Gemini SDK connection
-     */
-    async testConnection(): Promise<boolean> {
-        if (!this.enabled) {
-            console.log('[Gemini SDK] ❌ Client not configured');
-            return false;
-        }
-
-        console.log('[Gemini SDK] 🧪 Testing ACP connection...');
-        const response = await this.generateResponse("Hi! Please respond with 'OK' to confirm.");
-
-        if (response && !response.startsWith('⚠️') && !response.startsWith('🔥')) {
-            console.log('[Gemini SDK] ✅ ACP SDK test successful');
-            console.log(`[Gemini SDK] Response preview: ${response.substring(0, 100)}...`);
-            return true;
-        } else {
-            console.log('[Gemini SDK] ❌ ACP SDK test failed');
-            if (response) {
-                console.log(`[Gemini SDK] Error: ${response}`);
-            }
-            return false;
-        }
-    }
-
-    /**
-     * Terminate the ACP underlying process cleanly
-     */
-    close(): void {
-        this.acpClient?.stop();
-    }
+    /** No-op: no subprocess to terminate. */
+    close(): void {}
 }
 
-/**
- * Convenience function to create a Gemini client
- */
 export function createGeminiClient(): GeminiClient {
     return new GeminiClient();
 }
 
-// Test script when run directly
+// ── Self-test when run directly ───────────────────────────────────────────────
 if (import.meta.url === `file://${process.argv[1]}`) {
-    console.log('Testing Gemini ACP SDK Client...\n');
-
     const client = createGeminiClient();
-
     if (client.isEnabled()) {
-        console.log('[Gemini SDK] 🧪 Testing Chatting...');
-        client.generateResponse("用一句话形容现在的通信机制。").then(res => {
-            console.log('\n💬 [Response]:\n' + res);
-            client.close();
-        });
+        console.log('\n[Test] Sending a simple prompt...');
+        const res = await client.chat('用一句话描述你现在的通信机制。');
+        console.log('\n[Response]:', res);
+        client.close();
     }
 }
