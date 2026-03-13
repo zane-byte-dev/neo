@@ -14,6 +14,7 @@ import { AsyncTaskManager } from './lib/async-task-manager.js';
 import { MessageQueue } from './lib/message-queue.js';
 import { ReminderManager, parseReminderTime } from './lib/reminder-manager.js';
 import { ScheduledTaskManager, parseScheduledTask } from './lib/scheduled-task-manager.js';
+import { UserProfileManager } from './lib/user-profile.js';
 import cron from 'node-cron';
 
 
@@ -69,6 +70,9 @@ const reminderManager = new ReminderManager(CACHE_DIR);
 // Scheduled (recurring) task manager
 const scheduledTaskManager = new ScheduledTaskManager(CACHE_DIR);
 
+// User profile
+const userProfile = new UserProfileManager(CACHE_DIR);
+
 interface Task {
     chatId: number;
     question: string;
@@ -92,6 +96,90 @@ class NeoAgentBot {
      * Load persisted queue from disk and replay any interrupted tasks.
      */
     async init() {
+        // Init user profile
+        await userProfile.init();
+
+        // Archive expired Telegram sessions to history/memory/ via Gemini compression
+        const workDir = process.env.GEMINI_WORK_DIR;
+        const archiveApiKey = process.env.GEMINI_API_KEY;
+        if (workDir && archiveApiKey) {
+            chatHistoryCache.setOnSessionExpire(async (session) => {
+                if (session.messages.length < 2) return; // skip trivial sessions
+
+                try {
+                    const memoryDir = join(workDir, 'history', 'memory');
+                    await fs.mkdir(memoryDir, { recursive: true });
+
+                    const dateStr = new Date(session.startTime).toISOString().slice(0, 10);
+                    const memoryFile = join(memoryDir, `${dateStr}.md`);
+
+                    // Idempotency check
+                    let existing = '';
+                    try { existing = await fs.readFile(memoryFile, 'utf8'); } catch { /* new file */ }
+                    if (existing.includes(session.sessionId)) {
+                        console.log(`[MemoryArchive] Session ${session.sessionId} already archived, skipping.`);
+                        return;
+                    }
+
+                    // Build raw transcript for compression (capped to avoid huge prompts)
+                    const transcript = session.messages.map(m => {
+                        const role = m.role === 'user' ? (m.userName ?? 'User') : 'Neo';
+                        const body = m.content.length > 300 ? m.content.slice(0, 300) + '...' : m.content;
+                        return `${role}: ${body}`;
+                    }).join('\n\n');
+
+                    const startHm = new Date(session.startTime).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+                    // Call Gemini API directly (not ACP) to compress — lightweight, non-blocking
+                    const compressionPrompt = `你是一个个人知识管理助手，负责将对话压缩为记忆摘要。
+
+以下是一段 Telegram 对话记录（开始时间 ${startHm}）：
+
+${transcript}
+
+请将这段对话压缩为 3-5 行的记忆摘要，格式如下（严格遵守）：
+## ${startHm} <主题关键词>
+- 做了什么（行动 + 结果，一行）
+- 产出了哪些文件或结论（若有）
+- 遗留了哪些待办项（若有）
+
+规则：
+- 只记录事实，不带修饰，不写废话
+- 如果只是闲聊或简单问答，第一行写"闲聊/问答"，只保留 1-2 行关键点
+- 不要加 session_id 或时间戳，我会自动添加`;
+
+                    const res = await fetch(
+                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${archiveApiKey}`,
+                        {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: compressionPrompt }] }],
+                                generationConfig: { temperature: 0.2, maxOutputTokens: 300 },
+                            }),
+                        }
+                    );
+
+                    let summary: string;
+                    if (res.ok) {
+                        const data = await res.json() as any;
+                        summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+                    } else {
+                        // Fallback: simple first-message excerpt if API fails
+                        const firstUser = session.messages.find(m => m.role === 'user');
+                        const preview = firstUser?.content.slice(0, 100) ?? '（无内容）';
+                        summary = `## ${startHm} Telegram 对话\n- ${preview}`;
+                    }
+
+                    const block = `\n${summary}\n<!-- session: ${session.sessionId} -->\n`;
+                    await fs.appendFile(memoryFile, block, 'utf8');
+                    console.log(`[MemoryArchive] Compressed & archived session ${session.sessionId} → ${memoryFile}`);
+                } catch (err: any) {
+                    console.error('[MemoryArchive] Failed:', err.message);
+                }
+            });
+        }
+
         // Init reminder manager
         await reminderManager.init(async (reminder) => {
             console.log(`[Reminder] Firing #${reminder.id} (${reminder.prompt ? 'action' : 'notification'}): ${reminder.content}`);
@@ -129,19 +217,28 @@ class NeoAgentBot {
         // Init scheduled task manager (recurring cron tasks)
         await scheduledTaskManager.init(async (task) => {
             console.log(`[ScheduledTask] Executing #${task.id}: ${task.content}`);
-            const notifyMsg = await this.bot.telegram.sendMessage(
-                task.chatId,
-                `🕐 定时任务：**${task.content}**\n\n⏳ 正在执行...`,
-                { parse_mode: 'Markdown' }
-            ).catch(() => null);
+            try {
+                const notifyMsg = await this.bot.telegram.sendMessage(
+                    task.chatId,
+                    `🕐 定时任务：**${task.content}**\n\n⏳ 正在执行...`,
+                    { parse_mode: 'Markdown' }
+                ).catch(() => null);
 
-            const queueTask: Task = {
-                chatId: task.chatId,
-                question: task.prompt,
-                userName: 'scheduled-task',
-                messageId: notifyMsg?.message_id ?? 0,
-            };
-            await messageQueue.enqueue(queueTask, (t) => this.processTask(t));
+                const queueTask: Task = {
+                    chatId: task.chatId,
+                    question: task.prompt,
+                    userName: 'scheduled-task',
+                    messageId: notifyMsg?.message_id ?? 0,
+                };
+                await messageQueue.enqueue(queueTask, (t) => this.processTask(t));
+            } catch (err: any) {
+                console.error(`[ScheduledTask] Failed to enqueue #${task.id}:`, err.message);
+                await this.bot.telegram.sendMessage(
+                    task.chatId,
+                    `⚠️ 定时任务「${task.content}」执行失败：${err.message}\n任务 ID: \`${task.id}\``,
+                    { parse_mode: 'Markdown' }
+                ).catch(() => {});
+            }
         });
 
         if (pending.length === 0) return;
@@ -800,17 +897,17 @@ class NeoAgentBot {
             ? plainText.slice(0, 20000) + '\n\n[...内容过长，已截断至前 20000 字符]'
             : plainText;
 
-        // Save to web-cache/YYYY-MM-DD/<sanitized-domain>_<timestamp>.md
-        const cacheDir = join(
+        // Save to history/inbox/YYYY-MM-DD-<domain>.md (consistent with CLI inbox convention)
+        const inboxDir = join(
             process.env.GEMINI_WORK_DIR || process.cwd(),
-            'web-cache',
-            new Date().toISOString().slice(0, 10)
+            'history', 'inbox'
         );
-        await fs.mkdir(cacheDir, { recursive: true });
+        await fs.mkdir(inboxDir, { recursive: true });
 
         const domain = new URL(url).hostname.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const fileName = `${domain}_${Date.now()}.md`;
-        const savedPath = join(cacheDir, fileName);
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const fileName = `${dateStr}-${domain}.md`;
+        const savedPath = join(inboxDir, fileName);
 
         const fileContent = `# ${url}\n\n> 抓取时间: ${new Date().toLocaleString('zh-CN')}\n\n${truncated}`;
         await fs.writeFile(savedPath, fileContent, 'utf8');
@@ -908,11 +1005,29 @@ class NeoAgentBot {
     private async processTask(task: Task) {
         const { chatId, question, userName, messageId } = task;
 
+        // Hard timeout for the entire task — prevents silent hangs
+        const TASK_TIMEOUT_MS = parseInt(process.env.TASK_TIMEOUT_MS || '300000', 10); // default 5 min
+        let taskTimedOut = false;
+        const taskTimeoutHandle = setTimeout(async () => {
+            taskTimedOut = true;
+            console.error(`[Worker] Task timed out after ${TASK_TIMEOUT_MS / 1000}s for: ${question.substring(0, 60)}`);
+            await this.bot.telegram.sendMessage(
+                chatId,
+                `⚠️ 请求处理超时（>${TASK_TIMEOUT_MS / 60000} 分钟），可能是 AI 引擎无响应，请稍后重试。`
+            ).catch(() => {});
+        }, TASK_TIMEOUT_MS);
+
         try {
             console.log(`[Worker] Processing task for ${userName}: ${question.substring(0, 20)}...`);
 
             await chatHistoryCache.addMessage('user', question, userName);
-            const context = chatHistoryCache.getContextForGemini();
+            const historyContext = chatHistoryCache.getContextForGemini();
+
+            // Prepend user profile (city, timezone, interests etc.) if available
+            const profileCtx = await userProfile.toContextString();
+            const context = profileCtx
+                ? `${profileCtx}\n\n${historyContext}`
+                : historyContext;
 
             const timestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             const extraArgs: any = messageId ? { reply_parameters: { message_id: messageId } } : {};
@@ -1025,8 +1140,12 @@ class NeoAgentBot {
                 });
 
         } catch (error) {
-            console.error(`[Worker Error] ${error}`);
-            await this.sendReply(chatId, '🔥 处理请求时出现错误，请稍后重试。', 2, messageId);
+            if (!taskTimedOut) {
+                console.error(`[Worker Error] ${error}`);
+                await this.sendReply(chatId, '🔥 处理请求时出现错误，请稍后重试。', 2, messageId);
+            }
+        } finally {
+            clearTimeout(taskTimeoutHandle);
         }
     }
 
@@ -1267,6 +1386,54 @@ class NeoAgentBot {
                 break;
             }
 
+            case '/profile': {
+                const args = text.split(' ').slice(1);
+                const sub = args[0];
+
+                if (!sub || sub === 'show') {
+                    await ctx.reply(
+                        `👤 **个人信息**\n\n${userProfile.toDisplayString()}`,
+                        { parse_mode: 'Markdown' }
+                    );
+                } else if (sub === 'clear') {
+                    await userProfile.clear();
+                    await ctx.reply('✅ 个人信息已清空。');
+                } else if (sub === 'set') {
+                    // /profile set city 杭州
+                    // /profile set name 张三
+                    // /profile set interests 科技,投资,健身
+                    // /profile set notes 我是一名工程师，早上7点起床
+                    const field = args[1];
+                    const value = args.slice(2).join(' ');
+                    if (!field || !value) {
+                        await ctx.reply(
+                            '用法:\n' +
+                            '`/profile set name 你的名字`\n' +
+                            '`/profile set city 所在城市`\n' +
+                            '`/profile set timezone Asia/Shanghai`\n' +
+                            '`/profile set language 中文`\n' +
+                            '`/profile set interests 科技,投资,健身`\n' +
+                            '`/profile set notes 自由描述，如职业、习惯等`',
+                            { parse_mode: 'Markdown' }
+                        );
+                        break;
+                    }
+                    const allowed = ['name', 'city', 'timezone', 'language', 'interests', 'notes'];
+                    if (!allowed.includes(field)) {
+                        await ctx.reply(`❌ 不支持的字段 \`${field}\`，可用: ${allowed.join(', ')}`, { parse_mode: 'Markdown' });
+                        break;
+                    }
+                    const patch: any = field === 'interests'
+                        ? { interests: value.split(/[,，]/).map(s => s.trim()).filter(Boolean) }
+                        : { [field]: value };
+                    await userProfile.update(patch);
+                    await ctx.reply(`✅ 已更新 ${field}。\n\n${userProfile.toDisplayString()}`, { parse_mode: 'Markdown' });
+                } else {
+                    await ctx.reply('用法: `/profile` 查看 | `/profile set <字段> <值>` 设置 | `/profile clear` 清空', { parse_mode: 'Markdown' });
+                }
+                break;
+            }
+
             default:
                 await ctx.reply('Unknown command. Try /start for help.');
         }
@@ -1291,6 +1458,7 @@ class NeoAgentBot {
             { command: 'remindcancel', description: '取消提醒 /remindcancel <id>' },
             { command: 'schedules',    description: '查看所有定时任务' },
             { command: 'unschedule',   description: '删除定时任务 /unschedule <id>' },
+            { command: 'profile',      description: '查看/设置个人信息（城市、兴趣等）' },
             { command: 'research',     description: '提交深度调研任务' },
         ]).then(() => console.log('[System] Bot commands registered.'))
           .catch(err => console.error('[System] Failed to register commands:', err));

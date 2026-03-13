@@ -28,7 +28,7 @@ interface Message {
     timestamp: string;
 }
 
-interface Session {
+export interface Session {
     sessionId: string;
     startTime: string;
     endTime: string;
@@ -47,6 +47,7 @@ export class ChatHistoryCache {
     private currentSession: Session | null = null;
     private sessionTimeoutMs: number;
     private maxHistoryMessages: number;
+    private onSessionExpire?: (session: Session) => Promise<void>;
 
     constructor() {
         this.cacheDir = CHAT_CACHE_DIR;
@@ -89,6 +90,14 @@ export class ChatHistoryCache {
     }
 
     /**
+     * Register a callback that fires when a session expires (idle timeout exceeded).
+     * The expired session object is passed — use it to archive to history/memory/.
+     */
+    setOnSessionExpire(cb: (session: Session) => Promise<void>): void {
+        this.onSessionExpire = cb;
+    }
+
+    /**
      * Add a message to the current session
      */
     async addMessage(
@@ -98,6 +107,13 @@ export class ChatHistoryCache {
     ): Promise<void> {
         // Check if we need a new session
         if (this.shouldCreateNewSession()) {
+            // Fire expire callback for the outgoing session before rotating
+            if (this.currentSession && this.currentSession.messages.length > 0 && this.onSessionExpire) {
+                const expiredSession = { ...this.currentSession, messages: [...this.currentSession.messages] };
+                this.onSessionExpire(expiredSession).catch(err =>
+                    console.error('[ChatHistoryCache] onSessionExpire error:', err.message)
+                );
+            }
             await this.createNewSession();
         }
 
