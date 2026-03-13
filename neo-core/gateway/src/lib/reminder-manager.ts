@@ -4,8 +4,9 @@ import { join } from 'path';
 export interface Reminder {
     id: string;
     chatId: number;
-    content: string;
-    fireAt: number;   // unix ms
+    content: string;      // brief display text for listings / simple notification
+    prompt?: string;      // if set, execute this as a Gemini task when reminder fires
+    fireAt: number;       // unix ms
     createdAt: number;
     fired: boolean;
 }
@@ -13,83 +14,74 @@ export interface Reminder {
 type FireCallback = (reminder: Reminder) => Promise<void>;
 
 /**
- * Parses a Chinese natural-language time expression and returns the fire timestamp.
- * Returns null if the message does not contain a recognisable time expression.
- *
- * Supported patterns (examples):
- *   10分钟后提醒我 xxx
- *   提醒我 2小时后 xxx
- *   提醒我 明天9点 xxx
- *   提醒我 明天下午3点半 xxx
- *   提醒我 今天22:30 xxx
- *   提醒我 后天8点 xxx
- *   提醒我 3天后 xxx
+ * Uses Gemini to parse a natural-language reminder expression.
+ * Returns { fireAt, content } or null if the text is not a reminder.
  */
-export function parseReminderTime(text: string): { fireAt: number; content: string } | null {
+export async function parseReminderTime(
+    text: string,
+    apiKey: string
+): Promise<{ fireAt: number; content: string; prompt?: string } | null> {
     const now = new Date();
+    const nowStr = now.toLocaleString('zh-CN', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', weekday: 'long',
+    });
 
-    // ── Relative: N分钟/小时/天后 ──────────────────────────────────────────
-    const relMatch = text.match(/(\d+)\s*(分钟|小时|天)后/);
-    if (relMatch) {
-        const n = parseInt(relMatch[1], 10);
-        const unit = relMatch[2];
-        let ms = 0;
-        if (unit === '分钟') ms = n * 60_000;
-        else if (unit === '小时') ms = n * 3_600_000;
-        else ms = n * 86_400_000;
+    const prompt = `你是一个智能提醒解析助手。当前时间是: ${nowStr}
 
-        const fireAt = Date.now() + ms;
-        const content = extractContent(text);
-        return content ? { fireAt, content } : null;
+用户发送了以下消息:
+"${text}"
+
+请判断这是否是一个设置提醒/定时任务的请求，分两类:
+
+【类型A: 纯提醒通知】—— 只需到时间推送一条通知，不需要执行任何查询。
+  例: "提醒我下午3点喝水", "明天早上9点提醒我开会"
+  返回: {"is_reminder": true, "fire_at": "ISO时间", "is_action": false, "content": "喝水"}
+
+【类型B: 定时执行任务】—— 到时间后需要实际去查询/执行某件事并返回结果给用户。
+  例: "1分钟后告诉我杭州的天气", "半小时后帮我总结今天的科技新闻", "5分钟后查一下比特币价格"
+  返回: {"is_reminder": true, "fire_at": "ISO时间", "is_action": true, "prompt": "查询杭州现在的实时天气，告诉我温度和天气状况", "content": "查询杭州天气"}
+  注意: prompt 是届时要发给 AI 执行的完整指令，要具体清晰；content 是简短描述（用于列表显示）。
+
+如果不是提醒请求，或者无法确定时间，返回 {"is_reminder": false}
+
+只输出 JSON，不要任何其他文字。`;
+
+    try {
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+                }),
+            }
+        );
+        if (!res.ok) return null;
+
+        const data = await res.json() as any;
+        const raw: string = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        const cleaned = raw.replace(/```(?:json)?/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+
+        if (!parsed.is_reminder || !parsed.fire_at || !parsed.content) return null;
+
+        const fireAt = new Date(parsed.fire_at).getTime();
+        if (isNaN(fireAt) || fireAt <= Date.now()) return null;
+
+        const result: { fireAt: number; content: string; prompt?: string } = {
+            fireAt,
+            content: String(parsed.content).trim(),
+        };
+        if (parsed.is_action && parsed.prompt) {
+            result.prompt = String(parsed.prompt).trim();
+        }
+        return result;
+    } catch {
+        return null;
     }
-
-    // ── Absolute: 今天/明天/后天 + 时间 ────────────────────────────────────
-    const dayMatch = text.match(/(今[天日]|明天|后天)/);
-    const timeMatch = text.match(/(\d{1,2})[点时:：](\d{0,2})?(?:分)?|(\d{2}):(\d{2})/);
-
-    if (dayMatch && timeMatch) {
-        const dayWord = dayMatch[1];
-        const base = new Date(now);
-        if (dayWord === '明天') base.setDate(base.getDate() + 1);
-        else if (dayWord === '后天') base.setDate(base.getDate() + 2);
-
-        let hour = parseInt(timeMatch[1] ?? timeMatch[3], 10);
-        const minute = parseInt(timeMatch[2] || timeMatch[4] || '0', 10);
-
-        // 下午/晚上 modifier
-        if (/下午|晚上|傍晚/.test(text) && hour < 12) hour += 12;
-        // 上午/早上 modifier: leave as-is
-        if (/早上|上午|凌晨/.test(text) && hour === 12) hour = 0;
-
-        // Handle 半 as :30
-        const adjMinute = /半/.test(text) && minute === 0 ? 30 : minute;
-
-        base.setHours(hour, adjMinute, 0, 0);
-        const fireAt = base.getTime();
-
-        if (fireAt <= Date.now()) return null;   // time already passed
-
-        const content = extractContent(text);
-        return content ? { fireAt, content } : null;
-    }
-
-    return null;
-}
-
-/**
- * Strip all trigger phrases and time expressions from the text to get the reminder content.
- */
-function extractContent(text: string): string {
-    return text
-        .replace(/提醒我/g, '')
-        .replace(/(\d+)\s*(分钟|小时|天)后/g, '')
-        .replace(/(今[天日]|明天|后天)/g, '')
-        .replace(/(\d{1,2})[点时:：](\d{0,2})?(?:分)?/g, '')
-        .replace(/(\d{2}):(\d{2})/g, '')
-        .replace(/下午|晚上|傍晚|早上|上午|凌晨/g, '')
-        .replace(/[半点]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
 }
 
 export class ReminderManager {
@@ -121,12 +113,13 @@ export class ReminderManager {
         this.timer = setInterval(() => this.tick(), 30_000);
     }
 
-    async add(chatId: number, content: string, fireAt: number): Promise<Reminder> {
+    async add(chatId: number, content: string, fireAt: number, prompt?: string): Promise<Reminder> {
         const id = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-        const reminder: Reminder = { id, chatId, content, fireAt, createdAt: Date.now(), fired: false };
+        const reminder: Reminder = { id, chatId, content, prompt, fireAt, createdAt: Date.now(), fired: false };
         this.reminders.set(id, reminder);
         await this.saveToDisk();
-        console.log(`[ReminderManager] Added reminder #${id} for ${new Date(fireAt).toLocaleString('zh-CN')}`);
+        const type = prompt ? 'action' : 'notification';
+        console.log(`[ReminderManager] Added ${type} reminder #${id} for ${new Date(fireAt).toLocaleString('zh-CN')}`);
         return reminder;
     }
 

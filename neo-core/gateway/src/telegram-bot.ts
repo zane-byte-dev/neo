@@ -13,6 +13,7 @@ import { setupLogger } from './lib/logger.js';
 import { AsyncTaskManager } from './lib/async-task-manager.js';
 import { MessageQueue } from './lib/message-queue.js';
 import { ReminderManager, parseReminderTime } from './lib/reminder-manager.js';
+import { ScheduledTaskManager, parseScheduledTask } from './lib/scheduled-task-manager.js';
 import cron from 'node-cron';
 
 
@@ -65,6 +66,9 @@ const messageQueue = new MessageQueue(CACHE_DIR);
 // Reminder manager
 const reminderManager = new ReminderManager(CACHE_DIR);
 
+// Scheduled (recurring) task manager
+const scheduledTaskManager = new ScheduledTaskManager(CACHE_DIR);
+
 interface Task {
     chatId: number;
     question: string;
@@ -90,16 +94,56 @@ class NeoAgentBot {
     async init() {
         // Init reminder manager
         await reminderManager.init(async (reminder) => {
-            console.log(`[Reminder] Firing #${reminder.id}: ${reminder.content}`);
-            await this.bot.telegram.sendMessage(
-                reminder.chatId,
-                `⏰ **提醒:** ${reminder.content}`,
-                { parse_mode: 'Markdown' }
-            ).catch(err => console.error('[Reminder] Send failed:', err.message));
+            console.log(`[Reminder] Firing #${reminder.id} (${reminder.prompt ? 'action' : 'notification'}): ${reminder.content}`);
+
+            if (reminder.prompt) {
+                // Action reminder: enqueue as a real task so it goes through processTask (streaming)
+                const task: Task = {
+                    chatId: reminder.chatId,
+                    question: reminder.prompt,
+                    userName: 'reminder',
+                    messageId: 0,
+                };
+                const notifyMsg = await this.bot.telegram.sendMessage(
+                    reminder.chatId,
+                    `⏰ 定时任务触发：**${reminder.content}**\n\n⏳ 正在执行...`,
+                    { parse_mode: 'Markdown' }
+                ).catch(() => null);
+
+                // Override messageId so processTask can edit-in-place
+                if (notifyMsg) task.messageId = notifyMsg.message_id;
+                await messageQueue.enqueue(task, (t) => this.processTask(t));
+            } else {
+                // Simple notification
+                await this.bot.telegram.sendMessage(
+                    reminder.chatId,
+                    `⏰ **提醒:** ${reminder.content}`,
+                    { parse_mode: 'Markdown' }
+                ).catch(err => console.error('[Reminder] Send failed:', err.message));
+            }
         });
 
         // Replay interrupted message queue tasks
         const pending = await messageQueue.init();
+
+        // Init scheduled task manager (recurring cron tasks)
+        await scheduledTaskManager.init(async (task) => {
+            console.log(`[ScheduledTask] Executing #${task.id}: ${task.content}`);
+            const notifyMsg = await this.bot.telegram.sendMessage(
+                task.chatId,
+                `🕐 定时任务：**${task.content}**\n\n⏳ 正在执行...`,
+                { parse_mode: 'Markdown' }
+            ).catch(() => null);
+
+            const queueTask: Task = {
+                chatId: task.chatId,
+                question: task.prompt,
+                userName: 'scheduled-task',
+                messageId: notifyMsg?.message_id ?? 0,
+            };
+            await messageQueue.enqueue(queueTask, (t) => this.processTask(t));
+        });
+
         if (pending.length === 0) return;
 
         console.log(`[MessageQueue] Replaying ${pending.length} interrupted task(s)...`);
@@ -554,6 +598,14 @@ class NeoAgentBot {
             return;
         }
 
+        // Detect recurring schedule intent: "每天", "每周", "每月", "每小时", "每隔", "每个工作日"
+        const isScheduleIntent = /每(天|日|周|月|小时|隔|个工作日)/.test(rawText) ||
+            /定期|每\d+(分钟|小时)/.test(rawText);
+        if (isScheduleIntent) {
+            await this.handleScheduledTaskMessage(ctx, rawText, chatId, messageId);
+            return;
+        }
+
         // Detect reminder intent: "提醒我", "N分钟/小时后"
         const isReminderIntent = rawText.includes('提醒我') ||
             /^\d+\s*(分钟|小时|天)后/.test(rawText);
@@ -575,35 +627,87 @@ class NeoAgentBot {
     }
 
     /**
-     * Parse and register a natural-language reminder
+     * Parse and register a natural-language recurring scheduled task
      */
-    private async handleReminderMessage(ctx: any, text: string, chatId: number, messageId: number) {
-        const result = parseReminderTime(text);
-        if (!result || !result.content) {
-            await ctx.reply(
-                '⚠️ 无法解析提醒时间，请用以下格式：\n' +
-                '• `提醒我 10分钟后 xxx`\n' +
-                '• `提醒我 2小时后 xxx`\n' +
-                '• `提醒我 明天9点 xxx`\n' +
-                '• `提醒我 明天下午3点半 xxx`\n' +
-                '• `提醒我 今天22:30 xxx`',
-                { parse_mode: 'Markdown', reply_parameters: { message_id: messageId } }
-            );
+    private async handleScheduledTaskMessage(ctx: any, text: string, chatId: number, messageId: number) {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            await ctx.reply('⚠️ 定时任务功能需要配置 GEMINI_API_KEY。', { reply_parameters: { message_id: messageId } });
             return;
         }
 
-        const reminder = await reminderManager.add(chatId, result.content, result.fireAt);
+        const statusMsg = await this.bot.telegram.sendMessage(
+            chatId, '⏳ 解析定时任务...', { reply_parameters: { message_id: messageId } }
+        );
+
+        const result = await parseScheduledTask(text, apiKey);
+
+        if (!result) {
+            await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                '⚠️ 无法解析定时任务，请换个说法。\n\n支持的格式例如：\n' +
+                '• 每天早上9点告诉我杭州的天气\n' +
+                '• 每周一早上8点半汇总科技新闻\n' +
+                '• 每两小时提醒我喝水\n' +
+                '• 每天下午6点查一下比特币价格'
+            ).catch(() => {});
+            return;
+        }
+
+        const task = await scheduledTaskManager.add(chatId, result.content, result.prompt, result.cronExpr);
+        await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+            `✅ 定时任务已创建！\n\n` +
+            `📌 任务: ${result.content}\n` +
+            `📋 执行指令: ${result.prompt}\n` +
+            `⏰ Cron: \`${result.cronExpr}\`\n` +
+            `🆔 ID: ${task.id}\n\n` +
+            `用 /unschedule ${task.id} 删除此任务`,
+            { parse_mode: 'Markdown' }
+        ).catch(() => {});
+    }
+
+    /**
+     * Parse and register a natural-language reminder
+     */
+    private async handleReminderMessage(ctx: any, text: string, chatId: number, messageId: number) {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            await ctx.reply('⚠️ 提醒功能需要配置 GEMINI_API_KEY。', { reply_parameters: { message_id: messageId } });
+            return;
+        }
+
+        const statusMsg = await this.bot.telegram.sendMessage(
+            chatId, '⏳ 解析提醒时间...', { reply_parameters: { message_id: messageId } }
+        );
+
+        const result = await parseReminderTime(text, apiKey);
+
+        if (!result || !result.content) {
+            await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+                '⚠️ 无法理解提醒时间，请换个说法试试。\n\n例如：\n' +
+                '• 提醒我下周一早上9点开周会\n' +
+                '• 提醒我这周五下午6点下班\n' +
+                '• 30分钟后提醒我喝水\n' +
+                '• 提醒我明天上午10点半打电话'
+            ).catch(() => {});
+            return;
+        }
+
+        const reminder = await reminderManager.add(chatId, result.content, result.fireAt, result.prompt);
         const fireStr = new Date(result.fireAt).toLocaleString('zh-CN', {
             month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
         });
-        await ctx.reply(
-            `✅ 提醒已设置！\n\n` +
+        const typeLabel = result.prompt ? '🤖 定时任务' : '🔔 提醒通知';
+        const detailLine = result.prompt
+            ? `📋 任务: ${result.prompt}\n`
+            : '';
+        await this.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined,
+            `✅ ${typeLabel}已设置！\n\n` +
             `📌 内容: ${result.content}\n` +
+            detailLine +
             `🕐 时间: ${fireStr}\n` +
-            `🆔 ID: \`${reminder.id}\`\n\n` +
-            `用 /remindcancel \`${reminder.id}\` 取消`,
-            { parse_mode: 'Markdown', reply_parameters: { message_id: messageId } }
-        );
+            `🆔 ID: ${reminder.id}\n\n` +
+            `用 /remindcancel ${reminder.id} 取消`
+        ).catch(() => {});
     }
 
     /**
@@ -1131,6 +1235,38 @@ class NeoAgentBot {
                 break;
             }
 
+            case '/schedules': {
+                const all = scheduledTaskManager.getAll();
+                if (all.length === 0) {
+                    await ctx.reply('🗓 暂无定时任务。\n\n发送如 "每天早上9点告诉我杭州的天气" 来创建一个。');
+                    break;
+                }
+                const lines = all.map(t =>
+                    `🔁 \`${t.id}\`  \`${t.cronExpr}\`\n   ${t.content}`
+                );
+                await ctx.reply(
+                    `🗓 **定时任务列表 (${lines.length} 条)**\n\n` + lines.join('\n\n') +
+                    '\n\n用 /unschedule <id> 删除',
+                    { parse_mode: 'Markdown' }
+                );
+                break;
+            }
+
+            case '/unschedule': {
+                const schedId = text.split(' ')[1]?.replace(/^#/, '').trim();
+                if (!schedId) {
+                    await ctx.reply('用法: `/unschedule <任务ID>`', { parse_mode: 'Markdown' });
+                    break;
+                }
+                const removed = await scheduledTaskManager.cancel(schedId);
+                if (removed) {
+                    await ctx.reply(`✅ 定时任务 \`#${schedId}\` 已删除。`, { parse_mode: 'Markdown' });
+                } else {
+                    await ctx.reply(`❌ 未找到定时任务 \`#${schedId}\`。`, { parse_mode: 'Markdown' });
+                }
+                break;
+            }
+
             default:
                 await ctx.reply('Unknown command. Try /start for help.');
         }
@@ -1153,6 +1289,8 @@ class NeoAgentBot {
             { command: 'cancel',       description: '取消某个任务 /cancel <id>' },
             { command: 'reminders',    description: '查看所有提醒' },
             { command: 'remindcancel', description: '取消提醒 /remindcancel <id>' },
+            { command: 'schedules',    description: '查看所有定时任务' },
+            { command: 'unschedule',   description: '删除定时任务 /unschedule <id>' },
             { command: 'research',     description: '提交深度调研任务' },
         ]).then(() => console.log('[System] Bot commands registered.'))
           .catch(err => console.error('[System] Failed to register commands:', err));
@@ -1171,8 +1309,8 @@ class NeoAgentBot {
         this.bot.launch();
 
         // Enable graceful stop
-        process.once('SIGINT', () => { reminderManager.destroy(); geminiClient.close(); this.bot.stop('SIGINT'); });
-        process.once('SIGTERM', () => { reminderManager.destroy(); geminiClient.close(); this.bot.stop('SIGTERM'); });
+        process.once('SIGINT', () => { reminderManager.destroy(); scheduledTaskManager.destroy(); geminiClient.close(); this.bot.stop('SIGINT'); });
+        process.once('SIGTERM', () => { reminderManager.destroy(); scheduledTaskManager.destroy(); geminiClient.close(); this.bot.stop('SIGTERM'); });
     }
 }
 
