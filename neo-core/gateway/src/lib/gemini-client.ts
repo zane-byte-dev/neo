@@ -531,16 +531,31 @@ export class GeminiClient {
     }
 
     private async loadSystemInstruction(): Promise<string> {
-        // Prefer AGENT_CONFIG_DIR/agent.md, fallback to WORK_DIR/agent.md
-        const candidates = [
-            this.configDir && join(this.configDir, 'agent.md'),
-            join(this.workDir, 'agent.md'),
-        ].filter(Boolean) as string[];
+        const dirs = [this.configDir, this.workDir].filter(Boolean) as string[];
 
-        for (const p of candidates) {
+        // Try three-file system: AGENTS.md + SOUL.md (optional) + TOOLS.md (optional)
+        for (const dir of dirs) {
             try {
-                const content = await fs.readFile(p, 'utf8');
-                console.log(`[AgentRuntime] 📜 Loaded agent.md from: ${p}`);
+                const agents = await fs.readFile(join(dir, 'AGENTS.md'), 'utf8');
+                const parts: string[] = [agents.trim()];
+                for (const file of ['SOUL.md', 'TOOLS.md']) {
+                    try {
+                        const content = await fs.readFile(join(dir, file), 'utf8');
+                        if (content.trim()) parts.push(content.trim());
+                    } catch { /* optional */ }
+                }
+                const merged = parts.join('\n\n---\n\n');
+                const fileList = ['AGENTS.md', 'SOUL.md', 'TOOLS.md'].slice(0, parts.length).join(' + ');
+                console.log(`[AgentRuntime] 📜 Loaded prompt from: ${dir} (${fileList})`);
+                return merged;
+            } catch { /* try next dir */ }
+        }
+
+        // Backward compat: single agent.md
+        for (const dir of dirs) {
+            try {
+                const content = await fs.readFile(join(dir, 'agent.md'), 'utf8');
+                console.log(`[AgentRuntime] 📜 Loaded agent.md from: ${dir}`);
                 return content;
             } catch { /* try next */ }
         }

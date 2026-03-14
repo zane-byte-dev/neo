@@ -21,7 +21,7 @@ const CHAT_MAX_CONTEXT_TOKENS = parseInt(
     10
 );
 
-interface Message {
+export interface Message {
     role: 'user' | 'assistant';
     content: string;
     userName?: string;
@@ -239,6 +239,23 @@ export class ChatHistoryCache {
             this.currentSession.messages = messages.slice(removeCount);
             console.log(`[ChatHistoryCache] ✂️  Trimmed ${removeCount} old messages`);
         }
+    }
+
+    /**
+     * Replace the current session's messages with a single summary entry.
+     * Used by /compact to shrink context while retaining key information.
+     */
+    async compactWithSummary(summary: string): Promise<void> {
+        if (!this.currentSession) return;
+        const now = new Date().toISOString();
+        this.currentSession.messages = [{
+            role: 'assistant',
+            content: `[对话摘要]\n${summary}`,
+            timestamp: now,
+        }];
+        this.currentSession.endTime = now;
+        await this.saveToFile();
+        console.log('[ChatHistoryCache] 🗜️  Session compacted with summary');
     }
 
     /**

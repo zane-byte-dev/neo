@@ -1363,14 +1363,20 @@ ${transcript}
             case '/start':
                 await ctx.reply(
                     '🔭 **NeoAgent Connect Gateway**\n' +
-                    '这是一个极简的全能代理网关。发送任何消息，远端的 Gemini CLI 将接管思考过程。\n\n' +
-                    '`/btw <问题>` — 临时问答，不计入对话上下文\n' +
-                    '`/clear`  — 清空上下文对话历史\n' +
-                    '`/newsession` — 开启新会话\n' +
-                    '`/stats`  — 查看会话统计数据\n' +
-                    '`/tasks`  — 查看所有后台任务状态\n' +
-                    '`/cancel <id>` — 取消某个任务\n' +
-                    '`/async` 或 `/research` — 提交后台长任务 (不会阻塞后续对话)',
+                    '这是一个极简的全能代理网关。\n\n' +
+                    '**对话控制**\n' +
+                    '`/new` — 开启新会话（重置上下文）\n' +
+                    '`/compact` — 压缩当前上下文（保留摘要）\n' +
+                    '`/clear` — 清空全部历史\n' +
+                    '`/btw <问题>` — 临时问答，不计入上下文\n' +
+                    '`/stats` — 查看会话统计\n\n' +
+                    '**任务管理**\n' +
+                    '`/tasks` — 查看后台任务\n' +
+                    '`/cancel <id>` — 取消任务\n' +
+                    '`/async` 或 `/research` — 提交后台长任务\n\n' +
+                    '**提醒 & 定时**\n' +
+                    '`/reminders` — 查看提醒\n' +
+                    '`/schedules` — 查看定时任务',
                     { parse_mode: 'Markdown' }
                 );
                 break;
@@ -1380,10 +1386,48 @@ ${transcript}
                 await ctx.reply('🗑️ Chat history cleared. Starting fresh!');
                 break;
 
+            case '/new':
             case '/newsession':
                 await chatHistoryCache.createNewSession();
-                await ctx.reply('📝 New session created!');
+                await ctx.reply('📝 新会话已开启，上下文已重置。');
                 break;
+
+            case '/compact': {
+                const msgs = chatHistoryCache.getCurrentSessionHistory();
+                if (msgs.length < 3) {
+                    await ctx.reply('💬 当前对话太短（< 3 条），无需压缩。');
+                    break;
+                }
+                const statusMsg = await this.bot.telegram.sendMessage(ctx.chat.id, '⏳ 正在压缩上下文...');
+                const apiKey = process.env.GEMINI_API_KEY;
+                if (!apiKey) {
+                    await this.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined, '⚠️ 需要配置 GEMINI_API_KEY。').catch(() => {});
+                    break;
+                }
+                const transcript = msgs.map((m: import('./lib/chat-history-cache.js').Message) => {
+                    const role = m.role === 'user' ? (m.userName ?? 'User') : 'Assistant';
+                    const body = m.content.length > 500 ? m.content.slice(0, 500) + '...' : m.content;
+                    return `${role}: ${body}`;
+                }).join('\n\n');
+                const summary = await geminiGenerate(
+                    apiKey,
+                    [{ parts: [{ text: `请将以下对话压缩为简洁的上下文摘要（5-10行），保留关键事实、决策和待办项，供后续对话参考：\n\n${transcript}` }] }],
+                    { generationConfig: { temperature: 0.2, maxOutputTokens: 600 } }
+                );
+                if (!summary) {
+                    await this.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined, '⚠️ 压缩失败，请重试。').catch(() => {});
+                    break;
+                }
+                await chatHistoryCache.compactWithSummary(summary);
+                await this.bot.telegram.editMessageText(
+                    ctx.chat.id, statusMsg.message_id, undefined,
+                    `✅ 上下文已压缩（${msgs.length} 条 → 1 条摘要）\n\n**摘要：**\n${summary}`,
+                    { parse_mode: 'Markdown' }
+                ).catch(async () => {
+                    await ctx.reply(`✅ 已压缩 ${msgs.length} 条消息。\n\n摘要：\n${summary}`);
+                });
+                break;
+            }
 
             case '/stats': {
                 const stats = chatHistoryCache.getStats();
@@ -1570,8 +1614,10 @@ ${transcript}
         // Register command menu with Telegram
         this.bot.telegram.setMyCommands([
             { command: 'start',        description: '查看帮助与所有命令' },
-            { command: 'clear',        description: '清空当前对话历史' },
-            { command: 'newsession',   description: '开启新会话' },
+            { command: 'new',          description: '开启新会话（重置上下文）' },
+            { command: 'compact',      description: '压缩当前上下文（保留摘要）' },
+            { command: 'clear',        description: '清空全部对话历史' },
+            { command: 'btw',          description: '临时问答，不计入对话上下文' },
             { command: 'stats',        description: '查看会话统计' },
             { command: 'tasks',        description: '查看所有后台任务状态' },
             { command: 'cancel',       description: '取消某个任务 /cancel <id>' },
@@ -1582,7 +1628,6 @@ ${transcript}
             { command: 'profile',      description: '查看/设置个人信息（城市、兴趣等）' },
             { command: 'research',     description: '提交深度调研任务' },
             { command: 'async',        description: '提交后台长任务' },
-            { command: 'btw',          description: '临时问答，不计入对话上下文 /btw <问题>' },
         ]).then(() => console.log('[System] Bot commands registered.'))
           .catch(err => console.error('[System] Failed to register commands:', err));
 
