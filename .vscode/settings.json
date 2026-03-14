@@ -1,3 +1,8 @@
 {
-    "workbench.colorTheme": "Visual Studio Light"
+    "chat.tools.terminal.autoApprove": {
+        "/^node -e \"const p = require\\('/Users/zhengchao/mox/neo/neo-core/gateway/node_modules/telegraf/package\\.json'\\); console\\.log\\(JSON\\.stringify\\(Object\\.keys\\(p\\.exports\\), null, 2\\)\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

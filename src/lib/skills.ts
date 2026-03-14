@@ -43,6 +43,10 @@ const fetchUrlSkill: Skill = {
         const url = String(args.url ?? '');
         const maxChars = Math.min(Number(args.max_chars ?? 8_000), 30_000);
 
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            return '[Error] URL 必须以 http:// 或 https:// 开头';
+        }
+
         const htmlToText = (html: string): string =>
             html
                 .replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -62,19 +66,15 @@ const fetchUrlSkill: Skill = {
             targetUrl: string,
             timeoutMs = 15_000,
         ): Promise<{ ok: boolean; text?: string; status?: number }> => {
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), timeoutMs);
             try {
                 const res = await fetch(targetUrl, {
-                    signal: ctrl.signal,
+                    signal: AbortSignal.timeout(timeoutMs),
                     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent/2.0)' },
                 });
                 if (!res.ok) return { ok: false, status: res.status };
                 return { ok: true, text: htmlToText(await res.text()) };
             } catch {
                 return { ok: false };
-            } finally {
-                clearTimeout(t);
             }
         };
 
@@ -319,6 +319,10 @@ const httpRequestSkill: Skill = {
         const method = String(args.method ?? 'GET').toUpperCase();
         const maxChars = Math.min(Number(args.max_response_chars ?? 5_000), 20_000);
 
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            return '[Error] URL 必须以 http:// 或 https:// 开头';
+        }
+
         const headersObj: Record<string, string> = { 'User-Agent': 'NeoAgent/2.0' };
         if (args.headers) {
             try {
@@ -341,11 +345,8 @@ const httpRequestSkill: Skill = {
             }
         }
 
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 30_000);
-
         try {
-            const res = await fetch(url, { ...fetchOptions, signal: controller.signal });
+            const res = await fetch(url, { ...fetchOptions, signal: AbortSignal.timeout(30_000) });
             const text = await res.text();
             const truncated =
                 text.length > maxChars
@@ -358,8 +359,6 @@ const httpRequestSkill: Skill = {
             );
         } catch (err: unknown) {
             return `[Error] http_request: ${err instanceof Error ? err.message : String(err)}`;
-        } finally {
-            clearTimeout(timer);
         }
     },
 };
@@ -494,123 +493,43 @@ const fetchAiNewsSkill: Skill = {
         ).split(',').map(s => s.trim()).filter(Boolean);
         const maxPerSource = Math.min(Number(args.max_per_source ?? 5), 15);
 
-        const sections: string[] = [];
-        const ua = 'Mozilla/5.0 (compatible; NeoAgent/2.0; +https://github.com/neo)';
+        const { stories } = await gatherNewsStories(timeRange, subreddits, maxPerSource);
+        const filtered = stories.filter(s => {
+            if (s.source.startsWith('Reddit'))  return enabledSources.includes('reddit');
+            if (s.source === 'Hacker News')     return enabledSources.includes('hackernews');
+            return enabledSources.includes('rss');
+        });
 
-        // ── Reddit ────────────────────────────────────────────────────────────
-        if (enabledSources.includes('reddit')) {
-            const redditStories: string[] = [];
-            for (const sub of subreddits) {
-                try {
-                    const res = await fetch(
-                        `https://www.reddit.com/r/${encodeURIComponent(sub)}/top.json?limit=${maxPerSource}&t=${encodeURIComponent(timeRange)}`,
-                        { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(12_000) },
-                    );
-                    if (!res.ok) continue;
-                    const data = await res.json() as Record<string, any>;
-                    const posts: any[] = data?.data?.children ?? [];
-                    for (const post of posts) {
-                        const p = post?.data;
-                        if (!p || p.stickied || p.over_18) continue;
-                        const externalUrl = p.url && !p.url.includes('reddit.com') ? `\n   外链: ${p.url}` : '';
-                        redditStories.push(
-                            `• ${p.title}\n` +
-                            `   热度: ${p.score} 赞 / ${p.num_comments} 评论 | r/${sub}\n` +
-                            `   讨论: https://reddit.com${p.permalink}${externalUrl}`,
-                        );
-                    }
-                } catch {
-                    // silently skip failed subreddits
-                }
-            }
-            if (redditStories.length > 0) {
-                sections.push(`## 📌 Reddit 热帖\n\n${redditStories.join('\n\n')}`);
-            }
-        }
-
-        // ── Hacker News (Algolia API) ─────────────────────────────────────────
-        if (enabledSources.includes('hackernews')) {
-            try {
-                const secondsAgo =
-                    timeRange === 'week' ? 7 * 86_400 :
-                    timeRange === 'month' ? 30 * 86_400 :
-                    86_400;
-                const since = Math.floor(Date.now() / 1_000) - secondsAgo;
-                const hnUrl =
-                    `https://hn.algolia.com/api/v1/search?tags=story` +
-                    `&query=${encodeURIComponent('AI LLM machine learning')}&hitsPerPage=${maxPerSource}` +
-                    `&numericFilters=created_at_i>${since},points>10`;
-
-                const res = await fetch(hnUrl, {
-                    headers: { 'User-Agent': ua },
-                    signal: AbortSignal.timeout(12_000),
-                });
-                if (res.ok) {
-                    const data = await res.json() as Record<string, any>;
-                    const hits: any[] = data?.hits ?? [];
-                    const hnStories = hits
-                        .filter(h => h.title)
-                        .map(h =>
-                            `• ${h.title}\n` +
-                            `   热度: ${h.points ?? 0} 分 / ${h.num_comments ?? 0} 评论\n` +
-                            `   讨论: https://news.ycombinator.com/item?id=${h.objectID}` +
-                            (h.url ? `\n   外链: ${h.url}` : ''),
-                        );
-                    if (hnStories.length > 0) {
-                        sections.push(`## 🔶 Hacker News\n\n${hnStories.join('\n\n')}`);
-                    }
-                }
-            } catch {
-                // silently skip
-            }
-        }
-
-        // ── RSS 源（TechCrunch AI 频道 + The Verge AI）────────────────────────
-        if (enabledSources.includes('rss')) {
-            const rssFeeds: Array<{ name: string; url: string }> = [
-                { name: 'TechCrunch AI', url: 'https://techcrunch.com/tag/artificial-intelligence/feed/' },
-                { name: 'The Verge AI',  url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml' },
-            ];
-
-            const rssStories: string[] = [];
-            for (const feed of rssFeeds) {
-                try {
-                    const res = await fetch(feed.url, {
-                        headers: { 'User-Agent': ua },
-                        signal: AbortSignal.timeout(12_000),
-                    });
-                    if (!res.ok) continue;
-                    const xml = await res.text();
-
-                    // Extract <item> blocks
-                    const itemRe = /<item[^>]*>([\s\S]*?)<\/item>/g;
-                    const titleRe = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/;
-                    const linkRe  = /<link>([^<]+)<\/link>/;
-                    const descRe  = /<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/;
-
-                    let count = 0;
-                    let m: RegExpExecArray | null;
-                    while ((m = itemRe.exec(xml)) !== null && count < maxPerSource) {
-                        const body  = m[1];
-                        const title = (titleRe.exec(body)?.[1] ?? '').trim();
-                        const url   = (linkRe.exec(body)?.[1]  ?? '').trim();
-                        const desc  = (descRe.exec(body)?.[1]  ?? '')
-                            .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
-                        if (!title || !url) continue;
-                        rssStories.push(`• ${title}\n   ${desc ? desc + ' …' : ''}\n   ${url}`);
-                        count++;
-                    }
-                } catch {
-                    // silently skip
-                }
-            }
-            if (rssStories.length > 0) {
-                sections.push(`## 📰 科技媒体 (RSS)\n\n${rssStories.join('\n\n')}`);
-            }
-        }
-
-        if (sections.length === 0) {
+        if (filtered.length === 0) {
             return '[Info] 暂时未能获取到新闻内容，网络可能受限，请稍后重试或手动提供选题。';
+        }
+
+        const sections: string[] = [];
+
+        const redditStories = filtered.filter(s => s.source.startsWith('Reddit'));
+        if (redditStories.length > 0) {
+            const lines = redditStories.map(s => {
+                const ext = s.externalUrl ? `\n   外链: ${s.externalUrl}` : '';
+                return `• ${s.title}\n   热度: ${s.score} | ${s.source}\n   讨论: ${s.discussionUrl}${ext}`;
+            });
+            sections.push(`## 📌 Reddit 热帖\n\n${lines.join('\n\n')}`);
+        }
+
+        const hnStories = filtered.filter(s => s.source === 'Hacker News');
+        if (hnStories.length > 0) {
+            const lines = hnStories.map(s => {
+                const ext = s.externalUrl ? `\n   外链: ${s.externalUrl}` : '';
+                return `• ${s.title}\n   热度: ${s.score}\n   讨论: ${s.discussionUrl}${ext}`;
+            });
+            sections.push(`## 🔶 Hacker News\n\n${lines.join('\n\n')}`);
+        }
+
+        const rssStories = filtered.filter(s => !s.source.startsWith('Reddit') && s.source !== 'Hacker News');
+        if (rssStories.length > 0) {
+            const lines = rssStories.map(s =>
+                `• ${s.title}${s.snippet ? '\n   ' + s.snippet + ' …' : ''}\n   ${s.discussionUrl}`,
+            );
+            sections.push(`## 📰 科技媒体 (RSS)\n\n${lines.join('\n\n')}`);
         }
 
         const rangeLabel =
@@ -1057,6 +976,9 @@ const browserFetchSkill: Skill = {
     handler: async (args) => {
         const url = String(args.url ?? '');
         const maxChars = Math.min(Number(args.max_chars ?? 8_000), 30_000);
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            return '[Error] URL 必须以 http:// 或 https:// 开头';
+        }
         return browserFetch(url, maxChars);
     },
 };
