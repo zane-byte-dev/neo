@@ -1233,6 +1233,7 @@ ${transcript}
 
             // ── Final flush ──────────────────────────────────────────────────
             if (!responseText) {
+                console.error(`[Worker] No response text for task from ${userName}: "${question.slice(0, 80).replace(/\n/g, ' ')}"`);
                 await this.bot.telegram.editMessageText(chatId, activeMsgId, undefined, '⚠️ Failed to generate response.').catch(() => {});
                 return;
             }
@@ -1564,7 +1565,7 @@ ${transcript}
      */
     run() {
         console.log(`🤖 Bot started. Auth Chat ID: ${AUTHORIZED_CHAT_ID || 'ALL'}`);
-        console.log(`🛠  Gemini CLI enabled: ${geminiClient.isEnabled()}`);
+        console.log(`🛠  Gemini Client enabled: ${geminiClient.isEnabled()}`);
 
         // Register command menu with Telegram
         this.bot.telegram.setMyCommands([
@@ -1580,6 +1581,8 @@ ${transcript}
             { command: 'unschedule',   description: '删除定时任务 /unschedule <id>' },
             { command: 'profile',      description: '查看/设置个人信息（城市、兴趣等）' },
             { command: 'research',     description: '提交深度调研任务' },
+            { command: 'async',        description: '提交后台长任务' },
+            { command: 'btw',          description: '临时问答，不计入对话上下文 /btw <问题>' },
         ]).then(() => console.log('[System] Bot commands registered.'))
           .catch(err => console.error('[System] Failed to register commands:', err));
 

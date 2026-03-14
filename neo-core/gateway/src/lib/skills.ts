@@ -13,7 +13,7 @@
  *   get_datetime — Current date/time with optional timezone
  */
 
-import { registerSkill, Skill } from './gemini-client.js';
+import { registerSkill, Skill, geminiGenerate } from './gemini-client.js';
 
 // ── fetch_url ─────────────────────────────────────────────────────────────────
 
@@ -390,6 +390,450 @@ const getDatetimeSkill: Skill = {
     },
 };
 
+// ── fetch_ai_news ─────────────────────────────────────────────────────────────
+
+/**
+ * Fetches trending AI/tech news from Reddit (public JSON API) and
+ * Hacker News (Algolia). No API keys required.
+ *
+ * Typical usage: let the LLM call this, then ask it to write a WeChat article
+ * based on the returned stories.
+ *
+ * Scheduled task example:
+ *   "每天早上8点抓取 AI 热点新闻，并生成一篇微信公众号文章草稿发给我"
+ */
+const fetchAiNewsSkill: Skill = {
+    declaration: {
+        name: 'fetch_ai_news',
+        description:
+            'Fetch trending AI / technology news from Reddit and Hacker News. ' +
+            'Returns top stories with titles, scores, URLs, and brief descriptions. ' +
+            'Use this to gather source material and then write a WeChat (微信公众号) article. ' +
+            'No API key required.',
+        parameters: {
+            type: 'object',
+            properties: {
+                time_range: {
+                    type: 'string',
+                    description: '"day" = last 24 h (default), "week" = last 7 days, "month" = last 30 days',
+                },
+                sources: {
+                    type: 'string',
+                    description: 'Comma-separated list: "reddit,hackernews,rss" (default: all three)',
+                },
+                subreddits: {
+                    type: 'string',
+                    description:
+                        'Comma-separated Reddit subreddits to include ' +
+                        '(default: "artificial,MachineLearning,ChatGPT,LocalLLaMA,singularity")',
+                },
+                max_per_source: {
+                    type: 'number',
+                    description: 'Max stories per source/subreddit (default: 5, max: 15)',
+                },
+            },
+        },
+    },
+
+    handler: async (args) => {
+        const timeRange = String(args.time_range ?? 'day');
+        const enabledSources = String(args.sources ?? 'reddit,hackernews,rss')
+            .split(',').map(s => s.trim().toLowerCase());
+        const subreddits = String(
+            args.subreddits ?? 'artificial,MachineLearning,ChatGPT,LocalLLaMA,singularity',
+        ).split(',').map(s => s.trim()).filter(Boolean);
+        const maxPerSource = Math.min(Number(args.max_per_source ?? 5), 15);
+
+        const sections: string[] = [];
+        const ua = 'Mozilla/5.0 (compatible; NeoAgent/2.0; +https://github.com/neo)';
+
+        // ── Reddit ────────────────────────────────────────────────────────────
+        if (enabledSources.includes('reddit')) {
+            const redditStories: string[] = [];
+            for (const sub of subreddits) {
+                try {
+                    const res = await fetch(
+                        `https://www.reddit.com/r/${encodeURIComponent(sub)}/top.json?limit=${maxPerSource}&t=${encodeURIComponent(timeRange)}`,
+                        { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(12_000) },
+                    );
+                    if (!res.ok) continue;
+                    const data = await res.json() as Record<string, any>;
+                    const posts: any[] = data?.data?.children ?? [];
+                    for (const post of posts) {
+                        const p = post?.data;
+                        if (!p || p.stickied || p.over_18) continue;
+                        const externalUrl = p.url && !p.url.includes('reddit.com') ? `\n   外链: ${p.url}` : '';
+                        redditStories.push(
+                            `• ${p.title}\n` +
+                            `   热度: ${p.score} 赞 / ${p.num_comments} 评论 | r/${sub}\n` +
+                            `   讨论: https://reddit.com${p.permalink}${externalUrl}`,
+                        );
+                    }
+                } catch {
+                    // silently skip failed subreddits
+                }
+            }
+            if (redditStories.length > 0) {
+                sections.push(`## 📌 Reddit 热帖\n\n${redditStories.join('\n\n')}`);
+            }
+        }
+
+        // ── Hacker News (Algolia API) ─────────────────────────────────────────
+        if (enabledSources.includes('hackernews')) {
+            try {
+                const secondsAgo =
+                    timeRange === 'week' ? 7 * 86_400 :
+                    timeRange === 'month' ? 30 * 86_400 :
+                    86_400;
+                const since = Math.floor(Date.now() / 1_000) - secondsAgo;
+                const hnUrl =
+                    `https://hn.algolia.com/api/v1/search?tags=story` +
+                    `&query=${encodeURIComponent('AI LLM machine learning')}&hitsPerPage=${maxPerSource}` +
+                    `&numericFilters=created_at_i>${since},points>10`;
+
+                const res = await fetch(hnUrl, {
+                    headers: { 'User-Agent': ua },
+                    signal: AbortSignal.timeout(12_000),
+                });
+                if (res.ok) {
+                    const data = await res.json() as Record<string, any>;
+                    const hits: any[] = data?.hits ?? [];
+                    const hnStories = hits
+                        .filter(h => h.title)
+                        .map(h =>
+                            `• ${h.title}\n` +
+                            `   热度: ${h.points ?? 0} 分 / ${h.num_comments ?? 0} 评论\n` +
+                            `   讨论: https://news.ycombinator.com/item?id=${h.objectID}` +
+                            (h.url ? `\n   外链: ${h.url}` : ''),
+                        );
+                    if (hnStories.length > 0) {
+                        sections.push(`## 🔶 Hacker News\n\n${hnStories.join('\n\n')}`);
+                    }
+                }
+            } catch {
+                // silently skip
+            }
+        }
+
+        // ── RSS 源（TechCrunch AI 频道 + The Verge AI）────────────────────────
+        if (enabledSources.includes('rss')) {
+            const rssFeeds: Array<{ name: string; url: string }> = [
+                { name: 'TechCrunch AI', url: 'https://techcrunch.com/tag/artificial-intelligence/feed/' },
+                { name: 'The Verge AI',  url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml' },
+            ];
+
+            const rssStories: string[] = [];
+            for (const feed of rssFeeds) {
+                try {
+                    const res = await fetch(feed.url, {
+                        headers: { 'User-Agent': ua },
+                        signal: AbortSignal.timeout(12_000),
+                    });
+                    if (!res.ok) continue;
+                    const xml = await res.text();
+
+                    // Extract <item> blocks
+                    const itemRe = /<item[^>]*>([\s\S]*?)<\/item>/g;
+                    const titleRe = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/;
+                    const linkRe  = /<link>([^<]+)<\/link>/;
+                    const descRe  = /<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/;
+
+                    let count = 0;
+                    let m: RegExpExecArray | null;
+                    while ((m = itemRe.exec(xml)) !== null && count < maxPerSource) {
+                        const body  = m[1];
+                        const title = (titleRe.exec(body)?.[1] ?? '').trim();
+                        const url   = (linkRe.exec(body)?.[1]  ?? '').trim();
+                        const desc  = (descRe.exec(body)?.[1]  ?? '')
+                            .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 120);
+                        if (!title || !url) continue;
+                        rssStories.push(`• ${title}\n   ${desc ? desc + ' …' : ''}\n   ${url}`);
+                        count++;
+                    }
+                } catch {
+                    // silently skip
+                }
+            }
+            if (rssStories.length > 0) {
+                sections.push(`## 📰 科技媒体 (RSS)\n\n${rssStories.join('\n\n')}`);
+            }
+        }
+
+        if (sections.length === 0) {
+            return '[Info] 暂时未能获取到新闻内容，网络可能受限，请稍后重试或手动提供选题。';
+        }
+
+        const rangeLabel =
+            timeRange === 'week'  ? '过去 7 天' :
+            timeRange === 'month' ? '过去 30 天' :
+            '过去 24 小时';
+
+        return (
+            `# 🤖 AI 热点新闻聚合（${rangeLabel}）\n\n` +
+            sections.join('\n\n---\n\n') +
+            '\n\n---\n提示：你可以让我基于以上内容撰写一篇微信公众号文章草稿。'
+        );
+    },
+};
+
+// ── generate_wechat_article ───────────────────────────────────────────────────
+
+/**
+ * Internal helper: fetch structured story objects from all sources.
+ * Returns a { rawText, stories } pair so both can be surfaced in the final output.
+ */
+interface NewsStory {
+    source: string;   // e.g. "Reddit r/MachineLearning"
+    title: string;
+    score: string;    // human-readable, e.g. "432 赞 / 87 评论"
+    discussionUrl: string;
+    externalUrl?: string;
+    snippet?: string;
+}
+
+async function gatherNewsStories(
+    timeRange: string,
+    subreddits: string[],
+    maxPerSource: number,
+): Promise<{ rawText: string; stories: NewsStory[] }> {
+    const ua = 'Mozilla/5.0 (compatible; NeoAgent/2.0)';
+    const stories: NewsStory[] = [];
+
+    // ── Reddit ────────────────────────────────────────────────────────────────
+    for (const sub of subreddits) {
+        try {
+            const res = await fetch(
+                `https://www.reddit.com/r/${encodeURIComponent(sub)}/top.json?limit=${maxPerSource}&t=${encodeURIComponent(timeRange)}`,
+                { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(12_000) },
+            );
+            if (!res.ok) continue;
+            const data = await res.json() as Record<string, any>;
+            for (const post of (data?.data?.children ?? [])) {
+                const p = post?.data;
+                if (!p || p.stickied || p.over_18) continue;
+                stories.push({
+                    source: `Reddit r/${sub}`,
+                    title: p.title,
+                    score: `${p.score} 赞 / ${p.num_comments} 评论`,
+                    discussionUrl: `https://reddit.com${p.permalink}`,
+                    externalUrl: p.url && !p.url.includes('reddit.com') ? p.url : undefined,
+                });
+            }
+        } catch { /* skip */ }
+    }
+
+    // ── Hacker News ───────────────────────────────────────────────────────────
+    try {
+        const secondsAgo =
+            timeRange === 'week'  ? 7 * 86_400 :
+            timeRange === 'month' ? 30 * 86_400 :
+            86_400;
+        const since = Math.floor(Date.now() / 1_000) - secondsAgo;
+        const hnRes = await fetch(
+            `https://hn.algolia.com/api/v1/search?tags=story` +
+            `&query=${encodeURIComponent('AI LLM machine learning')}` +
+            `&hitsPerPage=${maxPerSource}&numericFilters=created_at_i>${since},points>10`,
+            { headers: { 'User-Agent': ua }, signal: AbortSignal.timeout(12_000) },
+        );
+        if (hnRes.ok) {
+            const data = await hnRes.json() as Record<string, any>;
+            for (const h of (data?.hits ?? [])) {
+                if (!h.title) continue;
+                stories.push({
+                    source: 'Hacker News',
+                    title: h.title,
+                    score: `${h.points ?? 0} 分 / ${h.num_comments ?? 0} 评论`,
+                    discussionUrl: `https://news.ycombinator.com/item?id=${h.objectID}`,
+                    externalUrl: h.url ?? undefined,
+                });
+            }
+        }
+    } catch { /* skip */ }
+
+    // ── RSS ───────────────────────────────────────────────────────────────────
+    const rssFeeds = [
+        { name: 'TechCrunch AI', url: 'https://techcrunch.com/tag/artificial-intelligence/feed/' },
+        { name: 'The Verge AI',  url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml' },
+    ];
+    for (const feed of rssFeeds) {
+        try {
+            const res = await fetch(feed.url, {
+                headers: { 'User-Agent': ua },
+                signal: AbortSignal.timeout(12_000),
+            });
+            if (!res.ok) continue;
+            const xml = await res.text();
+            const itemRe   = /<item[^>]*>([\s\S]*?)<\/item>/g;
+            const titleRe  = /<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/;
+            const linkRe   = /<link>([^<]+)<\/link>/;
+            const descRe   = /<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/;
+            let count = 0;
+            let m: RegExpExecArray | null;
+            while ((m = itemRe.exec(xml)) !== null && count < maxPerSource) {
+                const body    = m[1];
+                const title   = (titleRe.exec(body)?.[1] ?? '').trim();
+                const url     = (linkRe.exec(body)?.[1]  ?? '').trim();
+                const snippet = (descRe.exec(body)?.[1]  ?? '')
+                    .replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 150);
+                if (!title || !url) continue;
+                stories.push({
+                    source: feed.name,
+                    title,
+                    score: '',
+                    discussionUrl: url,
+                    snippet: snippet || undefined,
+                });
+                count++;
+            }
+        } catch { /* skip */ }
+    }
+
+    // ── Build rawText for the LLM ─────────────────────────────────────────────
+    const rawLines = stories.map((s, i) => {
+        const parts = [
+            `[${i + 1}] ${s.title}`,
+            `    来源: ${s.source}${s.score ? ' | 热度: ' + s.score : ''}`,
+            `    讨论: ${s.discussionUrl}`,
+        ];
+        if (s.externalUrl) parts.push(`    原文: ${s.externalUrl}`);
+        if (s.snippet)     parts.push(`    摘要: ${s.snippet}`);
+        return parts.join('\n');
+    });
+
+    return { rawText: rawLines.join('\n\n'), stories };
+}
+
+const generateWechatArticleSkill: Skill = {
+    declaration: {
+        name: 'generate_wechat_article',
+        description:
+            'Fetch trending AI/tech news and generate a complete WeChat public account (微信公众号) article draft. ' +
+            'Returns both the FULL SOURCE LIST (every story with URL) AND the article draft in one response, ' +
+            'so the user can trace, verify, and expand any reference. ' +
+            'Use this instead of fetch_ai_news when the goal is to produce a publishable article.',
+        parameters: {
+            type: 'object',
+            properties: {
+                time_range: {
+                    type: 'string',
+                    description: '"day" = last 24 h (default), "week" = last 7 days',
+                },
+                subreddits: {
+                    type: 'string',
+                    description:
+                        'Comma-separated Reddit subreddits ' +
+                        '(default: "artificial,MachineLearning,ChatGPT,LocalLLaMA,singularity")',
+                },
+                max_per_source: {
+                    type: 'number',
+                    description: 'Max stories per source (default: 6, max: 15)',
+                },
+                style: {
+                    type: 'string',
+                    description:
+                        '"tech" = technical deep-dive (default), ' +
+                        '"popular" = casual & accessible, ' +
+                        '"opinion" = opinionated commentary',
+                },
+                word_count: {
+                    type: 'number',
+                    description: 'Target article length in Chinese characters (default: 1500)',
+                },
+                focus_topic: {
+                    type: 'string',
+                    description: 'Optional: narrow the article to a specific topic, e.g. "大模型推理效率"',
+                },
+            },
+        },
+    },
+
+    handler: async (args) => {
+        const timeRange    = String(args.time_range    ?? 'day');
+        const maxPerSource = Math.min(Number(args.max_per_source ?? 6), 15);
+        const style        = String(args.style         ?? 'tech');
+        const wordCount    = Number(args.word_count    ?? 1500);
+        const focusTopic   = args.focus_topic ? String(args.focus_topic) : null;
+        const subreddits   = String(
+            args.subreddits ?? 'artificial,MachineLearning,ChatGPT,LocalLLaMA,singularity',
+        ).split(',').map(s => s.trim()).filter(Boolean);
+
+        const apiKey = process.env.GEMINI_API_KEY ?? '';
+        if (!apiKey) return '[Error] GEMINI_API_KEY 未设置，无法生成文章。';
+
+        // 1. Gather news ───────────────────────────────────────────────────────
+        const { rawText, stories } = await gatherNewsStories(timeRange, subreddits, maxPerSource);
+        if (stories.length === 0) {
+            return '[Info] 未能获取新闻内容，网络可能受限，请稍后重试。';
+        }
+
+        // 2. Build source index for the user ──────────────────────────────────
+        const sourceIndex = stories.map((s, i) => {
+            const parts = [
+                `**[${i + 1}] ${s.title}**`,
+                `  - 来源: ${s.source}${s.score ? '  热度: ' + s.score : ''}`,
+                `  - 讨论: ${s.discussionUrl}`,
+            ];
+            if (s.externalUrl) parts.push(`  - 原文: ${s.externalUrl}`);
+            if (s.snippet)     parts.push(`  - 摘要: ${s.snippet}`);
+            return parts.join('\n');
+        }).join('\n\n');
+
+        // 3. Ask Gemini to write the article ──────────────────────────────────
+        const styleGuide =
+            style === 'popular' ? '风格轻松活泼，类比通俗，面向大众读者，少用英文缩写，多用故事感。' :
+            style === 'opinion' ? '风格鲜明有观点，适当犀利，提出作者立场，引导读者思考。' :
+            '风格专业严谨，面向有技术背景的读者，可使用专业术语但需简要解释。';
+
+        const focusInstruction = focusTopic
+            ? `本文请聚焦在「${focusTopic}」这一主题，从以上素材中挑选最相关的内容展开。`
+            : '请从以上素材中选取 3-5 条最有价值的内容组织成文章。';
+
+        const writingPrompt = `你是一位资深科技博主，擅长将技术动态转化为高质量微信公众号文章。
+
+以下是今日 AI 领域原始新闻素材（编号与来源已标注）：
+
+${rawText}
+
+---
+写作要求：
+1. ${focusInstruction}
+2. 文章结构：醒目标题 → 导语（钩子，2-3句）→ 3-5个正文小节（每节有小标题）→ 结语（观点总结或行动提示）
+3. ${styleGuide}
+4. 目标字数：约 ${wordCount} 字（不含标点计）
+5. 引用具体素材时，在句末加上来源编号，如"[3]"，方便读者追溯原文
+6. 不要使用 Markdown 的 # 标题符号，用加粗即可；不要有 HTML 标签
+7. 只输出文章正文，不要加任何解释或前言
+
+现在请开始写作：`;
+
+        const article = await geminiGenerate(
+            apiKey,
+            [{ role: 'user', parts: [{ text: writingPrompt }] }],
+            { model: 'flash', generationConfig: { temperature: 0.8 } },
+        );
+
+        if (!article) {
+            return (
+                `# 📋 原始素材（${stories.length} 条）\n\n${sourceIndex}\n\n` +
+                '[Error] 文章生成失败，但原始素材已附上，你可以手动撰写。'
+            );
+        }
+
+        // 4. Return: source index + article ──────────────────────────────────
+        const rangeLabel = timeRange === 'week' ? '过去 7 天' : '过去 24 小时';
+        return (
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `📋 原始素材来源（${stories.length} 条 | ${rangeLabel}）\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            sourceIndex +
+            `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `✍️ 微信公众号文章草稿\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            article
+        );
+    },
+};
+
 // ── Export setup ──────────────────────────────────────────────────────────────
 
 /**
@@ -401,5 +845,7 @@ export function setupSkills(): void {
     registerSkill(getWeatherSkill);
     registerSkill(httpRequestSkill);
     registerSkill(getDatetimeSkill);
-    console.log('[Skills] ✅ 5 skills registered: fetch_url, search_web, get_weather, http_request, get_datetime');
+    registerSkill(fetchAiNewsSkill);
+    registerSkill(generateWechatArticleSkill);
+    console.log('[Skills] ✅ 7 skills registered: fetch_url, search_web, get_weather, http_request, get_datetime, fetch_ai_news, generate_wechat_article');
 }

@@ -364,8 +364,14 @@ async function* streamGeminiApi(
                         );
                     }
 
+                    const candidate = json.candidates?.[0];
+                    const finishReason: string | undefined = candidate?.finishReason;
+                    if (finishReason && finishReason !== 'STOP') {
+                        console.warn(`[Gemini] finishReason=${finishReason}`, candidate?.safetyRatings ?? '');
+                    }
+
                     const parts: Array<Record<string, unknown>> =
-                        json.candidates?.[0]?.content?.parts ?? [];
+                        candidate?.content?.parts ?? [];
 
                     for (const part of parts) {
                         if (part.thought && typeof part.text === 'string') {
@@ -417,6 +423,9 @@ async function agentLoop(
     let finalText = '';
 
     for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
+        if (iter === MAX_TOOL_ITERATIONS - 1) {
+            console.warn(`[AgentRuntime] Reached MAX_TOOL_ITERATIONS (${MAX_TOOL_ITERATIONS}), forcing stop`);
+        }
         // modelRawParts accumulates every part EXACTLY as received from the API.
         // This is critical for thinking models: thought parts and their associated
         // thought_signatures on functionCall parts must be round-tripped verbatim.
@@ -444,6 +453,8 @@ async function agentLoop(
             finalText = turnText;
             if (turnText) {
                 onChunk?.({ type: 'text', text: turnText });
+            } else {
+                console.warn(`[AgentRuntime] Empty text turn at iter=${iter}, rawParts=${JSON.stringify(modelRawParts).slice(0, 300)}`);
             }
             break;
         }
@@ -485,44 +496,55 @@ export class GeminiClient {
     private apiKey = '';
     private model = '';
     private workDir = '';
+    private configDir = '';
     private systemInstruction = '';
 
     constructor() {
         this.apiKey = process.env.GEMINI_API_KEY ?? '';
         this.model = resolveModel(process.env.GEMINI_MODEL ?? 'flash');
-        this.workDir = process.env.WORK_DIR ?? '';
+        this.workDir = process.env.WORK_DIR ?? process.env.GEMINI_WORK_DIR ?? '';
+        this.configDir = process.env.AGENT_CONFIG_DIR ?? '';
 
         if (!this.apiKey) {
             console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
             return;
         }
         if (!this.workDir) {
-            console.log('[AgentRuntime] ❌ Disabled: WORK_DIR not set');
+            console.log('[AgentRuntime] ❌ Disabled: WORK_DIR (or GEMINI_WORK_DIR) not set');
             return;
         }
 
         this.enabled = true;
         console.log(`[AgentRuntime] ✅ Initialized. Model: ${this.model}`);
         console.log(`[AgentRuntime] 📂 WorkDir: ${this.workDir}`);
+        if (this.configDir) console.log(`[AgentRuntime] ⚙️  ConfigDir: ${this.configDir}`);
 
         // Load system instruction in the background (non-blocking)
         this.loadSystemInstruction().then(si => {
             this.systemInstruction = si;
             if (si) {
-                console.log(`[AgentRuntime] 📜 GEMINI.md loaded (${si.length} chars)`);
+                console.log(`[AgentRuntime] 📜 agent.md loaded (${si.length} chars)`);
             } else {
-                console.log('[AgentRuntime] ⚠️  No GEMINI.md found in workDir');
+                console.log('[AgentRuntime] ⚠️  No agent.md found');
             }
-        }).catch(err => console.error('[AgentRuntime] Failed to load GEMINI.md:', err.message));
+        }).catch(err => console.error('[AgentRuntime] Failed to load agent.md:', err.message));
     }
 
     private async loadSystemInstruction(): Promise<string> {
-        const mdPath = join(this.workDir, 'GEMINI.md');
-        try {
-            return await fs.readFile(mdPath, 'utf8');
-        } catch {
-            return '';
+        // Prefer AGENT_CONFIG_DIR/agent.md, fallback to WORK_DIR/agent.md
+        const candidates = [
+            this.configDir && join(this.configDir, 'agent.md'),
+            join(this.workDir, 'agent.md'),
+        ].filter(Boolean) as string[];
+
+        for (const p of candidates) {
+            try {
+                const content = await fs.readFile(p, 'utf8');
+                console.log(`[AgentRuntime] 📜 Loaded agent.md from: ${p}`);
+                return content;
+            } catch { /* try next */ }
         }
+        return '';
     }
 
     private buildPrompt(message: string, history?: string): string {
@@ -541,7 +563,10 @@ export class GeminiClient {
         onChunk?: StreamCallback,
         imageInput?: ImageInput,
     ): Promise<string | null> {
-        if (!this.enabled) return null;
+        if (!this.enabled) {
+            console.warn(`[AgentRuntime] Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
+            return null;
+        }
 
         const prompt = this.buildPrompt(message, history);
         const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: prompt }] }];
@@ -558,7 +583,12 @@ export class GeminiClient {
                 onChunk,
                 imageInput,
             );
-            console.log(`[AgentRuntime] ✅ Done in ${Date.now() - start}ms`);
+            const elapsed = Date.now() - start;
+            if (!result) {
+                console.warn(`[AgentRuntime] Empty result after ${elapsed}ms for: ${message.slice(0, 80).replace(/\n/g, ' ')}`);
+            } else {
+                console.log(`[AgentRuntime] ✅ Done in ${elapsed}ms, response length=${result.length}`);
+            }
             return result || null;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
