@@ -843,7 +843,7 @@ const xifengAuditSkill: Skill = {
 
         // ── Step 1: Pick 2-3 relevant articles from the knowledge base ────────
         const resourceDir = process.env.RESOURCE_DIR ?? join(workDir, 'project/@reference');
-        const kbDir = join(resourceDir, '西风的知识库');
+        const kbDir = join(resourceDir, 'xifeng-km');
         let kbContext = '';
         try {
             const allFiles = (await fs.readdir(kbDir))
