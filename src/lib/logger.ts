@@ -1,5 +1,5 @@
 /**
- * Logger Utility for NeoAgent
+ * Logger Utility for inkClaw
  * Provides global timestamp prefixing for console methods.
  */
 

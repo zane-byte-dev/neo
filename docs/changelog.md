@@ -1,13 +1,13 @@
-# Neo
+# inkClaw
 
 这是一个本地化的AI助手，基于本地文件建立知识库，Git负责版本管理，直接调用 Gemini SDK 作为 AI Agent。
-项目分为三个子仓库：`neo-brain`（知识库）、`neo-core`（网关与工具）、`neo-tools`（辅助脚本）。
-在 `neo-core/gateway/config` 目录下存放了 AI 的系统配置和工具。
+项目分为三个子仓库：`inkClaw-brain`（知识库）、`inkClaw-core`（网关与工具）、`inkClaw-tools`（辅助脚本）。
+在 `inkClaw-core/gateway/config` 目录下存放了 AI 的系统配置和工具。
 
 ## 目前已经实现的
 
 ### 极简架构底座
-纯本地 Markdown + Git 版本管理，`neo-brain` 确立 `inbox/history/user` 分区，实现 Local-First。
+纯本地 Markdown + Git 版本管理，`inkClaw-brain` 确立 `inbox/history/user` 分区，实现 Local-First。
 
 ### 自动化记忆生命周期
 会话即日志 (Session-to-Log)，通过 Telegram Bot 网关实现碎片注入，自动向 `history/memory/` 沉淀记录。
@@ -41,13 +41,13 @@
 
 ### 2026-03-14
 彻底去除 gemini-cli 依赖，底层全面迁移为直接调用 Gemini SDK（FunctionCalling 模式），响应速度大幅提升。
-重构项目目录结构，拆分为 `neo-brain`（知识库）、`neo-core`（网关）、`neo-tools`（工具脚本）三仓分离架构。
-`neo-core/gateway/config` 取代原 `system/` 目录，承载 AI 系统配置（SOUL、AGENTS、TOOLS、WriteWiki）。
+重构项目目录结构，拆分为 `inkClaw-brain`（知识库）、`inkClaw-core`（网关）、`inkClaw-tools`（工具脚本）三仓分离架构。
+`inkClaw-core/gateway/config` 取代原 `system/` 目录，承载 AI 系统配置（SOUL、AGENTS、TOOLS、WriteWiki）。
 
 ### 2026-03-04
 彻底重构知识库物理与逻辑架构，确立“Logs + 维度账本 (Ledgers)”分发体系。
 废弃手动日记模版，转向“会话即日志 (Session-to-Log) + 自动脱水 (Dehydration)”的全自动化审计流。
-调研 QoderWork 技术栈（Electron+CLI+node-pty），确认 Neo 后续 UI/终端交互路径。
+调研 QoderWork 技术栈（Electron+CLI+node-pty），确认 inkClaw 后续 UI/终端交互路径。
 确立 “node-pty 对接 gemini-cli” 的 UI 交付路径，实现 Electron 壳与 CLI 大脑的工程解耦。
 利用 AI 通过 Git commit 历史与 OKR 自动对齐生成绩效自评。
 
@@ -55,13 +55,13 @@
 架构扁平化，确立 `inbox/project/history/reference/system` 五大支柱。
 
 ### 2026-02-04
-NeoAgent Typeless（录音提纯）原型跑通，探索原生音频理解。
+inkClaw Typeless（录音提纯）原型跑通，探索原生音频理解。
 
 ### 2026-02-09
 完成 Browser Plugin 链路与生图 (Imagine) 能力。
 
 ### 2026-02-10
-全链路打通 (Telegram <-> Local Vault)；项目正式命名为 Neo。
+全链路打通 (Telegram <-> Local Vault)；项目正式命名为 inkClaw。
 
 ### 2026-02-21
 激活 Google AI Pro，移除对学生优惠代理的依赖，确保模型主权。
@@ -79,16 +79,16 @@ NeoAgent Typeless（录音提纯）原型跑通，探索原生音频理解。
 底层重构为 SDK+FunctionCalling，调用提速。
 
 ### 2026-02-25
-**Neo Desktop v1 MVP 达成**。基于 Tauri + React 实现了原生的三栏桌面端设计，打通本地文件与 AI 侧边栏的无缝联动。
+**inkClaw Desktop v1 MVP 达成**。基于 Tauri + React 实现了原生的三栏桌面端设计，打通本地文件与 AI 侧边栏的无缝联动。
 
 ### 2026-02-27
 奥卡姆剃刀实践，技术栈从 Tauri 回撤至 Electron（后确立为原生+CLI混合模式）。
 
 ### 2026-01-19
-实现 CLI + 浏览器插件闭环，NeoAgent 正式跑通。
+实现 CLI + 浏览器插件闭环，inkClaw 正式跑通。
 
 ### 2026-01-22
-NeoAgent Gardener v2.0 重构完成，集成语义混合检索（Embedding API）。
+inkClaw Gardener v2.0 重构完成，集成语义混合检索（Embedding API）。
 
 ### 2026-01-26
 废弃复杂脚本，转为 "Interactive Automation" 交互式模式，数据回归 Local-First。

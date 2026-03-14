@@ -91,7 +91,7 @@ def fetch_wechat_article(url):
         return None
 
 def main():
-    json_path = "/Users/zhengchao/mox/neo/pending_links.json"
+    json_path = "/Users/zhengchao/mox/inkClaw/pending_links.json"
     if not os.path.exists(json_path):
         print("pending_links.json 不存在。")
         return

@@ -1,6 +1,6 @@
-# 🔭 NeoAgent Sentinel
+# 🔭 inkClaw Sentinel
 
-NeoAgent Sentinel 是一个 Telegram Bot 智能助手，通过 Gemini CLI（ACP 协议）提供 AI 回复，支持多轮对话历史缓存、后台异步长任务执行与定时巡检。
+inkClaw Sentinel 是一个 Telegram Bot 智能助手，通过 Gemini CLI（ACP 协议）提供 AI 回复，支持多轮对话历史缓存、后台异步长任务执行与定时巡检。
 
 ## 功能特性
 
@@ -107,7 +107,7 @@ Bot 立即回复：
 ```
 🧠 Thinking...
 
-🤖 NeoAgent (13:46)
+🤖 inkClaw (13:46)
 
 您可以使用 async/await 或 Promise 来处理异步任务...
 ```
@@ -215,4 +215,4 @@ MIT
 
 ## 作者
 
-Zhengchao - NeoAgent Project
+Zhengchao - inkClaw Project

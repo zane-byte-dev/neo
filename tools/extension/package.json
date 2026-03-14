@@ -1,6 +1,6 @@
 {
   "name": "mind-extension",
   "version": "2.1.0",
-  "description": "Chrome Extension - 划词保存网页内容到 NeoAgent vault",
+  "description": "Chrome Extension - 划词保存网页内容到 inkClaw vault",
   "private": true
 }

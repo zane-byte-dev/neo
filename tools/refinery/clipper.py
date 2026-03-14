@@ -32,7 +32,7 @@ def fetch_via_jina(url: str) -> dict[str, str]:
         return {"title": title, "content": content}
 
 def fetch_via_local(url: str) -> dict[str, str]:
-    headers = {'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent-Clipper/1.0)'}
+    headers = {'User-Agent': 'Mozilla/5.0 (compatible; inkClaw-Clipper/1.0)'}
     with httpx.Client(timeout=20.0) as client:
         res = client.get(url, headers=headers)
         res.raise_for_status()

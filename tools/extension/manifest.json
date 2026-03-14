@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Mind Extension",
   "version": "2.1.0",
-  "description": "简洁的划词保存工具 - 快速保存网页内容、推文、对话到 NeoAgent vault",
+  "description": "简洁的划词保存工具 - 快速保存网页内容、推文、对话到 inkClaw vault",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

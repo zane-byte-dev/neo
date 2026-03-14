@@ -1,6 +1,6 @@
-# Neo 项目演进：4层架构解耦方案
+# inkClaw 项目演进：4层架构解耦方案
 
-目前 NeoAgent 的网关架构（Sentinel）向最终可扩展形态（Agentic Architecture）的演进设计，核心在于完全隔离机制、计算与能力。
+目前 inkClaw 的网关架构（Sentinel）向最终可扩展形态（Agentic Architecture）的演进设计，核心在于完全隔离机制、计算与能力。
 
 ### 1. 架构全景图：4层模型
 

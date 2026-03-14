@@ -1,7 +1,7 @@
 /**
  * Mind Extension - Content Script (精简版)
  * 
- * 只保留保存到 NeoAgent 的核心功能：
+ * 只保留保存到 inkClaw 的核心功能：
  * 1. 划词保存
  * 2. X.com 推文保存
  * 3. Gemini 对话保存
@@ -713,7 +713,7 @@
     createSaveButton() {
       const button = document.createElement('button');
       button.setAttribute('data-mind-feishu-save-btn', 'true');
-      button.setAttribute('title', '保存到 NeoAgent');
+      button.setAttribute('title', '保存到 inkClaw');
       button.style.cssText = `
         display: inline-flex;
         align-items: center;
@@ -737,7 +737,7 @@
           <polyline points="17 21 17 13 7 13 7 21"/>
           <polyline points="7 3 7 8 15 8"/>
         </svg>
-        <span>保存到 NeoAgent</span>
+        <span>保存到 inkClaw</span>
       `;
 
       // Hover 效果
@@ -1475,7 +1475,7 @@
         return false;
       }
     } catch (error) {
-      console.error('[Mind Extension] 保存到 NeoAgent 失败:', error);
+      console.error('[Mind Extension] 保存到 inkClaw 失败:', error);
       return false;
     }
   }

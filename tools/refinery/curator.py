@@ -65,7 +65,7 @@ def run_curator() -> str:
         if res.returncode != 0 or not response or "⚠️" in response or "🔥" in response:
             return f"❌ [策展人] 唤醒失败或无思考产出：{response or res.stderr}"
             
-        report = f"🕰️ **时空连线：来自 `{file_name}.md` 的只言片语**\n\n{response}\n\n--- \n_*(由 NeoAgent 策展代理自动从归档区中挖掘并精炼)*_"
+        report = f"🕰️ **时空连线：来自 `{file_name}.md` 的只言片语**\n\n{response}\n\n--- \n_*(由 inkClaw 策展代理自动从归档区中挖掘并精炼)*_"
         return report
         
     except Exception as e:

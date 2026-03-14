@@ -87,7 +87,7 @@ interface Task {
     skipHistory?: boolean;
 }
 
-class NeoAgentBot {
+class inkClawBot {
     private bot: Telegraf;
     private activeTaskIds = new Set<string>();
 
@@ -130,7 +130,7 @@ class NeoAgentBot {
 
                     // Build raw transcript for compression (capped to avoid huge prompts)
                     const transcript = session.messages.map(m => {
-                        const role = m.role === 'user' ? (m.userName ?? 'User') : 'Neo';
+                        const role = m.role === 'user' ? (m.userName ?? 'User') : 'inkClaw';
                         const body = m.content.length > 300 ? m.content.slice(0, 300) + '...' : m.content;
                         return `${role}: ${body}`;
                     }).join('\n\n');
@@ -951,7 +951,7 @@ ${transcript}
         try {
             const res = await fetch(url, {
                 signal: controller.signal,
-                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent/2.0)' },
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; inkClaw/2.0)' },
             });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             html = await res.text();
@@ -1128,7 +1128,7 @@ ${transcript}
 
             const timestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
             const extraArgs: any = messageId ? { reply_parameters: { message_id: messageId } } : {};
-            const agentLabel = task.skipHistory ? 'btw' : 'NeoAgent';
+            const agentLabel = task.skipHistory ? 'btw' : 'inkClaw';
 
             // Send placeholder — will become the first streaming message
             const placeholderMsg = await this.bot.telegram.sendMessage(
@@ -1168,7 +1168,7 @@ ${transcript}
             };
 
             const buildThinkingStatus = () => {
-                const parts: string[] = [`⏳ NeoAgent (${timestamp})`];
+                const parts: string[] = [`⏳ inkClaw (${timestamp})`];
                 if (lastToolCall) parts.push(`🔧 调用工具: ${lastToolCall}`);
                 const thought = thoughtAccum.trim().replace(/\n+/g, ' ');
                 parts.push(thought.length > 120 ? '...' + thought.slice(-120) : (thought || '🤔 思考中...'));
@@ -1204,7 +1204,7 @@ ${transcript}
                         committedChars += cutAt;
                         // Start a new message for the overflow
                         const newMsg = await this.bot.telegram.sendMessage(
-                            chatId, `⏳ NeoAgent (${timestamp})\n\n✍️ 续...`
+                            chatId, `⏳ inkClaw (${timestamp})\n\n✍️ 续...`
                         );
                         activeMsgId = newMsg.message_id;
                         lastEditMs = 0;
@@ -1250,7 +1250,7 @@ ${transcript}
             );
 
             // Edit the last active message with whatever remains
-            const finalBody = `🤖 NeoAgent (${finalTimestamp})\n\n${finalSlice || fullFormatted}`;
+            const finalBody = `🤖 inkClaw (${finalTimestamp})\n\n${finalSlice || fullFormatted}`;
             await this.bot.telegram.editMessageText(chatId, activeMsgId, undefined, finalBody)
                 .catch(async (err: any) => {
                     // Telegram returns "message is not modified" when the streaming already
@@ -1281,7 +1281,7 @@ ${transcript}
 
         // Convert Markdown to Telegram-friendly format
         const telegramText = markdownToTelegram(text);
-        const replyText = `🤖 NeoAgent (${timestamp})\n\n${telegramText}`;
+        const replyText = `🤖 inkClaw (${timestamp})\n\n${telegramText}`;
 
         // Split long messages (Telegram limit is 4096 characters)
         const chunks = this.splitMessage(replyText, 4000);
@@ -1363,7 +1363,7 @@ ${transcript}
         switch (command) {
             case '/start':
                 await ctx.reply(
-                    '🔭 **NeoAgent Connect Gateway**\n' +
+                    '🔭 **inkClaw Connect Gateway**\n' +
                     '这是一个极简的全能代理网关。\n\n' +
                     '**对话控制**\n' +
                     '`/new` — 开启新会话（重置上下文）\n' +
@@ -1635,7 +1635,7 @@ ${transcript}
             const timeStr = new Date().toLocaleString('zh-CN');
             this.bot.telegram.sendMessage(
                 AUTHORIZED_CHAT_ID,
-                `🤖 **NeoAgent Gateway** 已于 ${timeStr} 启动/重启。\n` +
+                `🤖 **inkClaw Gateway** 已于 ${timeStr} 启动/重启。\n` +
                 `✅ 网关已上线\n` +
                 `✅ 引擎状态: ${process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview'} (Direct API + Agentic Loop)`,
                 { parse_mode: 'Markdown' }
@@ -1651,6 +1651,6 @@ ${transcript}
 }
 
 // Start the bot
-const bot = new NeoAgentBot(BOT_TOKEN);
+const bot = new inkClawBot(BOT_TOKEN);
 await bot.init();
 bot.run();

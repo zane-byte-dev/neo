@@ -69,7 +69,7 @@ const fetchUrlSkill: Skill = {
             try {
                 const res = await fetch(targetUrl, {
                     signal: AbortSignal.timeout(timeoutMs),
-                    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent/2.0)' },
+                    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; inkClaw/2.0)' },
                 });
                 if (!res.ok) return { ok: false, status: res.status };
                 return { ok: true, text: htmlToText(await res.text()) };
@@ -153,7 +153,7 @@ const searchWebSkill: Skill = {
             // 1. Instant Answer API — great for facts, conversions, definitions
             const iaRes = await fetch(
                 `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
-                { headers: { 'User-Agent': 'NeoAgent/2.0' } },
+                { headers: { 'User-Agent': 'inkClaw/2.0' } },
             );
             if (iaRes.ok) {
                 const data = await iaRes.json() as any;
@@ -180,7 +180,7 @@ const searchWebSkill: Skill = {
             // 2. Fallback: DuckDuckGo Lite HTML (simpler DOM, easier to parse)
             const liteRes = await fetch(
                 `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
-                { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent/2.0)' } },
+                { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; inkClaw/2.0)' } },
             );
             if (!liteRes.ok) return `[Error] 搜索失败: HTTP ${liteRes.status}`;
 
@@ -323,7 +323,7 @@ const httpRequestSkill: Skill = {
             return '[Error] URL 必须以 http:// 或 https:// 开头';
         }
 
-        const headersObj: Record<string, string> = { 'User-Agent': 'NeoAgent/2.0' };
+        const headersObj: Record<string, string> = { 'User-Agent': 'inkClaw/2.0' };
         if (args.headers) {
             try {
                 Object.assign(headersObj, JSON.parse(String(args.headers)));
@@ -565,7 +565,7 @@ async function gatherNewsStories(
     subreddits: string[],
     maxPerSource: number,
 ): Promise<{ rawText: string; stories: NewsStory[] }> {
-    const ua = 'Mozilla/5.0 (compatible; NeoAgent/2.0)';
+    const ua = 'Mozilla/5.0 (compatible; inkClaw/2.0)';
     const stories: NewsStory[] = [];
 
     // ── Reddit ────────────────────────────────────────────────────────────────
