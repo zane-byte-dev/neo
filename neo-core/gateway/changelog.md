@@ -1,16 +1,16 @@
 # Neo
 
-这是一个本地化的AI助手，基于本地文件建立知识库，Git负责版本管理，GeminiCli 作为 AI Agent。
-当前项目本身就是这个知识助手维护的。
-在 `system` 目录下存放了 AI 的系统配置和工具。
+这是一个本地化的AI助手，基于本地文件建立知识库，Git负责版本管理，直接调用 Gemini SDK 作为 AI Agent。
+项目分为三个子仓库：`neo-brain`（知识库）、`neo-core`（网关与工具）、`neo-tools`（辅助脚本）。
+在 `neo-core/gateway/config` 目录下存放了 AI 的系统配置和工具。
 
 ## 目前已经实现的
 
 ### 极简架构底座
-纯本地 Markdown + Git 版本管理，确立 `inbox/project/history/reference/system` 分区，实现 Local-First。
+纯本地 Markdown + Git 版本管理，`neo-brain` 确立 `inbox/history/user` 分区，实现 Local-First。
 
 ### 自动化记忆生命周期
-会话即日志 (Session-to-Log)，通过 gemini-cli Hook 实现在离开会话时自动脱水并向 `history/memory/` 沉淀记录。
+会话即日志 (Session-to-Log)，通过 Telegram Bot 网关实现碎片注入，自动向 `history/memory/` 沉淀记录。
 
 ### 多重 AI 人格切换
 通过 `system/persona` 实现“管家(基建)”、“西风(决策审计)”、“作家(输出沉淀)”等不同人格的精准调用。
@@ -27,7 +27,7 @@
 基于 Node.js 定时唤醒，自动检索历史记录进行每日知识策展并主动推送到终端。
 
 ### UI 界面层解耦重构
-推进 node-pty 接入 gemini-cli 的交付路径，把终端套上一层轻量的 Electron 外壳。
+基于 Electron 外壳对接 Gemini SDK，实现轻量桌面端交互层。
 
 ### 向量增强检索 (RAG)
 优化本地 Markdown 的 Embedding 与索引性能，实现模糊意图检索和主动联想搜索。
@@ -38,6 +38,11 @@
 
 
 ## change log
+
+### 2026-03-14
+彻底去除 gemini-cli 依赖，底层全面迁移为直接调用 Gemini SDK（FunctionCalling 模式），响应速度大幅提升。
+重构项目目录结构，拆分为 `neo-brain`（知识库）、`neo-core`（网关）、`neo-tools`（工具脚本）三仓分离架构。
+`neo-core/gateway/config` 取代原 `system/` 目录，承载 AI 系统配置（SOUL、AGENTS、TOOLS、WriteWiki）。
 
 ### 2026-03-04
 彻底重构知识库物理与逻辑架构，确立“Logs + 维度账本 (Ledgers)”分发体系。
