@@ -1387,7 +1387,6 @@ ${transcript}
                 break;
 
             case '/new':
-            case '/newsession':
                 await chatHistoryCache.createNewSession();
                 await ctx.reply('📝 新会话已开启，上下文已重置。');
                 break;

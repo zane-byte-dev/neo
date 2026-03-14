@@ -875,7 +875,8 @@ const xifengAuditSkill: Skill = {
             : '进行全面底层诊断：利益分析 → 生态位判断 → 风险识别 → 非典型建议。';
 
         // ── Step 1: Pick 2-3 relevant articles from the knowledge base ────────
-        const kbDir = join(workDir, 'project/@reference/西风的知识库');
+        const resourceDir = process.env.RESOURCE_DIR ?? join(workDir, 'project/@reference');
+        const kbDir = join(resourceDir, '西风的知识库');
         let kbContext = '';
         try {
             const allFiles = (await fs.readdir(kbDir))
