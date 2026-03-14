@@ -6,16 +6,18 @@
  * function-calling declarations sent to the Gemini API.
  *
  * Built-in skills:
- *   fetch_url    — Fetch a web page and return clean plain text
- *   search_web   — Search the web via DuckDuckGo
- *   get_weather  — Real-time weather via wttr.in (no API key needed)
- *   http_request — Generic HTTP GET / POST to any API
- *   get_datetime — Current date/time with optional timezone
+ *   fetch_url      — Fetch a web page and return clean plain text
+ *   search_web     — Search the web via DuckDuckGo
+ *   get_weather    — Real-time weather via wttr.in (no API key needed)
+ *   http_request   — Generic HTTP GET / POST to any API
+ *   get_datetime   — Current date/time with optional timezone
+ *   browser_fetch  — Fetch JS-rendered pages via real Chrome (Puppeteer)
  */
 
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { registerSkill, Skill, geminiGenerate } from './gemini-client.js';
+import { browserFetch } from './browser-service.js';
 
 // ── fetch_url ─────────────────────────────────────────────────────────────────
 
@@ -41,18 +43,8 @@ const fetchUrlSkill: Skill = {
         const url = String(args.url ?? '');
         const maxChars = Math.min(Number(args.max_chars ?? 8_000), 30_000);
 
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 15_000);
-
-        try {
-            const res = await fetch(url, {
-                signal: controller.signal,
-                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent/2.0)' },
-            });
-            if (!res.ok) return `[Error] HTTP ${res.status} ${res.statusText}`;
-
-            const html = await res.text();
-            const text = html
+        const htmlToText = (html: string): string =>
+            html
                 .replace(/<script[\s\S]*?<\/script>/gi, '')
                 .replace(/<style[\s\S]*?<\/style>/gi, '')
                 .replace(/<[^>]+>/g, ' ')
@@ -66,13 +58,69 @@ const fetchUrlSkill: Skill = {
                 .replace(/\n{3,}/g, '\n\n')
                 .trim();
 
-            return text.length > maxChars
-                ? text.slice(0, maxChars) + `\n\n[...已截断，还有 ${text.length - maxChars} 个字符]`
-                : text;
+        const tryFetch = async (
+            targetUrl: string,
+            timeoutMs = 15_000,
+        ): Promise<{ ok: boolean; text?: string; status?: number }> => {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), timeoutMs);
+            try {
+                const res = await fetch(targetUrl, {
+                    signal: ctrl.signal,
+                    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; NeoAgent/2.0)' },
+                });
+                if (!res.ok) return { ok: false, status: res.status };
+                return { ok: true, text: htmlToText(await res.text()) };
+            } catch {
+                return { ok: false };
+            } finally {
+                clearTimeout(t);
+            }
+        };
+
+        const truncate = (text: string, prefix = '') => {
+            const full = prefix + text;
+            return full.length > maxChars
+                ? full.slice(0, maxChars) + `\n\n[...已截断，还有 ${full.length - maxChars} 个字符]`
+                : full;
+        };
+
+        try {
+            // 1. Direct fetch
+            const direct = await tryFetch(url);
+            if (direct.ok && direct.text) return truncate(direct.text);
+
+            // Only attempt fallbacks for access-denied responses
+            const blocked = [401, 403, 429];
+            if (!blocked.includes(direct.status ?? 0)) {
+                return `[Error] HTTP ${direct.status ?? '网络错误'} — 无法访问该页面`;
+            }
+
+            // 2. Google Cache fallback
+            const gc = await tryFetch(
+                `https://webcache.googleusercontent.com/search?q=cache:${encodeURIComponent(url)}`,
+                12_000,
+            );
+            if (gc.ok && gc.text) {
+                return truncate(gc.text, `[来源: Google Cache — 原始页面返回 ${direct.status}]\n\n`);
+            }
+
+            // 3. Wayback Machine fallback
+            const wb = await tryFetch(
+                `https://web.archive.org/web/${encodeURIComponent(url)}`,
+                15_000,
+            );
+            if (wb.ok && wb.text) {
+                return truncate(wb.text, `[来源: Wayback Machine — 原始页面返回 ${direct.status}]\n\n`);
+            }
+
+            return (
+                `[Error] HTTP ${direct.status} — 页面拒绝访问，` +
+                `Google Cache 和 Wayback Machine 均无法获取内容。` +
+                `\n请粘贴页面文字或截图，我再帮你分析。`
+            );
         } catch (err: unknown) {
             return `[Error] fetch_url: ${err instanceof Error ? err.message : String(err)}`;
-        } finally {
-            clearTimeout(timer);
         }
     },
 };
@@ -984,6 +1032,35 @@ ${focusInstruction}
     },
 };
 
+// ── browser_fetch ─────────────────────────────────────────────────────────────
+
+const browserFetchSkill: Skill = {
+    declaration: {
+        name: 'browser_fetch',
+        description:
+            'Fetch a URL using a real Chrome browser with full JavaScript rendering. ' +
+            'Use this when fetch_url fails (403, Cloudflare, login walls, SPA pages). ' +
+            'Slower than fetch_url (~5-15s) but handles JS-heavy sites, paywalls, and anti-bot pages. ' +
+            'Does NOT bypass sites that require user login (e.g. Twitter/X without session).',
+        parameters: {
+            type: 'object',
+            properties: {
+                url: { type: 'string', description: 'Full URL to fetch (must start with http:// or https://)' },
+                max_chars: {
+                    type: 'number',
+                    description: 'Maximum characters to return (default 8000, max 30000)',
+                },
+            },
+            required: ['url'],
+        },
+    },
+    handler: async (args) => {
+        const url = String(args.url ?? '');
+        const maxChars = Math.min(Number(args.max_chars ?? 8_000), 30_000);
+        return browserFetch(url, maxChars);
+    },
+};
+
 // ── Export setup ──────────────────────────────────────────────────────────────
 
 /**
@@ -998,5 +1075,6 @@ export function setupSkills(): void {
     registerSkill(fetchAiNewsSkill);
     registerSkill(generateWechatArticleSkill);
     registerSkill(xifengAuditSkill);
-    console.log('[Skills] ✅ 8 skills registered: fetch_url, search_web, get_weather, http_request, get_datetime, fetch_ai_news, generate_wechat_article, xifeng_audit');
+    registerSkill(browserFetchSkill);
+    console.log('[Skills] ✅ 9 skills registered: fetch_url, search_web, get_weather, http_request, get_datetime, fetch_ai_news, generate_wechat_article, xifeng_audit, browser_fetch');
 }

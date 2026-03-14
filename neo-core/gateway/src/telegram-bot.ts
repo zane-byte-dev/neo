@@ -16,6 +16,7 @@ import { ReminderManager, parseReminderTime } from './lib/reminder-manager.js';
 import { ScheduledTaskManager, parseScheduledTask } from './lib/scheduled-task-manager.js';
 import { UserProfileManager } from './lib/user-profile.js';
 import { setupSkills } from './lib/skills.js';
+import { closeBrowser } from './lib/browser-service.js';
 import cron from 'node-cron';
 
 
@@ -1644,8 +1645,8 @@ ${transcript}
         this.bot.launch();
 
         // Enable graceful stop
-        process.once('SIGINT', () => { reminderManager.destroy(); scheduledTaskManager.destroy(); geminiClient.close(); this.bot.stop('SIGINT'); });
-        process.once('SIGTERM', () => { reminderManager.destroy(); scheduledTaskManager.destroy(); geminiClient.close(); this.bot.stop('SIGTERM'); });
+        process.once('SIGINT', () => { reminderManager.destroy(); scheduledTaskManager.destroy(); geminiClient.close(); closeBrowser(); this.bot.stop('SIGINT'); });
+        process.once('SIGTERM', () => { reminderManager.destroy(); scheduledTaskManager.destroy(); geminiClient.close(); closeBrowser(); this.bot.stop('SIGTERM'); });
     }
 }
 
