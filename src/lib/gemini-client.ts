@@ -14,7 +14,7 @@
  */
 
 import { config } from 'dotenv';
-import { join, dirname, isAbsolute } from 'node:path';
+import { join, dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promises as fs } from 'node:fs';
 import { execa } from 'execa';
@@ -502,8 +502,10 @@ export class GeminiClient {
     constructor() {
         this.apiKey = process.env.GEMINI_API_KEY ?? '';
         this.model = resolveModel(process.env.GEMINI_MODEL ?? 'flash');
-        this.workDir = process.env.WORK_DIR ?? process.env.GEMINI_WORK_DIR ?? '';
-        this.configDir = process.env.AGENT_CONFIG_DIR ?? '';
+        // Always resolve to absolute path so tool calls work regardless of CWD
+        const rawWorkDir = process.env.WORK_DIR ?? process.env.GEMINI_WORK_DIR ?? '';
+        this.workDir = rawWorkDir ? resolve(rawWorkDir) : '';
+        this.configDir = process.env.AGENT_CONFIG_DIR ? resolve(process.env.AGENT_CONFIG_DIR) : '';
 
         if (!this.apiKey) {
             console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');

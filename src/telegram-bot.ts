@@ -4,7 +4,7 @@ import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { execa } from 'execa';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
 import { GeminiClient, geminiGenerate, geminiUploadFile } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
@@ -42,6 +42,33 @@ if (!AUTHORIZED_CHAT_ID) {
     process.exit(1);
 }
 
+// ── Bot command registry (single source of truth) ──────────────────────────
+// Add new commands here; setMyCommands() picks them up automatically.
+const BOT_COMMANDS: Array<{ command: string; description: string }> = [
+    { command: 'start',        description: '查看帮助与所有命令' },
+    { command: 'new',          description: '开启新会话（重置上下文）' },
+    { command: 'compact',      description: '压缩当前上下文（保留摘要）' },
+    { command: 'clear',        description: '清空全部对话历史' },
+    { command: 'btw',          description: '临时问答，不计入对话上下文' },
+    { command: 'stats',        description: '查看会话统计' },
+    { command: 'tasks',        description: '查看所有后台任务状态' },
+    { command: 'cancel',       description: '取消某个任务 /cancel <id>' },
+    { command: 'reminders',    description: '查看所有提醒' },
+    { command: 'remindcancel', description: '取消提醒 /remindcancel <id>' },
+    { command: 'schedules',    description: '查看所有定时任务' },
+    { command: 'unschedule',   description: '删除定时任务 /unschedule <id>' },
+    { command: 'profile',      description: '查看/设置个人信息（城市、兴趣等）' },
+    { command: 'research',     description: '提交深度调研任务' },
+    { command: 'async',        description: '提交后台长任务' },
+    { command: 'ls',           description: '列出 workspace 目录内容（零 token）' },
+    { command: 'read',         description: '直接读取文件内容，不经过 AI（零 token）' },
+    { command: 'note',         description: '快速记录碎片到 Inbox（零 token）/note <内容>' },
+    { command: 'today',        description: '查看今日 Inbox 与日记（零 token）' },
+    { command: 'task',         description: '快速追加任务到 Tasks（零 token）/task <内容>' },
+    { command: 'search',       description: '全文搜索 vault（零 token）/search <关键词>' },
+    { command: 'weekly',       description: '立即生成本周周报' },
+];
+
 // Register pluggable skills (fetch_url, search_web, get_weather, http_request, get_datetime)
 setupSkills();
 
@@ -52,8 +79,24 @@ const geminiClient = new GeminiClient();
 const chatHistoryCache = new ChatHistoryCache();
 await chatHistoryCache.init();
 
+// Session-to-Log: whenever a session expires (idle timeout), immediately dehydrate it.
+// This complements the 23:59 cron — mid-day session switches won't be missed.
+chatHistoryCache.setOnSessionExpire(async (session) => {
+    if (session.messages.length === 0) return;
+    const projectRoot = process.cwd();
+    const vaultEnv = { ...process.env };
+    try {
+        await import('execa').then(({ execa }) =>
+            execa('npx', ['tsx', join(projectRoot, 'apps/refinery/session-to-log.ts')], { env: vaultEnv })
+        );
+        console.log(`[SessionExpire] Dehydrated session ${session.sessionId} (${session.messages.length} msgs)`);
+    } catch (err: any) {
+        console.error('[SessionExpire] session-to-log failed:', err.message);
+    }
+});
+
 // Initialize async task manager
-const asyncTaskManager = new AsyncTaskManager(process.env.WORK_DIR || process.cwd());
+const asyncTaskManager = new AsyncTaskManager(CACHE_DIR);
 await asyncTaskManager.init();
 
 // Keywords that trigger background async tasks
@@ -90,6 +133,8 @@ interface Task {
 class inkClawBot {
     private bot: Telegraf;
     private activeTaskIds = new Set<string>();
+    // Stores fuzzy-search results waiting for user to pick (keyed by chatId)
+    private pendingReadMatches = new Map<number, { matches: string[]; expiry: number }>();
 
     constructor(token: string) {
         this.bot = new Telegraf(token);
@@ -105,80 +150,6 @@ class inkClawBot {
     async init() {
         // Init user profile
         await userProfile.init();
-
-        // Archive expired Telegram sessions to history/memory/ via Gemini compression
-        const workDir = process.env.WORK_DIR;
-        const archiveApiKey = process.env.GEMINI_API_KEY;
-        if (workDir && archiveApiKey) {
-            chatHistoryCache.setOnSessionExpire(async (session) => {
-                if (session.messages.length < 2) return; // skip trivial sessions
-
-                try {
-                    const memoryDir = join(workDir, 'history', 'memory');
-                    await fs.mkdir(memoryDir, { recursive: true });
-
-                    const dateStr = new Date(session.startTime).toISOString().slice(0, 10);
-                    const memoryFile = join(memoryDir, `${dateStr}.md`);
-
-                    // Idempotency check
-                    let existing = '';
-                    try { existing = await fs.readFile(memoryFile, 'utf8'); } catch { /* new file */ }
-                    if (existing.includes(session.sessionId)) {
-                        console.log(`[MemoryArchive] Session ${session.sessionId} already archived, skipping.`);
-                        return;
-                    }
-
-                    // Build raw transcript for compression (capped to avoid huge prompts)
-                    const transcript = session.messages.map(m => {
-                        const role = m.role === 'user' ? (m.userName ?? 'User') : 'inkClaw';
-                        const body = m.content.length > 300 ? m.content.slice(0, 300) + '...' : m.content;
-                        return `${role}: ${body}`;
-                    }).join('\n\n');
-
-                    const startHm = new Date(session.startTime).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-
-                    // Call Gemini API directly (not ACP) to compress — lightweight, non-blocking
-                    const compressionPrompt = `你是一个个人知识管理助手，负责将对话压缩为记忆摘要。
-
-以下是一段 Telegram 对话记录（开始时间 ${startHm}）：
-
-${transcript}
-
-请将这段对话压缩为 3-5 行的记忆摘要，格式如下（严格遵守）：
-## ${startHm} <主题关键词>
-- 做了什么（行动 + 结果，一行）
-- 产出了哪些文件或结论（若有）
-- 遗留了哪些待办项（若有）
-
-规则：
-- 只记录事实，不带修饰，不写废话
-- 如果只是闲聊或简单问答，第一行写"闲聊/问答"，只保留 1-2 行关键点
-- 不要加 session_id 或时间戳，我会自动添加`;
-
-                    const summaryText = await geminiGenerate(
-                        archiveApiKey,
-                        [{ parts: [{ text: compressionPrompt }] }],
-                        { generationConfig: { temperature: 0.2, maxOutputTokens: 300 } },
-                    );
-
-                    let summary: string;
-                    if (summaryText) {
-                        summary = summaryText;
-                    } else {
-                        // Fallback: simple first-message excerpt if API fails
-                        const firstUser = session.messages.find(m => m.role === 'user');
-                        const preview = firstUser?.content.slice(0, 100) ?? '（无内容）';
-                        summary = `## ${startHm} Telegram 对话\n- ${preview}`;
-                    }
-
-                    const block = `\n${summary}\n<!-- session: ${session.sessionId} -->\n`;
-                    await fs.appendFile(memoryFile, block, 'utf8');
-                    console.log(`[MemoryArchive] Compressed & archived session ${session.sessionId} → ${memoryFile}`);
-                } catch (err: any) {
-                    console.error('[MemoryArchive] Failed:', err.message);
-                }
-            });
-        }
 
         // Init reminder manager
         await reminderManager.init(async (reminder) => {
@@ -276,13 +247,16 @@ ${transcript}
             return;
         }
 
-        const projectRoot = process.env.WORK_DIR || process.cwd();
+        // Project root = where the bot process was launched (always /path/to/neo).
+        // WORK_DIR points to the vault, NOT the project — do not mix them.
+        const projectRoot = process.cwd();
+        const vaultEnv = { ...process.env };   // forward all env vars so scripts get WORK_DIR, GEMINI_API_KEY, etc.
 
         // Run every day at 02:00 AM (Butler)
         cron.schedule('0 2 * * *', async () => {
             console.log('[Cron] Execution starting: Butler daily maintenance');
             try {
-                const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/butler.ts')]);
+                const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/butler.ts')], { env: vaultEnv });
                 await this.sendReply(AUTHORIZED_CHAT_ID, `📅 **每日管家巡检报告**:\n\n${result.stdout}`);
             } catch (error: any) {
                 console.error(`[Cron Error] ${error}`);
@@ -294,7 +268,7 @@ ${transcript}
         cron.schedule('30 9 * * *', async () => {
             console.log('[Cron] Execution starting: Curator daily briefing');
             try {
-                const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/curator.ts')]);
+                const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/curator.ts')], { env: vaultEnv });
                 if (!result.stdout.includes('未在归档库')) {
                     await this.sendReply(AUTHORIZED_CHAT_ID, result.stdout);
                 }
@@ -304,7 +278,37 @@ ${transcript}
             }
         });
 
-        console.log('[System] Cron jobs configured (Butler: 02:00, Curator: 09:30).');
+        // Run every day at 23:59 — Session-to-Log dehydration
+        cron.schedule('59 23 * * *', async () => {
+            console.log('[Cron] Execution starting: Session-to-Log');
+            try {
+                const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/session-to-log.ts')], { env: vaultEnv });
+                if (result.stdout && !result.stdout.includes('跳过')) {
+                    await this.sendReply(AUTHORIZED_CHAT_ID, result.stdout);
+                }
+            } catch (error: any) {
+                console.error(`[Cron Error Session-to-Log] ${error}`);
+                await this.sendReply(AUTHORIZED_CHAT_ID, `❌ **Session→Log 失败**:\n${error.message || error.stderr}`);
+            }
+        });
+
+        // Run every Sunday at 21:00 — Weekly report
+        cron.schedule('0 21 * * 0', async () => {
+            console.log('[Cron] Execution starting: Weekly report');
+            try {
+                const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/weekly-report.ts')], { env: vaultEnv });
+                if (result.stdout && !result.stdout.includes('⚠️')) {
+                    await this.sendReply(AUTHORIZED_CHAT_ID, `📊 **本周周报**\n\n${result.stdout}`);
+                } else if (result.stdout) {
+                    await this.sendReply(AUTHORIZED_CHAT_ID, result.stdout);
+                }
+            } catch (error: any) {
+                console.error(`[Cron Error WeeklyReport] ${error}`);
+                await this.sendReply(AUTHORIZED_CHAT_ID, `❌ **周报生成失败**:\n${error.message || error.stderr}`);
+            }
+        });
+
+        console.log('[System] Cron jobs configured (Butler: 02:00, Curator: 09:30, Session→Log: 23:59, WeeklyReport: Sun 21:00).');
     }
 
     /**
@@ -769,6 +773,46 @@ ${transcript}
             }
             await this.handleCommand(ctx);
             return;
+        }
+
+        // Intercept "r<N>" quick-select replies from /read fuzzy search results
+        const quickPick = rawText.match(/^r(\d+)$/i);
+        if (quickPick) {
+            const pending = this.pendingReadMatches.get(chatId);
+            if (pending && pending.expiry > Date.now()) {
+                const idx = parseInt(quickPick[1], 10) - 1;
+                if (idx >= 0 && idx < pending.matches.length) {
+                    this.pendingReadMatches.delete(chatId);
+                    const absPath = pending.matches[idx];
+                    const resolvedBase = resolve(process.env.WORK_DIR || process.cwd());
+                    const relPath = absPath.slice(resolvedBase.length + 1);
+                    try {
+                        const stat = await fs.stat(absPath);
+                        if (stat.size > 100 * 1024) {
+                            await ctx.reply(`⚠️ 文件超过 100KB（${(stat.size / 1024).toFixed(1)}KB），请缩小范围。`);
+                            return;
+                        }
+                        const content = await fs.readFile(absPath, 'utf8');
+                        const MAX_MSG = 4000;
+                        const header = `📄 ${relPath}\n\n`;
+                        if (header.length + content.length <= MAX_MSG) {
+                            await ctx.reply(header + content);
+                        } else {
+                            const chunks: string[] = [];
+                            for (let i = 0; i < content.length; i += MAX_MSG - header.length) {
+                                chunks.push(content.slice(i, i + MAX_MSG - header.length));
+                            }
+                            await ctx.reply(`📄 ${relPath} (${chunks.length} 段)\n\n${chunks[0]}`);
+                            for (let i = 1; i < chunks.length; i++) {
+                                await ctx.reply(chunks[i]).catch(() => {});
+                            }
+                        }
+                    } catch (err: any) {
+                        await ctx.reply(`❌ 无法读取文件: ${err.message}`);
+                    }
+                    return;
+                }
+            }
         }
 
         // Detect implicit long tasks (triggered by keyword prefixes)
@@ -1377,7 +1421,15 @@ ${transcript}
                     '`/async` 或 `/research` — 提交后台长任务\n\n' +
                     '**提醒 & 定时**\n' +
                     '`/reminders` — 查看提醒\n' +
-                    '`/schedules` — 查看定时任务',
+                    '`/schedules` — 查看定时任务\n\n' +
+                    '**文件直通（零 token）**\n' +
+                    '`/ls [路径]` — 列出 workspace 目录内容\n' +
+                    '`/read <路径>` — 直接读取文件内容，不经过 AI\n' +
+                    '`/note <内容>` — 快速追加碎片到今日 Inbox\n' +
+                    '`/today` — 查看今日 Inbox 与日记\n' +
+                    '`/task <内容>` — 快速追加任务到 2-Tasks\n' +
+                    '`/search <关键词>` — 全文搜索 vault\n' +
+                    '`/weekly` — 立即生成本周周报',
                     { parse_mode: 'Markdown' }
                 );
                 break;
@@ -1599,9 +1651,342 @@ ${transcript}
                 break;
             }
 
+            case '/ls': {
+                const workDir = process.env.WORK_DIR;
+                if (!workDir) {
+                    await ctx.reply('⚠️ WORK_DIR 未配置。');
+                    break;
+                }
+                const rawArg = text.split(' ').slice(1).join(' ').trim();
+                // Sanitize: strip leading slashes / dots to prevent path traversal
+                const safeSuffix = rawArg.replace(/^[./\\]+/, '');
+                const targetDir = safeSuffix ? join(workDir, safeSuffix) : workDir;
+                // Ensure target stays inside workDir
+                const resolvedTarget = resolve(targetDir);
+                const resolvedBase  = resolve(workDir);
+                if (!resolvedTarget.startsWith(resolvedBase)) {
+                    await ctx.reply('⛔ 不允许访问 WORK_DIR 以外的路径。');
+                    break;
+                }
+                try {
+                    const entries = await fs.readdir(resolvedTarget, { withFileTypes: true });
+                    if (entries.length === 0) {
+                        await ctx.reply(`📂 ${safeSuffix || '/'} 目录为空。`);
+                        break;
+                    }
+                    const lines = entries.map(e => {
+                        const icon = e.isDirectory() ? '📁' : '📄';
+                        return `${icon} ${e.name}`;
+                    });
+                    const displayPath = safeSuffix || '(workspace root)';
+                    await ctx.reply(`📂 ${displayPath}\n\n` + lines.join('\n'));
+                } catch (err: any) {
+                    await ctx.reply(`❌ 无法读取目录: ${err.message}`);
+                }
+                break;
+            }
+
+            case '/read': {
+                const workDir = process.env.WORK_DIR;
+                if (!workDir) {
+                    await ctx.reply('⚠️ WORK_DIR 未配置。');
+                    break;
+                }
+                const rawArg = text.split(' ').slice(1).join(' ').trim();
+                if (!rawArg) {
+                    await ctx.reply('用法: /read <路径或关键词>\n例: /read 随手记  /read inbox/note.md');
+                    break;
+                }
+                const resolvedBase = resolve(workDir);
+
+                // Helper: send a file by its absolute path
+                const sendFile = async (absPath: string, label: string) => {
+                    const stat = await fs.stat(absPath);
+                    if (stat.size > 100 * 1024) {
+                        await ctx.reply(`⚠️ 文件超过 100KB（${(stat.size / 1024).toFixed(1)}KB），请缩小范围。`);
+                        return;
+                    }
+                    const content = await fs.readFile(absPath, 'utf8');
+                    const MAX_MSG = 4000;
+                    const header = `📄 ${label}\n\n`;
+                    if (header.length + content.length <= MAX_MSG) {
+                        await ctx.reply(header + content);
+                    } else {
+                        const chunks: string[] = [];
+                        for (let i = 0; i < content.length; i += MAX_MSG - header.length) {
+                            chunks.push(content.slice(i, i + MAX_MSG - header.length));
+                        }
+                        await ctx.reply(`📄 ${label} (${chunks.length} 段)\n\n${chunks[0]}`);
+                        for (let i = 1; i < chunks.length; i++) {
+                            await ctx.reply(chunks[i]).catch(() => {});
+                        }
+                    }
+                };
+
+                // 1. Try exact path first
+                const safeSuffix = rawArg.replace(/^[./\\]+/, '');
+                const exactPath = resolve(join(workDir, safeSuffix));
+                if (exactPath.startsWith(resolvedBase)) {
+                    try {
+                        const stat = await fs.stat(exactPath);
+                        if (stat.isDirectory()) {
+                            // Treat like /ls
+                            const entries = await fs.readdir(exactPath, { withFileTypes: true });
+                            if (entries.length === 0) {
+                                await ctx.reply(`📂 ${safeSuffix} 目录为空。`);
+                            } else {
+                                const lines = entries.map(e => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`);
+                                await ctx.reply(`📂 ${safeSuffix}\n\n` + lines.join('\n'));
+                            }
+                            break;
+                        }
+                        await sendFile(exactPath, safeSuffix);
+                        break;
+                    } catch {
+                        // Exact path not found — fall through to fuzzy search
+                    }
+                }
+
+                // 2. Fuzzy search: find files whose relative path contains rawArg (case-insensitive)
+                const matches = await this.findFiles(rawArg, workDir, resolvedBase);
+
+                if (matches.length === 0) {
+                    await ctx.reply(`🔍 未找到匹配 "${rawArg}" 的文件。`);
+                } else if (matches.length === 1) {
+                    const relPath = matches[0].slice(resolvedBase.length + 1);
+                    await sendFile(matches[0], relPath);
+                } else {
+                    const MAX_SHOW = 10;
+                    const shown = matches.slice(0, MAX_SHOW);
+                    const lines = shown.map((p, i) => `${i + 1}. ${p.slice(resolvedBase.length + 1)}`);
+                    const suffix = matches.length > MAX_SHOW ? `\n\n...还有 ${matches.length - MAX_SHOW} 个，请缩窄关键词` : '';
+                    await ctx.reply(`🔍 找到 ${matches.length} 个匹配文件：\n\n${lines.join('\n')}${suffix}\n\n回复序号直接阅读，例如发送 "r1" 读取第1个，"r2" 读取第2个。`);
+                    // Store matches in a short-lived map keyed by chatId for reply resolution
+                    this.pendingReadMatches.set(ctx.chat.id, { matches: shown, expiry: Date.now() + 120_000 });
+                }
+                break;
+            }
+
+            case '/note': {
+                const workDir = process.env.WORK_DIR;
+                if (!workDir) {
+                    await ctx.reply('⚠️ WORK_DIR 未配置。');
+                    break;
+                }
+                const noteContent = text.replace(/^\/note\s*/i, '').trim();
+                if (!noteContent) {
+                    await ctx.reply('用法: `/note <内容>`\n\n快速追加一条碎片到今日 Inbox，不经过 AI。', { parse_mode: 'Markdown' });
+                    break;
+                }
+                try {
+                    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+                    const inboxDir = join(resolve(workDir), '0-Inbox');
+                    await fs.mkdir(inboxDir, { recursive: true });
+                    const inboxFile = join(inboxDir, `${today}.md`);
+                    const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
+                    // Add date header if this is a new file
+                    let fileExists = false;
+                    try { await fs.access(inboxFile); fileExists = true; } catch { /* new file */ }
+                    const entry = fileExists
+                        ? `\n- ${timeStr} ${noteContent}\n`
+                        : `# ${today} Inbox\n\n- ${timeStr} ${noteContent}\n`;
+                    await fs.appendFile(inboxFile, entry, 'utf-8');
+                    await ctx.reply(`✅ 已记入 0-Inbox/${today}.md`);
+                } catch (err: any) {
+                    await ctx.reply(`❌ 写入失败: ${err.message}`);
+                }
+                break;
+            }
+
+            case '/today': {
+                const workDir = process.env.WORK_DIR;
+                if (!workDir) {
+                    await ctx.reply('⚠️ WORK_DIR 未配置。');
+                    break;
+                }
+                const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+                const absWorkDir = resolve(workDir);
+                const inboxPath = join(absWorkDir, '0-Inbox', `${today}.md`);
+                const dailyPath = join(absWorkDir, '1-Daily', `${today}.md`);
+
+                const readOrNull = async (p: string) => {
+                    try { return await fs.readFile(p, 'utf-8'); }
+                    catch { return null; }
+                };
+
+                const inbox = await readOrNull(inboxPath);
+                const daily = await readOrNull(dailyPath);
+
+                if (!inbox && !daily) {
+                    await ctx.reply(`📭 今天（${today}）还没有任何记录。\n\n用 \`/note <内容>\` 开始记录。`, { parse_mode: 'Markdown' });
+                    break;
+                }
+
+                const MAX = 3500;
+                if (inbox) {
+                    const header = `📥 **0-Inbox/${today}.md**\n\n`;
+                    const body = inbox.length > MAX ? inbox.slice(0, MAX) + '\n...(已截断)' : inbox;
+                    await ctx.reply(header + body, { parse_mode: 'Markdown' }).catch(() =>
+                        ctx.reply(header + body));
+                }
+                if (daily) {
+                    const header = `📓 **1-Daily/${today}.md**\n\n`;
+                    const body = daily.length > MAX ? daily.slice(0, MAX) + '\n...(已截断)' : daily;
+                    await ctx.reply(header + body, { parse_mode: 'Markdown' }).catch(() =>
+                        ctx.reply(header + body));
+                }
+                break;
+            }
+
+            case '/task': {
+                const workDir = process.env.WORK_DIR;
+                if (!workDir) { await ctx.reply('⚠️ WORK_DIR 未配置。'); break; }
+                const taskContent = text.replace(/^\/task\s*/i, '').trim();
+                if (!taskContent) {
+                    await ctx.reply('用法: `/task <内容>`\n\n快速追加一条任务到 2-Tasks，不经过 AI。', { parse_mode: 'Markdown' });
+                    break;
+                }
+                try {
+                    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+                    const tasksDir = join(resolve(workDir), '2-Tasks');
+                    await fs.mkdir(tasksDir, { recursive: true });
+                    const tasksFile = join(tasksDir, 'tasks.md');
+                    const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
+                    let fileExists = false;
+                    try { await fs.access(tasksFile); fileExists = true; } catch { /* new file */ }
+                    const entry = fileExists
+                        ? `\n- [ ] ${taskContent}  _(${today} ${timeStr})_\n`
+                        : `# Tasks\n\n- [ ] ${taskContent}  _(${today} ${timeStr})_\n`;
+                    await fs.appendFile(tasksFile, entry, 'utf-8');
+                    await ctx.reply(`✅ 任务已记入 2-Tasks/tasks.md`);
+                } catch (err: any) {
+                    await ctx.reply(`❌ 写入失败: ${err.message}`);
+                }
+                break;
+            }
+
+            case '/search': {
+                const workDir = process.env.WORK_DIR;
+                if (!workDir) { await ctx.reply('⚠️ WORK_DIR 未配置。'); break; }
+                const query = text.replace(/^\/search\s*/i, '').trim();
+                if (!query) {
+                    await ctx.reply('用法: `/search <关键词>`\n\n全文搜索 vault 中所有 .md 文件。', { parse_mode: 'Markdown' });
+                    break;
+                }
+                const absBase = resolve(workDir);
+                const SKIP = new Set(['.git', 'node_modules', '.tmp', '__pycache__', 'dist']);
+                const MAX_RESULTS = 8;
+                const CONTEXT_CHARS = 120;
+                interface SearchHit { file: string; line: number; snippet: string; }
+                const hits: SearchHit[] = [];
+
+                const walk = async (dir: string): Promise<void> => {
+                    if (hits.length >= MAX_RESULTS) return;
+                    let entries: import('fs').Dirent[];
+                    try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+                    catch { return; }
+                    for (const e of entries) {
+                        if (hits.length >= MAX_RESULTS) break;
+                        const abs = join(dir, e.name);
+                        if (e.isDirectory()) {
+                            if (SKIP.has(e.name) || e.name.startsWith('.')) continue;
+                            await walk(abs);
+                        } else if (e.isFile() && e.name.endsWith('.md')) {
+                            const content = await fs.readFile(abs, 'utf-8').catch(() => '');
+                            const lines = content.split('\n');
+                            const q = query.toLowerCase();
+                            for (let i = 0; i < lines.length && hits.length < MAX_RESULTS; i++) {
+                                if (lines[i].toLowerCase().includes(q)) {
+                                    const snippet = lines[i].trim().slice(0, CONTEXT_CHARS);
+                                    hits.push({ file: abs.slice(absBase.length + 1), line: i + 1, snippet });
+                                }
+                            }
+                        }
+                    }
+                };
+
+                await walk(absBase);
+
+                if (hits.length === 0) {
+                    await ctx.reply(`🔍 未找到包含 "${query}" 的内容。`);
+                } else {
+                    const lines = hits.map(h => `📄 \`${h.file}\` L${h.line}\n   ${h.snippet}`);
+                    await ctx.reply(
+                        `🔍 **"${query}"** 找到 ${hits.length} 处匹配：\n\n` + lines.join('\n\n'),
+                        { parse_mode: 'Markdown' }
+                    ).catch(() =>
+                        ctx.reply(`🔍 "${query}" 找到 ${hits.length} 处：\n\n` + hits.map(h => `${h.file}:${h.line}  ${h.snippet}`).join('\n\n'))
+                    );
+                }
+                break;
+            }
+
+            case '/weekly': {
+                const statusMsg = await ctx.reply('⏳ 正在生成本周周报...');
+                try {
+                    const projectRoot = process.cwd();
+                    const vaultEnv = { ...process.env };
+                    const { execa: _execa } = await import('execa');
+                    const result = await _execa('npx', ['tsx', join(projectRoot, 'apps/refinery/weekly-report.ts')], { env: vaultEnv });
+                    const output = result.stdout?.trim() || '（无输出）';
+                    await this.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
+                        output.slice(0, 4000)
+                    ).catch(() => ctx.reply(output.slice(0, 4000)));
+                } catch (err: any) {
+                    await this.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
+                        `❌ 周报生成失败: ${err.message}`
+                    ).catch(() => {});
+                }
+                break;
+            }
+
             default:
                 await ctx.reply('Unknown command. Try /start for help.');
         }
+    }
+
+    /**
+     * Recursively walk baseDir and collect files whose relative path contains
+     * query (case-insensitive). Skips hidden dirs, node_modules, .tmp, __pycache__.
+     */
+    private async findFiles(query: string, baseDir: string, resolvedBase: string, depth = 0): Promise<string[]> {
+        const SKIP_DIRS = new Set(['.git', 'node_modules', '.tmp', '__pycache__', 'dist', '.cache']);
+        const MAX_DEPTH = 6;
+        const results: string[] = [];
+        if (depth > MAX_DEPTH) return results;
+
+        let entries: import('fs').Dirent[];
+        try {
+            entries = await fs.readdir(baseDir, { withFileTypes: true });
+        } catch {
+            return results;
+        }
+
+        const q = query.toLowerCase();
+        for (const entry of entries) {
+            const absPath = join(baseDir, entry.name);
+            if (entry.isDirectory()) {
+                if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+                const sub = await this.findFiles(query, absPath, resolvedBase, depth + 1);
+                results.push(...sub);
+            } else if (entry.isFile()) {
+                const relPath = absPath.slice(resolvedBase.length + 1);
+                if (relPath.toLowerCase().includes(q)) {
+                    results.push(absPath);
+                }
+            }
+        }
+        // Sort: exact basename match first, then by path length (shallower first)
+        const basename = query.toLowerCase();
+        results.sort((a, b) => {
+            const aName = a.split('/').pop()!.toLowerCase();
+            const bName = b.split('/').pop()!.toLowerCase();
+            const aExact = aName.includes(basename) ? 0 : 1;
+            const bExact = bName.includes(basename) ? 0 : 1;
+            if (aExact !== bExact) return aExact - bExact;
+            return a.length - b.length;
+        });
+        return results;
     }
 
     /**
@@ -1611,24 +1996,9 @@ ${transcript}
         console.log(`🤖 Bot started. Auth Chat ID: ${AUTHORIZED_CHAT_ID || 'ALL'}`);
         console.log(`🛠  Gemini Client enabled: ${geminiClient.isEnabled()}`);
 
-        // Register command menu with Telegram
-        this.bot.telegram.setMyCommands([
-            { command: 'start',        description: '查看帮助与所有命令' },
-            { command: 'new',          description: '开启新会话（重置上下文）' },
-            { command: 'compact',      description: '压缩当前上下文（保留摘要）' },
-            { command: 'clear',        description: '清空全部对话历史' },
-            { command: 'btw',          description: '临时问答，不计入对话上下文' },
-            { command: 'stats',        description: '查看会话统计' },
-            { command: 'tasks',        description: '查看所有后台任务状态' },
-            { command: 'cancel',       description: '取消某个任务 /cancel <id>' },
-            { command: 'reminders',    description: '查看所有提醒' },
-            { command: 'remindcancel', description: '取消提醒 /remindcancel <id>' },
-            { command: 'schedules',    description: '查看所有定时任务' },
-            { command: 'unschedule',   description: '删除定时任务 /unschedule <id>' },
-            { command: 'profile',      description: '查看/设置个人信息（城市、兴趣等）' },
-            { command: 'research',     description: '提交深度调研任务' },
-            { command: 'async',        description: '提交后台长任务' },
-        ]).then(() => console.log('[System] Bot commands registered.'))
+        // Register command menu with Telegram — derived from BOT_COMMANDS (single source of truth)
+        this.bot.telegram.setMyCommands(BOT_COMMANDS)
+          .then(() => console.log('[System] Bot commands registered.'))
           .catch(err => console.error('[System] Failed to register commands:', err));
 
         if (AUTHORIZED_CHAT_ID) {

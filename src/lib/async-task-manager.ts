@@ -20,9 +20,8 @@ export class AsyncTaskManager {
     private pollingInterval: NodeJS.Timeout | null = null;
     private isPolling = false;
 
-    constructor(private workDir: string) {
-        // Store tasks in the same directory as chat history for now
-        this.dbPath = join(workDir, 'history', 'async_tasks.json');
+    constructor(cacheDir: string) {
+        this.dbPath = join(cacheDir, 'async_tasks.json');
     }
 
     /**

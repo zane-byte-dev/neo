@@ -15,9 +15,15 @@
  */
 
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, resolve, isAbsolute } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { registerSkill, Skill, geminiGenerate } from './gemini-client.js';
 import { browserFetch } from './browser-service.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const _PROJECT_ROOT = resolve(__dirname, '../..');
 
 // ── fetch_url ─────────────────────────────────────────────────────────────────
 
@@ -842,7 +848,10 @@ const xifengAuditSkill: Skill = {
             : '进行全面底层诊断：利益分析 → 生态位判断 → 风险识别 → 非典型建议。';
 
         // ── Step 1: Pick 2-3 relevant articles from the knowledge base ────────
-        const resourceDir = process.env.RESOURCE_DIR ?? join(workDir, 'project/@reference');
+        const rawResourceDir = process.env.RESOURCE_DIR ?? '';
+        const resourceDir = rawResourceDir
+            ? (isAbsolute(rawResourceDir) ? rawResourceDir : resolve(_PROJECT_ROOT, rawResourceDir))
+            : join(workDir, 'project/@reference');
         const kbDir = join(resourceDir, 'xifeng-km');
         let kbContext = '';
         try {
