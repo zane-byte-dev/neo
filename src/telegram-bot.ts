@@ -15,7 +15,7 @@ import { MessageQueue } from './lib/message-queue.js';
 import { ReminderManager, parseReminderTime } from './lib/reminder-manager.js';
 import { ScheduledTaskManager, parseScheduledTask } from './lib/scheduled-task-manager.js';
 import { UserProfileManager } from './lib/user-profile.js';
-import { setupSkills } from './lib/skills.js';
+import { setupSkills } from './skills/index.js';
 import { closeBrowser } from './lib/browser-service.js';
 import cron from 'node-cron';
 

@@ -77,9 +77,22 @@ interface FunctionDeclaration {
 
 // ── Skill registry ────────────────────────────────────────────────────────────
 
+export interface SkillMeta {
+    /** Logical grouping for display / dynamic loading */
+    category?: 'web' | 'ai' | 'utility' | 'knowledge';
+    /** Semver or date stamp, e.g. "1.0.0" */
+    version?: string;
+    /** Set to false to skip registration at startup (default: true) */
+    enabled?: boolean;
+    /** Env-var names that must be set for this skill to work, e.g. ['GEMINI_API_KEY'] */
+    requiresEnv?: string[];
+}
+
 export interface Skill {
     declaration: FunctionDeclaration;
     handler: (args: Record<string, unknown>, workDir: string) => Promise<string>;
+    /** Optional metadata — compatible with MCP tool-manifest conventions */
+    meta?: SkillMeta;
 }
 
 const skillRegistry = new Map<string, Skill>();
