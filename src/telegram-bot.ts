@@ -95,15 +95,15 @@ chatHistoryCache.setOnSessionExpire(async (session) => {
     }
 });
 
+// Persistent message queue — survives bot restarts
+const CACHE_DIR = process.env.CHAT_CACHE_DIR || './cache';
+
 // Initialize async task manager
 const asyncTaskManager = new AsyncTaskManager(CACHE_DIR);
 await asyncTaskManager.init();
 
 // Keywords that trigger background async tasks
 const ASYNC_TRIGGER_PREFIXES = ['调研', '重构'];
-
-// Persistent message queue — survives bot restarts
-const CACHE_DIR = process.env.CHAT_CACHE_DIR || './cache';
 const messageQueue = new MessageQueue(CACHE_DIR);
 
 // Reminder manager
