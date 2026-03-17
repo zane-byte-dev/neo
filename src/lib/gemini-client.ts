@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { promises as fs } from 'node:fs';
 import { execa } from 'execa';
 import { setupLogger } from './logger.js';
+import { logDangerousCommand, logSuspiciousInput } from './audit-logger.js';
 
 setupLogger();
 
@@ -160,6 +161,34 @@ const TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
 ];
 
+// ── Security: dangerous command detection ─────────────────────────────────────
+
+const DANGEROUS_PATTERNS = [
+    /\brm\s+(?:-[rf]*\s+)*\/\s*(?:[^/]|$)/,  // rm -rf /
+    /\brm\s+(?:-[rf]*\s+)*\/[a-z]/,          // rm -rf /etc, /usr, etc.
+    /\bdd\b/,                                // dd (disk writer)
+    /\bchmod\s+(?:000|777)/,                 // chmod 000 or 777 on critical paths
+    /\bmkfs/,                                // mkfs (format filesystem)
+    /\b(?:sudo|su)\b/,                       // sudo/su (privilege escalation)
+    />\s*\/dev\/[a-z]/,                      // redirect to /dev/sda, /dev/null, etc.
+];
+
+/**
+ * Check if a command contains dangerous patterns.
+ * Returns { blocked: true, reason: string } if dangerous, else { blocked: false }.
+ */
+function checkDangerousCommand(command: string): { blocked: boolean; reason?: string } {
+    for (const pattern of DANGEROUS_PATTERNS) {
+        if (pattern.test(command)) {
+            return {
+                blocked: true,
+                reason: `Dangerous pattern detected: ${pattern.source}`,
+            };
+        }
+    }
+    return { blocked: false };
+}
+
 // ── Tool execution ────────────────────────────────────────────────────────────
 
 async function executeTool(
@@ -172,6 +201,20 @@ async function executeTool(
         switch (name) {
             case 'bash': {
                 const command = String(args.command ?? '');
+                
+                // Security: Check for dangerous commands
+                const danger = checkDangerousCommand(command);
+                if (danger.blocked) {
+                    console.warn(`[Security] Dangerous command blocked: ${command.slice(0, 100)}`);
+                    await logDangerousCommand(command, true, danger.reason);
+                    return `[BLOCKED] Dangerous command pattern detected: ${danger.reason}`;
+                }
+
+                // Log non-dangerous external API calls
+                if (command.includes('curl') || command.includes('wget') || command.includes('python')) {
+                    await logDangerousCommand(command, false, 'External API call');
+                }
+
                 const timeoutMs = Math.min(Number(args.timeout_ms ?? 30_000), 120_000);
                 const proc = await execa('sh', ['-c', command], {
                     cwd: workDir,
@@ -192,16 +235,27 @@ async function executeTool(
             case 'read_file': {
                 const filePath = String(args.path ?? '');
                 const resolved = isAbsolute(filePath) ? filePath : join(workDir, filePath);
-                const content = await fs.readFile(resolved, 'utf8');
+                let content = await fs.readFile(resolved, 'utf8');
+                
                 // Guard against enormous files flooding the context window
                 const LIMIT = 50_000;
+                let wasTruncated = false;
                 if (content.length > LIMIT) {
-                    return (
-                        content.slice(0, LIMIT) +
-                        `\n\n[...truncated: ${content.length - LIMIT} additional chars omitted]`
-                    );
+                    content = content.slice(0, LIMIT) +
+                        `\n\n[...truncated: ${content.length - LIMIT} additional chars omitted]`;
+                    wasTruncated = true;
                 }
-                return content;
+                
+                // Wrap external content in markers to prevent prompt injection
+                // This makes it clear to the model what is user-provided vs system content
+                const wrapped = `[EXTERNAL_CONTENT]
+Source: ${resolved}${wasTruncated ? ' (TRUNCATED)' : ''}
+─────────────────────────────────
+${content}
+─────────────────────────────────
+[/EXTERNAL_CONTENT]`;
+                
+                return wrapped;
             }
 
             case 'write_file': {

@@ -2,6 +2,13 @@
 
 inkClaw Sentinel 是一个 Telegram Bot 智能助手，通过 Gemini CLI（ACP 协议）提供 AI 回复，支持多轮对话历史缓存、后台异步长任务执行与定时巡检。
 
+## 📌 最近更新
+
+**[2026-03 Refactoring]** 完成了大规模架构优化：
+- ✅ 命令模块化：单体 600+ 行 switch → 6 个独立模块＆调度器模式
+- 🔒 安全加固：危险命令检测、提示注入防护、审计日志系统
+- 📚 详见 [REFACTORING.md](REFACTORING.md)
+
 ## 功能特性
 
 - 💬 Telegram Chat Bot 对话模式，支持多轮上下文记忆
@@ -13,6 +20,7 @@ inkClaw Sentinel 是一个 Telegram Bot 智能助手，通过 Gemini CLI（ACP �
 - 🗂️ 对话历史本地缓存（Session 超时自动归档）
 - 📱 手机、电脑、网页全平台支持
 - 🚀 PM2 后台运行
+- 🔐 **NEW:** 内置安全防护（危险命令阻止、提示注入防护、审计日志）
 
 ## 系统要求
 
