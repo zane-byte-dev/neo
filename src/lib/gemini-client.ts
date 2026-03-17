@@ -9,7 +9,7 @@
 
 import { join, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
-import { setupLogger } from './logger.js';
+import { setupLogger } from '../utils/logger.js';
 import { GEMINI_BASE_URL, GEMINI_FILES_UPLOAD_URL } from '../config.js';
 import { agentLoop, resolveModel } from './agent-runtime.js';
 
@@ -23,7 +23,7 @@ export type {
     FunctionDeclaration,
     ToolMeta,
     Tool,
-} from './gemini-types.js';
+} from '../utils/gemini-types.js';
 
 import type {
     StreamCallback,
@@ -31,7 +31,7 @@ import type {
     FileInput,
     GeminiContent,
     Tool,
-} from './gemini-types.js';
+} from '../utils/gemini-types.js';
 
 setupLogger();
 

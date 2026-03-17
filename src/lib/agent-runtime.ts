@@ -10,7 +10,7 @@ import type {
     StreamCallback,
     ImageInput,
     Tool,
-} from './gemini-types.js';
+} from '../utils/gemini-types.js';
 
 // ── Internal types ────────────────────────────────────────────────────────────
 

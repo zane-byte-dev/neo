@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs';
-import { markdownToTelegram } from '../lib/markdown-converter.js';
+import { markdownToTelegram } from '../utils/markdown-converter.js';
 import { TASK_TIMEOUT_MS, EDIT_INTERVAL_MS, CHUNK_LIMIT } from '../config.js';
 import type { Task } from './types.js';
 

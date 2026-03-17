@@ -6,7 +6,7 @@
  */
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { autoLoad } from '../lib/auto-loader.js';
+import { autoLoad } from '../utils/auto-loader.js';
 import type { Command, CommandDeps } from './_base.js';
 
 export type { Command, CommandDeps } from './_base.js';

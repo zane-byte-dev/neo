@@ -1,4 +1,4 @@
-import { markdownToTelegram } from '../lib/markdown-converter.js';
+import { markdownToTelegram } from '../utils/markdown-converter.js';
 
 function splitMessage(message: string, maxLength: number): string[] {
     if (message.length <= maxLength) {

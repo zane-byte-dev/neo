@@ -7,7 +7,7 @@
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registerTool } from '../lib/gemini-client.js';
-import { autoLoad } from '../lib/auto-loader.js';
+import { autoLoad } from '../utils/auto-loader.js';
 import type { Tool } from './_base.js';
 
 function isTool(value: unknown): value is Tool {

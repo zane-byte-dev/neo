@@ -5,9 +5,9 @@
 import { join, dirname, isAbsolute } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { execa } from 'execa';
-import { logDangerousCommand, logToolExecution } from './audit-logger.js';
+import { logDangerousCommand, logToolExecution } from '../utils/audit-logger.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
-import type { Tool, FunctionDeclaration } from './gemini-types.js';
+import type { Tool, FunctionDeclaration } from '../utils/gemini-types.js';
 
 // ── Built-in tool declarations ────────────────────────────────────────────────
 

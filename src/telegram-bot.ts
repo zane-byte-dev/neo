@@ -6,7 +6,7 @@ import { promises as fs } from 'fs';
 import { BOT_COMMANDS, ASYNC_TRIGGER_PREFIXES, CACHE_DIR } from './config.js';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
-import { setupLogger } from './lib/logger.js';
+import { setupLogger } from './utils/logger.js';
 import { AsyncTaskManager } from './lib/async-task-manager.js';
 import { MessageQueue } from './lib/message-queue.js';
 import { ReminderManager } from './lib/reminder-manager.js';
@@ -20,7 +20,7 @@ import { setupHandlers } from './bot/handlers.js';
 import { initLifecycle } from './bot/lifecycle.js';
 import { sendReply as sendReplyFn } from './bot/reply.js';
 import { processTask as processTaskFn } from './bot/task-processor.js';
-import { findFiles as findFilesFn } from './bot/file-search.js';
+import { findFiles as findFilesFn } from './utils/file-search.js';
 import { processMessage as processMessageFn } from './bot/message-router.js';
 import { handleUrlMessage as handleUrlMessageFn } from './bot/url-handler.js';
 import {

@@ -7,7 +7,7 @@
 import cron from 'node-cron';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { autoLoad } from '../lib/auto-loader.js';
+import { autoLoad } from '../utils/auto-loader.js';
 import type { CronJob, CronDeps } from './_base.js';
 
 export type { CronJob, CronDeps } from './_base.js';
