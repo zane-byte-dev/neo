@@ -291,7 +291,7 @@ class inkClawBot {
             const timeStr = new Date().toLocaleString('zh-CN');
             this.bot.telegram.sendMessage(
                 AUTHORIZED_CHAT_ID,
-                `🤖 **inkClaw Gateway** 已于 ${timeStr} 启动/重启。\n` +
+                `🤖 **inkClaw ** 已于 ${timeStr} 启动/重启。\n` +
                 `✅ 网关已上线\n` +
                 `✅ 引擎状态: ${process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview'} (Direct API + Agentic Loop)`,
                 { parse_mode: 'Markdown' }
