@@ -69,10 +69,9 @@ await chatHistoryCache.init();
 chatHistoryCache.setOnSessionExpire(async (session) => {
     if (session.messages.length === 0) return;
     try {
-        const { runSessionToLog } = await import('./crons/session-to-log.js');
-        const result = await runSessionToLog();
-        if (result) console.log(`[SessionExpire] ${result}`);
-        else console.log(`[SessionExpire] Session ${session.sessionId} — no log generated (already exists or empty)`);
+        const { generateDailyLogTool } = await import('./tools/generate-daily-log.js');
+        const result = await generateDailyLogTool.handler({}, '');
+        console.log(`[SessionExpire] ${result}`);
     } catch (err: any) {
         console.error('[SessionExpire] session-to-log failed:', err.message);
     }

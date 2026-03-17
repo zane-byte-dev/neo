@@ -47,7 +47,7 @@ export interface FunctionDeclaration {
 
 export interface ToolMeta {
     /** Logical grouping for display / dynamic loading */
-    category?: 'web' | 'ai' | 'utility' | 'knowledge';
+    category?: 'web' | 'ai' | 'utility' | 'knowledge' | 'workspace';
     /** Semver or date stamp, e.g. "1.0.0" */
     version?: string;
     /** Set to false to skip registration at startup (default: true) */

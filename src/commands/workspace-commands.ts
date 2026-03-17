@@ -268,9 +268,8 @@ export const workspaceCommand: Command = {
         case '/weekly': {
             const statusMsg = await ctx.reply('⏳ 正在生成本周周报...');
             try {
-                const { runWeeklyReport } = await import('../crons/weekly-report.js');
-                const output = await runWeeklyReport();
-                const text = output || '⚠️ 本周没有日记文件，无法生成周报。';
+                const { generateWeeklyReportTool } = await import('../tools/generate-weekly-report.js');
+                const text = await generateWeeklyReportTool.handler({}, '');
                 await deps.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
                     text.slice(0, 4000)
                 ).catch(() => ctx.reply(text.slice(0, 4000)));

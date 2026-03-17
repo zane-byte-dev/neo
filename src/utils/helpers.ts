@@ -1,5 +1,5 @@
 /**
- * _helpers.ts — Shared utilities for cron jobs.
+ * helpers.ts — Shared lightweight utilities (vault path, one-shot Gemini call).
  */
 import { resolve } from 'path';
 
