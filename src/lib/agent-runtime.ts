@@ -9,7 +9,7 @@ import type {
     GeminiPart,
     StreamCallback,
     ImageInput,
-    Skill,
+    Tool,
 } from './gemini-types.js';
 
 // ── Internal types ────────────────────────────────────────────────────────────
@@ -38,14 +38,14 @@ async function* streamGeminiApi(
     model: string,
     systemInstruction: string,
     contents: GeminiContent[],
-    skillRegistry: Map<string, Skill>,
+    toolRegistry: Map<string, Tool>,
 ): AsyncGenerator<ApiChunk> {
     const url = `${GEMINI_BASE_URL}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
     const body: Record<string, unknown> = {
         contents,
         generationConfig: { temperature: 0.7 },
-        tools: [{ functionDeclarations: [...TOOL_DECLARATIONS, ...Array.from(skillRegistry.values()).map(s => s.declaration)] }],
+        tools: [{ functionDeclarations: [...TOOL_DECLARATIONS, ...Array.from(toolRegistry.values()).map(s => s.declaration)] }],
     };
     if (systemInstruction) {
         body.systemInstruction = { parts: [{ text: systemInstruction }] };
@@ -132,7 +132,7 @@ export async function agentLoop(
     systemInstruction: string,
     initialContents: GeminiContent[],
     workDir: string,
-    skillRegistry: Map<string, Skill>,
+    toolRegistry: Map<string, Tool>,
     onChunk?: StreamCallback,
     imageInput?: ImageInput,
 ): Promise<string> {
@@ -163,7 +163,7 @@ export async function agentLoop(
         const functionCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
         // Consume one full model turn from the streaming API
-        for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents, skillRegistry)) {
+        for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents, toolRegistry)) {
             if (chunk.rawPart) modelRawParts.push(chunk.rawPart);
             if (chunk.thought) {
                 // Thinking tokens: stream immediately — always safe to show live
@@ -203,7 +203,7 @@ export async function agentLoop(
 
         // Execute all tools (parallel for speed)
         const results = await Promise.all(
-            functionCalls.map(fc => executeTool(fc.name, fc.args, workDir, skillRegistry)),
+            functionCalls.map(fc => executeTool(fc.name, fc.args, workDir, toolRegistry)),
         );
 
         // Add function responses

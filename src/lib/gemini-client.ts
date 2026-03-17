@@ -1,5 +1,5 @@
 /**
- * gemini-client.ts — Gemini API client and skill registry.
+ * gemini-client.ts — Gemini API client and tool registry.
  *
  * Sub-modules handle the heavy lifting:
  *   - gemini-types.ts  — shared type definitions
@@ -13,18 +13,16 @@ import { setupLogger } from './logger.js';
 import { GEMINI_BASE_URL, GEMINI_FILES_UPLOAD_URL } from '../config.js';
 import { agentLoop, resolveModel } from './agent-runtime.js';
 
-// Re-export all types for backward compatibility
 export type {
     StreamChunk,
     StreamCallback,
-    JSONRPCNotification,
     GeminiPart,
     ImageInput,
     FileInput,
     GeminiContent,
     FunctionDeclaration,
-    SkillMeta,
-    Skill,
+    ToolMeta,
+    Tool,
 } from './gemini-types.js';
 
 import type {
@@ -32,19 +30,18 @@ import type {
     ImageInput,
     FileInput,
     GeminiContent,
-    Skill,
-    JSONRPCNotification,
+    Tool,
 } from './gemini-types.js';
 
 setupLogger();
 
-// ── Skill registry ────────────────────────────────────────────────────────────
+// ── Tool registry ─────────────────────────────────────────────────────────────────
 
-const skillRegistry = new Map<string, Skill>();
+const toolRegistry = new Map<string, Tool>();
 
-export function registerSkill(skill: Skill): void {
-    skillRegistry.set(skill.declaration.name, skill);
-    console.log(`[AgentRuntime] 🔧 Skill registered: ${skill.declaration.name}`);
+export function registerTool(tool: Tool): void {
+    toolRegistry.set(tool.declaration.name, tool);
+    console.log(`[AgentRuntime] 🔧 Tool registered: ${tool.declaration.name}`);
 }
 
 // ── Simple (non-streaming) API calls ──────────────────────────────────────────
@@ -212,7 +209,7 @@ export class GeminiClient {
                 this.systemInstruction,
                 contents,
                 this.workDir,
-                skillRegistry,
+                toolRegistry,
                 onChunk,
                 imageInput,
             );
@@ -270,21 +267,16 @@ export class GeminiClient {
 
     /**
      * Async isolated task — same agentic loop, fresh context (no shared history).
-     * The onEvent parameter is accepted for API compatibility but is unused.
      */
-    async chatAsyncWithContext(
-        message: string,
-        _conversationHistory: string,
-        _onEvent?: (msg: JSONRPCNotification) => { detach: boolean; result?: string },
-    ): Promise<string | null> {
+    async chatAsyncWithContext(message: string): Promise<string | null> {
         return this.runAgent(message);
     }
 
-    async runSkill(skillName: string, args: string[]): Promise<string | null> {
+    async runTool(toolName: string, args: string[]): Promise<string | null> {
         const prompt =
-            `Please execute the skill **${skillName}**.\n\n` +
+            `Please execute the tool **${toolName}**.\n\n` +
             `Arguments: ${args.join(' ')}\n\n` +
-            `(Skill file: system/skill/${skillName}.md)`;
+            `(Tool: ${toolName})`;
         return this.runAgent(prompt);
     }
 

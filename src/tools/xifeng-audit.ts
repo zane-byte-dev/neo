@@ -2,14 +2,14 @@ import { promises as fs } from 'fs';
 import { join, resolve, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import type { Skill } from './_base.js';
+import type { Tool } from './_base.js';
 import { geminiGenerate } from '../lib/gemini-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const _PROJECT_ROOT = resolve(__dirname, '../..');
 
-export const xifengAuditSkill: Skill = {
+export const xifengAuditTool: Tool = {
     meta: { category: 'knowledge', version: '1.0.0', requiresEnv: ['GEMINI_API_KEY'] },
     declaration: {
         name: 'xifeng_audit',

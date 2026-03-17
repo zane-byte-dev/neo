@@ -56,9 +56,7 @@ export async function processAsyncTaskBackground(
 
         const asyncPrompt = `[ASYNC TASK] Please execute the following long-running task. If you need to use tools like research_start or heavy filesystem manipulation, do it now.\n\nTask: ${task.prompt}`;
 
-        const responseText = await deps.geminiClient.chatAsyncWithContext(asyncPrompt, '', () => {
-            return { detach: false };
-        });
+        const responseText = await deps.geminiClient.chatAsyncWithContext(asyncPrompt);
 
         if (responseText) {
             await deps.asyncTaskManager.updateTaskStatus(task.id, 'completed', { result: responseText });

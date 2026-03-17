@@ -7,7 +7,7 @@ import { promises as fs } from 'node:fs';
 import { execa } from 'execa';
 import { logDangerousCommand, logToolExecution } from './audit-logger.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
-import type { Skill, FunctionDeclaration } from './gemini-types.js';
+import type { Tool, FunctionDeclaration } from './gemini-types.js';
 
 // ── Built-in tool declarations ────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ export async function executeTool(
     name: string,
     args: Record<string, unknown>,
     workDir: string,
-    skillRegistry: Map<string, Skill>,
+    toolRegistry: Map<string, Tool>,
 ): Promise<string> {
     console.log(`[AgentRuntime] Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
     const startedAt = Date.now();
@@ -183,9 +183,9 @@ ${content}
             }
 
             default: {
-                const skill = skillRegistry.get(name);
-                if (skill) {
-                    const result = await skill.handler(args, workDir);
+                const tool = toolRegistry.get(name);
+                if (tool) {
+                    const result = await tool.handler(args, workDir);
                     return finish(result);
                 }
                 return finish(`[Error] Unknown tool: ${name}`, 'error');

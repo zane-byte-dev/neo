@@ -1,6 +1,6 @@
-import type { Skill } from './_base.js';
+import type { Tool } from './_base.js';
 
-export const getDatetimeSkill: Skill = {
+export const getDatetimeTool: Tool = {
     meta: { category: 'utility', version: '1.0.0' },
     declaration: {
         name: 'get_datetime',

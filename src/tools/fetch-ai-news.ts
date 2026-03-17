@@ -1,7 +1,7 @@
-import type { Skill } from './_base.js';
+import type { Tool } from './_base.js';
 import { gatherNewsStories } from './_news-helper.js';
 
-export const fetchAiNewsSkill: Skill = {
+export const fetchAiNewsTool: Tool = {
     meta: { category: 'ai', version: '1.0.0' },
     declaration: {
         name: 'fetch_ai_news',

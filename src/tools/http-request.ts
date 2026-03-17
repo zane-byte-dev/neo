@@ -1,6 +1,6 @@
-import type { Skill } from './_base.js';
+import type { Tool } from './_base.js';
 
-export const httpRequestSkill: Skill = {
+export const httpRequestTool: Tool = {
     meta: { category: 'web', version: '1.0.0' },
     declaration: {
         name: 'http_request',

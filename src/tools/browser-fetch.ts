@@ -1,7 +1,7 @@
-import type { Skill } from './_base.js';
+import type { Tool } from './_base.js';
 import { browserFetch } from '../lib/browser-service.js';
 
-export const browserFetchSkill: Skill = {
+export const browserFetchTool: Tool = {
     meta: { category: 'web', version: '1.0.0' },
     declaration: {
         name: 'browser_fetch',

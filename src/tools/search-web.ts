@@ -1,6 +1,6 @@
-import type { Skill } from './_base.js';
+import type { Tool } from './_base.js';
 
-export const searchWebSkill: Skill = {
+export const searchWebTool: Tool = {
     meta: { category: 'web', version: '1.0.0' },
     declaration: {
         name: 'search_web',

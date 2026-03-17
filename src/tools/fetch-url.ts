@@ -1,4 +1,4 @@
-import type { Skill } from './_base.js';
+import type { Tool } from './_base.js';
 
 const htmlToText = (html: string): string =>
     html
@@ -31,7 +31,7 @@ const tryFetch = async (
     }
 };
 
-export const fetchUrlSkill: Skill = {
+export const fetchUrlTool: Tool = {
     meta: { category: 'web', version: '1.0.0' },
     declaration: {
         name: 'fetch_url',

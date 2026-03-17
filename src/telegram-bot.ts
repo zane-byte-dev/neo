@@ -12,7 +12,7 @@ import { MessageQueue } from './lib/message-queue.js';
 import { ReminderManager } from './lib/reminder-manager.js';
 import { ScheduledTaskManager } from './lib/scheduled-task-manager.js';
 import { UserProfileManager } from './lib/user-profile.js';
-import { setupSkills } from './skills/index.js';
+import { setupTools } from './tools/index.js';
 import { closeBrowser } from './lib/browser-service.js';
 import { setupCronJobs } from './bot/cron-jobs.js';
 import { setupHandlers } from './bot/handlers.js';
@@ -53,8 +53,8 @@ if (!AUTHORIZED_CHAT_ID) {
 
 // Bot commands defined in src/config.ts (single source of truth)
 
-// Register pluggable skills (fetch_url, search_web, get_weather, http_request, get_datetime)
-setupSkills();
+// Register pluggable tools (fetch_url, search_web, get_weather, http_request, get_datetime)
+setupTools();
 
 // Initialize Gemini client
 const geminiClient = new GeminiClient();

@@ -11,14 +11,6 @@ export type StreamChunk =
 
 export type StreamCallback = (chunk: StreamChunk) => void;
 
-// Kept so existing callers (chatAsyncWithContext signature) still compile.
-export interface JSONRPCNotification {
-    jsonrpc: '2.0';
-    method: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    params?: any;
-}
-
 // ── Gemini REST API types ─────────────────────────────────────────────────────
 
 export type GeminiPart =
@@ -51,22 +43,22 @@ export interface FunctionDeclaration {
     };
 }
 
-// ── Skill types ──────────────────────────────────────────────────────────────
+// ── Tool types ───────────────────────────────────────────────────────────────
 
-export interface SkillMeta {
+export interface ToolMeta {
     /** Logical grouping for display / dynamic loading */
     category?: 'web' | 'ai' | 'utility' | 'knowledge';
     /** Semver or date stamp, e.g. "1.0.0" */
     version?: string;
     /** Set to false to skip registration at startup (default: true) */
     enabled?: boolean;
-    /** Env-var names that must be set for this skill to work, e.g. ['GEMINI_API_KEY'] */
+    /** Env-var names that must be set for this tool to work, e.g. ['GEMINI_API_KEY'] */
     requiresEnv?: string[];
 }
 
-export interface Skill {
+export interface Tool {
     declaration: FunctionDeclaration;
     handler: (args: Record<string, unknown>, workDir: string) => Promise<string>;
     /** Optional metadata — compatible with MCP tool-manifest conventions */
-    meta?: SkillMeta;
+    meta?: ToolMeta;
 }

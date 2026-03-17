@@ -1,6 +1,6 @@
-import type { Skill } from './_base.js';
+import type { Tool } from './_base.js';
 
-export const getWeatherSkill: Skill = {
+export const getWeatherTool: Tool = {
     meta: { category: 'utility', version: '1.0.0' },
     declaration: {
         name: 'get_weather',
