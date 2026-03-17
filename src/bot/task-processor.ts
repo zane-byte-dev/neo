@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import { markdownToTelegram } from '../lib/markdown-converter.js';
+import { TASK_TIMEOUT_MS, EDIT_INTERVAL_MS, CHUNK_LIMIT } from '../config.js';
 import type { Task } from './types.js';
 
 interface ProcessTaskDeps {
@@ -14,16 +15,16 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
     const { bot, geminiClient, chatHistoryCache, userProfile, sendReply } = deps;
     const { chatId, question, userName, messageId } = task;
 
-    const TASK_TIMEOUT_MS = parseInt(process.env.TASK_TIMEOUT_MS || '300000', 10);
+    const taskTimeoutMs = TASK_TIMEOUT_MS;
     let taskTimedOut = false;
     const taskTimeoutHandle = setTimeout(async () => {
         taskTimedOut = true;
-        console.error(`[Worker] Task timed out after ${TASK_TIMEOUT_MS / 1000}s for: ${question.substring(0, 60)}`);
+        console.error(`[Worker] Task timed out after ${taskTimeoutMs / 1000}s for: ${question.substring(0, 60)}`);
         await bot.telegram.sendMessage(
             chatId,
-            `⚠️ 请求处理超时（>${TASK_TIMEOUT_MS / 60000} 分钟），可能是 AI 引擎无响应，请稍后重试。`
+            `⚠️ 请求处理超时（>${taskTimeoutMs / 60000} 分钟），可能是 AI 引擎无响应，请稍后重试。`
         ).catch(() => {});
-    }, TASK_TIMEOUT_MS);
+    }, taskTimeoutMs);
 
     try {
         console.log(`[Worker] Processing task for ${userName}: ${question.substring(0, 20)}...`);
@@ -57,9 +58,6 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         let committedChars = 0;
 
         let lastEditMs = 0;
-
-        const EDIT_INTERVAL_MS = 1200;
-        const CHUNK_LIMIT = 3800;
 
         const header = () => `${task.skipHistory ? '💬' : '🤖'} ${agentLabel} (${timestamp})\n\n`;
 

@@ -1,11 +1,10 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { SKIP_DIRS, MAX_SEARCH_DEPTH } from '../config.js';
 
 export async function findFiles(query: string, baseDir: string, resolvedBase: string, depth = 0): Promise<string[]> {
-    const SKIP_DIRS = new Set(['.git', 'node_modules', '.tmp', '__pycache__', 'dist', '.cache']);
-    const MAX_DEPTH = 6;
     const results: string[] = [];
-    if (depth > MAX_DEPTH) return results;
+    if (depth > MAX_SEARCH_DEPTH) return results;
 
     let entries: import('fs').Dirent[];
     try {

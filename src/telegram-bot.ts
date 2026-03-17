@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { config } from 'dotenv';
 import { Telegraf } from 'telegraf';
 import { join } from 'path';
 import { promises as fs } from 'fs';
+import { BOT_COMMANDS, ASYNC_TRIGGER_PREFIXES, CACHE_DIR } from './config.js';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { setupLogger } from './lib/logger.js';
@@ -35,9 +35,6 @@ import type { Task } from './bot/types.js';
 // Initialize Logger
 setupLogger();
 
-// Load environment variables
-config();
-
 // Configuration
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const AUTHORIZED_CHAT_ID = process.env.TELEGRAM_CHAT_ID
@@ -54,32 +51,7 @@ if (!AUTHORIZED_CHAT_ID) {
     process.exit(1);
 }
 
-// ── Bot command registry (single source of truth) ──────────────────────────
-// Add new commands here; setMyCommands() picks them up automatically.
-const BOT_COMMANDS: Array<{ command: string; description: string }> = [
-    { command: 'start',        description: '查看帮助与所有命令' },
-    { command: 'new',          description: '开启新会话（重置上下文）' },
-    { command: 'compact',      description: '压缩当前上下文（保留摘要）' },
-    { command: 'clear',        description: '清空全部对话历史' },
-    { command: 'btw',          description: '临时问答，不计入对话上下文' },
-    { command: 'stats',        description: '查看会话统计' },
-    { command: 'tasks',        description: '查看所有后台任务状态' },
-    { command: 'cancel',       description: '取消某个任务 /cancel <id>' },
-    { command: 'reminders',    description: '查看所有提醒' },
-    { command: 'remindcancel', description: '取消提醒 /remindcancel <id>' },
-    { command: 'schedules',    description: '查看所有定时任务' },
-    { command: 'unschedule',   description: '删除定时任务 /unschedule <id>' },
-    { command: 'profile',      description: '查看/设置个人信息（城市、兴趣等）' },
-    { command: 'research',     description: '提交深度调研任务' },
-    { command: 'async',        description: '提交后台长任务' },
-    { command: 'ls',           description: '列出 workspace 目录内容（零 token）' },
-    { command: 'read',         description: '直接读取文件内容，不经过 AI（零 token）' },
-    { command: 'note',         description: '快速记录碎片到 Inbox（零 token）/note <内容>' },
-    { command: 'today',        description: '查看今日 Inbox 与日记（零 token）' },
-    { command: 'task',         description: '快速追加任务到 Tasks（零 token）/task <内容>' },
-    { command: 'search',       description: '全文搜索 vault（零 token）/search <关键词>' },
-    { command: 'weekly',       description: '立即生成本周周报' },
-];
+// Bot commands defined in src/config.ts (single source of truth)
 
 // Register pluggable skills (fetch_url, search_web, get_weather, http_request, get_datetime)
 setupSkills();
@@ -108,14 +80,12 @@ chatHistoryCache.setOnSessionExpire(async (session) => {
 });
 
 // Persistent message queue — survives bot restarts
-const CACHE_DIR = process.env.CHAT_CACHE_DIR || './cache';
 
 // Initialize async task manager
 const asyncTaskManager = new AsyncTaskManager(CACHE_DIR);
 await asyncTaskManager.init();
 
-// Keywords that trigger background async tasks
-const ASYNC_TRIGGER_PREFIXES = ['调研', '重构'];
+// Async trigger prefixes defined in src/config.ts
 const messageQueue = new MessageQueue(CACHE_DIR);
 
 // Reminder manager

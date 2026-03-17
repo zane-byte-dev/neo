@@ -1,5 +1,6 @@
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
+import { SKIP_DIRS } from '../config.js';
 
 interface WorkspaceDeps {
     bot: any;
@@ -226,7 +227,6 @@ export async function tryHandleWorkspaceCommand(
                 return true;
             }
             const absBase = resolve(workDir);
-            const SKIP = new Set(['.git', 'node_modules', '.tmp', '__pycache__', 'dist']);
             const MAX_RESULTS = 8;
             const CONTEXT_CHARS = 120;
             interface SearchHit { file: string; line: number; snippet: string; }
@@ -241,7 +241,7 @@ export async function tryHandleWorkspaceCommand(
                     if (hits.length >= MAX_RESULTS) break;
                     const abs = join(dir, e.name);
                     if (e.isDirectory()) {
-                        if (SKIP.has(e.name) || e.name.startsWith('.')) continue;
+                        if (SKIP_DIRS.has(e.name) || e.name.startsWith('.')) continue;
                         await walk(abs);
                     } else if (e.isFile() && e.name.endsWith('.md')) {
                         const content = await fs.readFile(abs, 'utf-8').catch(() => '');

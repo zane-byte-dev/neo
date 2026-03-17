@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { execa } from 'execa';
 import { join } from 'path';
+import { CRON_SCHEDULES } from '../config.js';
 
 interface CronDeps {
     authorizedChatId: number | null;
@@ -17,7 +18,7 @@ export function setupCronJobs(deps: CronDeps) {
     const projectRoot = process.cwd();
     const vaultEnv = { ...process.env };
 
-    cron.schedule('0 2 * * *', async () => {
+    cron.schedule(CRON_SCHEDULES.butler, async () => {
         console.log('[Cron] Execution starting: Butler daily maintenance');
         try {
             const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/butler.ts')], { env: vaultEnv });
@@ -28,7 +29,7 @@ export function setupCronJobs(deps: CronDeps) {
         }
     });
 
-    cron.schedule('30 9 * * *', async () => {
+    cron.schedule(CRON_SCHEDULES.curator, async () => {
         console.log('[Cron] Execution starting: Curator daily briefing');
         try {
             const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/curator.ts')], { env: vaultEnv });
@@ -41,7 +42,7 @@ export function setupCronJobs(deps: CronDeps) {
         }
     });
 
-    cron.schedule('59 23 * * *', async () => {
+    cron.schedule(CRON_SCHEDULES.sessionLog, async () => {
         console.log('[Cron] Execution starting: Session-to-Log');
         try {
             const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/session-to-log.ts')], { env: vaultEnv });
@@ -54,7 +55,7 @@ export function setupCronJobs(deps: CronDeps) {
         }
     });
 
-    cron.schedule('0 21 * * 0', async () => {
+    cron.schedule(CRON_SCHEDULES.weeklyReport, async () => {
         console.log('[Cron] Execution starting: Weekly report');
         try {
             const result = await execa('npx', ['tsx', join(projectRoot, 'apps/refinery/weekly-report.ts')], { env: vaultEnv });
@@ -69,5 +70,5 @@ export function setupCronJobs(deps: CronDeps) {
         }
     });
 
-    console.log('[System] Cron jobs configured (Butler: 02:00, Curator: 09:30, Session→Log: 23:59, WeeklyReport: Sun 21:00).');
+    console.log(`[System] Cron jobs configured (Butler: ${CRON_SCHEDULES.butler}, Curator: ${CRON_SCHEDULES.curator}, Session→Log: ${CRON_SCHEDULES.sessionLog}, WeeklyReport: ${CRON_SCHEDULES.weeklyReport}).`);
 }
