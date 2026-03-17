@@ -1,17 +1,8 @@
-import type { ReminderManager } from '../lib/reminder-manager.js';
-import type { ScheduledTaskManager } from '../lib/scheduled-task-manager.js';
+import type { Command } from './_base.js';
 
-interface ReminderDeps {
-    reminderManager: ReminderManager;
-    scheduledTaskManager: ScheduledTaskManager;
-}
-
-export async function tryHandleReminderCommand(
-    command: string,
-    text: string,
-    ctx: any,
-    deps: ReminderDeps,
-): Promise<boolean> {
+export const reminderCommand: Command = {
+    commands: ['/reminders', '/remindcancel', '/schedules', '/unschedule'],
+    handler: async (command, text, ctx, deps) => {
     switch (command) {
         case '/reminders': {
             const all = deps.reminderManager.getAll();
@@ -19,7 +10,7 @@ export async function tryHandleReminderCommand(
                 await ctx.reply('📅 暂无活跃提醒。');
                 return true;
             }
-            const lines = all.map(r => {
+            const lines = all.map((r: any) => {
                 const fireStr = new Date(r.fireAt).toLocaleString('zh-CN', {
                     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
                 });
@@ -53,7 +44,7 @@ export async function tryHandleReminderCommand(
                 await ctx.reply('🗓 暂无定时任务。\n\n发送如 "每天早上9点告诉我杭州的天气" 来创建一个。');
                 return true;
             }
-            const lines = all.map(t =>
+            const lines = all.map((t: any) =>
                 `🔁 \`${t.id}\`  \`${t.cronExpr}\`\n   ${t.content}`
             );
             await ctx.reply(
@@ -82,4 +73,5 @@ export async function tryHandleReminderCommand(
         default:
             return false;
     }
-}
+    },
+};

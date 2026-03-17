@@ -1,16 +1,10 @@
 import { geminiGenerate } from '../lib/gemini-client.js';
-import type { ChatHistoryCache, Message } from '../lib/chat-history-cache.js';
+import type { Message } from '../lib/chat-history-cache.js';
+import type { Command } from './_base.js';
 
-interface ConversationDeps {
-    bot: any;
-    chatHistoryCache: ChatHistoryCache;
-}
-
-export async function tryHandleConversationCommand(
-    command: string,
-    ctx: any,
-    deps: ConversationDeps,
-): Promise<boolean> {
+export const conversationCommand: Command = {
+    commands: ['/compact'],
+    handler: async (command, _text, ctx, deps) => {
     if (command !== '/compact') return false;
 
     const msgs = deps.chatHistoryCache.getCurrentSessionHistory();
@@ -53,4 +47,5 @@ export async function tryHandleConversationCommand(
     });
 
     return true;
-}
+    },
+};

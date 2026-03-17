@@ -1,15 +1,8 @@
-import type { UserProfileManager } from '../lib/user-profile.js';
+import type { Command } from './_base.js';
 
-interface ProfileDeps {
-    userProfile: UserProfileManager;
-}
-
-export async function tryHandleProfileCommand(
-    command: string,
-    text: string,
-    ctx: any,
-    deps: ProfileDeps,
-): Promise<boolean> {
+export const profileCommand: Command = {
+    commands: ['/profile'],
+    handler: async (command, text, ctx, deps) => {
     if (command !== '/profile') return false;
 
     const args = text.split(' ').slice(1);
@@ -62,4 +55,5 @@ export async function tryHandleProfileCommand(
 
     await ctx.reply('用法: `/profile` 查看 | `/profile set <字段> <值>` 设置 | `/profile clear` 清空', { parse_mode: 'Markdown' });
     return true;
-}
+    },
+};

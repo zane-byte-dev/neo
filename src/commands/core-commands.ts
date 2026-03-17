@@ -1,18 +1,8 @@
-import type { ChatHistoryCache } from '../lib/chat-history-cache.js';
+import type { Command } from './_base.js';
 
-interface CoreCommandDeps {
-    chatHistoryCache: ChatHistoryCache;
-}
-
-/**
- * Handle stable core commands that do not depend on bot internals.
- * Returns true when the command is handled.
- */
-export async function tryHandleCoreCommand(
-    command: string,
-    ctx: any,
-    deps: CoreCommandDeps,
-): Promise<boolean> {
+export const coreCommand: Command = {
+    commands: ['/start', '/clear', '/new', '/stats'],
+    handler: async (command, _text, ctx, deps) => {
     switch (command) {
         case '/start':
             await ctx.reply(
@@ -67,4 +57,5 @@ export async function tryHandleCoreCommand(
         default:
             return false;
     }
-}
+    },
+};

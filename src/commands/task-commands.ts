@@ -1,15 +1,9 @@
-import type { AsyncTask, AsyncTaskManager } from '../lib/async-task-manager.js';
+import type { AsyncTask } from '../lib/async-task-manager.js';
+import type { Command } from './_base.js';
 
-interface TaskDeps {
-    asyncTaskManager: AsyncTaskManager;
-}
-
-export async function tryHandleTaskCommand(
-    command: string,
-    text: string,
-    ctx: any,
-    deps: TaskDeps,
-): Promise<boolean> {
+export const taskCommand: Command = {
+    commands: ['/tasks', '/cancel'],
+    handler: async (command, text, ctx, deps) => {
     switch (command) {
         case '/tasks': {
             const all = deps.asyncTaskManager.getAllTasks();
@@ -59,4 +53,5 @@ export async function tryHandleTaskCommand(
         default:
             return false;
     }
-}
+    },
+};

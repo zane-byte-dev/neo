@@ -13,6 +13,7 @@ import { ReminderManager } from './lib/reminder-manager.js';
 import { ScheduledTaskManager } from './lib/scheduled-task-manager.js';
 import { UserProfileManager } from './lib/user-profile.js';
 import { setupTools } from './tools/index.js';
+import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
 import { closeBrowser } from './lib/browser-service.js';
 import { setupCronJobs } from './bot/cron-jobs.js';
 import { setupHandlers } from './bot/handlers.js';
@@ -20,7 +21,6 @@ import { initLifecycle } from './bot/lifecycle.js';
 import { sendReply as sendReplyFn } from './bot/reply.js';
 import { processTask as processTaskFn } from './bot/task-processor.js';
 import { findFiles as findFilesFn } from './bot/file-search.js';
-import { handleCommand as handleCommandFn } from './bot/command-handler.js';
 import { processMessage as processMessageFn } from './bot/message-router.js';
 import { handleUrlMessage as handleUrlMessageFn } from './bot/url-handler.js';
 import {
@@ -53,8 +53,9 @@ if (!AUTHORIZED_CHAT_ID) {
 
 // Bot commands defined in src/config.ts (single source of truth)
 
-// Register pluggable tools (fetch_url, search_web, get_weather, http_request, get_datetime)
-setupTools();
+// Auto-discover and register pluggable tools & commands
+await setupTools();
+await setupCommands();
 
 // Initialize Gemini client
 const geminiClient = new GeminiClient();

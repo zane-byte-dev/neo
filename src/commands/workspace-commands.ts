@@ -1,19 +1,11 @@
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
 import { SKIP_DIRS } from '../config.js';
+import type { Command } from './_base.js';
 
-interface WorkspaceDeps {
-    bot: any;
-    pendingReadMatches: Map<number, { matches: string[]; expiry: number }>;
-    findFiles: (query: string, baseDir: string, resolvedBase: string) => Promise<string[]>;
-}
-
-export async function tryHandleWorkspaceCommand(
-    command: string,
-    text: string,
-    ctx: any,
-    deps: WorkspaceDeps,
-): Promise<boolean> {
+export const workspaceCommand: Command = {
+    commands: ['/ls', '/read', '/note', '/today', '/task', '/search', '/weekly'],
+    handler: async (command, text, ctx, deps) => {
     switch (command) {
         case '/ls': {
             const workDir = process.env.WORK_DIR;
@@ -295,4 +287,5 @@ export async function tryHandleWorkspaceCommand(
         default:
             return false;
     }
-}
+    },
+};
