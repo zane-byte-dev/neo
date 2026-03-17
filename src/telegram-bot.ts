@@ -15,7 +15,7 @@ import { UserProfileManager } from './lib/user-profile.js';
 import { setupTools } from './tools/index.js';
 import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
 import { closeBrowser } from './lib/browser-service.js';
-import { setupCronJobs } from './bot/cron-jobs.js';
+import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './bot/handlers.js';
 import { initLifecycle } from './bot/lifecycle.js';
 import { sendReply as sendReplyFn } from './bot/reply.js';
@@ -68,13 +68,11 @@ await chatHistoryCache.init();
 // This complements the 23:59 cron — mid-day session switches won't be missed.
 chatHistoryCache.setOnSessionExpire(async (session) => {
     if (session.messages.length === 0) return;
-    const projectRoot = process.cwd();
-    const vaultEnv = { ...process.env };
     try {
-        await import('execa').then(({ execa }) =>
-            execa('npx', ['tsx', join(projectRoot, 'apps/refinery/session-to-log.ts')], { env: vaultEnv })
-        );
-        console.log(`[SessionExpire] Dehydrated session ${session.sessionId} (${session.messages.length} msgs)`);
+        const { runSessionToLog } = await import('./crons/session-to-log.js');
+        const result = await runSessionToLog();
+        if (result) console.log(`[SessionExpire] ${result}`);
+        else console.log(`[SessionExpire] Session ${session.sessionId} — no log generated (already exists or empty)`);
     } catch (err: any) {
         console.error('[SessionExpire] session-to-log failed:', err.message);
     }
@@ -114,8 +112,8 @@ class inkClawBot {
             processDocumentMessage: (ctx) => this.processDocumentMessage(ctx),
         });
         setupCronJobs({
-            authorizedChatId: AUTHORIZED_CHAT_ID,
-            sendReply: (chatId, text, retries, replyToMessageId) => this.sendReply(chatId, text, retries, replyToMessageId),
+            chatId: AUTHORIZED_CHAT_ID!,
+            sendReply: (chatId, text) => this.sendReply(chatId, text),
         });
         setupAsyncPollingFn({
             asyncTaskManager,

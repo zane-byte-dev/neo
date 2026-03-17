@@ -108,12 +108,3 @@ export const DANGEROUS_PATTERNS = [
     /\b(?:sudo|su)\b/,                       // sudo/su (privilege escalation)
     />\s*\/dev\/[a-z]/,                      // redirect to /dev/sda, /dev/null, etc.
 ];
-
-// ── Cron ─────────────────────────────────────────────────────────────────────
-
-export const CRON_SCHEDULES = {
-    butler:       '0 2 * * *',
-    curator:      '30 9 * * *',
-    sessionLog:   '59 23 * * *',
-    weeklyReport: '0 21 * * 0',
-} as const;

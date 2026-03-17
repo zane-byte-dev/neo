@@ -268,14 +268,12 @@ export const workspaceCommand: Command = {
         case '/weekly': {
             const statusMsg = await ctx.reply('⏳ 正在生成本周周报...');
             try {
-                const projectRoot = process.cwd();
-                const vaultEnv = { ...process.env };
-                const { execa: _execa } = await import('execa');
-                const result = await _execa('npx', ['tsx', join(projectRoot, 'apps/refinery/weekly-report.ts')], { env: vaultEnv });
-                const output = result.stdout?.trim() || '（无输出）';
+                const { runWeeklyReport } = await import('../crons/weekly-report.js');
+                const output = await runWeeklyReport();
+                const text = output || '⚠️ 本周没有日记文件，无法生成周报。';
                 await deps.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
-                    output.slice(0, 4000)
-                ).catch(() => ctx.reply(output.slice(0, 4000)));
+                    text.slice(0, 4000)
+                ).catch(() => ctx.reply(text.slice(0, 4000)));
             } catch (err: any) {
                 await deps.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
                     `❌ 周报生成失败: ${err.message}`
