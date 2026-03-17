@@ -3,46 +3,55 @@
  */
 
 /**
- * Convert Markdown to Telegram-friendly format
- * Removes unsupported Markdown and cleans up formatting
+ * Convert Markdown to Telegram HTML format.
+ * Telegram does not support full GitHub Markdown; this converts a practical subset.
  */
 export function markdownToTelegram(text: string): string {
-    let converted = text;
+    const codeBlocks: string[] = [];
 
-    // Remove code blocks (```), keep the content
-    converted = converted.replace(/```[\w]*\n([\s\S]*?)```/g, (_, code) => {
-        return `\n${code.trim()}\n`;
+    const escapeHtml = (input: string): string =>
+        input
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+    let converted = text.replace(/\r\n/g, '\n');
+
+    converted = converted.replace(/```[\w-]*\n([\s\S]*?)```/g, (_, code: string) => {
+        const token = `@@CODE_BLOCK_${codeBlocks.length}@@`;
+        codeBlocks.push(`<pre><code>${escapeHtml(code.trim())}</code></pre>`);
+        return token;
     });
 
-    // Remove inline code backticks, keep content
-    converted = converted.replace(/`([^`]+)`/g, '$1');
+    converted = escapeHtml(converted);
 
-    // Convert bold **text** or __text__ to *text* (Telegram bold)
-    converted = converted.replace(/\*\*(.+?)\*\*/g, '*$1*');
-    converted = converted.replace(/__(.+?)__/g, '*$1*');
+    // Links: [text](url)
+    converted = converted.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>');
 
-    // Remove italic markers (Telegram doesn't support _ for italic reliably)
-    converted = converted.replace(/_(.+?)_/g, '$1');
+    // Headings: # text
+    converted = converted.replace(/^#{1,6}\s+(.+)$/gm, '<b>$1</b>');
 
-    // Remove headers (#, ##, ###) - just keep the text
-    converted = converted.replace(/^#{1,6}\s+(.+)$/gm, '$1');
+    // Bold and italic
+    converted = converted.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    converted = converted.replace(/__(.+?)__/g, '<b>$1</b>');
+    converted = converted.replace(/\*(.+?)\*/g, '<i>$1</i>');
+    converted = converted.replace(/_(.+?)_/g, '<i>$1</i>');
 
-    // Convert bullet points - → to •
-    converted = converted.replace(/^[-*+]\s/gm, '• ');
+    // Inline code
+    converted = converted.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-    // Remove horizontal rules
+    // Bullets
+    converted = converted.replace(/^\s*[-*+]\s+/gm, '• ');
+
+    // Horizontal rules
     converted = converted.replace(/^---+$/gm, '');
     converted = converted.replace(/^___+$/gm, '');
     converted = converted.replace(/^\*\*\*+$/gm, '');
 
-    // Remove link markdown [text](url), keep text
-    converted = converted.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    // Restore fenced code blocks
+    for (let i = 0; i < codeBlocks.length; i++) {
+        converted = converted.replace(`@@CODE_BLOCK_${i}@@`, codeBlocks[i]);
+    }
 
-    // Clean up excessive newlines (more than 2)
-    converted = converted.replace(/\n{3,}/g, '\n\n');
-
-    // Trim whitespace
-    converted = converted.trim();
-
-    return converted;
+    return converted.replace(/\n{3,}/g, '\n\n').trim();
 }

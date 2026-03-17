@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { promises as fs } from 'node:fs';
 import { execa } from 'execa';
 import { setupLogger } from './logger.js';
-import { logDangerousCommand, logSuspiciousInput } from './audit-logger.js';
+import { logDangerousCommand, logToolExecution } from './audit-logger.js';
 
 setupLogger();
 
@@ -197,6 +197,15 @@ async function executeTool(
     workDir: string,
 ): Promise<string> {
     console.log(`[AgentRuntime] Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
+    const startedAt = Date.now();
+
+    const finish = async (result: string, status: 'ok' | 'blocked' | 'error' = 'ok'): Promise<string> => {
+        const elapsedMs = Date.now() - startedAt;
+        const summary = `${status} (${elapsedMs}ms) ${result.replace(/\s+/g, ' ').slice(0, 220)}`;
+        await logToolExecution(name, args, summary);
+        return result;
+    };
+
     try {
         switch (name) {
             case 'bash': {
@@ -207,7 +216,7 @@ async function executeTool(
                 if (danger.blocked) {
                     console.warn(`[Security] Dangerous command blocked: ${command.slice(0, 100)}`);
                     await logDangerousCommand(command, true, danger.reason);
-                    return `[BLOCKED] Dangerous command pattern detected: ${danger.reason}`;
+                    return finish(`[BLOCKED] Dangerous command pattern detected: ${danger.reason}`, 'blocked');
                 }
 
                 // Log non-dangerous external API calls
@@ -229,7 +238,7 @@ async function executeTool(
                     .filter(Boolean)
                     .join('\n')
                     .trim();
-                return out || '(no output)';
+                return finish(out || '(no output)');
             }
 
             case 'read_file': {
@@ -255,7 +264,7 @@ ${content}
 ─────────────────────────────────
 [/EXTERNAL_CONTENT]`;
                 
-                return wrapped;
+                return finish(wrapped);
             }
 
             case 'write_file': {
@@ -264,7 +273,7 @@ ${content}
                 const resolved = isAbsolute(filePath) ? filePath : join(workDir, filePath);
                 await fs.mkdir(dirname(resolved), { recursive: true });
                 await fs.writeFile(resolved, content, 'utf8');
-                return `OK: wrote ${content.length} chars to ${resolved}`;
+                return finish(`OK: wrote ${content.length} chars to ${resolved}`);
             }
 
             case 'list_dir': {
@@ -275,19 +284,22 @@ ${content}
                     if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
                     return a.name.localeCompare(b.name);
                 });
-                return sorted.map(e => (e.isDirectory() ? `${e.name}/` : e.name)).join('\n');
+                return finish(sorted.map(e => (e.isDirectory() ? `${e.name}/` : e.name)).join('\n'));
             }
 
             default: {
                 const skill = skillRegistry.get(name);
-                if (skill) return skill.handler(args, workDir);
-                return `[Error] Unknown tool: ${name}`;
+                if (skill) {
+                    const result = await skill.handler(args, workDir);
+                    return finish(result);
+                }
+                return finish(`[Error] Unknown tool: ${name}`, 'error');
             }
         }
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[AgentRuntime] Tool error (${name}): ${msg}`);
-        return `[Error] ${name} failed: ${msg}`;
+        return finish(`[Error] ${name} failed: ${msg}`, 'error');
     }
 }
 
