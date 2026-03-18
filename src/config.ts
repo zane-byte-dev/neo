@@ -42,6 +42,7 @@ export const BOT_COMMANDS: Array<{ command: string; description: string }> = [
     { command: 'task',         description: '快速追加任务到 Tasks（零 token）/task <内容>' },
     { command: 'search',       description: '全文搜索 vault（零 token）/search <关键词>' },
     { command: 'weekly',       description: '立即生成本周周报' },
+    { command: 'save',         description: '回复消息保存到 Library（零 token）/save [子目录/]标题' },
 ];
 
 // ── Agent / Gemini ───────────────────────────────────────────────────────────

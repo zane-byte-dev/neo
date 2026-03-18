@@ -56,11 +56,21 @@ export async function sendReply(
         const telegramText = markdownToTelegram(chunk);
         const replyText = `🤖 inkClaw (${timestamp})\n\n${telegramText}`;
 
+        const isLastChunk = i === textChunks.length - 1;
+        const saveButton = {
+            reply_markup: {
+                inline_keyboard: [[{ text: '💾 保存到 Library', callback_data: 'save_lib' }]]
+            }
+        };
+
         for (let attempt = 0; attempt <= retries; attempt++) {
             try {
                 const extraArgs: any = {};
                 if (replyToMessageId) {
                     extraArgs.reply_parameters = { message_id: replyToMessageId };
+                }
+                if (isLastChunk) {
+                    Object.assign(extraArgs, saveButton);
                 }
                 await bot.telegram.sendMessage(
                     chatId,
@@ -75,6 +85,9 @@ export async function sendReply(
                         const fallbackArgs: any = {};
                         if (replyToMessageId) {
                             fallbackArgs.reply_parameters = { message_id: replyToMessageId };
+                        }
+                        if (isLastChunk) {
+                            Object.assign(fallbackArgs, saveButton);
                         }
                         await bot.telegram.sendMessage(chatId, chunkPrefix + chunk, fallbackArgs);
                         break;

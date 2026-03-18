@@ -7,6 +7,7 @@ interface HandlersDeps {
     processPhotoMessage: (ctx: any) => Promise<void>;
     processVoiceMessage: (ctx: any) => Promise<void>;
     processDocumentMessage: (ctx: any) => Promise<void>;
+    handleCallbackQuery: (ctx: any) => Promise<void>;
 }
 
 export function setupHandlers(deps: HandlersDeps) {
@@ -32,6 +33,10 @@ export function setupHandlers(deps: HandlersDeps) {
 
     deps.bot.on(message('document'), async (ctx: any) => {
         await deps.processDocumentMessage(ctx);
+    });
+
+    deps.bot.on('callback_query', async (ctx: any) => {
+        await deps.handleCallbackQuery(ctx);
     });
 
     deps.bot.catch((err: any) => {

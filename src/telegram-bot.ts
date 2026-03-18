@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Telegraf } from 'telegraf';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
 import { BOT_COMMANDS, ASYNC_TRIGGER_PREFIXES, CACHE_DIR } from './config.js';
 import { GeminiClient } from './lib/gemini-client.js';
@@ -109,6 +109,7 @@ class inkClawBot {
             processPhotoMessage: (ctx) => this.processPhotoMessage(ctx),
             processVoiceMessage: (ctx) => this.processVoiceMessage(ctx),
             processDocumentMessage: (ctx) => this.processDocumentMessage(ctx),
+            handleCallbackQuery: (ctx) => this.handleCallbackQuery(ctx),
         });
         setupCronJobs({
             chatId: AUTHORIZED_CHAT_ID!,
@@ -271,6 +272,53 @@ class inkClawBot {
 
     private async findFiles(query: string, baseDir: string, resolvedBase: string, depth = 0): Promise<string[]> {
         return findFilesFn(query, baseDir, resolvedBase, depth);
+    }
+
+    private async handleCallbackQuery(ctx: any) {
+        const data = ctx.callbackQuery?.data;
+        if (!data) return;
+
+        if (data === 'save_lib') {
+            const workDir = process.env.WORK_DIR;
+            if (!workDir) {
+                await ctx.answerCbQuery('⚠️ WORK_DIR 未配置').catch(() => {});
+                return;
+            }
+
+            const msgText: string = ctx.callbackQuery.message?.text || '';
+            // Strip the bot header: optional "[N/M]\n" prefix + "🤖 inkClaw (HH:MM)\n\n"
+            const content = msgText.replace(/^(?:\[\d+\/\d+\]\n)?🤖 inkClaw \(\d{2}:\d{2}\)\n\n/, '');
+
+            if (!content.trim()) {
+                await ctx.answerCbQuery('❌ 消息内容为空').catch(() => {});
+                return;
+            }
+
+            try {
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+                const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' }).replace(':', '');
+                const title = `saved-${dateStr}-${timeStr}`;
+
+                const targetDir = join(resolve(workDir), '3-Library', 'Wiki');
+                await fs.mkdir(targetDir, { recursive: true });
+                const filePath = join(targetDir, `${title}.md`);
+
+                const dateTimeStr = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+                await fs.writeFile(filePath, `# ${title}\n\n${content}\n\n---\n\n时间: ${dateTimeStr}\n`, 'utf-8');
+
+                // Update button to reflect saved state
+                await ctx.editMessageReplyMarkup({
+                    inline_keyboard: [[{ text: `✅ 已保存 → Wiki/${title}.md`, callback_data: 'saved_noop' }]]
+                }).catch(() => {});
+                await ctx.answerCbQuery('✅ 已保存到 3-Library/Wiki/').catch(() => {});
+            } catch (err: any) {
+                console.error('[SaveCallback] Error:', err.message);
+                await ctx.answerCbQuery('❌ 保存失败: ' + err.message).catch(() => {});
+            }
+        } else if (data === 'saved_noop') {
+            await ctx.answerCbQuery('已保存过了').catch(() => {});
+        }
     }
 
     /**

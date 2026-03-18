@@ -4,7 +4,7 @@ import { SKIP_DIRS } from '../config.js';
 import type { Command } from './_base.js';
 
 export const workspaceCommand: Command = {
-    commands: ['/ls', '/read', '/note', '/today', '/task', '/search', '/weekly'],
+    commands: ['/ls', '/read', '/note', '/today', '/task', '/search', '/weekly', '/save'],
     handler: async (command, text, ctx, deps) => {
     switch (command) {
         case '/ls': {
@@ -277,6 +277,82 @@ export const workspaceCommand: Command = {
                 await deps.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
                     `❌ 周报生成失败: ${err.message}`
                 ).catch(() => {});
+            }
+            return true;
+        }
+
+        case '/save': {
+            const workDir = process.env.WORK_DIR;
+            if (!workDir) { await ctx.reply('⚠️ WORK_DIR 未配置。'); return true; }
+
+            // Content comes from: replied-to message first, then text after command
+            const replyText: string | undefined = ctx.message?.reply_to_message?.text;
+            const arg = text.replace(/^\/save\s*/i, '').trim();
+
+            const rawContent = replyText ?? arg;
+            if (!rawContent) {
+                await ctx.reply(
+                    '用法：回复任意消息，发送 `/save [标题]` 即可存入 `3-Library/`。\n\n' +
+                    '示例：\n`/save` — 以时间戳命名\n`/save AI工具对比` — 自定义标题\n`/save Wiki/AI工具对比` — 存入指定子目录',
+                    { parse_mode: 'Markdown' }
+                );
+                return true;
+            }
+
+            // Parse subdir and title from arg
+            // e.g. "Wiki/AI工具" → subdir=Wiki, title=AI工具
+            // e.g. "AI工具" → subdir=Wiki (default), title=AI工具
+            // e.g. "" → subdir=Wiki, title=timestamp
+            let subDir = 'Wiki';
+            let title = '';
+
+            if (arg.includes('/')) {
+                const slashIdx = arg.indexOf('/');
+                subDir = arg.slice(0, slashIdx).trim() || 'Wiki';
+                title = arg.slice(slashIdx + 1).trim();
+            } else {
+                title = arg;
+            }
+
+            if (!title) {
+                const now = new Date();
+                const dateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+                const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' }).replace(':', '');
+                title = `saved-${dateStr}-${timeStr}`;
+            }
+
+            // Sanitize path components to prevent path traversal
+            const safeSubDir = subDir.replace(/[\/\\..]/g, '').slice(0, 64);
+            const safeTitle = title.replace(/[\/\\:*?"<>|]/g, '-').slice(0, 128);
+
+            try {
+                const absBase = resolve(workDir);
+                const targetDir = join(absBase, '3-Library', safeSubDir);
+                // Ensure target is within workspace
+                if (!targetDir.startsWith(absBase)) {
+                    await ctx.reply('⛔ 不允许访问 WORK_DIR 以外的路径。');
+                    return true;
+                }
+                await fs.mkdir(targetDir, { recursive: true });
+                const filePath = join(targetDir, `${safeTitle}.md`);
+
+                const now = new Date();
+                const dateTimeStr = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+                const fileContent = `# ${safeTitle}\n\n${rawContent}\n\n---\n\n时间: ${dateTimeStr}\n`;
+
+                // Append if file exists, create otherwise
+                let fileExists = false;
+                try { await fs.access(filePath); fileExists = true; } catch { /* new */ }
+                if (fileExists) {
+                    await fs.appendFile(filePath, `\n\n---\n\n${rawContent}\n\n时间: ${dateTimeStr}\n`, 'utf-8');
+                } else {
+                    await fs.writeFile(filePath, fileContent, 'utf-8');
+                }
+
+                const relPath = `3-Library/${safeSubDir}/${safeTitle}.md`;
+                await ctx.reply(`✅ 已保存到 \`${relPath}\``, { parse_mode: 'Markdown' });
+            } catch (err: any) {
+                await ctx.reply(`❌ 保存失败: ${err.message}`);
             }
             return true;
         }
