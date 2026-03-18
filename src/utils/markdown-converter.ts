@@ -17,9 +17,19 @@ export function markdownToTelegram(text: string): string {
 
     let converted = text.replace(/\r\n/g, '\n');
 
+    // Use \x01 as delimiter: no underscores (safe from italic regex), no @ (safe from Telegram mention linkification)
     converted = converted.replace(/```[\w-]*\n([\s\S]*?)```/g, (_, code: string) => {
-        const token = `@@CODE_BLOCK_${codeBlocks.length}@@`;
+        const token = `\x01CB${codeBlocks.length}\x01`;
         codeBlocks.push(`<pre><code>${escapeHtml(code.trim())}</code></pre>`);
+        return token;
+    });
+
+    // Protect inline code spans before any bold/italic processing so that
+    // underscores inside `tool_names` don't get mangled by the _.._ italic regex.
+    const inlineCodeSpans: string[] = [];
+    converted = converted.replace(/`([^`]+)`/g, (_, code: string) => {
+        const token = `\x01IC${inlineCodeSpans.length}\x01`;
+        inlineCodeSpans.push(`<code>${escapeHtml(code)}</code>`);
         return token;
     });
 
@@ -37,8 +47,10 @@ export function markdownToTelegram(text: string): string {
     converted = converted.replace(/\*(.+?)\*/g, '<i>$1</i>');
     converted = converted.replace(/_(.+?)_/g, '<i>$1</i>');
 
-    // Inline code
-    converted = converted.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Restore inline code spans
+    for (let i = 0; i < inlineCodeSpans.length; i++) {
+        converted = converted.replace(`\x01IC${i}\x01`, inlineCodeSpans[i]);
+    }
 
     // Bullets
     converted = converted.replace(/^\s*[-*+]\s+/gm, '• ');
@@ -50,7 +62,7 @@ export function markdownToTelegram(text: string): string {
 
     // Restore fenced code blocks
     for (let i = 0; i < codeBlocks.length; i++) {
-        converted = converted.replace(`@@CODE_BLOCK_${i}@@`, codeBlocks[i]);
+        converted = converted.replace(`\x01CB${i}\x01`, codeBlocks[i]);
     }
 
     return converted.replace(/\n{3,}/g, '\n\n').trim();

@@ -32,12 +32,18 @@ export const getWeatherTool: Tool = {
                 `https://wttr.in/${encodeURIComponent(location)}?format=j1&lang=${langParam}`,
                 { headers: { 'User-Agent': 'curl/7.68.0', Accept: 'application/json' } },
             );
-            if (!res.ok) return `[Error] 天气获取失败: HTTP ${res.status}`;
+            if (!res.ok) {
+                console.error(`[get_weather] HTTP ${res.status} for location="${location}"`);
+                return `[Error] 天气获取失败: HTTP ${res.status}。请直接告知用户天气服务暂时不可用，不要改用其他工具。`;
+            }
 
             const data = await res.json() as any;
             const cur = data.current_condition?.[0];
             const area = data.nearest_area?.[0];
-            if (!cur) return '[Error] 未返回天气数据';
+            if (!cur) {
+                console.error(`[get_weather] Empty response for location="${location}"`, JSON.stringify(data).slice(0, 200));
+                return '[Error] 未返回天气数据。请直接告知用户天气服务暂时不可用，不要改用其他工具。';
+            }
 
             const city = area?.areaName?.[0]?.value ?? location;
             const country = area?.country?.[0]?.value ?? '';
@@ -64,7 +70,8 @@ export const getWeatherTool: Tool = {
 
             return out.trim();
         } catch (err: unknown) {
-            return `[Error] get_weather: ${err instanceof Error ? err.message : String(err)}`;
+            console.error(`[get_weather] Exception for location="${location}":`, err);
+            return `[Error] get_weather: ${err instanceof Error ? err.message : String(err)}。请直接告知用户天气服务暂时不可用，不要改用其他工具。`;
         }
     },
 };
