@@ -14,6 +14,7 @@
 | 获取天气 | `get_weather` |
 | 拉取 AI 新闻 | `fetch_ai_news` |
 | 生成微信公众号文章 | `generate_wechat_article` |
+| 访问西风知识库（列文章/读文章） | `find_in_km` |
 
 ## 使用原则
 

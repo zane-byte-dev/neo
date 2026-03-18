@@ -152,15 +152,18 @@ export class GeminiClient {
             try {
                 const agents = await fs.readFile(join(dir, 'AGENTS.md'), 'utf8');
                 const parts: string[] = [agents.trim()];
-                for (const file of ['SOUL.md', 'TOOLS.md']) {
+                const loadedFiles = ['AGENTS.md'];
+                for (const file of ['SOUL.md', 'TOOLS.md', 'XIFENG.md']) {
                     try {
                         const content = await fs.readFile(join(dir, file), 'utf8');
-                        if (content.trim()) parts.push(content.trim());
+                        if (content.trim()) {
+                            parts.push(content.trim());
+                            loadedFiles.push(file);
+                        }
                     } catch { /* optional */ }
                 }
                 const merged = parts.join('\n\n---\n\n');
-                const fileList = ['AGENTS.md', 'SOUL.md', 'TOOLS.md'].slice(0, parts.length).join(' + ');
-                console.log(`[AgentRuntime] 📜 Loaded prompt from: ${dir} (${fileList})`);
+                console.log(`[AgentRuntime] 📜 Loaded prompt from: ${dir} (${loadedFiles.join(' + ')})`)
                 return merged;
             } catch { /* try next dir */ }
         }

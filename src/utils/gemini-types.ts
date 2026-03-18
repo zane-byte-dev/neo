@@ -38,7 +38,7 @@ export interface FunctionDeclaration {
     description: string;
     parameters: {
         type: string;
-        properties: Record<string, { type: string; description: string }>;
+        properties: Record<string, { type: string; description: string; items?: { type: string }; enum?: string[] }>;
         required?: string[];
     };
 }
