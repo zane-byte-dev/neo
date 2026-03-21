@@ -24,9 +24,10 @@ export async function handleUrlMessage(
     );
 
     let pageText: string;
+    let savedPath: string;
 
     try {
-        ({ text: pageText } = await fetchAndSaveUrl(url));
+        ({ text: pageText, savedPath } = await fetchAndSaveUrl(url));
         await deps.bot.telegram.editMessageText(
             chatId,
             statusMsg.message_id,
@@ -46,8 +47,8 @@ export async function handleUrlMessage(
 
     const userQuestion = rawText.replace(url, '').trim();
     const question = userQuestion
-        ? `${userQuestion}\n\n[网页内容 - ${url}]:\n${pageText}`
-        : `请对以下网页内容进行摘要，提炼核心观点和要点。\n\n[网页内容 - ${url}]:\n${pageText}`;
+        ? `${userQuestion}\n\n[网页内容 - ${url} | 本地文件: ${savedPath}]:\n${pageText}`
+        : `请对以下网页内容进行摘要，提炼核心观点和要点。\n\n[网页内容 - ${url} | 本地文件: ${savedPath}]:\n${pageText}`;
 
     const task: Task = { chatId, question, userName, messageId };
     await deps.messageQueue.enqueue(task, async (t: Task) => {
@@ -62,7 +63,6 @@ export async function handleUrlMessage(
 async function fetchAndSaveUrl(url: string): Promise<{ text: string; savedPath: string }> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
-
     let html: string;
     try {
         const res = await fetch(url, {
@@ -74,7 +74,6 @@ async function fetchAndSaveUrl(url: string): Promise<{ text: string; savedPath: 
     } finally {
         clearTimeout(timeout);
     }
-
     const plainText = html
         .replace(/<script[\s\S]*?<\/script>/gi, '')
         .replace(/<style[\s\S]*?<\/style>/gi, '')
