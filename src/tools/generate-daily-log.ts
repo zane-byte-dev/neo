@@ -68,12 +68,6 @@ export const generateDailyLogTool: Tool = {
         const today = todayStr();
         const outPath = join(vaultRoot, '1-Daily', `${today}.md`);
 
-        // Idempotent: don't overwrite
-        try {
-            await fs.access(outPath);
-            return `⏭️ ${today}.md 已存在，跳过生成。`;
-        } catch { /* proceed */ }
-
         const messages = await loadTodayMessages();
         if (messages.length === 0) {
             return `⏭️ 今天（${today}）没有对话记录，跳过。`;
@@ -119,6 +113,6 @@ ${transcript}
         await fs.mkdir(join(vaultRoot, '1-Daily'), { recursive: true });
         await fs.writeFile(outPath, summary, 'utf-8');
 
-        return `📓 今日日记已生成：1-Daily/${today}.md（${messages.length} 条消息 → ${summary.length} 字）`;
+        return `📓 今日日记已更新：1-Daily/${today}.md（${messages.length} 条消息 → ${summary.length} 字）`;
     },
 };

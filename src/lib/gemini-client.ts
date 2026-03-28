@@ -179,13 +179,25 @@ export class GeminiClient {
         return '';
     }
 
-    private buildPrompt(message: string, history?: string): string {
+    private async buildPrompt(message: string, history?: string): Promise<string> {
         const now = new Date().toLocaleString('zh-CN');
-        let prompt = `[Runtime Context]\n- Current Time: ${now}\n\n`;
-        if (history?.trim()) {
-            prompt += `[Previous Conversation History]\n${history}\n\n`;
+        let prompt = `[Runtime Context]\n- Current Time: ${now}\n`;
+
+        // Inject NOW.md (Short-term memory / Workbench)
+        try {
+            const nowMdPath = join(this.workDir, 'NOW.md');
+            const nowMd = await fs.readFile(nowMdPath, 'utf8');
+            if (nowMd.trim()) {
+                prompt += `\n[Current Mission/Focus]\n${nowMd.trim()}\n`;
+            }
+        } catch {
+            // NOW.md not found or unreadable, skip
         }
-        prompt += `[New Message]\n${message}`;
+
+        if (history?.trim()) {
+            prompt += `\n[Previous Conversation History]\n${history}\n`;
+        }
+        prompt += `\n[New Message]\n${message}`;
         return prompt;
     }
 
@@ -200,7 +212,7 @@ export class GeminiClient {
             return null;
         }
 
-        const prompt = this.buildPrompt(message, history);
+        const prompt = await this.buildPrompt(message, history);
         const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: prompt }] }];
 
         try {

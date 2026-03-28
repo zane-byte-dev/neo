@@ -3,6 +3,14 @@
         "/^node -e \"const p = require\\('/Users/zhengchao/mox/neo/neo-core/gateway/node_modules/telegraf/package\\.json'\\); console\\.log\\(JSON\\.stringify\\(Object\\.keys\\(p\\.exports\\), null, 2\\)\\)\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^cd /Users/zhengchao/mox/neo/resource/km/xifeng-km && python3 -c \"\nimport os\nfname = '051___是谁阻碍了你看到真相_\\[\\\\xa0\\\\xa0\\\\xa0\\\\xa0\\]\\{\\.tab1\\}23_9_13__\\.md'\nwith open\\(fname, 'r'\\) as f:\n    print\\(f\\.read\\(1500\\)\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^cd /Users/zhengchao/mox/neo/resource/km/xifeng-km && python3 -c \"\nimport os\nold = '051___是谁阻碍了你看到真相_\\[\\\\xa0\\\\xa0\\\\xa0\\\\xa0\\]\\{\\.tab1\\}23_9_13__\\.md'\nnew = '051_是谁阻碍了你看到真相_23_9_13\\.md'\nos\\.rename\\(old, new\\)\nprint\\('renamed:', new\\)\nprint\\('exists:', os\\.path\\.exists\\(new\\)\\)\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
