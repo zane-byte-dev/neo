@@ -39,14 +39,17 @@ async function* streamGeminiApi(
     systemInstruction: string,
     contents: GeminiContent[],
     toolRegistry: Map<string, Tool>,
+    forceText = false,
 ): AsyncGenerator<ApiChunk> {
     const url = `${GEMINI_BASE_URL}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
     const body: Record<string, unknown> = {
         contents,
         generationConfig: { temperature: 0.7 },
-        tools: [{ functionDeclarations: [...TOOL_DECLARATIONS, ...Array.from(toolRegistry.values()).map(s => s.declaration)] }],
     };
+    if (!forceText) {
+        body.tools = [{ functionDeclarations: [...TOOL_DECLARATIONS, ...Array.from(toolRegistry.values()).map(s => s.declaration)] }];
+    }
     if (systemInstruction) {
         body.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
@@ -151,9 +154,10 @@ export async function agentLoop(
     const contents: GeminiContent[] = [...initialContents];
     let finalText = '';
 
-    for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
-        if (iter === MAX_TOOL_ITERATIONS - 1) {
-            console.warn(`[AgentRuntime] Reached MAX_TOOL_ITERATIONS (${MAX_TOOL_ITERATIONS}), forcing stop`);
+    for (let iter = 0; iter <= MAX_TOOL_ITERATIONS; iter++) {
+        const isLastIter = iter === MAX_TOOL_ITERATIONS;
+        if (isLastIter) {
+            console.warn(`[AgentRuntime] Reached MAX_TOOL_ITERATIONS (${MAX_TOOL_ITERATIONS}), forcing text response`);
         }
         // modelRawParts accumulates every part EXACTLY as received from the API.
         // This is critical for thinking models: thought parts and their associated
@@ -163,7 +167,7 @@ export async function agentLoop(
         const functionCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
         // Consume one full model turn from the streaming API
-        for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents, toolRegistry)) {
+        for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents, toolRegistry, isLastIter)) {
             if (chunk.rawPart) modelRawParts.push(chunk.rawPart);
             if (chunk.thought) {
                 // Thinking tokens: stream immediately — always safe to show live
@@ -177,8 +181,8 @@ export async function agentLoop(
 
         const turnText = textParts.join('');
 
-        if (functionCalls.length === 0) {
-            // ── Final turn: no more tool calls ──────────────────────────────
+        if (functionCalls.length === 0 || isLastIter) {
+            // ── Final turn: no more tool calls (or iteration limit reached) ──
             finalText = turnText;
             if (turnText) {
                 onChunk?.({ type: 'text', text: turnText });

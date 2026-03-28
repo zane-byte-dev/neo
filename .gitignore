@@ -39,3 +39,5 @@ logs/
 
 # PM2
 .pm2/
+
+.DS_Store
