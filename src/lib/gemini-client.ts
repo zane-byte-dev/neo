@@ -12,6 +12,7 @@ import { promises as fs } from 'node:fs';
 import { setupLogger } from '../utils/logger.js';
 import { GEMINI_BASE_URL, GEMINI_FILES_UPLOAD_URL } from '../config.js';
 import { agentLoop, resolveModel } from './agent-runtime.js';
+import { loadOpenClawSkills, formatSkillsPrompt } from './openclaw-skills.js';
 
 export type {
     StreamChunk,
@@ -134,14 +135,22 @@ export class GeminiClient {
         if (this.configDir) console.log(`[AgentRuntime] ⚙️  ConfigDir: ${this.configDir}`);
 
         // Load system instruction in the background (non-blocking)
-        this.loadSystemInstruction().then(si => {
-            this.systemInstruction = si;
-            if (si) {
-                console.log(`[AgentRuntime] 📜 agent.md loaded (${si.length} chars)`);
+        this.loadSystemInstruction().then(async si => {
+            const parts: string[] = [];
+            if (si) parts.push(si);
+
+            // Append OpenClaw skills
+            const skillsPrompt = await this.loadOpenClawSkills();
+            if (skillsPrompt) parts.push(skillsPrompt);
+
+            this.systemInstruction = parts.join('\n\n---\n\n');
+
+            if (this.systemInstruction) {
+                console.log(`[AgentRuntime] 📜 System instruction ready (${this.systemInstruction.length} chars)`);
             } else {
-                console.log('[AgentRuntime] ⚠️  No agent.md found');
+                console.log('[AgentRuntime] ⚠️  No system instruction loaded');
             }
-        }).catch(err => console.error('[AgentRuntime] Failed to load agent.md:', err.message));
+        }).catch(err => console.error('[AgentRuntime] Failed to load system instruction:', err.message));
     }
 
     private async loadSystemInstruction(): Promise<string> {
@@ -177,6 +186,23 @@ export class GeminiClient {
             } catch { /* try next */ }
         }
         return '';
+    }
+
+    /**
+     * Discover and load OpenClaw skills, returning a formatted prompt section.
+     */
+    private async loadOpenClawSkills(): Promise<string> {
+        try {
+            const skills = await loadOpenClawSkills();
+            if (skills.length === 0) return '';
+            const prompt = formatSkillsPrompt(skills);
+            console.log(`[AgentRuntime] 🧩 OpenClaw: ${skills.length} skill(s) loaded — ${skills.map(s => s.name).join(', ')}`);
+            return prompt;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[AgentRuntime] ⚠️  OpenClaw skills load failed: ${msg}`);
+            return '';
+        }
     }
 
     private async buildPrompt(message: string, history?: string): Promise<string> {
