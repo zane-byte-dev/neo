@@ -15,6 +15,7 @@ import { UserProfileManager } from './lib/user-profile.js';
 import { setupTools } from './tools/index.js';
 import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
 import { setToolContext } from './lib/tool-context.js';
+import { resolve as resolveUserInput, hasPending } from './lib/user-input-waiter.js';
 import { closeBrowser } from './lib/browser-service.js';
 import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './bot/handlers.js';
@@ -294,6 +295,20 @@ class inkClawBot {
     private async handleCallbackQuery(ctx: any) {
         const data = ctx.callbackQuery?.data;
         if (!data) return;
+
+        // ask_user inline keyboard response
+        if (data.startsWith('ask_user:')) {
+            const choice = data.slice('ask_user:'.length);
+            const chatId = ctx.callbackQuery.message?.chat?.id;
+            if (chatId && hasPending(chatId)) {
+                resolveUserInput(chatId, choice);
+                await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
+                await ctx.answerCbQuery(`已选择：${choice}`).catch(() => {});
+            } else {
+                await ctx.answerCbQuery('已超时或无待处理问题').catch(() => {});
+            }
+            return;
+        }
 
         if (data === 'save_lib') {
             const workDir = process.env.WORK_DIR;

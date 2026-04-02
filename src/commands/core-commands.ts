@@ -1,4 +1,5 @@
 import type { Command } from './_base.js';
+import { cancel as cancelUserInput } from '../lib/user-input-waiter.js';
 
 export const coreCommand: Command = {
     commands: ['/start', '/clear', '/new', '/stats'],
@@ -34,11 +35,13 @@ export const coreCommand: Command = {
             return true;
 
         case '/clear':
+            cancelUserInput(ctx.chat.id);
             await deps.chatHistoryCache.clearHistory();
             await ctx.reply('🗑️ Chat history cleared. Starting fresh!');
             return true;
 
         case '/new':
+            cancelUserInput(ctx.chat.id);
             await deps.chatHistoryCache.createNewSession();
             await ctx.reply('📝 新会话已开启，上下文已重置。');
             return true;

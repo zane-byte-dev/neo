@@ -59,14 +59,25 @@ export const askUserTool: Tool = {
             ? (args.choices as string[]).filter(c => typeof c === 'string' && c)
             : [];
 
-        let message = `❓ **AI 需要你的回答：**\n\n${question}`;
+        const messageText = `❓ **AI 需要你的回答：**\n\n${question}`;
+
+        const sendOptions: Record<string, unknown> = { parse_mode: 'Markdown' };
         if (choices.length > 0) {
-            message += `\n\n选项：\n${choices.map((c, i) => `  ${i + 1}. ${c}`).join('\n')}`;
+            // Build inline keyboard — max 2 buttons per row for readability
+            const rows: Array<Array<{ text: string; callback_data: string }>> = [];
+            for (let i = 0; i < choices.length; i += 2) {
+                rows.push(
+                    choices.slice(i, i + 2).map(c => ({
+                        text: c,
+                        callback_data: `ask_user:${c}`,
+                    }))
+                );
+            }
+            sendOptions.reply_markup = { inline_keyboard: rows };
         }
-        message += '\n\n_（请直接回复，AI 正在等待...）_';
 
         try {
-            await ctx.bot.telegram.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+            await ctx.bot.telegram.sendMessage(chatId, messageText, sendOptions);
         } catch (err: any) {
             console.error('[AskUserTool] Failed to send question:', err.message);
             return `[Error] Failed to send question to user: ${err.message}`;
