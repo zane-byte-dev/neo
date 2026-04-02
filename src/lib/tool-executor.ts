@@ -45,7 +45,9 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
     {
         name: 'write_file',
-        description: 'Write text content to a file, creating parent directories as needed.',
+        description: 'Write text content to a file, creating parent directories as needed. ' +
+            'Use for creating new files or complete rewrites. ' +
+            'To modify an existing file, prefer edit_file (targeted replacement) to avoid accidental overwrites.',
         parameters: {
             type: 'object',
             properties: {
