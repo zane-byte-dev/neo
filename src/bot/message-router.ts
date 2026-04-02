@@ -2,6 +2,8 @@ import { promises as fs } from 'fs';
 import { resolve } from 'path';
 import { parseReminderTime } from '../lib/reminder-manager.js';
 import { parseScheduledTask } from '../lib/scheduled-task-manager.js';
+import { hasPending, resolve as resolveUserInput } from '../lib/user-input-waiter.js';
+import { setActiveChatId } from '../lib/tool-context.js';
 import type { Task } from './types.js';
 
 interface MessageRouterDeps {
@@ -35,6 +37,15 @@ export async function processMessage(deps: MessageRouterDeps, ctx: any) {
 
     if (!deps.isAuthorized(chatId)) {
         await ctx.reply('⛔ Unauthorized.');
+        return;
+    }
+
+    // Update the active chat ID in tool context (for ask_user, schedule_create, etc.)
+    setActiveChatId(chatId);
+
+    // If ask_user tool is waiting for input, route this message directly to it
+    if (hasPending(chatId)) {
+        resolveUserInput(chatId, rawText);
         return;
     }
 

@@ -14,6 +14,7 @@ import { ScheduledTaskManager } from './lib/scheduled-task-manager.js';
 import { UserProfileManager } from './lib/user-profile.js';
 import { setupTools } from './tools/index.js';
 import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
+import { setToolContext } from './lib/tool-context.js';
 import { closeBrowser } from './lib/browser-service.js';
 import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './bot/handlers.js';
@@ -95,6 +96,15 @@ const scheduledTaskManager = new ScheduledTaskManager(CACHE_DIR);
 // User profile
 const userProfile = new UserProfileManager(CACHE_DIR);
 
+// Populate tool context so schedule/ask_user tools can access managers.
+// chatId starts as AUTHORIZED_CHAT_ID and gets updated per-message via setActiveChatId().
+setToolContext({
+    scheduledTaskManager,
+    reminderManager,
+    bot: null, // set after bot instance is created below
+    chatId: AUTHORIZED_CHAT_ID ?? 0,
+});
+
 class inkClawBot {
     private bot: Telegraf;
     private activeTaskIds = new Set<string>();
@@ -102,6 +112,13 @@ class inkClawBot {
 
     constructor(token: string) {
         this.bot = new Telegraf(token);
+        // Give tools access to the bot instance for ask_user / proactive messaging
+        setToolContext({
+            scheduledTaskManager,
+            reminderManager,
+            bot: this.bot,
+            chatId: AUTHORIZED_CHAT_ID ?? 0,
+        });
         setupHandlers({
             bot: this.bot,
             handleCommand: (ctx) => this.handleCommand(ctx),
