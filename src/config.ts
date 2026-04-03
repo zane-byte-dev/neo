@@ -6,11 +6,49 @@
 import { config as loadEnv } from 'dotenv';
 loadEnv();
 
+import type { TenantKey, Platform } from './types/platform.js';
+import { makeTenantKey } from './types/platform.js';
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function envInt(key: string, fallback: number): number {
     const v = process.env[key];
     return v ? parseInt(v, 10) : fallback;
+}
+
+// ── Multi-tenant authorization ───────────────────────────────────────────────
+
+/**
+ * Parse AUTHORIZED_USERS env var.
+ * Format: comma-separated `platform:userId` entries.
+ * Example: "telegram:123456789,feishu:ou_xxxxxxxxxxxx"
+ *
+ * Falls back to legacy TELEGRAM_CHAT_ID if AUTHORIZED_USERS is not set.
+ */
+function parseAuthorizedUsers(): Set<TenantKey> {
+    const raw = process.env.AUTHORIZED_USERS;
+    if (raw) {
+        const keys = raw.split(',').map(s => s.trim()).filter(Boolean) as TenantKey[];
+        return new Set(keys);
+    }
+    // Legacy fallback: single Telegram user
+    const legacyChatId = process.env.TELEGRAM_CHAT_ID;
+    if (legacyChatId) {
+        return new Set([makeTenantKey('telegram', legacyChatId)]);
+    }
+    return new Set();
+}
+
+export const AUTHORIZED_USERS: ReadonlySet<TenantKey> = parseAuthorizedUsers();
+
+/** Quick auth check */
+export function isAuthorized(tenantKey: TenantKey): boolean {
+    return AUTHORIZED_USERS.has(tenantKey);
+}
+
+/** Get all authorized tenants for a specific platform */
+export function getAuthorizedForPlatform(platform: Platform): TenantKey[] {
+    return [...AUTHORIZED_USERS].filter(k => k.startsWith(`${platform}:`));
 }
 
 // ── Bot ──────────────────────────────────────────────────────────────────────

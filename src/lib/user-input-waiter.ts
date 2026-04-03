@@ -13,7 +13,7 @@ interface PendingAsk {
     timeoutHandle: ReturnType<typeof setTimeout>;
 }
 
-const pending = new Map<number, PendingAsk>();
+const pending = new Map<string, PendingAsk>();
 
 const ASK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -21,7 +21,7 @@ const ASK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
  * Wait for user input. Returns a Promise that resolves when the user replies.
  * Rejects after ASK_TIMEOUT_MS if no reply.
  */
-export function waitForUserInput(chatId: number): Promise<string> {
+export function waitForUserInput(chatId: string): Promise<string> {
     // Cancel any existing pending ask for this chat
     cancel(chatId);
 
@@ -36,7 +36,7 @@ export function waitForUserInput(chatId: number): Promise<string> {
 }
 
 /** Called by message-router when user sends a message while ask_user is pending. */
-export function resolve(chatId: number, answer: string): boolean {
+export function resolve(chatId: string, answer: string): boolean {
     const entry = pending.get(chatId);
     if (!entry) return false;
     clearTimeout(entry.timeoutHandle);
@@ -46,12 +46,12 @@ export function resolve(chatId: number, answer: string): boolean {
 }
 
 /** Check if there is a pending ask for this chatId. */
-export function hasPending(chatId: number): boolean {
+export function hasPending(chatId: string): boolean {
     return pending.has(chatId);
 }
 
 /** Cancel a pending ask (e.g. on /new or /clear). */
-export function cancel(chatId: number): void {
+export function cancel(chatId: string): void {
     const entry = pending.get(chatId);
     if (!entry) return;
     clearTimeout(entry.timeoutHandle);

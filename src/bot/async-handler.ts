@@ -1,7 +1,9 @@
+import type { PlatformAdapter, NormalizedMessage, TenantKey } from '../types/platform.js';
+
 interface AsyncDeps {
     asyncTaskManager: any;
     geminiClient: any;
-    sendReply: (chatId: number, text: string, retries?: number, replyToMessageId?: number) => Promise<void>;
+    sendReply: (chatId: string, text: string, retries?: number, replyToMessageId?: string) => Promise<void>;
     activeTaskIds: Set<string>;
 }
 
@@ -10,18 +12,16 @@ export function setupAsyncPolling(deps: AsyncDeps) {
     asyncTaskManager.startPolling(async (task: any, result: string) => {
         if (activeTaskIds.has(task.id)) return;
         console.log(`[Poller] Task #${task.id} completed. Pushing result to user.`);
-        await sendReply(task.chatId, `✅ **后台任务 #${task.id} 异步完成:**\n\n${result}`);
+        await sendReply(String(task.chatId), `✅ **后台任务 #${task.id} 异步完成:**\n\n${result}`);
     });
 }
 
 export async function handleAsyncTask(
     deps: AsyncDeps,
-    ctx: any
+    msg: NormalizedMessage,
 ) {
-    const chatId = ctx.chat.id;
-    let text = ctx.message.text as string;
-    const messageId = ctx.message.message_id;
-    const userName = ctx.chat.first_name || 'User';
+    const { tenantKey, chatId, id: messageId, userName } = msg;
+    let text = msg.text;
 
     if (text.startsWith('/research ')) {
         text = text.replace('/research ', '').trim();
@@ -37,7 +37,7 @@ export async function handleAsyncTask(
         chatId,
         `👌 任务已启动，ID: #${task.id}。\n正在进入独立引擎处理 (如 Deep Research)。\n你可以继续聊天，处理完我会主动推送结果。`,
         2,
-        messageId
+        messageId,
     );
 
     void processAsyncTaskBackground(deps, task, userName);
@@ -60,15 +60,15 @@ export async function processAsyncTaskBackground(
 
         if (responseText) {
             await deps.asyncTaskManager.updateTaskStatus(task.id, 'completed', { result: responseText });
-            await deps.sendReply(task.chatId, `✅ **后台任务 #${task.id} 完成:**\n\n${responseText}`);
+            await deps.sendReply(String(task.chatId), `✅ **后台任务 #${task.id} 完成:**\n\n${responseText}`);
         } else {
             await deps.asyncTaskManager.updateTaskStatus(task.id, 'failed', { error: 'Empty response' });
-            await deps.sendReply(task.chatId, `⚠️ **任务 #${task.id} 似乎没有返回有效结果。`);
+            await deps.sendReply(String(task.chatId), `⚠️ **任务 #${task.id} 似乎没有返回有效结果。`);
         }
     } catch (error: any) {
         console.error(`[AsyncWorker Error] Task #${task.id}:`, error);
         await deps.asyncTaskManager.updateTaskStatus(task.id, 'failed', { error: error.message || String(error) });
-        await deps.sendReply(task.chatId, `🔥 **后台任务 #${task.id} 执行失败:**\n${error.message}`);
+        await deps.sendReply(String(task.chatId), `🔥 **后台任务 #${task.id} 执行失败:**\n${error.message}`);
     } finally {
         deps.activeTaskIds.delete(task.id);
     }

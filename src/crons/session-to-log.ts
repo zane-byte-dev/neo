@@ -7,7 +7,9 @@ export const sessionLogCron: CronJob = {
     handler: async (deps) => {
         const result = await generateDailyLogTool.handler({}, '');
         if (!result.startsWith('⏭️')) {
-            await deps.sendReply(deps.chatId, result);
+            for (const tk of deps.tenantKeys) {
+                await deps.sendReply(tk, result);
+            }
         }
     },
 };

@@ -1,4 +1,4 @@
-import { markdownToTelegram } from '../utils/markdown-converter.js';
+import type { PlatformAdapter } from '../types/platform.js';
 
 function splitMessage(message: string, maxLength: number): string[] {
     if (message.length <= maxLength) {
@@ -36,60 +36,47 @@ function splitMessage(message: string, maxLength: number): string[] {
 }
 
 export async function sendReply(
-    bot: any,
-    chatId: number,
+    adapter: PlatformAdapter,
+    chatId: string,
     text: string,
     retries: number = 2,
-    replyToMessageId?: number
+    replyToMessageId?: string
 ) {
     const timestamp = new Date().toLocaleTimeString('zh-CN', {
         hour: '2-digit',
         minute: '2-digit',
     });
 
-    // Split on raw text first, then convert each chunk to HTML so we don't cut HTML tags in half.
+    // Split on raw text first, then convert each chunk so we don't cut tags in half.
     const textChunks = splitMessage(text, 3500);
 
     for (let i = 0; i < textChunks.length; i++) {
         const chunk = textChunks[i];
         const chunkPrefix = textChunks.length > 1 ? `[${i + 1}/${textChunks.length}]\n` : '';
-        const telegramText = markdownToTelegram(chunk);
-        const replyText = `🤖 inkClaw (${timestamp})\n\n${telegramText}`;
+        const formatted = adapter.formatMarkdown(chunk);
+        const replyText = `🤖 inkClaw (${timestamp})\n\n${formatted}`;
 
         const isLastChunk = i === textChunks.length - 1;
-        const saveButton = {
-            reply_markup: {
-                inline_keyboard: [[{ text: '💾 保存到 Library', callback_data: 'save_lib' }]]
-            }
-        };
+        const saveButton = isLastChunk
+            ? [[{ text: '💾 保存到 Library', callbackData: 'save_lib' }]]
+            : undefined;
 
         for (let attempt = 0; attempt <= retries; attempt++) {
             try {
-                const extraArgs: any = {};
-                if (replyToMessageId) {
-                    extraArgs.reply_parameters = { message_id: replyToMessageId };
-                }
-                if (isLastChunk) {
-                    Object.assign(extraArgs, saveButton);
-                }
-                await bot.telegram.sendMessage(
-                    chatId,
-                    chunkPrefix + replyText,
-                    { ...extraArgs, parse_mode: 'HTML' }
-                );
+                await adapter.sendMessage(chatId, chunkPrefix + replyText, {
+                    replyToId: replyToMessageId,
+                    parseMode: 'html',
+                    inlineKeyboard: saveButton,
+                });
                 break;
             } catch (error: any) {
                 const desc = error?.description || error?.message || '';
                 if (desc.includes("can't parse entities") || desc.includes('parse entities')) {
                     try {
-                        const fallbackArgs: any = {};
-                        if (replyToMessageId) {
-                            fallbackArgs.reply_parameters = { message_id: replyToMessageId };
-                        }
-                        if (isLastChunk) {
-                            Object.assign(fallbackArgs, saveButton);
-                        }
-                        await bot.telegram.sendMessage(chatId, chunkPrefix + chunk, fallbackArgs);
+                        await adapter.sendMessage(chatId, chunkPrefix + chunk, {
+                            replyToId: replyToMessageId,
+                            inlineKeyboard: saveButton,
+                        });
                         break;
                     } catch {
                         // continue retry loop below

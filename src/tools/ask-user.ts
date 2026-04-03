@@ -2,7 +2,7 @@
  * ask-user.ts — Ask the user a question and wait for their reply.
  *
  * When the AI calls this tool:
- * 1. The question is sent to the Telegram user.
+ * 1. The question is sent to the user via their platform adapter.
  * 2. The agent loop pauses.
  * 3. The user's next message resolves the promise.
  * 4. The agent loop resumes with the user's answer.
@@ -61,23 +61,26 @@ export const askUserTool: Tool = {
 
         const messageText = `❓ **AI 需要你的回答：**\n\n${question}`;
 
-        const sendOptions: Record<string, unknown> = { parse_mode: 'Markdown' };
-        if (choices.length > 0) {
-            // Build inline keyboard — max 2 buttons per row for readability
-            const rows: Array<Array<{ text: string; callback_data: string }>> = [];
-            for (let i = 0; i < choices.length; i += 2) {
-                rows.push(
-                    choices.slice(i, i + 2).map(c => ({
-                        text: c,
-                        callback_data: `ask_user:${c}`,
-                    }))
-                );
-            }
-            sendOptions.reply_markup = { inline_keyboard: rows };
-        }
+        const inlineKeyboard = choices.length > 0
+            ? (() => {
+                const rows: Array<Array<{ text: string; callbackData: string }>> = [];
+                for (let i = 0; i < choices.length; i += 2) {
+                    rows.push(
+                        choices.slice(i, i + 2).map(c => ({
+                            text: c,
+                            callbackData: `ask_user:${c}`,
+                        }))
+                    );
+                }
+                return rows;
+            })()
+            : undefined;
 
         try {
-            await ctx.bot.telegram.sendMessage(chatId, messageText, sendOptions);
+            await ctx.adapter.sendMessage(chatId, messageText, {
+                parseMode: 'markdown',
+                inlineKeyboard,
+            });
         } catch (err: any) {
             console.error('[AskUserTool] Failed to send question:', err.message);
             return `[Error] Failed to send question to user: ${err.message}`;

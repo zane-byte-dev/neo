@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 
-import { Telegraf } from 'telegraf';
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
-import { BOT_COMMANDS, ASYNC_TRIGGER_PREFIXES, CACHE_DIR } from './config.js';
+import { BOT_COMMANDS, ASYNC_TRIGGER_PREFIXES, CACHE_DIR, AUTHORIZED_USERS, getAuthorizedForPlatform } from './config.js';
 import { GeminiClient } from './lib/gemini-client.js';
 import { ChatHistoryCache } from './lib/chat-history-cache.js';
 import { setupLogger } from './utils/logger.js';
@@ -14,7 +13,7 @@ import { ScheduledTaskManager } from './lib/scheduled-task-manager.js';
 import { UserProfileManager } from './lib/user-profile.js';
 import { setupTools } from './tools/index.js';
 import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
-import { setToolContext } from './lib/tool-context.js';
+import { registerTenantContext, getTenantContext, getAllTenantKeys } from './lib/tool-context.js';
 import { resolve as resolveUserInput, hasPending } from './lib/user-input-waiter.js';
 import { closeBrowser } from './lib/browser-service.js';
 import { setupCronJobs } from './crons/index.js';
@@ -31,6 +30,9 @@ import {
     processDocumentMessage as processDocumentMessageFn,
 } from './bot/media-handler.js';
 import { handleAsyncTask as handleAsyncTaskFn, setupAsyncPolling as setupAsyncPollingFn } from './bot/async-handler.js';
+import { TelegramAdapter } from './adapters/telegram-adapter.js';
+import { parseTenantKey } from './types/platform.js';
+import type { TenantKey, NormalizedMessage, NormalizedCallback, PlatformAdapter } from './types/platform.js';
 import type { Task } from './bot/types.js';
 
 
@@ -39,352 +41,352 @@ setupLogger();
 
 // Configuration
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const AUTHORIZED_CHAT_ID = process.env.TELEGRAM_CHAT_ID
-    ? parseInt(process.env.TELEGRAM_CHAT_ID, 10)
-    : null;
 
 if (!BOT_TOKEN) {
     console.error('❌ TELEGRAM_BOT_TOKEN missing.');
     process.exit(1);
 }
 
-if (!AUTHORIZED_CHAT_ID) {
-    console.error('❌ TELEGRAM_CHAT_ID missing. Set it to restrict bot access to a specific user.');
+if (AUTHORIZED_USERS.size === 0) {
+    console.error('❌ No authorized users. Set AUTHORIZED_USERS or TELEGRAM_CHAT_ID.');
     process.exit(1);
 }
-
-// Bot commands defined in src/config.ts (single source of truth)
 
 // Auto-discover and register pluggable tools & commands
 await setupTools();
 await setupCommands();
 
-// Initialize Gemini client
+// Initialize Gemini client (shared across tenants)
 const geminiClient = new GeminiClient();
 
-// Initialize chat history cache
-const chatHistoryCache = new ChatHistoryCache();
-await chatHistoryCache.init();
+// ── Legacy data migration ────────────────────────────────────────────────────
 
-// Session-to-Log: whenever a session expires (idle timeout), immediately dehydrate it.
-// This complements the 23:59 cron — mid-day session switches won't be missed.
-chatHistoryCache.setOnSessionExpire(async (session) => {
-    if (session.messages.length === 0) return;
+/**
+ * Migrate old single-tenant cache files into the first Telegram tenant's subdirectory.
+ * Only runs once — if legacy files exist at cache root but no tenant dirs have been created yet.
+ */
+async function migrateLegacyCache(): Promise<void> {
+    const legacyFiles = [
+        'chat_history.json', 'async_tasks.json', 'message_queue.json',
+        'reminders.json', 'scheduled_tasks.json', 'todos.json', 'user_profile.json',
+    ];
+
+    // Check if any legacy file exists at cache root
+    let hasLegacy = false;
+    for (const f of legacyFiles) {
+        try {
+            await fs.access(join(CACHE_DIR, f));
+            hasLegacy = true;
+            break;
+        } catch { /* not found */ }
+    }
+
+    if (!hasLegacy) return;
+
+    // Pick the first (usually only) Telegram tenant as migration target
+    const firstTk = telegramTenantKeys[0];
+    if (!firstTk) return;
+
+    const targetDir = join(CACHE_DIR, firstTk.replace(':', '_'));
+
+    // If target dir already has files, skip — migration already done
     try {
-        const { generateDailyLogTool } = await import('./tools/generate-daily-log.js');
-        const result = await generateDailyLogTool.handler({}, '');
-        console.log(`[SessionExpire] ${result}`);
-    } catch (err: any) {
-        console.error('[SessionExpire] session-to-log failed:', err.message);
-    }
-});
+        const entries = await fs.readdir(targetDir);
+        if (entries.length > 0) return;
+    } catch { /* dir doesn't exist yet, proceed */ }
 
-// Persistent message queue — survives bot restarts
+    await fs.mkdir(targetDir, { recursive: true });
 
-// Initialize async task manager
-const asyncTaskManager = new AsyncTaskManager(CACHE_DIR);
-await asyncTaskManager.init();
-
-// Async trigger prefixes defined in src/config.ts
-const messageQueue = new MessageQueue(CACHE_DIR);
-
-// Reminder manager
-const reminderManager = new ReminderManager(CACHE_DIR);
-
-// Scheduled (recurring) task manager
-const scheduledTaskManager = new ScheduledTaskManager(CACHE_DIR);
-
-// User profile
-const userProfile = new UserProfileManager(CACHE_DIR);
-
-// Populate tool context so schedule/ask_user tools can access managers.
-// chatId starts as AUTHORIZED_CHAT_ID and gets updated per-message via setActiveChatId().
-setToolContext({
-    scheduledTaskManager,
-    reminderManager,
-    bot: null, // set after bot instance is created below
-    chatId: AUTHORIZED_CHAT_ID ?? 0,
-});
-
-class inkClawBot {
-    private bot: Telegraf;
-    private activeTaskIds = new Set<string>();
-    private pendingReadMatches = new Map<number, { matches: string[]; expiry: number }>();
-
-    constructor(token: string) {
-        this.bot = new Telegraf(token);
-        // Give tools access to the bot instance for ask_user / proactive messaging
-        setToolContext({
-            scheduledTaskManager,
-            reminderManager,
-            bot: this.bot,
-            chatId: AUTHORIZED_CHAT_ID ?? 0,
-        });
-        setupHandlers({
-            bot: this.bot,
-            handleCommand: (ctx) => this.handleCommand(ctx),
-            processMessage: (ctx) => this.processMessage(ctx),
-            processPhotoMessage: (ctx) => this.processPhotoMessage(ctx),
-            processVoiceMessage: (ctx) => this.processVoiceMessage(ctx),
-            processDocumentMessage: (ctx) => this.processDocumentMessage(ctx),
-            handleCallbackQuery: (ctx) => this.handleCallbackQuery(ctx),
-        });
-        setupCronJobs({
-            chatId: AUTHORIZED_CHAT_ID!,
-            sendReply: (chatId, text) => this.sendReply(chatId, text),
-        });
-        setupAsyncPollingFn({
-            asyncTaskManager,
-            geminiClient,
-            sendReply: (chatId, text, retries, replyToMessageId) => this.sendReply(chatId, text, retries, replyToMessageId),
-            activeTaskIds: this.activeTaskIds,
-        });
-        console.log('[System] Background worker queue started.');
+    let migrated = 0;
+    for (const f of legacyFiles) {
+        const src = join(CACHE_DIR, f);
+        const dest = join(targetDir, f);
+        try {
+            await fs.copyFile(src, dest);
+            migrated++;
+        } catch { /* file doesn't exist, skip */ }
     }
 
-    async init() {
-        await initLifecycle({
-            bot: this.bot,
-            userProfile,
-            reminderManager,
-            scheduledTaskManager,
-            messageQueue,
-            authorizedChatId: AUTHORIZED_CHAT_ID,
-            processTask: (task) => this.processTask(task),
-        });
-    }
-
-    private async processTask(task: Task) {
-        return processTaskFn(
-            {
-                bot: this.bot,
-                geminiClient,
-                chatHistoryCache,
-                userProfile,
-                sendReply: (chatId, text, retries, replyToMessageId) => this.sendReply(chatId, text, retries, replyToMessageId),
-            },
-            task
-        );
-    }
-
-    private async sendReply(chatId: number, text: string, retries: number = 2, replyToMessageId?: number) {
-        return sendReplyFn(this.bot, chatId, text, retries, replyToMessageId);
-    }
-
-    /**
-     * Check if user is authorized
-     */
-    private isAuthorized(chatId: number): boolean {
-        if (AUTHORIZED_CHAT_ID === null) {
-            return false;
-        }
-        return chatId === AUTHORIZED_CHAT_ID;
-    }
-
-    private async handleAsyncTask(ctx: any) {
-        return handleAsyncTaskFn(
-            {
-                asyncTaskManager,
-                geminiClient,
-                sendReply: (chatId, text, retries, replyToMessageId) => this.sendReply(chatId, text, retries, replyToMessageId),
-                activeTaskIds: this.activeTaskIds,
-            },
-            ctx
-        );
-    }
-
-    private async processMessage(ctx: any) {
-        return processMessageFn(
-            {
-                bot: this.bot,
-                isAuthorized: (chatId) => this.isAuthorized(chatId),
-                asyncTriggerPrefixes: ASYNC_TRIGGER_PREFIXES,
-                pendingReadMatches: this.pendingReadMatches,
-                scheduledTaskManager,
-                reminderManager,
-                messageQueue,
-                processTask: (task) => this.processTask(task),
-                handleAsyncTask: (innerCtx) => this.handleAsyncTask(innerCtx),
-                handleCommand: (innerCtx) => this.handleCommand(innerCtx),
-                handleUrlMessage: (innerCtx, url, rawText, userName, chatId, messageId) =>
-                    this.handleUrlMessage(innerCtx, url, rawText, userName, chatId, messageId),
-            },
-            ctx
-        );
-    }
-
-    private async handleUrlMessage(
-        ctx: any,
-        url: string,
-        rawText: string,
-        userName: string,
-        chatId: number,
-        messageId: number
-    ) {
-        return handleUrlMessageFn(
-            {
-                bot: this.bot,
-                messageQueue,
-                processTask: (task) => this.processTask(task),
-            },
-            ctx,
-            url,
-            rawText,
-            userName,
-            chatId,
-            messageId
-        );
-    }
-
-    private async processVoiceMessage(ctx: any) {
-        return processVoiceMessageFn(
-            {
-                bot: this.bot,
-                messageQueue,
-                processTask: (task) => this.processTask(task),
-            },
-            ctx,
-            (chatId) => this.isAuthorized(chatId)
-        );
-    }
-
-    private async processDocumentMessage(ctx: any) {
-        return processDocumentMessageFn(
-            {
-                bot: this.bot,
-                messageQueue,
-                processTask: (task) => this.processTask(task),
-            },
-            ctx,
-            (chatId) => this.isAuthorized(chatId)
-        );
-    }
-
-    private async processPhotoMessage(ctx: any) {
-        return processPhotoMessageFn(
-            {
-                bot: this.bot,
-                messageQueue,
-                processTask: (task) => this.processTask(task),
-            },
-            ctx,
-            (chatId) => this.isAuthorized(chatId)
-        );
-    }
-
-    private async handleCommand(ctx: any) {
-        return handleCommandFn(
-            {
-                bot: this.bot,
-                chatHistoryCache,
-                asyncTaskManager,
-                reminderManager,
-                scheduledTaskManager,
-                userProfile,
-                pendingReadMatches: this.pendingReadMatches,
-                findFiles: (query, baseDir, resolvedBase) => this.findFiles(query, baseDir, resolvedBase),
-            },
-            ctx
-        );
-    }
-
-    private async findFiles(query: string, baseDir: string, resolvedBase: string, depth = 0): Promise<string[]> {
-        return findFilesFn(query, baseDir, resolvedBase, depth);
-    }
-
-    private async handleCallbackQuery(ctx: any) {
-        const data = ctx.callbackQuery?.data;
-        if (!data) return;
-
-        // ask_user inline keyboard response
-        if (data.startsWith('ask_user:')) {
-            const choice = data.slice('ask_user:'.length);
-            const chatId = ctx.callbackQuery.message?.chat?.id;
-            if (chatId && hasPending(chatId)) {
-                resolveUserInput(chatId, choice);
-                await ctx.editMessageReplyMarkup({ inline_keyboard: [] }).catch(() => {});
-                await ctx.answerCbQuery(`已选择：${choice}`).catch(() => {});
-            } else {
-                await ctx.answerCbQuery('已超时或无待处理问题').catch(() => {});
-            }
-            return;
-        }
-
-        if (data === 'save_lib') {
-            const workDir = process.env.WORK_DIR;
-            if (!workDir) {
-                await ctx.answerCbQuery('⚠️ WORK_DIR 未配置').catch(() => {});
-                return;
-            }
-
-            const msgText: string = ctx.callbackQuery.message?.text || '';
-            // Strip the bot header: optional "[N/M]\n" prefix + "🤖 inkClaw (HH:MM)\n\n"
-            const content = msgText.replace(/^(?:\[\d+\/\d+\]\n)?🤖 inkClaw \(\d{2}:\d{2}\)\n\n/, '');
-
-            if (!content.trim()) {
-                await ctx.answerCbQuery('❌ 消息内容为空').catch(() => {});
-                return;
-            }
-
-            try {
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
-                const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' }).replace(':', '');
-                const title = `saved-${dateStr}-${timeStr}`;
-
-                const targetDir = join(resolve(workDir), '3-Library', 'Wiki');
-                await fs.mkdir(targetDir, { recursive: true });
-                const filePath = join(targetDir, `${title}.md`);
-
-                const dateTimeStr = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-                await fs.writeFile(filePath, `# ${title}\n\n${content}\n\n---\n\n时间: ${dateTimeStr}\n`, 'utf-8');
-
-                // Update button to reflect saved state
-                await ctx.editMessageReplyMarkup({
-                    inline_keyboard: [[{ text: `✅ 已保存 → Wiki/${title}.md`, callback_data: 'saved_noop' }]]
-                }).catch(() => {});
-                await ctx.answerCbQuery('✅ 已保存到 3-Library/Wiki/').catch(() => {});
-            } catch (err: any) {
-                console.error('[SaveCallback] Error:', err.message);
-                await ctx.answerCbQuery('❌ 保存失败: ' + err.message).catch(() => {});
-            }
-        } else if (data === 'saved_noop') {
-            await ctx.answerCbQuery('已保存过了').catch(() => {});
-        }
-    }
-
-    /**
-     * Start the bot
-     */
-    run() {
-        console.log(`🤖 Bot started. Auth Chat ID: ${AUTHORIZED_CHAT_ID || 'ALL'}`);
-        console.log(`🛠  Gemini Client enabled: ${geminiClient.isEnabled()}`);
-
-        // Register command menu with Telegram — derived from BOT_COMMANDS (single source of truth)
-        this.bot.telegram.setMyCommands(BOT_COMMANDS)
-          .then(() => console.log('[System] Bot commands registered.'))
-          .catch(err => console.error('[System] Failed to register commands:', err));
-
-        if (AUTHORIZED_CHAT_ID) {
-            const timeStr = new Date().toLocaleString('zh-CN');
-            this.bot.telegram.sendMessage(
-                AUTHORIZED_CHAT_ID,
-                `🤖 **inkClaw ** 已于 ${timeStr} 启动/重启。\n` +
-                `✅ 网关已上线\n` +
-                `✅ 引擎状态: ${process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview'} (Direct API + Agentic Loop)`,
-                { parse_mode: 'Markdown' }
-            ).catch(err => console.error('[Startup Message Failed]', err));
-        }
-
-        this.bot.launch();
-
-        // Enable graceful stop
-        process.once('SIGINT', () => { reminderManager.destroy(); scheduledTaskManager.destroy(); geminiClient.close(); closeBrowser(); this.bot.stop('SIGINT'); });
-        process.once('SIGTERM', () => { reminderManager.destroy(); scheduledTaskManager.destroy(); geminiClient.close(); closeBrowser(); this.bot.stop('SIGTERM'); });
+    if (migrated > 0) {
+        console.log(`[Migration] Moved ${migrated} cache files from ${CACHE_DIR}/ → ${targetDir}/`);
     }
 }
 
-// Start the bot
-const bot = new inkClawBot(BOT_TOKEN);
-await bot.init();
-bot.run();
+// ── Per-tenant initialization ────────────────────────────────────────────────
+
+async function initTenant(tenantKey: TenantKey, adapter: PlatformAdapter): Promise<void> {
+    const tenantCacheDir = join(CACHE_DIR, tenantKey.replace(':', '_'));
+    await fs.mkdir(tenantCacheDir, { recursive: true });
+
+    const chatHistoryCache = new ChatHistoryCache(tenantCacheDir);
+    await chatHistoryCache.init();
+
+    // Session-to-Log: dehydrate on idle timeout
+    chatHistoryCache.setOnSessionExpire(async (session: any) => {
+        if (session.messages.length === 0) return;
+        try {
+            const { generateDailyLogTool } = await import('./tools/generate-daily-log.js');
+            const result = await generateDailyLogTool.handler({}, '');
+            console.log(`[SessionExpire] (${tenantKey}) ${result}`);
+        } catch (err: any) {
+            console.error(`[SessionExpire] (${tenantKey}) session-to-log failed:`, err.message);
+        }
+    });
+
+    const asyncTaskManager = new AsyncTaskManager(tenantCacheDir);
+    await asyncTaskManager.init();
+
+    const messageQueue = new MessageQueue(tenantCacheDir);
+    const reminderManager = new ReminderManager(tenantCacheDir);
+    const scheduledTaskManager = new ScheduledTaskManager(tenantCacheDir);
+    const userProfile = new UserProfileManager(tenantCacheDir);
+
+    const { userId } = parseTenantKey(tenantKey);
+
+    registerTenantContext({
+        tenantKey,
+        chatId: userId,
+        adapter,
+        scheduledTaskManager,
+        reminderManager,
+        chatHistoryCache,
+        userProfile,
+        asyncTaskManager,
+        messageQueue,
+        cacheDir: tenantCacheDir,
+    });
+
+    console.log(`[Tenant] ✅ ${tenantKey} initialized (cache: ${tenantCacheDir})`);
+}
+
+// ── Shared processing functions ──────────────────────────────────────────────
+
+const activeTaskIds = new Set<string>();
+const pendingReadMatches = new Map<string, { matches: string[]; expiry: number }>();
+
+function sendReply(adapter: PlatformAdapter, chatId: string, text: string, retries: number = 2, replyToMessageId?: string) {
+    return sendReplyFn(adapter, chatId, text, retries, replyToMessageId);
+}
+
+function processTask(adapter: PlatformAdapter, tenantKey: TenantKey, task: Task) {
+    const ctx = getTenantContext(tenantKey);
+    return processTaskFn(
+        {
+            adapter,
+            geminiClient,
+            chatHistoryCache: ctx.chatHistoryCache,
+            userProfile: ctx.userProfile,
+            sendReply: (cId, text, retries, replyToMsgId) => sendReply(adapter, cId, text, retries, replyToMsgId),
+        },
+        task,
+    );
+}
+
+function processMessage(adapter: PlatformAdapter, tenantKey: TenantKey, msg: NormalizedMessage) {
+    const ctx = getTenantContext(tenantKey);
+    return processMessageFn(
+        {
+            adapter,
+            asyncTriggerPrefixes: ASYNC_TRIGGER_PREFIXES,
+            pendingReadMatches,
+            scheduledTaskManager: ctx.scheduledTaskManager,
+            reminderManager: ctx.reminderManager,
+            messageQueue: ctx.messageQueue,
+            processTask: (task) => processTask(adapter, tenantKey, task),
+            handleAsyncTask: (innerMsg) => handleAsyncTaskFn(
+                {
+                    asyncTaskManager: ctx.asyncTaskManager,
+                    geminiClient,
+                    sendReply: (cId, text, retries, rId) => sendReply(adapter, cId, text, retries, rId),
+                    activeTaskIds,
+                },
+                innerMsg,
+            ),
+            handleCommand: (innerMsg) => handleCommandFn(
+                {
+                    adapter,
+                    tenantKey,
+                    chatId: innerMsg.chatId,
+                    chatHistoryCache: ctx.chatHistoryCache,
+                    asyncTaskManager: ctx.asyncTaskManager,
+                    reminderManager: ctx.reminderManager,
+                    scheduledTaskManager: ctx.scheduledTaskManager,
+                    userProfile: ctx.userProfile,
+                    pendingReadMatches,
+                    findFiles: (q, b, r) => findFilesFn(q, b, r),
+                },
+                { text: innerMsg.text, chatId: innerMsg.chatId, messageId: innerMsg.id, quotedText: innerMsg.quotedText },
+            ),
+            handleUrlMessage: (innerMsg, url) => handleUrlMessageFn(
+                {
+                    adapter,
+                    messageQueue: ctx.messageQueue,
+                    processTask: (task) => processTask(adapter, tenantKey, task),
+                },
+                innerMsg,
+                url,
+            ),
+        },
+        msg,
+    );
+}
+
+async function handleCallbackQuery(adapter: PlatformAdapter, cb: NormalizedCallback) {
+    const { data, chatId, messageId } = cb;
+
+    // ask_user inline keyboard response
+    if (data.startsWith('ask_user:')) {
+        const choice = data.slice('ask_user:'.length);
+        if (hasPending(chatId)) {
+            resolveUserInput(chatId, choice);
+            await adapter.editMessage(chatId, messageId, '', {
+                inlineKeyboard: [],
+            }).catch(() => {});
+            // For Telegram we need answerCbQuery through the raw context
+            if (cb._raw && typeof (cb._raw as any).answerCbQuery === 'function') {
+                await (cb._raw as any).answerCbQuery(`已选择：${choice}`).catch(() => {});
+            }
+        } else {
+            if (cb._raw && typeof (cb._raw as any).answerCbQuery === 'function') {
+                await (cb._raw as any).answerCbQuery('已超时或无待处理问题').catch(() => {});
+            }
+        }
+        return;
+    }
+
+    if (data === 'save_lib') {
+        const workDir = process.env.WORK_DIR;
+        const raw = cb._raw as any;
+        if (!workDir) {
+            await raw?.answerCbQuery?.('⚠️ WORK_DIR 未配置').catch(() => {});
+            return;
+        }
+
+        const msgText: string = raw?.callbackQuery?.message?.text || '';
+        const content = msgText.replace(/^(?:\[\d+\/\d+\]\n)?🤖 inkClaw \(\d{2}:\d{2}\)\n\n/, '');
+
+        if (!content.trim()) {
+            await raw?.answerCbQuery?.('❌ 消息内容为空').catch(() => {});
+            return;
+        }
+
+        try {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
+            const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' }).replace(':', '');
+            const title = `saved-${dateStr}-${timeStr}`;
+
+            const targetDir = join(resolve(workDir), '3-Library', 'Wiki');
+            await fs.mkdir(targetDir, { recursive: true });
+            const filePath = join(targetDir, `${title}.md`);
+
+            const dateTimeStr = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+            await fs.writeFile(filePath, `# ${title}\n\n${content}\n\n---\n\n时间: ${dateTimeStr}\n`, 'utf-8');
+
+            await adapter.editMessage(chatId, messageId, msgText, {
+                inlineKeyboard: [[{ text: `✅ 已保存 → Wiki/${title}.md`, callbackData: 'saved_noop' }]],
+            }).catch(() => {});
+            await raw?.answerCbQuery?.('✅ 已保存到 3-Library/Wiki/').catch(() => {});
+        } catch (err: any) {
+            console.error('[SaveCallback] Error:', err.message);
+            await raw?.answerCbQuery?.('❌ 保存失败: ' + err.message).catch(() => {});
+        }
+    } else if (data === 'saved_noop') {
+        if (cb._raw && typeof (cb._raw as any).answerCbQuery === 'function') {
+            await (cb._raw as any).answerCbQuery('已保存过了').catch(() => {});
+        }
+    }
+}
+
+// ── Telegram bootstrap ───────────────────────────────────────────────────────
+
+const telegramAdapter = new TelegramAdapter(BOT_TOKEN);
+
+// Initialize all Telegram tenants
+const telegramTenantKeys = getAuthorizedForPlatform('telegram');
+await migrateLegacyCache();
+for (const tk of telegramTenantKeys) {
+    await initTenant(tk, telegramAdapter);
+}
+
+// Wire event handlers
+setupHandlers({
+    adapter: telegramAdapter,
+    processMessage: (msg) => processMessage(telegramAdapter, msg.tenantKey, msg),
+    handleCallbackQuery: (cb) => handleCallbackQuery(telegramAdapter, cb),
+});
+
+// Setup cron jobs
+setupCronJobs({
+    tenantKeys: getAllTenantKeys(),
+    sendReply: async (tenantKey, text) => {
+        const ctx = getTenantContext(tenantKey);
+        await sendReply(ctx.adapter, ctx.chatId, text);
+    },
+});
+
+// Setup async polling for each tenant
+for (const tk of telegramTenantKeys) {
+    const ctx = getTenantContext(tk);
+    setupAsyncPollingFn({
+        asyncTaskManager: ctx.asyncTaskManager,
+        geminiClient,
+        sendReply: (cId, text, retries, rId) => sendReply(telegramAdapter, cId, text, retries, rId),
+        activeTaskIds,
+    });
+}
+
+// Initialize lifecycle for each tenant (profile, reminders, scheduled tasks, queue replay)
+for (const tk of telegramTenantKeys) {
+    const ctx = getTenantContext(tk);
+    await initLifecycle({
+        adapter: telegramAdapter,
+        tenantKey: tk,
+        chatId: ctx.chatId,
+        userProfile: ctx.userProfile,
+        reminderManager: ctx.reminderManager,
+        scheduledTaskManager: ctx.scheduledTaskManager,
+        messageQueue: ctx.messageQueue,
+        processTask: (task) => processTask(telegramAdapter, tk, task),
+    });
+}
+
+// ── Launch ───────────────────────────────────────────────────────────────────
+
+console.log(`🤖 Bot started. Authorized tenants: ${[...AUTHORIZED_USERS].join(', ')}`);
+console.log(`🛠  Gemini Client enabled: ${geminiClient.isEnabled()}`);
+
+// Register Telegram command menu
+telegramAdapter.setCommands(BOT_COMMANDS)
+    .then(() => console.log('[System] Telegram commands registered.'))
+    .catch((err: any) => console.error('[System] Failed to register commands:', err));
+
+// Send startup message to all Telegram tenants
+const timeStr = new Date().toLocaleString('zh-CN');
+for (const tk of telegramTenantKeys) {
+    const ctx = getTenantContext(tk);
+    telegramAdapter.sendMessage(
+        ctx.chatId,
+        `🤖 **inkClaw** 已于 ${timeStr} 启动/重启。\n` +
+        `✅ 网关已上线\n` +
+        `✅ 引擎状态: ${process.env.GEMINI_MODEL ?? 'gemini-3-flash-preview'} (Direct API + Agentic Loop)`,
+        { parseMode: 'markdown' },
+    ).catch((err: any) => console.error(`[Startup Message Failed] ${tk}:`, err));
+}
+
+await telegramAdapter.start();
+
+// Graceful shutdown
+const shutdown = (signal: string) => {
+    const allKeys = getAllTenantKeys();
+    for (const tk of allKeys) {
+        const ctx = getTenantContext(tk);
+        ctx.reminderManager.destroy();
+        ctx.scheduledTaskManager.destroy();
+    }
+    geminiClient.close();
+    closeBrowser();
+    telegramAdapter.stop();
+};
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));

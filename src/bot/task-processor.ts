@@ -1,18 +1,18 @@
 import { promises as fs } from 'fs';
-import { markdownToTelegram } from '../utils/markdown-converter.js';
 import { TASK_TIMEOUT_MS, EDIT_INTERVAL_MS, CHUNK_LIMIT } from '../config.js';
+import type { PlatformAdapter } from '../types/platform.js';
 import type { Task } from './types.js';
 
 interface ProcessTaskDeps {
-    bot: any;
+    adapter: PlatformAdapter;
     geminiClient: any;
     chatHistoryCache: any;
     userProfile: any;
-    sendReply: (chatId: number, text: string, retries?: number, replyToMessageId?: number) => Promise<void>;
+    sendReply: (chatId: string, text: string, retries?: number, replyToMessageId?: string) => Promise<void>;
 }
 
 export async function processTask(deps: ProcessTaskDeps, task: Task) {
-    const { bot, geminiClient, chatHistoryCache, userProfile, sendReply } = deps;
+    const { adapter, geminiClient, chatHistoryCache, userProfile, sendReply } = deps;
     const { chatId, question, userName, messageId } = task;
 
     const taskTimeoutMs = TASK_TIMEOUT_MS;
@@ -20,7 +20,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
     const taskTimeoutHandle = setTimeout(async () => {
         taskTimedOut = true;
         console.error(`[Worker] Task timed out after ${taskTimeoutMs / 1000}s for: ${question.substring(0, 60)}`);
-        await bot.telegram.sendMessage(
+        await adapter.sendMessage(
             chatId,
             `⚠️ 请求处理超时（>${taskTimeoutMs / 60000} 分钟），可能是 AI 引擎无响应，请稍后重试。`
         ).catch(() => {});
@@ -40,13 +40,12 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
             : historyContext;
 
         const timestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        const extraArgs: any = messageId ? { reply_parameters: { message_id: messageId } } : {};
         const agentLabel = task.skipHistory ? 'btw' : 'inkClaw';
 
-        const placeholderMsg = await bot.telegram.sendMessage(
+        const placeholderMsg = await adapter.sendMessage(
             chatId,
             `⏳ ${agentLabel} (${timestamp})\n\n🤔 思考中...`,
-            extraArgs
+            { replyToId: messageId || undefined },
         );
 
         let thoughtAccum = '';
@@ -54,26 +53,20 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         let textAccum = '';
         let hasTextStarted = false;
 
-        let activeMsgId = placeholderMsg.message_id;
+        let activeMsgId = placeholderMsg.id;
         let committedChars = 0;
 
         let lastEditMs = 0;
 
         const header = () => `${task.skipHistory ? '💬' : '🤖'} ${agentLabel} (${timestamp})\n\n`;
 
-        const doEdit = (msgId: number, body: string, asHtml: boolean = false) => {
+        const doEdit = (msgId: string, body: string, asHtml: boolean = false) => {
             const now = Date.now();
             if (now - lastEditMs < EDIT_INTERVAL_MS) {
                 return;
             }
             lastEditMs = now;
-            bot.telegram.editMessageText(
-                chatId,
-                msgId,
-                undefined,
-                body,
-                asHtml ? { parse_mode: 'HTML' } : undefined
-            ).catch(() => {});
+            adapter.editMessage(chatId, msgId, body, asHtml ? { parseMode: 'html' } : undefined).catch(() => {});
         };
 
         const buildThinkingStatus = () => {
@@ -103,23 +96,22 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
                         ? slice.lastIndexOf('\n', CHUNK_LIMIT)
                         : CHUNK_LIMIT;
                     const sealed = slice.slice(0, cutAt);
-                    await bot.telegram.editMessageText(
+                    await adapter.editMessage(
                         chatId,
                         activeMsgId,
-                        undefined,
-                        header() + markdownToTelegram(sealed),
-                        { parse_mode: 'HTML' }
+                        header() + adapter.formatMarkdown(sealed),
+                        { parseMode: 'html' },
                     ).catch(() => {});
 
                     committedChars += cutAt;
-                    const newMsg = await bot.telegram.sendMessage(
+                    const newMsg = await adapter.sendMessage(
                         chatId,
                         `⏳ inkClaw (${timestamp})\n\n✍️ 续...`
                     );
-                    activeMsgId = newMsg.message_id;
+                    activeMsgId = newMsg.id;
                     lastEditMs = 0;
                 } else {
-                    doEdit(activeMsgId, header() + markdownToTelegram(slice), true);
+                    doEdit(activeMsgId, header() + adapter.formatMarkdown(slice), true);
                 }
             }
         };
@@ -145,7 +137,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
 
         if (!responseText) {
             console.error(`[Worker] No response text for task from ${userName}: "${question.slice(0, 80).replace(/\n/g, ' ')}"`);
-            await bot.telegram.editMessageText(chatId, activeMsgId, undefined, '⚠️ Failed to generate response.').catch(() => {});
+            await adapter.editMessage(chatId, activeMsgId, '⚠️ Failed to generate response.').catch(() => {});
             return;
         }
 
@@ -154,19 +146,13 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         }
 
         const finalTimestamp = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-        const fullFormatted = markdownToTelegram(responseText);
+        const fullFormatted = adapter.formatMarkdown(responseText);
         const finalSlice = fullFormatted.slice(
-            markdownToTelegram(responseText.slice(0, committedChars)).length
+            adapter.formatMarkdown(responseText.slice(0, committedChars)).length
         );
 
         const finalBody = `🤖 inkClaw (${finalTimestamp})\n\n${finalSlice || fullFormatted}`;
-        await bot.telegram.editMessageText(
-            chatId,
-            activeMsgId,
-            undefined,
-            finalBody,
-            { parse_mode: 'HTML' }
-        )
+        await adapter.editMessage(chatId, activeMsgId, finalBody, { parseMode: 'html' })
             .catch(async (err: any) => {
                 const desc: string = err?.description ?? err?.message ?? '';
                 if (desc.includes('message is not modified')) return;

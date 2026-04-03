@@ -1,27 +1,27 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import { geminiGenerate, geminiUploadFile } from '../lib/gemini-client.js';
+import { isAuthorized } from '../config.js';
+import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
 import type { Task } from './types.js';
 
 interface MediaDeps {
-    bot: any;
+    adapter: PlatformAdapter;
     messageQueue: any;
     processTask: (task: Task) => Promise<void>;
 }
 
-export async function processVoiceMessage(deps: MediaDeps, ctx: any, isAuthorized: (chatId: number) => boolean) {
-    const chatId = ctx.chat.id;
-    const messageId = ctx.message.message_id;
-    const userName = ctx.chat.first_name || 'User';
+export async function processVoiceMessage(deps: MediaDeps, msg: NormalizedMessage) {
+    const { tenantKey, chatId, id: messageId, userName, media } = msg;
 
-    if (!isAuthorized(chatId)) {
-        await ctx.reply('⛔ Unauthorized.');
+    if (!isAuthorized(tenantKey)) {
+        await deps.adapter.sendMessage(chatId, '⛔ Unauthorized.');
         return;
     }
 
-    const fileId: string | undefined = ctx.message.voice?.file_id ?? ctx.message.audio?.file_id;
+    const fileId = media?.fileId;
     if (!fileId) {
-        await ctx.reply('⚠️ 无法获取语音文件。');
+        await deps.adapter.sendMessage(chatId, '⚠️ 无法获取语音文件。');
         return;
     }
 
@@ -30,48 +30,33 @@ export async function processVoiceMessage(deps: MediaDeps, ctx: any, isAuthorize
     const tmpPath = join(tmpDir, `voice_${messageId}_${Date.now()}.ogg`);
 
     try {
-        const fileLink = await deps.bot.telegram.getFileLink(fileId);
-        const res = await fetch(fileLink.href);
-        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-        await fs.writeFile(tmpPath, Buffer.from(await res.arrayBuffer()));
+        await deps.adapter.downloadFile(fileId, tmpPath);
         console.log(`[Voice] Saved to ${tmpPath}`);
     } catch (err: any) {
         console.error(`[Voice Error] ${err.message}`);
-        await ctx.reply('⚠️ 语音下载失败，请重试。');
+        await deps.adapter.sendMessage(chatId, '⚠️ 语音下载失败，请重试。');
         return;
     }
 
-    const statusMsg = await deps.bot.telegram.sendMessage(chatId, '🎙️ 正在识别语音...', {
-        reply_parameters: { message_id: messageId },
-    });
+    const statusMsg = await deps.adapter.sendMessage(chatId, '🎙️ 正在识别语音...', { replyToId: messageId });
 
     try {
         const transcription = await transcribeVoice(tmpPath);
         console.log(`[Voice] Transcription: ${transcription}`);
 
-        await deps.bot.telegram.editMessageText(
-            chatId,
-            statusMsg.message_id,
-            undefined,
-            `🎙️ 已识别: "${transcription}"\n\n⏳ 思考中...`
-        ).catch(() => {});
+        await deps.adapter.editMessage(chatId, statusMsg.id, `🎙️ 已识别: "${transcription}"\n\n⏳ 思考中...`).catch(() => {});
 
-        const task: Task = { chatId, question: transcription, userName, messageId };
+        const task: Task = { tenantKey, chatId, question: transcription, userName, messageId };
         await deps.messageQueue.enqueue(task, async (t: Task) => {
             try {
                 await deps.processTask(t);
             } finally {
-                await deps.bot.telegram.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+                await deps.adapter.deleteMessage(chatId, statusMsg.id).catch(() => {});
             }
         });
     } catch (err: any) {
         console.error(`[Voice Error] Transcription failed: ${err.message}`);
-        await deps.bot.telegram.editMessageText(
-            chatId,
-            statusMsg.message_id,
-            undefined,
-            `⚠️ 语音识别失败: ${err.message}`
-        ).catch(() => {});
+        await deps.adapter.editMessage(chatId, statusMsg.id, `⚠️ 语音识别失败: ${err.message}`).catch(() => {});
     } finally {
         await fs.unlink(tmpPath).catch(() => {});
     }

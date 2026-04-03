@@ -2,12 +2,13 @@ import type { Command } from './_base.js';
 
 export const reminderCommand: Command = {
     commands: ['/reminders', '/remindcancel', '/schedules', '/unschedule'],
-    handler: async (command, text, ctx, deps) => {
+    handler: async (command, text, msg, deps) => {
+    const reply = (t: string, md = false) => deps.adapter.sendMessage(msg.chatId, t, md ? { parseMode: 'markdown' } : undefined);
     switch (command) {
         case '/reminders': {
             const all = deps.reminderManager.getAll();
             if (all.length === 0) {
-                await ctx.reply('📅 暂无活跃提醒。');
+                await reply('📅 暂无活跃提醒。');
                 return true;
             }
             const lines = all.map((r: any) => {
@@ -16,9 +17,9 @@ export const reminderCommand: Command = {
                 });
                 return `⏰ \`${r.id}\` [${fireStr}]\n   ${r.content}`;
             });
-            await ctx.reply(
+            await reply(
                 `📅 **活跃提醒 (${lines.length} 条)**\n\n` + lines.join('\n\n'),
-                { parse_mode: 'Markdown' }
+                true
             );
             return true;
         }
@@ -26,14 +27,14 @@ export const reminderCommand: Command = {
         case '/remindcancel': {
             const remindId = text.split(' ')[1]?.replace(/^#/, '').trim();
             if (!remindId) {
-                await ctx.reply('用法: `/remindcancel <提醒ID>`', { parse_mode: 'Markdown' });
+                await reply('用法: `/remindcancel <提醒ID>`', true);
                 return true;
             }
             const ok = await deps.reminderManager.cancel(remindId);
             if (ok) {
-                await ctx.reply(`✅ 提醒 \`#${remindId}\` 已取消。`, { parse_mode: 'Markdown' });
+                await reply(`✅ 提醒 \`#${remindId}\` 已取消。`, true);
             } else {
-                await ctx.reply(`❌ 未找到提醒 \`#${remindId}\`。`, { parse_mode: 'Markdown' });
+                await reply(`❌ 未找到提醒 \`#${remindId}\`。`, true);
             }
             return true;
         }
@@ -41,16 +42,16 @@ export const reminderCommand: Command = {
         case '/schedules': {
             const all = deps.scheduledTaskManager.getAll();
             if (all.length === 0) {
-                await ctx.reply('🗓 暂无定时任务。\n\n发送如 "每天早上9点告诉我杭州的天气" 来创建一个。');
+                await reply('🗓 暂无定时任务。\n\n发送如 "每天早上9点告诉我杭州的天气" 来创建一个。');
                 return true;
             }
             const lines = all.map((t: any) =>
                 `🔁 \`${t.id}\`  \`${t.cronExpr}\`\n   ${t.content}`
             );
-            await ctx.reply(
+            await reply(
                 `🗓 **定时任务列表 (${lines.length} 条)**\n\n` + lines.join('\n\n') +
                 '\n\n用 /unschedule <id> 删除',
-                { parse_mode: 'Markdown' }
+                true
             );
             return true;
         }
@@ -58,14 +59,14 @@ export const reminderCommand: Command = {
         case '/unschedule': {
             const schedId = text.split(' ')[1]?.replace(/^#/, '').trim();
             if (!schedId) {
-                await ctx.reply('用法: `/unschedule <任务ID>`', { parse_mode: 'Markdown' });
+                await reply('用法: `/unschedule <任务ID>`', true);
                 return true;
             }
             const removed = await deps.scheduledTaskManager.cancel(schedId);
             if (removed) {
-                await ctx.reply(`✅ 定时任务 \`#${schedId}\` 已删除。`, { parse_mode: 'Markdown' });
+                await reply(`✅ 定时任务 \`#${schedId}\` 已删除。`, true);
             } else {
-                await ctx.reply(`❌ 未找到定时任务 \`#${schedId}\`。`, { parse_mode: 'Markdown' });
+                await reply(`❌ 未找到定时任务 \`#${schedId}\`。`, true);
             }
             return true;
         }

@@ -1,10 +1,12 @@
 /**
  * _base.ts — Shared types for cron job modules.
  */
+import type { TenantKey } from '../types/platform.js';
 
 export interface CronDeps {
-    chatId: number;
-    sendReply: (chatId: number, text: string) => Promise<void>;
+    /** All tenant keys this cron should operate on */
+    tenantKeys: TenantKey[];
+    sendReply: (tenantKey: TenantKey, text: string) => Promise<void>;
 }
 
 export interface CronJob {

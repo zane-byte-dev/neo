@@ -1,8 +1,13 @@
+import type { TenantKey } from '../types/platform.js';
+
 export interface Task {
-    chatId: number;
+    /** Tenant key: platform:userId */
+    tenantKey: TenantKey;
+    /** Platform-specific chat ID (string for cross-platform compat) */
+    chatId: string;
     question: string;
     userName: string;
-    messageId: number;
+    messageId: string;
     imagePath?: string;
     imageMimeType?: string;
     fileUri?: string;

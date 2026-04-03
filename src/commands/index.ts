@@ -30,17 +30,17 @@ export async function setupCommands(): Promise<void> {
     console.log(`[Commands] ✅ ${commandRegistry.length} command modules registered`);
 }
 
-export async function handleCommand(deps: CommandDeps, ctx: any): Promise<void> {
-    const text = ctx.message.text as string;
+export async function handleCommand(deps: CommandDeps, msg: { text: string; chatId: string; messageId: string; quotedText?: string }): Promise<void> {
+    const text = msg.text;
     const [command] = text.split(' ');
 
     console.log(`[Command] Received: ${command}`);
 
     for (const mod of commandRegistry) {
-        if (await mod.handler(command, text, ctx, deps)) {
+        if (await mod.handler(command, text, { chatId: msg.chatId, messageId: msg.messageId, quotedText: msg.quotedText }, deps)) {
             return;
         }
     }
 
-    await ctx.reply('Unknown command. Try /start for help.');
+    await deps.adapter.sendMessage(msg.chatId, 'Unknown command. Try /start for help.');
 }

@@ -1,26 +1,25 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
+import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
 import type { Task } from './types.js';
 
 interface UrlDeps {
-    bot: any;
+    adapter: PlatformAdapter;
     messageQueue: any;
     processTask: (task: Task) => Promise<void>;
 }
 
 export async function handleUrlMessage(
     deps: UrlDeps,
-    ctx: any,
+    msg: NormalizedMessage,
     url: string,
-    rawText: string,
-    userName: string,
-    chatId: number,
-    messageId: number
 ) {
-    const statusMsg = await deps.bot.telegram.sendMessage(
+    const { tenantKey, chatId, userName, id: messageId, text: rawText } = msg;
+
+    const statusMsg = await deps.adapter.sendMessage(
         chatId,
         `🌐 正在抓取页面...\n${url}`,
-        { reply_parameters: { message_id: messageId } }
+        { replyToId: messageId },
     );
 
     let pageText: string;
@@ -28,19 +27,17 @@ export async function handleUrlMessage(
 
     try {
         ({ text: pageText, savedPath } = await fetchAndSaveUrl(url));
-        await deps.bot.telegram.editMessageText(
+        await deps.adapter.editMessage(
             chatId,
-            statusMsg.message_id,
-            undefined,
-            `🌐 页面已抓取并保存\n${url}\n\n⏳ 正在分析...`
+            statusMsg.id,
+            `🌐 页面已抓取并保存\n${url}\n\n⏳ 正在分析...`,
         ).catch(() => {});
     } catch (err: any) {
         console.error(`[URL Error] ${err.message}`);
-        await deps.bot.telegram.editMessageText(
+        await deps.adapter.editMessage(
             chatId,
-            statusMsg.message_id,
-            undefined,
-            `⚠️ 页面抓取失败: ${err.message}`
+            statusMsg.id,
+            `⚠️ 页面抓取失败: ${err.message}`,
         ).catch(() => {});
         return;
     }
@@ -50,12 +47,12 @@ export async function handleUrlMessage(
         ? `${userQuestion}\n\n[网页内容 - ${url} | 本地文件: ${savedPath}]:\n${pageText}`
         : `请对以下网页内容进行摘要，提炼核心观点和要点。\n\n[网页内容 - ${url} | 本地文件: ${savedPath}]:\n${pageText}`;
 
-    const task: Task = { chatId, question, userName, messageId };
+    const task: Task = { tenantKey, chatId, question, userName, messageId };
     await deps.messageQueue.enqueue(task, async (t: Task) => {
         try {
             await deps.processTask(t);
         } finally {
-            await deps.bot.telegram.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+            await deps.adapter.deleteMessage(chatId, statusMsg.id).catch(() => {});
         }
     });
 }

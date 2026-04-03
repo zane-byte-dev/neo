@@ -5,12 +5,13 @@ import type { Command } from './_base.js';
 
 export const workspaceCommand: Command = {
     commands: ['/ls', '/read', '/note', '/today', '/task', '/search', '/weekly', '/save'],
-    handler: async (command, text, ctx, deps) => {
+    handler: async (command, text, msg, deps) => {
+    const reply = (t: string, md = false) => deps.adapter.sendMessage(msg.chatId, t, md ? { parseMode: 'markdown' } : undefined);
     switch (command) {
         case '/ls': {
             const workDir = process.env.WORK_DIR;
             if (!workDir) {
-                await ctx.reply('⚠️ WORK_DIR 未配置。');
+                await reply('⚠️ WORK_DIR 未配置。');
                 return true;
             }
             const rawArg = text.split(' ').slice(1).join(' ').trim();
@@ -19,20 +20,20 @@ export const workspaceCommand: Command = {
             const resolvedTarget = resolve(targetDir);
             const resolvedBase = resolve(workDir);
             if (!resolvedTarget.startsWith(resolvedBase)) {
-                await ctx.reply('⛔ 不允许访问 WORK_DIR 以外的路径。');
+                await reply('⛔ 不允许访问 WORK_DIR 以外的路径。');
                 return true;
             }
             try {
                 const entries = await fs.readdir(resolvedTarget, { withFileTypes: true });
                 if (entries.length === 0) {
-                    await ctx.reply(`📂 ${safeSuffix || '/'} 目录为空。`);
+                    await reply(`📂 ${safeSuffix || '/'} 目录为空。`);
                     return true;
                 }
                 const lines = entries.map(e => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`);
                 const displayPath = safeSuffix || '(workspace root)';
-                await ctx.reply(`📂 ${displayPath}\n\n` + lines.join('\n'));
+                await reply(`📂 ${displayPath}\n\n` + lines.join('\n'));
             } catch (err: any) {
-                await ctx.reply(`❌ 无法读取目录: ${err.message}`);
+                await reply(`❌ 无法读取目录: ${err.message}`);
             }
             return true;
         }
@@ -40,12 +41,12 @@ export const workspaceCommand: Command = {
         case '/read': {
             const workDir = process.env.WORK_DIR;
             if (!workDir) {
-                await ctx.reply('⚠️ WORK_DIR 未配置。');
+                await reply('⚠️ WORK_DIR 未配置。');
                 return true;
             }
             const rawArg = text.split(' ').slice(1).join(' ').trim();
             if (!rawArg) {
-                await ctx.reply('用法: /read <路径或关键词>\n例: /read 随手记  /read inbox/note.md');
+                await reply('用法: /read <路径或关键词>\n例: /read 随手记  /read inbox/note.md');
                 return true;
             }
             const resolvedBase = resolve(workDir);
@@ -53,22 +54,22 @@ export const workspaceCommand: Command = {
             const sendFile = async (absPath: string, label: string) => {
                 const stat = await fs.stat(absPath);
                 if (stat.size > 100 * 1024) {
-                    await ctx.reply(`⚠️ 文件超过 100KB（${(stat.size / 1024).toFixed(1)}KB），请缩小范围。`);
+                    await reply(`⚠️ 文件超过 100KB（${(stat.size / 1024).toFixed(1)}KB），请缩小范围。`);
                     return;
                 }
                 const content = await fs.readFile(absPath, 'utf8');
                 const MAX_MSG = 4000;
                 const header = `📄 ${label}\n\n`;
                 if (header.length + content.length <= MAX_MSG) {
-                    await ctx.reply(header + content);
+                    await reply(header + content);
                 } else {
                     const chunks: string[] = [];
                     for (let i = 0; i < content.length; i += MAX_MSG - header.length) {
                         chunks.push(content.slice(i, i + MAX_MSG - header.length));
                     }
-                    await ctx.reply(`📄 ${label} (${chunks.length} 段)\n\n${chunks[0]}`);
+                    await reply(`📄 ${label} (${chunks.length} 段)\n\n${chunks[0]}`);
                     for (let i = 1; i < chunks.length; i++) {
-                        await ctx.reply(chunks[i]).catch(() => {});
+                        await reply(chunks[i]).catch(() => {});
                     }
                 }
             };
@@ -81,10 +82,10 @@ export const workspaceCommand: Command = {
                     if (stat.isDirectory()) {
                         const entries = await fs.readdir(exactPath, { withFileTypes: true });
                         if (entries.length === 0) {
-                            await ctx.reply(`📂 ${safeSuffix} 目录为空。`);
+                            await reply(`📂 ${safeSuffix} 目录为空。`);
                         } else {
                             const lines = entries.map(e => `${e.isDirectory() ? '📁' : '📄'} ${e.name}`);
-                            await ctx.reply(`📂 ${safeSuffix}\n\n` + lines.join('\n'));
+                            await reply(`📂 ${safeSuffix}\n\n` + lines.join('\n'));
                         }
                         return true;
                     }
@@ -98,7 +99,7 @@ export const workspaceCommand: Command = {
             const matches = await deps.findFiles(rawArg, workDir, resolvedBase);
 
             if (matches.length === 0) {
-                await ctx.reply(`🔍 未找到匹配 "${rawArg}" 的文件。`);
+                await reply(`🔍 未找到匹配 "${rawArg}" 的文件。`);
             } else if (matches.length === 1) {
                 const relPath = matches[0].slice(resolvedBase.length + 1);
                 await sendFile(matches[0], relPath);
@@ -107,8 +108,8 @@ export const workspaceCommand: Command = {
                 const shown = matches.slice(0, MAX_SHOW);
                 const lines = shown.map((p, i) => `${i + 1}. ${p.slice(resolvedBase.length + 1)}`);
                 const suffix = matches.length > MAX_SHOW ? `\n\n...还有 ${matches.length - MAX_SHOW} 个，请缩窄关键词` : '';
-                await ctx.reply(`🔍 找到 ${matches.length} 个匹配文件：\n\n${lines.join('\n')}${suffix}\n\n回复序号直接阅读，例如发送 "r1" 读取第1个，"r2" 读取第2个。`);
-                deps.pendingReadMatches.set(ctx.chat.id, { matches: shown, expiry: Date.now() + 120_000 });
+                await reply(`🔍 找到 ${matches.length} 个匹配文件：\n\n${lines.join('\n')}${suffix}\n\n回复序号直接阅读，例如发送 "r1" 读取第1个，"r2" 读取第2个。`);
+                deps.pendingReadMatches.set(msg.chatId, { matches: shown, expiry: Date.now() + 120_000 });
             }
             return true;
         }
@@ -116,12 +117,12 @@ export const workspaceCommand: Command = {
         case '/note': {
             const workDir = process.env.WORK_DIR;
             if (!workDir) {
-                await ctx.reply('⚠️ WORK_DIR 未配置。');
+                await reply('⚠️ WORK_DIR 未配置。');
                 return true;
             }
             const noteContent = text.replace(/^\/note\s*/i, '').trim();
             if (!noteContent) {
-                await ctx.reply('用法: `/note <内容>`\n\n快速追加一条碎片到今日 Inbox，不经过 AI。', { parse_mode: 'Markdown' });
+                await reply('用法: `/note <内容>`\n\n快速追加一条碎片到今日 Inbox，不经过 AI。', true);
                 return true;
             }
             try {
@@ -136,9 +137,9 @@ export const workspaceCommand: Command = {
                     ? `\n- ${timeStr} ${noteContent}\n`
                     : `# ${today} Inbox\n\n- ${timeStr} ${noteContent}\n`;
                 await fs.appendFile(inboxFile, entry, 'utf-8');
-                await ctx.reply(`✅ 已记入 0-Inbox/${today}.md`);
+                await reply(`✅ 已记入 0-Inbox/${today}.md`);
             } catch (err: any) {
-                await ctx.reply(`❌ 写入失败: ${err.message}`);
+                await reply(`❌ 写入失败: ${err.message}`);
             }
             return true;
         }
@@ -146,7 +147,7 @@ export const workspaceCommand: Command = {
         case '/today': {
             const workDir = process.env.WORK_DIR;
             if (!workDir) {
-                await ctx.reply('⚠️ WORK_DIR 未配置。');
+                await reply('⚠️ WORK_DIR 未配置。');
                 return true;
             }
             const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
@@ -163,7 +164,7 @@ export const workspaceCommand: Command = {
             const daily = await readOrNull(dailyPath);
 
             if (!inbox && !daily) {
-                await ctx.reply(`📭 今天（${today}）还没有任何记录。\n\n用 \`/note <内容>\` 开始记录。`, { parse_mode: 'Markdown' });
+                await reply(`📭 今天（${today}）还没有任何记录。\n\n用 \`/note <内容>\` 开始记录。`, true);
                 return true;
             }
 
@@ -171,24 +172,24 @@ export const workspaceCommand: Command = {
             if (inbox) {
                 const header = `📥 **0-Inbox/${today}.md**\n\n`;
                 const body = inbox.length > MAX ? inbox.slice(0, MAX) + '\n...(已截断)' : inbox;
-                await ctx.reply(header + body, { parse_mode: 'Markdown' }).catch(() =>
-                    ctx.reply(header + body));
+                await reply(header + body, true).catch(() =>
+                    reply(header + body));
             }
             if (daily) {
                 const header = `📓 **1-Daily/${today}.md**\n\n`;
                 const body = daily.length > MAX ? daily.slice(0, MAX) + '\n...(已截断)' : daily;
-                await ctx.reply(header + body, { parse_mode: 'Markdown' }).catch(() =>
-                    ctx.reply(header + body));
+                await reply(header + body, true).catch(() =>
+                    reply(header + body));
             }
             return true;
         }
 
         case '/task': {
             const workDir = process.env.WORK_DIR;
-            if (!workDir) { await ctx.reply('⚠️ WORK_DIR 未配置。'); return true; }
+            if (!workDir) { await reply('⚠️ WORK_DIR 未配置。'); return true; }
             const taskContent = text.replace(/^\/task\s*/i, '').trim();
             if (!taskContent) {
-                await ctx.reply('用法: `/task <内容>`\n\n快速追加一条任务到 2-Tasks，不经过 AI。', { parse_mode: 'Markdown' });
+                await reply('用法: `/task <内容>`\n\n快速追加一条任务到 2-Tasks，不经过 AI。', true);
                 return true;
             }
             try {
@@ -203,19 +204,19 @@ export const workspaceCommand: Command = {
                     ? `\n- [ ] ${taskContent}  _(${today} ${timeStr})_\n`
                     : `# Tasks\n\n- [ ] ${taskContent}  _(${today} ${timeStr})_\n`;
                 await fs.appendFile(tasksFile, entry, 'utf-8');
-                await ctx.reply('✅ 任务已记入 2-Tasks/tasks.md');
+                await reply('✅ 任务已记入 2-Tasks/tasks.md');
             } catch (err: any) {
-                await ctx.reply(`❌ 写入失败: ${err.message}`);
+                await reply(`❌ 写入失败: ${err.message}`);
             }
             return true;
         }
 
         case '/search': {
             const workDir = process.env.WORK_DIR;
-            if (!workDir) { await ctx.reply('⚠️ WORK_DIR 未配置。'); return true; }
+            if (!workDir) { await reply('⚠️ WORK_DIR 未配置。'); return true; }
             const query = text.replace(/^\/search\s*/i, '').trim();
             if (!query) {
-                await ctx.reply('用法: `/search <关键词>`\n\n全文搜索 vault 中所有 .md 文件。', { parse_mode: 'Markdown' });
+                await reply('用法: `/search <关键词>`\n\n全文搜索 vault 中所有 .md 文件。', true);
                 return true;
             }
             const absBase = resolve(workDir);
@@ -252,49 +253,46 @@ export const workspaceCommand: Command = {
             await walk(absBase);
 
             if (hits.length === 0) {
-                await ctx.reply(`🔍 未找到包含 "${query}" 的内容。`);
+                await reply(`🔍 未找到包含 "${query}" 的内容。`);
             } else {
                 const lines = hits.map(h => `📄 \`${h.file}\` L${h.line}\n   ${h.snippet}`);
-                await ctx.reply(
+                await reply(
                     `🔍 **"${query}"** 找到 ${hits.length} 处匹配：\n\n` + lines.join('\n\n'),
-                    { parse_mode: 'Markdown' }
+                    true
                 ).catch(() =>
-                    ctx.reply(`🔍 "${query}" 找到 ${hits.length} 处：\n\n` + hits.map(h => `${h.file}:${h.line}  ${h.snippet}`).join('\n\n'))
+                    reply(`🔍 "${query}" 找到 ${hits.length} 处：\n\n` + hits.map(h => `${h.file}:${h.line}  ${h.snippet}`).join('\n\n'))
                 );
             }
             return true;
         }
 
         case '/weekly': {
-            const statusMsg = await ctx.reply('⏳ 正在生成本周周报...');
+            const statusMsg = await reply('⏳ 正在生成本周周报...');
             try {
                 const { generateWeeklyReportTool } = await import('../tools/generate-weekly-report.js');
                 const text = await generateWeeklyReportTool.handler({}, '');
-                await deps.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
-                    text.slice(0, 4000)
-                ).catch(() => ctx.reply(text.slice(0, 4000)));
+                await deps.adapter.editMessage(msg.chatId, statusMsg.id, text.slice(0, 4000)).catch(() =>
+                    reply(text.slice(0, 4000)));
             } catch (err: any) {
-                await deps.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined,
-                    `❌ 周报生成失败: ${err.message}`
-                ).catch(() => {});
+                await deps.adapter.editMessage(msg.chatId, statusMsg.id, `❌ 周报生成失败: ${err.message}`).catch(() => {});
             }
             return true;
         }
 
         case '/save': {
             const workDir = process.env.WORK_DIR;
-            if (!workDir) { await ctx.reply('⚠️ WORK_DIR 未配置。'); return true; }
+            if (!workDir) { await reply('⚠️ WORK_DIR 未配置。'); return true; }
 
             // Content comes from: replied-to message first, then text after command
-            const replyText: string | undefined = ctx.message?.reply_to_message?.text;
+            const replyText: string | undefined = msg.quotedText;
             const arg = text.replace(/^\/save\s*/i, '').trim();
 
             const rawContent = replyText ?? arg;
             if (!rawContent) {
-                await ctx.reply(
+                await reply(
                     '用法：回复任意消息，发送 `/save [标题]` 即可存入 `3-Library/`。\n\n' +
                     '示例：\n`/save` — 以时间戳命名\n`/save AI工具对比` — 自定义标题\n`/save Wiki/AI工具对比` — 存入指定子目录',
-                    { parse_mode: 'Markdown' }
+                    true
                 );
                 return true;
             }
@@ -330,7 +328,7 @@ export const workspaceCommand: Command = {
                 const targetDir = join(absBase, '3-Library', safeSubDir);
                 // Ensure target is within workspace
                 if (!targetDir.startsWith(absBase)) {
-                    await ctx.reply('⛔ 不允许访问 WORK_DIR 以外的路径。');
+                    await reply('⛔ 不允许访问 WORK_DIR 以外的路径。');
                     return true;
                 }
                 await fs.mkdir(targetDir, { recursive: true });
@@ -350,9 +348,9 @@ export const workspaceCommand: Command = {
                 }
 
                 const relPath = `3-Library/${safeSubDir}/${safeTitle}.md`;
-                await ctx.reply(`✅ 已保存到 \`${relPath}\``, { parse_mode: 'Markdown' });
+                await reply(`✅ 已保存到 \`${relPath}\``, true);
             } catch (err: any) {
-                await ctx.reply(`❌ 保存失败: ${err.message}`);
+                await reply(`❌ 保存失败: ${err.message}`);
             }
             return true;
         }

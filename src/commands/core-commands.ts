@@ -3,10 +3,11 @@ import { cancel as cancelUserInput } from '../lib/user-input-waiter.js';
 
 export const coreCommand: Command = {
     commands: ['/start', '/clear', '/new', '/stats'],
-    handler: async (command, _text, ctx, deps) => {
+    handler: async (command, _text, msg, deps) => {
+    const reply = (t: string, md = false) => deps.adapter.sendMessage(msg.chatId, t, md ? { parseMode: 'markdown' } : undefined);
     switch (command) {
         case '/start':
-            await ctx.reply(
+            await reply(
                 '🔭 **inkClaw Connect Gateway**\n' +
                 '这是一个极简的全能代理网关。\n\n' +
                 '**对话控制**\n' +
@@ -30,25 +31,25 @@ export const coreCommand: Command = {
                 '`/task <内容>` — 快速追加任务到 2-Tasks\n' +
                 '`/search <关键词>` — 全文搜索 vault\n' +
                 '`/weekly` — 立即生成本周周报',
-                { parse_mode: 'Markdown' }
+                true
             );
             return true;
 
         case '/clear':
-            cancelUserInput(ctx.chat.id);
+            cancelUserInput(msg.chatId);
             await deps.chatHistoryCache.clearHistory();
-            await ctx.reply('🗑️ Chat history cleared. Starting fresh!');
+            await reply('🗑️ Chat history cleared. Starting fresh!');
             return true;
 
         case '/new':
-            cancelUserInput(ctx.chat.id);
+            cancelUserInput(msg.chatId);
             await deps.chatHistoryCache.createNewSession();
-            await ctx.reply('📝 新会话已开启，上下文已重置。');
+            await reply('📝 新会话已开启，上下文已重置。');
             return true;
 
         case '/stats': {
             const stats = deps.chatHistoryCache.getStats();
-            await ctx.reply(
+            await reply(
                 `📊 **Chat Statistics**\n` +
                 `Total sessions: ${stats.totalSessions}\n` +
                 `Current messages: ${stats.currentMessages}\n` +

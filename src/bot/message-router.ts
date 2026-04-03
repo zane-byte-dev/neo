@@ -3,45 +3,42 @@ import { resolve } from 'path';
 import { parseReminderTime } from '../lib/reminder-manager.js';
 import { parseScheduledTask } from '../lib/scheduled-task-manager.js';
 import { hasPending, resolve as resolveUserInput } from '../lib/user-input-waiter.js';
-import { setActiveChatId } from '../lib/tool-context.js';
+import { setActiveTenantKey } from '../lib/tool-context.js';
+import { isAuthorized } from '../config.js';
+import type { PlatformAdapter, NormalizedMessage, TenantKey } from '../types/platform.js';
 import type { Task } from './types.js';
 
 interface MessageRouterDeps {
-    bot: any;
-    isAuthorized: (chatId: number) => boolean;
+    adapter: PlatformAdapter;
     asyncTriggerPrefixes: string[];
-    pendingReadMatches: Map<number, { matches: string[]; expiry: number }>;
+    pendingReadMatches: Map<string, { matches: string[]; expiry: number }>;
     scheduledTaskManager: any;
     reminderManager: any;
     messageQueue: any;
     processTask: (task: Task) => Promise<void>;
-    handleAsyncTask: (ctx: any) => Promise<void>;
-    handleCommand: (ctx: any) => Promise<void>;
-    handleUrlMessage: (ctx: any, url: string, rawText: string, userName: string, chatId: number, messageId: number) => Promise<void>;
+    handleAsyncTask: (msg: NormalizedMessage) => Promise<void>;
+    handleCommand: (msg: NormalizedMessage) => Promise<void>;
+    handleUrlMessage: (msg: NormalizedMessage, url: string) => Promise<void>;
 }
 
-export async function processMessage(deps: MessageRouterDeps, ctx: any) {
-    const chatId = ctx.chat.id;
-    const messageId = ctx.message.message_id;
-    const userName = ctx.chat.first_name || 'User';
-
-    const replyTo = ctx.message.reply_to_message;
-    const quotedText: string | null = replyTo?.text ?? replyTo?.caption ?? null;
-    const rawText: string = ctx.message.text;
+export async function processMessage(deps: MessageRouterDeps, msg: NormalizedMessage) {
+    const { tenantKey, chatId, userName, id: messageId } = msg;
+    const rawText = msg.text;
+    const quotedText = msg.quotedText ?? null;
     const text = quotedText
         ? `[引用消息]: ${quotedText}\n\n[我的问题]: ${rawText}`
         : rawText;
 
     const preview = rawText.length > 50 ? `${rawText.substring(0, 50)}...` : rawText;
-    console.log(`[Message] From ${userName} (ID: ${chatId}, MsgID: ${messageId}${quotedText ? ', replying to msg' : ''}): ${preview}`);
+    console.log(`[Message] From ${userName} (${tenantKey}, MsgID: ${messageId}${quotedText ? ', replying' : ''}): ${preview}`);
 
-    if (!deps.isAuthorized(chatId)) {
-        await ctx.reply('⛔ Unauthorized.');
+    if (!isAuthorized(tenantKey)) {
+        await deps.adapter.sendMessage(chatId, '⛔ Unauthorized.');
         return;
     }
 
-    // Update the active chat ID in tool context (for ask_user, schedule_create, etc.)
-    setActiveChatId(chatId);
+    // Set the active tenant for tools that call getToolContext()
+    setActiveTenantKey(tenantKey);
 
     // If ask_user tool is waiting for input, route this message directly to it
     if (hasPending(chatId)) {
@@ -51,14 +48,14 @@ export async function processMessage(deps: MessageRouterDeps, ctx: any) {
 
     if (rawText.startsWith('/')) {
         if (rawText.startsWith('/research') || rawText.startsWith('/async')) {
-            await deps.handleAsyncTask(ctx);
+            await deps.handleAsyncTask(msg);
             return;
         }
         if (rawText.startsWith('/btw')) {
-            await handleBtwMessage(deps, ctx, rawText, chatId, messageId, userName);
+            await handleBtwMessage(deps, msg);
             return;
         }
-        await deps.handleCommand(ctx);
+        await deps.handleCommand(msg);
         return;
     }
 
@@ -75,26 +72,26 @@ export async function processMessage(deps: MessageRouterDeps, ctx: any) {
                 try {
                     const stat = await fs.stat(absPath);
                     if (stat.size > 100 * 1024) {
-                        await ctx.reply(`⚠️ 文件超过 100KB（${(stat.size / 1024).toFixed(1)}KB），请缩小范围。`);
+                        await deps.adapter.sendMessage(chatId, `⚠️ 文件超过 100KB（${(stat.size / 1024).toFixed(1)}KB），请缩小范围。`);
                         return;
                     }
                     const content = await fs.readFile(absPath, 'utf8');
                     const MAX_MSG = 4000;
                     const header = `📄 ${relPath}\n\n`;
                     if (header.length + content.length <= MAX_MSG) {
-                        await ctx.reply(header + content);
+                        await deps.adapter.sendMessage(chatId, header + content);
                     } else {
                         const chunks: string[] = [];
                         for (let i = 0; i < content.length; i += MAX_MSG - header.length) {
                             chunks.push(content.slice(i, i + MAX_MSG - header.length));
                         }
-                        await ctx.reply(`📄 ${relPath} (${chunks.length} 段)\n\n${chunks[0]}`);
+                        await deps.adapter.sendMessage(chatId, `📄 ${relPath} (${chunks.length} 段)\n\n${chunks[0]}`);
                         for (let i = 1; i < chunks.length; i++) {
-                            await ctx.reply(chunks[i]).catch(() => {});
+                            await deps.adapter.sendMessage(chatId, chunks[i]).catch(() => {});
                         }
                     }
                 } catch (err: any) {
-                    await ctx.reply(`❌ 无法读取文件: ${err.message}`);
+                    await deps.adapter.sendMessage(chatId, `❌ 无法读取文件: ${err.message}`);
                 }
                 return;
             }
@@ -102,70 +99,57 @@ export async function processMessage(deps: MessageRouterDeps, ctx: any) {
     }
 
     if (deps.asyncTriggerPrefixes.some((prefix) => rawText.startsWith(prefix))) {
-        await deps.handleAsyncTask(ctx);
+        await deps.handleAsyncTask(msg);
         return;
     }
 
     const isScheduleIntent = /每(天|日|周|月|小时|隔|个工作日)/.test(rawText) ||
         /定期|每\d+(分钟|小时)/.test(rawText);
     if (isScheduleIntent) {
-        await handleScheduledTaskMessage(deps, ctx, rawText, chatId, messageId);
+        await handleScheduledTaskMessage(deps, msg);
         return;
     }
 
     const isReminderIntent = rawText.includes('提醒我') || /^\d+\s*(分钟|小时|天)后/.test(rawText);
     if (isReminderIntent) {
-        await handleReminderMessage(deps, ctx, rawText, chatId, messageId);
+        await handleReminderMessage(deps, msg);
         return;
     }
 
     const urlMatch = rawText.match(/https?:\/\/[^\s]+/);
     if (urlMatch) {
-        await deps.handleUrlMessage(ctx, urlMatch[0], rawText, userName, chatId, messageId);
+        await deps.handleUrlMessage(msg, urlMatch[0]);
         return;
     }
 
-    const task: Task = { chatId, question: text, userName, messageId };
+    const task: Task = { tenantKey, chatId, question: text, userName, messageId };
     await deps.messageQueue.enqueue(task, (t: Task) => deps.processTask(t));
 }
 
-async function handleBtwMessage(
-    deps: MessageRouterDeps,
-    ctx: any,
-    rawText: string,
-    chatId: number,
-    messageId: number,
-    userName: string
-) {
-    const question = rawText.replace(/^\/btw\s*/i, '').trim();
+async function handleBtwMessage(deps: MessageRouterDeps, msg: NormalizedMessage) {
+    const question = msg.text.replace(/^\/btw\s*/i, '').trim();
     if (!question) {
-        await ctx.reply('用法: `/btw <问题>`\n\n临时问答，不计入对话上下文。', { parse_mode: 'Markdown' });
+        await deps.adapter.sendMessage(msg.chatId, '用法: `/btw <问题>`\n\n临时问答，不计入对话上下文。', { parseMode: 'markdown' });
         return;
     }
-    const task: Task = { chatId, question, userName, messageId, skipHistory: true };
+    const task: Task = { tenantKey: msg.tenantKey, chatId: msg.chatId, question, userName: msg.userName, messageId: msg.id, skipHistory: true };
     await deps.messageQueue.enqueue(task, (t: Task) => deps.processTask(t));
 }
 
-async function handleScheduledTaskMessage(deps: MessageRouterDeps, ctx: any, text: string, chatId: number, messageId: number) {
+async function handleScheduledTaskMessage(deps: MessageRouterDeps, msg: NormalizedMessage) {
+    const { chatId, id: messageId, text, tenantKey } = msg;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        await ctx.reply('⚠️ 定时任务功能需要配置 GEMINI_API_KEY。', { reply_parameters: { message_id: messageId } });
+        await deps.adapter.sendMessage(chatId, '⚠️ 定时任务功能需要配置 GEMINI_API_KEY。', { replyToId: messageId });
         return;
     }
 
-    const statusMsg = await deps.bot.telegram.sendMessage(
-        chatId,
-        '⏳ 解析定时任务...',
-        { reply_parameters: { message_id: messageId } }
-    );
+    const statusMsg = await deps.adapter.sendMessage(chatId, '⏳ 解析定时任务...', { replyToId: messageId });
 
     const result = await parseScheduledTask(text, apiKey);
 
     if (!result) {
-        await deps.bot.telegram.editMessageText(
-            chatId,
-            statusMsg.message_id,
-            undefined,
+        await deps.adapter.editMessage(chatId, statusMsg.id,
             '⚠️ 无法解析定时任务，请换个说法。\n\n支持的格式例如：\n' +
             '• 每天早上9点告诉我杭州的天气\n' +
             '• 每周一早上8点半汇总科技新闻\n' +
@@ -176,40 +160,31 @@ async function handleScheduledTaskMessage(deps: MessageRouterDeps, ctx: any, tex
     }
 
     const task = await deps.scheduledTaskManager.add(chatId, result.content, result.prompt, result.cronExpr);
-    await deps.bot.telegram.editMessageText(
-        chatId,
-        statusMsg.message_id,
-        undefined,
+    await deps.adapter.editMessage(chatId, statusMsg.id,
         `✅ 定时任务已创建！\n\n` +
         `📌 任务: ${result.content}\n` +
         `📋 执行指令: ${result.prompt}\n` +
         `⏰ Cron: \`${result.cronExpr}\`\n` +
         `🆔 ID: ${task.id}\n\n` +
         `用 /unschedule ${task.id} 删除此任务`,
-        { parse_mode: 'Markdown' }
+        { parseMode: 'markdown' },
     ).catch(() => {});
 }
 
-async function handleReminderMessage(deps: MessageRouterDeps, ctx: any, text: string, chatId: number, messageId: number) {
+async function handleReminderMessage(deps: MessageRouterDeps, msg: NormalizedMessage) {
+    const { chatId, id: messageId, text } = msg;
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        await ctx.reply('⚠️ 提醒功能需要配置 GEMINI_API_KEY。', { reply_parameters: { message_id: messageId } });
+        await deps.adapter.sendMessage(chatId, '⚠️ 提醒功能需要配置 GEMINI_API_KEY。', { replyToId: messageId });
         return;
     }
 
-    const statusMsg = await deps.bot.telegram.sendMessage(
-        chatId,
-        '⏳ 解析提醒时间...',
-        { reply_parameters: { message_id: messageId } }
-    );
+    const statusMsg = await deps.adapter.sendMessage(chatId, '⏳ 解析提醒时间...', { replyToId: messageId });
 
     const result = await parseReminderTime(text, apiKey);
 
     if (!result || !result.content) {
-        await deps.bot.telegram.editMessageText(
-            chatId,
-            statusMsg.message_id,
-            undefined,
+        await deps.adapter.editMessage(chatId, statusMsg.id,
             '⚠️ 无法理解提醒时间，请换个说法试试。\n\n例如：\n' +
             '• 提醒我下周一早上9点开周会\n' +
             '• 提醒我这周五下午6点下班\n' +
@@ -228,10 +203,7 @@ async function handleReminderMessage(deps: MessageRouterDeps, ctx: any, text: st
     });
     const typeLabel = result.prompt ? '🤖 定时任务' : '🔔 提醒通知';
     const detailLine = result.prompt ? `📋 任务: ${result.prompt}\n` : '';
-    await deps.bot.telegram.editMessageText(
-        chatId,
-        statusMsg.message_id,
-        undefined,
+    await deps.adapter.editMessage(chatId, statusMsg.id,
         `✅ ${typeLabel}已设置！\n\n` +
         `📌 内容: ${result.content}\n` +
         detailLine +

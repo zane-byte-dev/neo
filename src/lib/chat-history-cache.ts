@@ -49,8 +49,8 @@ export class ChatHistoryCache {
     private maxHistoryMessages: number;
     private onSessionExpire?: (session: Session) => Promise<void>;
 
-    constructor() {
-        this.cacheDir = CHAT_CACHE_DIR;
+    constructor(cacheDir?: string) {
+        this.cacheDir = cacheDir ?? CHAT_CACHE_DIR;
         this.cacheFile = join(this.cacheDir, 'chat_history.json');
         this.sessionTimeoutMs = CHAT_SESSION_TIMEOUT_HOURS * 60 * 60 * 1000;
         this.maxHistoryMessages = CHAT_MAX_HISTORY_MESSAGES;

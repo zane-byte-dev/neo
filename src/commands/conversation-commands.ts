@@ -4,19 +4,19 @@ import type { Command } from './_base.js';
 
 export const conversationCommand: Command = {
     commands: ['/compact'],
-    handler: async (command, _text, ctx, deps) => {
+    handler: async (command, _text, msg, deps) => {
     if (command !== '/compact') return false;
 
     const msgs = deps.chatHistoryCache.getCurrentSessionHistory();
     if (msgs.length < 3) {
-        await ctx.reply('💬 当前对话太短（< 3 条），无需压缩。');
+        await deps.adapter.sendMessage(msg.chatId, '💬 当前对话太短（< 3 条），无需压缩。');
         return true;
     }
 
-    const statusMsg = await deps.bot.telegram.sendMessage(ctx.chat.id, '⏳ 正在压缩上下文...');
+    const statusMsg = await deps.adapter.sendMessage(msg.chatId, '⏳ 正在压缩上下文...');
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        await deps.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined, '⚠️ 需要配置 GEMINI_API_KEY。').catch(() => {});
+        await deps.adapter.editMessage(msg.chatId, statusMsg.id, '⚠️ 需要配置 GEMINI_API_KEY。').catch(() => {});
         return true;
     }
 
@@ -93,7 +93,7 @@ ${transcript}`;
     );
 
     if (!summary) {
-        await deps.bot.telegram.editMessageText(ctx.chat.id, statusMsg.message_id, undefined, '⚠️ 压缩失败，请重试。').catch(() => {});
+        await deps.adapter.editMessage(msg.chatId, statusMsg.id, '⚠️ 压缩失败，请重试。').catch(() => {});
         return true;
     }
 
@@ -108,12 +108,12 @@ ${transcript}`;
 
     // Telegram max message length is 4096; truncate preview if needed
     const preview = stored.length > 3000 ? stored.slice(0, 3000) + '\n\n…（摘要过长，已截断显示）' : stored;
-    await deps.bot.telegram.editMessageText(
-        ctx.chat.id, statusMsg.message_id, undefined,
+    await deps.adapter.editMessage(
+        msg.chatId, statusMsg.id,
         `✅ 上下文已压缩（${msgs.length} 条 → 1 条摘要）\n\n${preview}`,
-        { parse_mode: 'Markdown' }
+        { parseMode: 'markdown' }
     ).catch(async () => {
-        await ctx.reply(`✅ 已压缩 ${msgs.length} 条消息。\n\n${preview}`);
+        await deps.adapter.sendMessage(msg.chatId, `✅ 已压缩 ${msgs.length} 条消息。\n\n${preview}`);
     });
 
     return true;

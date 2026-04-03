@@ -3,12 +3,13 @@ import type { Command } from './_base.js';
 
 export const taskCommand: Command = {
     commands: ['/tasks', '/cancel'],
-    handler: async (command, text, ctx, deps) => {
+    handler: async (command, text, msg, deps) => {
+    const reply = (t: string, md = false) => deps.adapter.sendMessage(msg.chatId, t, md ? { parseMode: 'markdown' } : undefined);
     switch (command) {
         case '/tasks': {
             const all = deps.asyncTaskManager.getAllTasks();
             if (all.length === 0) {
-                await ctx.reply('📋 暂无任务记录。');
+                await reply('📋 暂无任务记录。');
                 return true;
             }
             const STATUS_EMOJI: Record<string, string> = {
@@ -23,9 +24,9 @@ export const taskCommand: Command = {
                 const prompt = t.prompt.length > 40 ? t.prompt.slice(0, 40) + '...' : t.prompt;
                 return `${emoji} \`#${t.id}\` [${time}]\n   ${prompt}`;
             });
-            await ctx.reply(
+            await reply(
                 `📋 **任务列表** (最近 ${lines.length} 条)\n\n` + lines.join('\n\n'),
-                { parse_mode: 'Markdown' }
+                true
             );
             return true;
         }
@@ -33,18 +34,18 @@ export const taskCommand: Command = {
         case '/cancel': {
             const taskId = text.split(' ')[1]?.replace(/^#/, '').trim();
             if (!taskId) {
-                await ctx.reply('用法: `/cancel <任务ID>`', { parse_mode: 'Markdown' });
+                await reply('用法: `/cancel <任务ID>`', true);
                 return true;
             }
             const cancelled = await deps.asyncTaskManager.cancelTask(taskId);
             if (cancelled) {
-                await ctx.reply(`✅ 任务 \`#${taskId}\` 已取消。`, { parse_mode: 'Markdown' });
+                await reply(`✅ 任务 \`#${taskId}\` 已取消。`, true);
             } else {
                 const task = deps.asyncTaskManager.getTask(taskId);
                 if (!task) {
-                    await ctx.reply(`❌ 未找到任务 \`#${taskId}\`。`, { parse_mode: 'Markdown' });
+                    await reply(`❌ 未找到任务 \`#${taskId}\`。`, true);
                 } else {
-                    await ctx.reply(`⚠️ 任务 \`#${taskId}\` 已是 ${task.status} 状态，无法取消。`, { parse_mode: 'Markdown' });
+                    await reply(`⚠️ 任务 \`#${taskId}\` 已是 ${task.status} 状态，无法取消。`, true);
                 }
             }
             return true;

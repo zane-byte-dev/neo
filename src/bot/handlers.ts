@@ -1,45 +1,25 @@
-import { message } from 'telegraf/filters';
+/**
+ * handlers.ts — Event handler setup.
+ *
+ * With the adapter pattern, platform-specific event registration is handled
+ * inside each PlatformAdapter. This module is now a thin coordination layer
+ * that wires the adapter's normalized events to the core processing pipeline.
+ */
+
+import type { PlatformAdapter, NormalizedMessage, NormalizedCallback } from '../types/platform.js';
 
 interface HandlersDeps {
-    bot: any;
-    handleCommand: (ctx: any) => Promise<void>;
-    processMessage: (ctx: any) => Promise<void>;
-    processPhotoMessage: (ctx: any) => Promise<void>;
-    processVoiceMessage: (ctx: any) => Promise<void>;
-    processDocumentMessage: (ctx: any) => Promise<void>;
-    handleCallbackQuery: (ctx: any) => Promise<void>;
+    adapter: PlatformAdapter;
+    processMessage: (msg: NormalizedMessage) => Promise<void>;
+    handleCallbackQuery: (cb: NormalizedCallback) => Promise<void>;
 }
 
 export function setupHandlers(deps: HandlersDeps) {
-    deps.bot.command('start', (ctx: any) => {
-        void deps.handleCommand(ctx);
+    deps.adapter.onMessage(async (msg: NormalizedMessage) => {
+        await deps.processMessage(msg);
     });
 
-    deps.bot.on(message('text'), async (ctx: any) => {
-        await deps.processMessage(ctx);
-    });
-
-    deps.bot.on(message('photo'), async (ctx: any) => {
-        await deps.processPhotoMessage(ctx);
-    });
-
-    deps.bot.on(message('voice'), async (ctx: any) => {
-        await deps.processVoiceMessage(ctx);
-    });
-
-    deps.bot.on(message('audio'), async (ctx: any) => {
-        await deps.processVoiceMessage(ctx);
-    });
-
-    deps.bot.on(message('document'), async (ctx: any) => {
-        await deps.processDocumentMessage(ctx);
-    });
-
-    deps.bot.on('callback_query', async (ctx: any) => {
-        await deps.handleCallbackQuery(ctx);
-    });
-
-    deps.bot.catch((err: any) => {
-        console.error(`[Bot Error] ${err}`);
+    deps.adapter.onCallbackQuery(async (cb: NormalizedCallback) => {
+        await deps.handleCallbackQuery(cb);
     });
 }

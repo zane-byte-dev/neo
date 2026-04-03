@@ -39,7 +39,10 @@ export async function setupCronJobs(deps: CronDeps): Promise<void> {
                 await job.handler(deps);
             } catch (error: any) {
                 console.error(`[Cron Error ${job.name}] ${error}`);
-                await deps.sendReply(deps.chatId, `❌ **${job.name} 失败**:\n${error.message || error.stderr}`);
+                // Send error to all tenants
+                for (const tk of deps.tenantKeys) {
+                    await deps.sendReply(tk, `❌ **${job.name} 失败**:\n${error.message || error.stderr}`);
+                }
             }
         });
 

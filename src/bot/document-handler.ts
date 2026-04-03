@@ -8,59 +8,54 @@ import {
     TEXT_EXTENSIONS,
     SPREADSHEET_EXTENSIONS,
     GEMINI_NATIVE_MIMES,
+    isAuthorized,
 } from '../config.js';
+import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
 import type { Task } from './types.js';
 
 interface MediaDeps {
-    bot: any;
+    adapter: PlatformAdapter;
     messageQueue: any;
     processTask: (task: Task) => Promise<void>;
 }
 
-export async function processDocumentMessage(deps: MediaDeps, ctx: any, isAuthorized: (chatId: number) => boolean) {
-    const chatId = ctx.chat.id;
-    const messageId = ctx.message.message_id;
-    const userName = ctx.chat.first_name || 'User';
-    const caption: string = ctx.message.caption || '';
+export async function processDocumentMessage(deps: MediaDeps, msg: NormalizedMessage) {
+    const { tenantKey, chatId, id: messageId, userName, media } = msg;
+    const caption = media?.caption || '';
 
-    if (!isAuthorized(chatId)) {
-        await ctx.reply('⛔ Unauthorized.');
+    if (!isAuthorized(tenantKey)) {
+        await deps.adapter.sendMessage(chatId, '⛔ Unauthorized.');
         return;
     }
 
-    const doc = ctx.message.document;
-    const fileName: string = doc.file_name || 'document';
-    const mimeType: string = doc.mime_type || 'application/octet-stream';
-    const fileSizeBytes: number = doc.file_size || 0;
+    const fileName = media?.fileName || 'document';
+    const mimeType = media?.mimeType || 'application/octet-stream';
+    const fileSizeBytes = media?.fileSize || 0;
+    const fileId = media?.fileId;
 
     console.log(`[Document] From ${userName}: ${fileName} (${mimeType}, ${fileSizeBytes} bytes)`);
 
-    if (fileSizeBytes > MAX_FILE_SIZE_BYTES) {
-        await ctx.reply('⚠️ 文件超过 20MB，暂不支持。');
+    if (!fileId) {
+        await deps.adapter.sendMessage(chatId, '⚠️ 无法获取文件。');
         return;
     }
 
-    const statusMsg = await deps.bot.telegram.sendMessage(chatId, `📄 正在处理文件: ${fileName}...`, {
-        reply_parameters: { message_id: messageId },
-    });
+    if (fileSizeBytes > MAX_FILE_SIZE_BYTES) {
+        await deps.adapter.sendMessage(chatId, '⚠️ 文件超过 20MB，暂不支持。');
+        return;
+    }
+
+    const statusMsg = await deps.adapter.sendMessage(chatId, `📄 正在处理文件: ${fileName}...`, { replyToId: messageId });
 
     const tmpDir = join(process.env.WORK_DIR || process.cwd(), '.tmp');
     await fs.mkdir(tmpDir, { recursive: true });
     const tmpPath = join(tmpDir, `doc_${messageId}_${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
 
     try {
-        const fileLink = await deps.bot.telegram.getFileLink(doc.file_id);
-        const res = await fetch(fileLink.href);
-        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-        await fs.writeFile(tmpPath, Buffer.from(await res.arrayBuffer()));
+        await deps.adapter.downloadFile(fileId, tmpPath);
     } catch (err: any) {
         console.error(`[Document Error] Download failed: ${err.message}`);
-        await deps.bot.telegram.editMessageText(
-            chatId,
-            statusMsg.message_id,
-            undefined,
-            `⚠️ 文件下载失败: ${err.message}`
-        ).catch(() => {});
+        await deps.adapter.editMessage(chatId, statusMsg.id, `⚠️ 文件下载失败: ${err.message}`).catch(() => {});
         return;
     }
 
@@ -85,24 +80,16 @@ export async function processDocumentMessage(deps: MediaDeps, ctx: any, isAuthor
                 : `请分析以下文件内容并给出总结或见解。\n\n[文件名: ${fileName}]\n\`\`\`\n${truncated}\n\`\`\``;
 
         } else if (isSpreadsheet) {
-            await deps.bot.telegram.editMessageText(
-                chatId,
-                statusMsg.message_id,
-                undefined,
-                '📊 正在转换表格内容...'
-            ).catch(() => {});
+            await deps.adapter.editMessage(chatId, statusMsg.id, '📊 正在转换表格内容...').catch(() => {});
             const csvText = await convertSpreadsheetToText(tmpPath, ext);
             if (!csvText) {
-                await deps.bot.telegram.editMessageText(
-                    chatId,
-                    statusMsg.message_id,
-                    undefined,
+                await deps.adapter.editMessage(chatId, statusMsg.id,
                     `⚠️ 无法解析 **${ext}** 格式。\n\n` +
                     `**解决方法：**\n` +
                     `• 在 Numbers / Excel 中选「文件 → 导出 → CSV」\n` +
                     `• 重新上传 **.csv** 文件\n\n` +
-                    '如已安装 LibreOffice，请确保 \`soffice\` 命令可用。',
-                    { parse_mode: 'Markdown' }
+                    '如已安装 LibreOffice，请确保 `soffice` 命令可用。',
+                    { parseMode: 'markdown' },
                 ).catch(() => {});
                 await fs.unlink(tmpPath).catch(() => {});
                 return;
@@ -115,42 +102,34 @@ export async function processDocumentMessage(deps: MediaDeps, ctx: any, isAuthor
                 : `请分析下表格数据并给出总结。\n\n[表格文件: ${fileName}]\n\`\`\`csv\n${truncated}\n\`\`\``;
 
         } else if (isGeminiNative) {
-            await deps.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined, '📄 正在上传文件...').catch(() => {});
+            await deps.adapter.editMessage(chatId, statusMsg.id, '📄 正在上传文件...').catch(() => {});
             fileUri = await uploadToGeminiFileApi(tmpPath, mimeType);
             fileMimeType = mimeType;
             question = caption || `请分析这份文件并给出详细总结。[文件名: ${fileName}]`;
-            await deps.bot.telegram.editMessageText(chatId, statusMsg.message_id, undefined, '📄 文件已上传，正在分析...').catch(() => {});
+            await deps.adapter.editMessage(chatId, statusMsg.id, '📄 文件已上传，正在分析...').catch(() => {});
 
         } else {
             const supported = 'PDF · 图片(JPG/PNG/WebP/HEIC) · 音频(MP3/WAV/OGG) · 视频(MP4/MOV)\n文本/代码(TXT/MD/CSV/JSON/...) · 表格(Numbers/Excel → 导出为 CSV)';
-            await deps.bot.telegram.editMessageText(
-                chatId,
-                statusMsg.message_id,
-                undefined,
+            await deps.adapter.editMessage(chatId, statusMsg.id,
                 `⚠️ 暂不支持 **${ext || mimeType}** 格式。\n\n**支持的格式:**\n${supported}`,
-                { parse_mode: 'Markdown' }
+                { parseMode: 'markdown' },
             ).catch(() => {});
             await fs.unlink(tmpPath).catch(() => {});
             return;
         }
     } catch (err: any) {
         console.error(`[Document Error] Processing failed: ${err.message}`);
-        await deps.bot.telegram.editMessageText(
-            chatId,
-            statusMsg.message_id,
-            undefined,
-            `⚠️ 文件处理失败: ${err.message}`
-        ).catch(() => {});
+        await deps.adapter.editMessage(chatId, statusMsg.id, `⚠️ 文件处理失败: ${err.message}`).catch(() => {});
         await fs.unlink(tmpPath).catch(() => {});
         return;
     }
 
-    const task: Task = { chatId, question, userName, messageId, fileUri, fileMimeType };
+    const task: Task = { tenantKey, chatId, question, userName, messageId, fileUri, fileMimeType };
     await deps.messageQueue.enqueue(task, async (t: Task) => {
         try {
             await deps.processTask(t);
         } finally {
-            await deps.bot.telegram.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+            await deps.adapter.deleteMessage(chatId, statusMsg.id).catch(() => {});
             await fs.unlink(tmpPath).catch(() => {});
         }
     });

@@ -6,6 +6,8 @@ export const butlerCron: CronJob = {
     schedule: '0 2 * * *',
     handler: async (deps) => {
         const report = await runButlerTool.handler({}, '');
-        await deps.sendReply(deps.chatId, `📅 **每日管家巡检报告**:\n\n${report}`);
+        for (const tk of deps.tenantKeys) {
+            await deps.sendReply(tk, `📅 **每日管家巡检报告**:\n\n${report}`);
+        }
     },
 };
