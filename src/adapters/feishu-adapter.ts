@@ -1,13 +1,18 @@
 /**
  * adapters/feishu-adapter.ts — Feishu (Lark) implementation of PlatformAdapter.
  *
- * Requires @larksuiteoapi/node-sdk to be installed.
+ * Uses @larksuiteoapi/node-sdk's WebSocket long connection (WSClient + EventDispatcher),
+ * so **no public IP or webhook callback URL is needed** — the SDK maintains a persistent
+ * WebSocket to Feishu's servers and pushes events directly.
+ *
  * Set environment variables: FEISHU_APP_ID, FEISHU_APP_SECRET.
  *
- * This is a skeleton — fill in event subscription & messaging once
- * the Feishu Open Platform App is configured.
+ * In the Feishu Developer Console, go to:
+ *   Events and Callbacks → Mode of event/callback subscription
+ *     → "Receive events/callbacks through persistent connection"
  */
 
+import * as lark from '@larksuiteoapi/node-sdk';
 import type {
     PlatformAdapter,
     NormalizedMessage,
@@ -24,49 +29,63 @@ export class FeishuAdapter implements PlatformAdapter {
 
     private appId: string;
     private appSecret: string;
-    private client: any; // lark.Client once SDK is installed
+    private client: InstanceType<typeof lark.Client>;
+    private wsClient?: InstanceType<typeof lark.WSClient>;
+    private eventDispatcher?: InstanceType<typeof lark.EventDispatcher>;
 
     constructor(opts: { appId: string; appSecret: string }) {
         this.appId = opts.appId;
         this.appSecret = opts.appSecret;
-        // Will be initialised in start() once SDK is available
+        this.client = new lark.Client({
+            appId: this.appId,
+            appSecret: this.appSecret,
+            appType: lark.AppType.SelfBuild,
+        });
     }
 
     // ── Lifecycle ────────────────────────────────────────────────────────
 
     async start(): Promise<void> {
-        try {
-            // Dynamic import — the SDK is optional; only needed when Feishu tenants are configured
-            const lark = await (Function('return import("@larksuiteoapi/node-sdk")')() as Promise<any>);
-            this.client = new lark.Client({
-                appId: this.appId,
-                appSecret: this.appSecret,
-                appType: lark.AppType?.SelfBuild,
-            });
-            // TODO: register event subscriptions (im.message.receive_v1, etc.)
-            console.log('[FeishuAdapter] Client initialized. Event subscription not yet wired.');
-        } catch (err: any) {
-            console.error('[FeishuAdapter] Failed to start — is @larksuiteoapi/node-sdk installed?', err.message);
-            throw err;
-        }
+        // Build event dispatcher with message handler
+        this.eventDispatcher = new lark.EventDispatcher({}).register({
+            'im.message.receive_v1': async (data: any) => {
+                try {
+                    await this._handleMessageEvent(data);
+                } catch (err: any) {
+                    console.error('[FeishuAdapter] Message handler error:', err.message);
+                }
+            },
+        });
+
+        // Create WebSocket client — maintains persistent connection, auto-reconnects
+        this.wsClient = new lark.WSClient({
+            appId: this.appId,
+            appSecret: this.appSecret,
+            loggerLevel: lark.LoggerLevel.info,
+        });
+
+        await this.wsClient.start({ eventDispatcher: this.eventDispatcher });
+        console.log('[FeishuAdapter] ✅ WebSocket long connection started.');
     }
 
     async stop(): Promise<void> {
-        // Feishu SDK doesn't have a persistent connection to close
-        this.client = null;
+        // SDK doesn't expose a close/disconnect method — just drop references
+        this.wsClient = undefined;
+        this.eventDispatcher = undefined;
+        console.log('[FeishuAdapter] Stopped.');
     }
 
     // ── Outbound ─────────────────────────────────────────────────────────
 
     async sendMessage(chatId: string, text: string, opts?: SendMessageOptions): Promise<SentMessage> {
-        if (!this.client) throw new Error('[FeishuAdapter] Not started');
+        const content = this._buildContent(text, opts);
+        const msgType = (opts?.parseMode === 'markdown') ? 'interactive' : 'text';
 
-        const content = JSON.stringify({ text });
         const res = await this.client.im.message.create({
             data: {
                 receive_id: chatId,
-                msg_type: 'text',
-                content,
+                msg_type: msgType,
+                content: JSON.stringify(content),
             },
             params: { receive_id_type: 'open_id' },
         });
@@ -75,19 +94,16 @@ export class FeishuAdapter implements PlatformAdapter {
         return { id: messageId, chatId };
     }
 
-    async editMessage(chatId: string, messageId: string, text: string, _opts?: SendMessageOptions): Promise<void> {
-        if (!this.client) throw new Error('[FeishuAdapter] Not started');
+    async editMessage(_chatId: string, messageId: string, text: string, opts?: SendMessageOptions): Promise<void> {
+        const content = this._buildContent(text, opts);
 
-        const content = JSON.stringify({ text });
         await this.client.im.message.patch({
             path: { message_id: messageId },
-            data: { content },
+            data: { content: JSON.stringify(content) },
         });
     }
 
     async deleteMessage(_chatId: string, messageId: string): Promise<void> {
-        if (!this.client) throw new Error('[FeishuAdapter] Not started');
-
         await this.client.im.message.delete({
             path: { message_id: messageId },
         });
@@ -96,25 +112,21 @@ export class FeishuAdapter implements PlatformAdapter {
     // ── Media ────────────────────────────────────────────────────────────
 
     async downloadFile(fileId: string, destPath: string): Promise<void> {
-        if (!this.client) throw new Error('[FeishuAdapter] Not started');
+        // fileId format: "messageId:fileKey"
+        const [messageId, fileKey] = fileId.includes(':') ? fileId.split(':') : [fileId, fileId];
 
-        const { writeFile } = await import('fs/promises');
         const res = await this.client.im.messageResource.get({
-            path: { message_id: fileId, file_key: fileId },
+            path: { message_id: messageId, file_key: fileKey },
             params: { type: 'file' },
         });
 
-        if (res?.data) {
-            await writeFile(destPath, Buffer.from(res.data));
-        } else {
-            throw new Error(`[FeishuAdapter] File download failed for ${fileId}`);
-        }
+        await res.writeFile(destPath);
     }
 
     // ── Format ───────────────────────────────────────────────────────────
 
     formatMarkdown(md: string): string {
-        // Feishu supports a subset of markdown; pass through for now
+        // Feishu rich text card supports a subset of markdown; pass through
         return md;
     }
 
@@ -128,32 +140,107 @@ export class FeishuAdapter implements PlatformAdapter {
         this.callbackHandler = handler;
     }
 
-    // ── Telegram-compat stubs ────────────────────────────────────────────
+    // ── Internal: build message content ──────────────────────────────────
 
-    async setCommands(_commands: Array<{ command: string; description: string }>): Promise<void> {
-        // Feishu doesn't have a /command menu equivalent
+    private _buildContent(text: string, opts?: SendMessageOptions): Record<string, unknown> {
+        if (opts?.parseMode === 'markdown') {
+            // Use interactive card for markdown rendering
+            return {
+                type: 'template',
+                data: {
+                    template_variable: { content: text },
+                    template_id: undefined, // falls back to default card
+                },
+                elements: [{ tag: 'markdown', content: text }],
+            };
+        }
+        return { text };
     }
 
     // ── Internal: normalize incoming Feishu events ───────────────────────
 
-    /** Call this from your Feishu webhook/event handler */
-    async handleIncomingMessage(event: any): Promise<void> {
+    private async _handleMessageEvent(data: any): Promise<void> {
         if (!this.messageHandler) return;
 
-        const sender = event?.sender?.sender_id?.open_id ?? '';
-        const chatId = sender;
-        const msgId = event?.message?.message_id ?? '';
-        const content = event?.message?.content ? JSON.parse(event.message.content) : {};
-        const text = content.text ?? '';
+        const message = data?.message;
+        const sender = data?.sender;
+        if (!message || !sender) return;
+
+        const chatType = message.chat_type; // 'p2p' or 'group'
+        const senderId = sender.sender_id?.open_id ?? '';
+        const chatId = senderId; // for p2p, use sender's open_id
+        const msgId = message.message_id ?? '';
+
+        // Parse message content (JSON string)
+        let text = '';
+        let mediaPayload: NormalizedMessage['media'] = undefined;
+
+        const msgType = message.message_type;
+        try {
+            const content = message.content ? JSON.parse(message.content) : {};
+
+            switch (msgType) {
+                case 'text':
+                    text = content.text ?? '';
+                    // Strip @bot mentions: "@_user_1" pattern
+                    text = text.replace(/@_user_\d+\s*/g, '').trim();
+                    break;
+                case 'image':
+                    mediaPayload = {
+                        type: 'photo',
+                        fileId: `${msgId}:${content.image_key}`,
+                        mimeType: 'image/jpeg',
+                    };
+                    break;
+                case 'audio':
+                    mediaPayload = {
+                        type: 'voice',
+                        fileId: `${msgId}:${content.file_key}`,
+                        mimeType: 'audio/ogg',
+                    };
+                    break;
+                case 'file':
+                    mediaPayload = {
+                        type: 'document',
+                        fileId: `${msgId}:${content.file_key}`,
+                        fileName: content.file_name || 'document',
+                        mimeType: content.mime_type || 'application/octet-stream',
+                    };
+                    break;
+                default:
+                    // post (rich text), merge_forward, etc. — extract text best-effort
+                    text = content.text ?? content.title ?? JSON.stringify(content).slice(0, 500);
+            }
+        } catch {
+            console.warn(`[FeishuAdapter] Failed to parse message content: ${message.content}`);
+        }
+
+        // Handle parent/reply context
+        const parentId = message.parent_id;
+        let quotedText: string | undefined;
+        if (parentId) {
+            try {
+                const parentMsg = await this.client.im.message.get({
+                    path: { message_id: parentId },
+                });
+                const parentContent = parentMsg?.data?.items?.[0]?.body?.content;
+                if (parentContent) {
+                    const parsed = JSON.parse(parentContent);
+                    quotedText = parsed.text ?? parsed.title;
+                }
+            } catch { /* ignore quote fetch failures */ }
+        }
 
         const normalized: NormalizedMessage = {
             id: msgId,
             tenantKey: `feishu:${chatId}` as any,
             platform: 'feishu',
             chatId,
-            userName: event?.sender?.sender_id?.union_id ?? 'User',
+            userName: sender.sender_id?.union_id ?? senderId,
             text,
-            _raw: event,
+            quotedText,
+            media: mediaPayload,
+            _raw: data,
         };
 
         await this.messageHandler(normalized);

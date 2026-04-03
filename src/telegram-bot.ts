@@ -316,15 +316,6 @@ setupHandlers({
     handleCallbackQuery: (cb) => handleCallbackQuery(telegramAdapter, cb),
 });
 
-// Setup cron jobs
-setupCronJobs({
-    tenantKeys: getAllTenantKeys(),
-    sendReply: async (tenantKey, text) => {
-        const ctx = getTenantContext(tenantKey);
-        await sendReply(ctx.adapter, ctx.chatId, text);
-    },
-});
-
 // Setup async polling for each tenant
 for (const tk of telegramTenantKeys) {
     const ctx = getTenantContext(tk);
@@ -351,7 +342,70 @@ for (const tk of telegramTenantKeys) {
     });
 }
 
+// ── Feishu bootstrap (optional — only when FEISHU_APP_ID is set) ─────────────
+
+let feishuAdapter: InstanceType<typeof import('./adapters/feishu-adapter.js').FeishuAdapter> | undefined;
+
+const FEISHU_APP_ID = process.env.FEISHU_APP_ID;
+const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET;
+
+if (FEISHU_APP_ID && FEISHU_APP_SECRET) {
+    const { FeishuAdapter } = await import('./adapters/feishu-adapter.js');
+    feishuAdapter = new FeishuAdapter({ appId: FEISHU_APP_ID, appSecret: FEISHU_APP_SECRET });
+
+    const feishuTenantKeys = getAuthorizedForPlatform('feishu');
+    for (const tk of feishuTenantKeys) {
+        await initTenant(tk, feishuAdapter);
+    }
+
+    // Wire event handlers
+    setupHandlers({
+        adapter: feishuAdapter,
+        processMessage: (msg) => processMessage(feishuAdapter!, msg.tenantKey, msg),
+        handleCallbackQuery: (cb) => handleCallbackQuery(feishuAdapter!, cb),
+    });
+
+    // Setup async polling for each Feishu tenant
+    for (const tk of feishuTenantKeys) {
+        const ctx = getTenantContext(tk);
+        setupAsyncPollingFn({
+            asyncTaskManager: ctx.asyncTaskManager,
+            geminiClient,
+            sendReply: (cId, text, retries, rId) => sendReply(feishuAdapter!, cId, text, retries, rId),
+            activeTaskIds,
+        });
+    }
+
+    // Initialize lifecycle
+    for (const tk of feishuTenantKeys) {
+        const ctx = getTenantContext(tk);
+        await initLifecycle({
+            adapter: feishuAdapter,
+            tenantKey: tk,
+            chatId: ctx.chatId,
+            userProfile: ctx.userProfile,
+            reminderManager: ctx.reminderManager,
+            scheduledTaskManager: ctx.scheduledTaskManager,
+            messageQueue: ctx.messageQueue,
+            processTask: (task) => processTask(feishuAdapter!, tk, task),
+        });
+    }
+
+    console.log(`[Feishu] ✅ ${feishuTenantKeys.length} tenant(s) configured.`);
+} else {
+    console.log('[Feishu] Skipped — FEISHU_APP_ID / FEISHU_APP_SECRET not set.');
+}
+
 // ── Launch ───────────────────────────────────────────────────────────────────
+
+// Update cron to include all tenants (Telegram + Feishu)
+setupCronJobs({
+    tenantKeys: getAllTenantKeys(),
+    sendReply: async (tenantKey, text) => {
+        const ctx = getTenantContext(tenantKey);
+        await sendReply(ctx.adapter, ctx.chatId, text);
+    },
+});
 
 console.log(`🤖 Bot started. Authorized tenants: ${[...AUTHORIZED_USERS].join(', ')}`);
 console.log(`🛠  Gemini Client enabled: ${geminiClient.isEnabled()}`);
@@ -376,6 +430,11 @@ for (const tk of telegramTenantKeys) {
 
 await telegramAdapter.start();
 
+// Start Feishu WebSocket connection (if configured)
+if (feishuAdapter) {
+    await feishuAdapter.start();
+}
+
 // Graceful shutdown
 const shutdown = (signal: string) => {
     const allKeys = getAllTenantKeys();
@@ -387,6 +446,7 @@ const shutdown = (signal: string) => {
     geminiClient.close();
     closeBrowser();
     telegramAdapter.stop();
+    feishuAdapter?.stop();
 };
 process.once('SIGINT', () => shutdown('SIGINT'));
 process.once('SIGTERM', () => shutdown('SIGTERM'));

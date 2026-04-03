@@ -11,6 +11,14 @@
         "/^cd /Users/zhengchao/mox/neo/resource/km/xifeng-km && python3 -c \"\nimport os\nold = '051___是谁阻碍了你看到真相_\\[\\\\xa0\\\\xa0\\\\xa0\\\\xa0\\]\\{\\.tab1\\}23_9_13__\\.md'\nnew = '051_是谁阻碍了你看到真相_23_9_13\\.md'\nos\\.rename\\(old, new\\)\nprint\\('renamed:', new\\)\nprint\\('exists:', os\\.path\\.exists\\(new\\)\\)\n\"$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^node -e \"const lark = require\\('@larksuiteoapi/node-sdk'\\); console\\.log\\('AppType:', lark\\.AppType\\); console\\.log\\('LoggerLevel:', lark\\.LoggerLevel\\); const c = new lark\\.Client\\(\\{appId:'test',appSecret:'test'\\}\\); console\\.log\\('im methods:', Object\\.keys\\(c\\.im\\?\\.message \\|\\| \\{\\}\\)\\.join\\(', '\\)\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^node -e \"\nconst lark = require\\('@larksuiteoapi/node-sdk'\\);\nconst ed = new lark\\.EventDispatcher\\(\\{\\}\\);\nconsole\\.log\\('EventDispatcher prototype:', Object\\.getOwnPropertyNames\\(Object\\.getPrototypeOf\\(ed\\)\\)\\.join\\(', '\\)\\);\nconst ws = new lark\\.WSClient;\nconsole\\.log\\('WSClient prototype:', Object\\.getOwnPropertyNames\\(Object\\.getPrototypeOf\\(ws\\)\\)\\.join\\(', '\\)\\);\n\" 2>&1 \\| head -20$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
