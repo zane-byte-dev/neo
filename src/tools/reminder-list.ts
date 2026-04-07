@@ -1,7 +1,7 @@
 /**
  * reminder-list.ts — AI tool to list all pending reminders.
  */
-import { getToolContext } from '../lib/tool-context.js';
+import { getToolContext } from '../services/tool-context.js';
 import type { Tool } from './_base.js';
 
 export const reminderListTool: Tool = {

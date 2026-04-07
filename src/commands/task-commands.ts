@@ -1,4 +1,4 @@
-import type { AsyncTask } from '../lib/async-task-manager.js';
+import type { AsyncTask } from '../services/async-task-manager.js';
 import type { Command } from './_base.js';
 
 export const taskCommand: Command = {

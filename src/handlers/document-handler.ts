@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import { execa } from 'execa';
-import { geminiUploadFile } from '../lib/gemini-client.js';
+import { geminiUploadFile } from '../services/gemini-client.js';
 import {
     MAX_FILE_SIZE_BYTES,
     TEXT_MIME_PREFIXES,
@@ -11,7 +11,7 @@ import {
     isAuthorized,
 } from '../config.js';
 import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
-import type { Task } from './types.js';
+import type { Task } from '../core/types.js';
 
 interface MediaDeps {
     adapter: PlatformAdapter;

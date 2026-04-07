@@ -1,5 +1,5 @@
 import type { Tool } from './_base.js';
-import { browserFetch } from '../lib/browser-service.js';
+import { browserFetch } from '../services/browser-service.js';
 
 export const browserFetchTool: Tool = {
     meta: { category: 'web', version: '1.0.0' },

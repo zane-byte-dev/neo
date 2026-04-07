@@ -6,7 +6,7 @@
  */
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { registerTool } from '../lib/gemini-client.js';
+import { registerTool } from '../services/gemini-client.js';
 import { autoLoad } from '../utils/auto-loader.js';
 import type { Tool } from './_base.js';
 

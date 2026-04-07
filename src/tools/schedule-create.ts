@@ -5,7 +5,7 @@
  * without the user needing to use the /schedules command flow.
  */
 import cron from 'node-cron';
-import { getToolContext } from '../lib/tool-context.js';
+import { getToolContext } from '../services/tool-context.js';
 import type { Tool } from './_base.js';
 
 export const scheduleCreateTool: Tool = {

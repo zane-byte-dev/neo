@@ -2,7 +2,7 @@ import { join } from 'path';
 import { promises as fs } from 'fs';
 import { isAuthorized } from '../config.js';
 import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
-import type { Task } from './types.js';
+import type { Task } from '../core/types.js';
 
 interface MediaDeps {
     adapter: PlatformAdapter;

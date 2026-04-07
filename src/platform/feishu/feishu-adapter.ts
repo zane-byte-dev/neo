@@ -19,7 +19,7 @@ import type {
     NormalizedCallback,
     SendMessageOptions,
     SentMessage,
-} from '../types/platform.js';
+} from '../../types/platform.js';
 
 export class FeishuAdapter implements PlatformAdapter {
     readonly platform = 'feishu' as const;

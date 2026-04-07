@@ -8,7 +8,7 @@
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { promises as fs } from 'fs';
-import { markdownToTelegram } from '../utils/markdown-converter.js';
+import { markdownToTelegram } from '../../utils/markdown-converter.js';
 import type {
     PlatformAdapter,
     NormalizedMessage,
@@ -16,7 +16,7 @@ import type {
     SendMessageOptions,
     SentMessage,
     MediaPayload,
-} from '../types/platform.js';
+} from '../../types/platform.js';
 
 export class TelegramAdapter implements PlatformAdapter {
     readonly platform = 'telegram' as const;

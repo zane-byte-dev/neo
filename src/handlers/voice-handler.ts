@@ -1,9 +1,9 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
-import { geminiGenerate, geminiUploadFile } from '../lib/gemini-client.js';
+import { geminiGenerate, geminiUploadFile } from '../services/gemini-client.js';
 import { isAuthorized } from '../config.js';
 import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
-import type { Task } from './types.js';
+import type { Task } from '../core/types.js';
 
 interface MediaDeps {
     adapter: PlatformAdapter;

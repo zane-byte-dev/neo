@@ -1,5 +1,5 @@
-import { geminiGenerate } from '../lib/gemini-client.js';
-import type { Message } from '../lib/chat-history-cache.js';
+import { geminiGenerate } from '../services/gemini-client.js';
+import type { Message } from '../services/chat-history-cache.js';
 import type { Command } from './_base.js';
 
 export const conversationCommand: Command = {

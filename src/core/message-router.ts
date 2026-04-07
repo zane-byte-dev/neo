@@ -1,9 +1,9 @@
 import { promises as fs } from 'fs';
 import { resolve } from 'path';
-import { parseReminderTime } from '../lib/reminder-manager.js';
-import { parseScheduledTask } from '../lib/scheduled-task-manager.js';
-import { hasPending, resolve as resolveUserInput } from '../lib/user-input-waiter.js';
-import { setActiveTenantKey } from '../lib/tool-context.js';
+import { parseReminderTime } from '../services/reminder-manager.js';
+import { parseScheduledTask } from '../services/scheduled-task-manager.js';
+import { hasPending, resolve as resolveUserInput } from '../services/user-input-waiter.js';
+import { setActiveTenantKey } from '../services/tool-context.js';
 import { isAuthorized } from '../config.js';
 import type { PlatformAdapter, NormalizedMessage, TenantKey } from '../types/platform.js';
 import type { Task } from './types.js';

@@ -1,5 +1,5 @@
 import type { Command } from './_base.js';
-import { cancel as cancelUserInput } from '../lib/user-input-waiter.js';
+import { cancel as cancelUserInput } from '../services/user-input-waiter.js';
 
 export const coreCommand: Command = {
     commands: ['/start', '/clear', '/new', '/stats'],

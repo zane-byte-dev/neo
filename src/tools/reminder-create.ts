@@ -4,7 +4,7 @@
  * Lets the AI autonomously schedule a one-shot notification or timed task
  * without relying on natural language detection in message-router.
  */
-import { getToolContext } from '../lib/tool-context.js';
+import { getToolContext } from '../services/tool-context.js';
 import type { Tool } from './_base.js';
 
 export const reminderCreateTool: Tool = {

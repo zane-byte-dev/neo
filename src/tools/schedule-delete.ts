@@ -1,7 +1,7 @@
 /**
  * schedule-delete.ts — AI tool to delete a recurring scheduled task by ID.
  */
-import { getToolContext } from '../lib/tool-context.js';
+import { getToolContext } from '../services/tool-context.js';
 import type { Tool } from './_base.js';
 
 export const scheduleDeleteTool: Tool = {

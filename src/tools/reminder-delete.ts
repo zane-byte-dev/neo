@@ -1,7 +1,7 @@
 /**
  * reminder-delete.ts — AI tool to cancel a reminder by ID.
  */
-import { getToolContext } from '../lib/tool-context.js';
+import { getToolContext } from '../services/tool-context.js';
 import type { Tool } from './_base.js';
 
 export const reminderDeleteTool: Tool = {

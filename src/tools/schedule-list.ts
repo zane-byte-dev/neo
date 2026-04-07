@@ -1,7 +1,7 @@
 /**
  * schedule-list.ts — AI tool to list all recurring scheduled tasks.
  */
-import { getToolContext } from '../lib/tool-context.js';
+import { getToolContext } from '../services/tool-context.js';
 import type { Tool } from './_base.js';
 
 export const scheduleListTool: Tool = {

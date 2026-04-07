@@ -19,6 +19,7 @@
         "/^node -e \"\nconst lark = require\\('@larksuiteoapi/node-sdk'\\);\nconst ed = new lark\\.EventDispatcher\\(\\{\\}\\);\nconsole\\.log\\('EventDispatcher prototype:', Object\\.getOwnPropertyNames\\(Object\\.getPrototypeOf\\(ed\\)\\)\\.join\\(', '\\)\\);\nconst ws = new lark\\.WSClient;\nconsole\\.log\\('WSClient prototype:', Object\\.getOwnPropertyNames\\(Object\\.getPrototypeOf\\(ws\\)\\)\\.join\\(', '\\)\\);\n\" 2>&1 \\| head -20$/": {
             "approve": true,
             "matchCommandLine": true
-        }
+        },
+        "mkdir": true
     }
 }
