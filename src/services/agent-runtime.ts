@@ -2,8 +2,9 @@
  * agent-runtime.ts — Gemini SSE streaming and agentic tool-calling loop.
  */
 
-import { GEMINI_BASE_URL, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../config.js';
+import { GEMINI_BASE_URL, GEMINI_API_TIMEOUT_MS, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../config.js';
 import { executeTool, TOOL_DECLARATIONS } from './tool-executor.js';
+import { dbg } from '../utils/debug-logger.js';
 import type {
     GeminiContent,
     GeminiPart,
@@ -58,6 +59,7 @@ async function* streamGeminiApi(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(GEMINI_API_TIMEOUT_MS),
     });
 
     if (!res.ok || !res.body) {
@@ -122,6 +124,11 @@ async function* streamGeminiApi(
                 }
             }
         }
+    } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'TimeoutError') {
+            throw new Error(`Gemini API timed out after ${GEMINI_API_TIMEOUT_MS / 1000}s`);
+        }
+        throw err;
     } finally {
         reader.releaseLock();
     }
@@ -154,6 +161,12 @@ export async function agentLoop(
     const contents: GeminiContent[] = [...initialContents];
     let finalText = '';
 
+    // Debug: log agent entry
+    const lastUserEntry = [...initialContents].reverse().find((c: GeminiContent) => c.role === 'user');
+    const lastUserParts = lastUserEntry?.parts ?? [];
+    const lastUserMsg = lastUserParts.map((p: any) => p.text ?? '').join(' ');
+    dbg.agentStart(model, initialContents.length, lastUserMsg);
+
     for (let iter = 0; iter <= MAX_TOOL_ITERATIONS; iter++) {
         const isLastIter = iter === MAX_TOOL_ITERATIONS;
         if (isLastIter) {
@@ -167,16 +180,23 @@ export async function agentLoop(
         const functionCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 
         // Consume one full model turn from the streaming API
+        dbg.apiRequest(iter, model, contents);
+        try {
         for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents, toolRegistry, isLastIter)) {
             if (chunk.rawPart) modelRawParts.push(chunk.rawPart);
             if (chunk.thought) {
                 // Thinking tokens: stream immediately — always safe to show live
                 onChunk?.({ type: 'thought', text: chunk.thought });
+                dbg.thought(iter, chunk.thought);
             } else if (chunk.functionCall) {
                 functionCalls.push({ name: chunk.functionCall.name, args: chunk.functionCall.args });
             } else if (chunk.text) {
                 textParts.push(chunk.text);
             }
+        }
+        } catch (err) {
+            dbg.apiError(iter, err);
+            throw err;
         }
 
         const turnText = textParts.join('');
@@ -186,9 +206,11 @@ export async function agentLoop(
             finalText = turnText;
             if (turnText) {
                 onChunk?.({ type: 'text', text: turnText });
+                dbg.modelText(iter, turnText);
             } else {
                 console.warn(`[AgentRuntime] Empty text turn at iter=${iter}, rawParts=${JSON.stringify(modelRawParts).slice(0, 300)}`);
             }
+            dbg.agentDone(iter, turnText.length);
             break;
         }
 
@@ -205,10 +227,20 @@ export async function agentLoop(
         // thought_signatures required by the Gemini thinking model.
         contents.push({ role: 'model', parts: modelRawParts as GeminiPart[] });
 
+        // Log tool calls before execution
+        for (const fc of functionCalls) {
+            dbg.toolCall(iter, fc.name, fc.args);
+        }
+
         // Execute all tools (parallel for speed)
         const results = await Promise.all(
             functionCalls.map(fc => executeTool(fc.name, fc.args, workDir, toolRegistry)),
         );
+
+        // Log tool results
+        for (let i = 0; i < functionCalls.length; i++) {
+            dbg.toolResult(iter, functionCalls[i].name, String(results[i]));
+        }
 
         // Add function responses
         contents.push({

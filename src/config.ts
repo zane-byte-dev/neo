@@ -91,6 +91,9 @@ export const GEMINI_FILES_UPLOAD_URL = 'https://generativelanguage.googleapis.co
 /** Maximum agentic tool-call iterations before forcing stop */
 export const MAX_TOOL_ITERATIONS = 15;
 
+/** Timeout for each individual Gemini API streaming request (ms) */
+export const GEMINI_API_TIMEOUT_MS = 90_000;
+
 /** Read-file content cap to prevent context flooding (chars) */
 export const READ_FILE_CHAR_LIMIT = 50_000;
 
