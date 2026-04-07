@@ -6,7 +6,7 @@
 
 export type StreamChunk =
     | { type: 'thought'; text: string }
-    | { type: 'tool_call'; toolName: string }
+    | { type: 'tool_call'; toolName: string; args?: Record<string, unknown> }
     | { type: 'text'; text: string };
 
 export type StreamCallback = (chunk: StreamChunk) => void;

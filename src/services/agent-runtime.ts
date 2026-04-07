@@ -220,7 +220,7 @@ export async function agentLoop(
             onChunk?.({ type: 'thought', text: turnText });
         }
         for (const fc of functionCalls) {
-            onChunk?.({ type: 'tool_call', toolName: fc.name });
+            onChunk?.({ type: 'tool_call', toolName: fc.name, args: fc.args });
         }
 
         // Record the model turn using raw parts to preserve thought parts and

@@ -140,9 +140,10 @@ export function setupLogger(): void {
     };
 
     // Local-time prefix for stdout — stays human-readable in the terminal.
-    const ts = () => {
+    const prefix = (level: Level) => {
         const n = new Date();
-        return `[${n.toISOString().slice(0, 10)} ${n.toTimeString().slice(0, 8)}]`;
+        const color = LEVEL_COLOR[level];
+        return `[${n.toISOString().slice(0, 10)} ${n.toTimeString().slice(0, 8)}] ${color}[${level}]${RESET}`;
     };
 
     // Write to the JSONL file only — do NOT call emit() which would also print
@@ -153,19 +154,19 @@ export function setupLogger(): void {
     };
 
     console.log = (...args: unknown[]) => {
-        orig.log(ts(), ...args);
+        orig.log(prefix('INFO'), ...args);
         toFile('INFO', args);
     };
     console.info = (...args: unknown[]) => {
-        orig.info(ts(), ...args);
+        orig.info(prefix('INFO'), ...args);
         toFile('INFO', args);
     };
     console.warn = (...args: unknown[]) => {
-        orig.warn(ts(), ...args);
+        orig.warn(prefix('WARN'), ...args);
         toFile('WARN', args);
     };
     console.error = (...args: unknown[]) => {
-        orig.error(ts(), ...args);
+        orig.error(prefix('ERROR'), ...args);
         toFile('ERROR', args);
     };
 }

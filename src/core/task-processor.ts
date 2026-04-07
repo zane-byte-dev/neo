@@ -72,8 +72,16 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         const buildThinkingStatus = () => {
             const parts: string[] = [`⏳ inkClaw (${timestamp})`];
             if (lastToolCall) parts.push(`🔧 ${lastToolCall}`);
-            const thought = thoughtAccum.trim().replace(/\n+/g, ' ');
-            parts.push(thought.length > 120 ? '...' + thought.slice(-120) : (thought || '🤔 思考中...'));
+            const thought = thoughtAccum.trim();
+            if (thought) {
+                // Show the last ~400 chars; if truncated, prefix with "..."
+                const snippet = thought.length > 400
+                    ? '...' + thought.slice(-400)
+                    : thought;
+                parts.push(`💭 ${snippet}`);
+            } else {
+                parts.push('🤔 思考中...');
+            }
             return parts.join('\n\n');
         };
 
@@ -83,7 +91,10 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
                 if (!hasTextStarted) doEdit(activeMsgId, buildThinkingStatus());
 
             } else if (chunk.type === 'tool_call') {
-                lastToolCall = chunk.toolName;
+                const argsStr = chunk.args && Object.keys(chunk.args).length > 0
+                    ? '(' + Object.entries(chunk.args).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ') + ')'
+                    : '';
+                lastToolCall = `${chunk.toolName}${argsStr}`;
                 if (!hasTextStarted) doEdit(activeMsgId, buildThinkingStatus());
 
             } else if (chunk.type === 'text') {
