@@ -26,6 +26,25 @@ export interface NoteEntry {
     content?: string
 }
 
+export type TodoStatus = 'not-started' | 'in-progress' | 'completed'
+
+export interface TodoItem {
+    id: string
+    content: string
+    status: TodoStatus
+    priority: string | null
+    created_at: string
+    updated_at: string
+}
+
+export interface InboxNote {
+    id: number
+    content: string
+    date: string
+    time: string
+    created_at: number
+}
+
 export interface AppState {
     // Auth
     token: string

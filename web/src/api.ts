@@ -127,6 +127,58 @@ export function sessionList() {
     return apiGet<Array<{ sessionId: string; title: string; updatedAt: string }>>('/api/session/list')
 }
 
+// ── Todo API ──────────────────────────────────────────────────────────────────
+import type { TodoItem, InboxNote } from './types'
+
+export function todoList() {
+    return apiGet<TodoItem[]>('/api/todos')
+}
+
+export function todoCreate(content: string, priority?: string) {
+    return fetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ content, ...(priority ? { priority } : {}) }),
+    }).then((r) => r.json() as Promise<TodoItem>)
+}
+
+export function todoUpdateStatus(id: string, status: string) {
+    return fetch(`/api/todos/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ status }),
+    }).then((r) => r.json())
+}
+
+export function todoDelete(id: string) {
+    return fetch(`/api/todos/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    }).then((r) => r.json())
+}
+
+// ── Notes (Inbox) API ─────────────────────────────────────────────────────────
+
+export function noteList(date?: string) {
+    const qs = date ? `?date=${encodeURIComponent(date)}` : ''
+    return apiGet<InboxNote[]>(`/api/notes${qs}`)
+}
+
+export function noteCreate(content: string) {
+    return fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ content }),
+    }).then((r) => r.json() as Promise<InboxNote>)
+}
+
+export function noteDelete(id: number) {
+    return fetch(`/api/notes/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    }).then((r) => r.json())
+}
+
 // ── Auth check ────────────────────────────────────────────────────────────────
 export type AuthResult = 'ok' | 'unauthorized' | 'unreachable'
 

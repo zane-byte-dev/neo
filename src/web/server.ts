@@ -223,6 +223,97 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
         }
     });
 
+    // ── GET /api/todos — list all todos ──────────────────────────────────
+    router.get('/api/todos', async (ctx) => {
+        const db = getDb();
+        ctx.body = db.prepare(
+            `SELECT id, content, status, priority, created_at, updated_at
+             FROM todos
+             ORDER BY
+               CASE status WHEN 'in-progress' THEN 0 WHEN 'not-started' THEN 1 ELSE 2 END,
+               created_at DESC`
+        ).all();
+    });
+
+    // ── POST /api/todos — create a todo ───────────────────────────────────
+    router.post('/api/todos', async (ctx) => {
+        const db = getDb();
+        const body = ctx.request.body as Record<string, unknown>;
+        const content = typeof body.content === 'string' ? body.content.trim() : '';
+        const priority = typeof body.priority === 'string' && body.priority.trim() ? body.priority.trim() : null;
+        if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
+        const id = Math.random().toString(36).slice(2, 10);
+        const now = new Date().toISOString();
+        db.prepare(
+            `INSERT INTO todos (id, tenant_key, content, status, priority, created_at, updated_at)
+             VALUES (?, 'web', ?, 'not-started', ?, ?, ?)`
+        ).run(id, content, priority, now, now);
+        ctx.body = { id, content, status: 'not-started', priority, created_at: now, updated_at: now };
+    });
+
+    // ── PATCH /api/todos/:id — update status / content ────────────────────
+    router.patch('/api/todos/:id', async (ctx) => {
+        const db = getDb();
+        const todoId = ctx.params.id;
+        const body = ctx.request.body as Record<string, unknown>;
+        const validStatuses = ['not-started', 'in-progress', 'completed'];
+        if (body.status !== undefined) {
+            const status = body.status as string;
+            if (!validStatuses.includes(status)) { ctx.status = 400; ctx.body = { error: 'invalid status' }; return; }
+            const now = new Date().toISOString();
+            const result = db.prepare('UPDATE todos SET status = ?, updated_at = ? WHERE id = ?').run(status, now, todoId);
+            if (result.changes === 0) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        }
+        ctx.body = { ok: true };
+    });
+
+    // ── DELETE /api/todos/:id ─────────────────────────────────────────────
+    router.delete('/api/todos/:id', async (ctx) => {
+        const db = getDb();
+        db.prepare('DELETE FROM todos WHERE id = ?').run(ctx.params.id);
+        ctx.body = { ok: true };
+    });
+
+    // ── GET /api/notes — list inbox notes ────────────────────────────────
+    router.get('/api/notes', async (ctx) => {
+        const db = getDb();
+        const q = ctx.query as Record<string, string>;
+        if (q.date) {
+            ctx.body = db.prepare(
+                `SELECT id, content, date, time, created_at FROM notes WHERE date = ? ORDER BY created_at DESC`
+            ).all(q.date);
+        } else {
+            ctx.body = db.prepare(
+                `SELECT id, content, date, time, created_at FROM notes ORDER BY created_at DESC LIMIT 200`
+            ).all();
+        }
+    });
+
+    // ── POST /api/notes — capture a note ─────────────────────────────────
+    router.post('/api/notes', async (ctx) => {
+        const db = getDb();
+        const body = ctx.request.body as Record<string, unknown>;
+        const content = typeof body.content === 'string' ? body.content.trim() : '';
+        if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
+        const now = new Date();
+        const date = now.toISOString().split('T')[0];
+        const time = now.toTimeString().split(' ')[0].slice(0, 5);
+        const createdAt = now.getTime();
+        const result = db.prepare(
+            `INSERT INTO notes (tenant_key, content, date, time, created_at) VALUES ('web', ?, ?, ?, ?)`
+        ).run(content, date, time, createdAt);
+        ctx.body = { id: result.lastInsertRowid, content, date, time, created_at: createdAt };
+    });
+
+    // ── DELETE /api/notes/:id ─────────────────────────────────────────────
+    router.delete('/api/notes/:id', async (ctx) => {
+        const db = getDb();
+        const noteId = Number(ctx.params.id);
+        if (!noteId) { ctx.status = 400; ctx.body = { error: 'invalid id' }; return; }
+        db.prepare('DELETE FROM notes WHERE id = ?').run(noteId);
+        ctx.body = { ok: true };
+    });
+
     app.use(router.routes());
     app.use(router.allowedMethods());
 
