@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import { execa } from 'execa';
+import { getVaultRoot } from '../utils/helpers.js';
 import { geminiUploadFile } from '../services/gemini-client.js';
 import {
     MAX_FILE_SIZE_BYTES,
@@ -47,7 +48,7 @@ export async function processDocumentMessage(deps: MediaDeps, msg: NormalizedMes
 
     const statusMsg = await deps.adapter.sendMessage(chatId, `📄 正在处理文件: ${fileName}...`, { replyToId: messageId });
 
-    const tmpDir = join(process.env.WORK_DIR || process.cwd(), '.tmp');
+    const tmpDir = join(getVaultRoot(), '.tmp');
     await fs.mkdir(tmpDir, { recursive: true });
     const tmpPath = join(tmpDir, `doc_${messageId}_${Date.now()}_${fileName.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
 

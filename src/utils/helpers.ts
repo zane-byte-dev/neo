@@ -11,6 +11,12 @@ export function getVaultRoot(): string {
     return raw ? resolve(raw) : process.cwd();
 }
 
+/** Return the resolved WORK_DIR path, or undefined if not configured. */
+export function getConfiguredWorkDir(): string | undefined {
+    const raw = process.env.WORK_DIR;
+    return raw ? resolve(raw) : undefined;
+}
+
 /** Lightweight one-shot Gemini call (no tool use, no history). */
 export async function callGemini(
     prompt: string,

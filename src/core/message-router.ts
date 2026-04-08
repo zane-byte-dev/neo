@@ -5,6 +5,7 @@ import { parseScheduledTask } from '../services/scheduled-task-manager.js';
 import { hasPending, resolve as resolveUserInput } from '../services/user-input-waiter.js';
 import { setActiveTenantKey } from '../services/tool-context.js';
 import { isAuthorized } from '../config.js';
+import { getVaultRoot } from '../utils/helpers.js';
 import type { PlatformAdapter, NormalizedMessage, TenantKey } from '../types/platform.js';
 import type { Task } from './types.js';
 
@@ -67,7 +68,7 @@ export async function processMessage(deps: MessageRouterDeps, msg: NormalizedMes
             if (idx >= 0 && idx < pending.matches.length) {
                 deps.pendingReadMatches.delete(chatId);
                 const absPath = pending.matches[idx];
-                const resolvedBase = resolve(process.env.WORK_DIR || process.cwd());
+                const resolvedBase = getVaultRoot();
                 const relPath = absPath.slice(resolvedBase.length + 1);
                 try {
                     const stat = await fs.stat(absPath);

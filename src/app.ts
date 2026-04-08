@@ -8,6 +8,7 @@
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
 import { ASYNC_TRIGGER_PREFIXES, getAuthorizedForPlatform } from './config.js';
+import { getConfiguredWorkDir } from './utils/helpers.js';
 import { initDb } from './services/db.js';
 import { GeminiClient } from './services/gemini-client.js';
 import { ChatHistoryCache } from './services/chat-history-cache.js';
@@ -285,7 +286,7 @@ export class App {
         }
 
         if (data === 'save_lib') {
-            const workDir = process.env.WORK_DIR;
+            const workDir = getConfiguredWorkDir();
             const raw = cb._raw as any;
             if (!workDir) {
                 await raw?.answerCbQuery?.('⚠️ WORK_DIR 未配置').catch(() => {});
@@ -306,7 +307,7 @@ export class App {
                 const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' }).replace(':', '');
                 const title = `saved-${dateStr}-${timeStr}`;
 
-                const targetDir = join(resolve(workDir), 'archives', 'Library', 'Wiki');
+                const targetDir = join(workDir, 'archives', 'Library', 'Wiki');
                 await fs.mkdir(targetDir, { recursive: true });
                 const filePath = join(targetDir, `${title}.md`);
 

@@ -1,5 +1,6 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
+import { getVaultRoot } from '../utils/helpers.js';
 import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
 import type { Task } from '../core/types.js';
 
@@ -90,7 +91,7 @@ async function fetchAndSaveUrl(url: string): Promise<{ text: string; savedPath: 
         : plainText;
 
     const inboxDir = join(
-        process.env.WORK_DIR || process.cwd(),
+        getVaultRoot(),
         'history',
         'inbox'
     );

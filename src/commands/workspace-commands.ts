@@ -1,6 +1,7 @@
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
 import { SKIP_DIRS } from '../config.js';
+import { getConfiguredWorkDir } from '../utils/helpers.js';
 import type { Command } from './_base.js';
 import { getDb } from '../services/db.js';
 import { getActiveTenantKey } from '../services/tool-context.js';
@@ -11,7 +12,7 @@ export const workspaceCommand: Command = {
     const reply = (t: string, md = false) => deps.adapter.sendMessage(msg.chatId, t, md ? { parseMode: 'markdown' } : undefined);
     switch (command) {
         case '/ls': {
-            const workDir = process.env.WORK_DIR;
+            const workDir = getConfiguredWorkDir();
             if (!workDir) {
                 await reply('⚠️ WORK_DIR 未配置。');
                 return true;
@@ -20,7 +21,7 @@ export const workspaceCommand: Command = {
             const safeSuffix = rawArg.replace(/^[./\\]+/, '');
             const targetDir = safeSuffix ? join(workDir, safeSuffix) : workDir;
             const resolvedTarget = resolve(targetDir);
-            const resolvedBase = resolve(workDir);
+            const resolvedBase = workDir;
             if (!resolvedTarget.startsWith(resolvedBase)) {
                 await reply('⛔ 不允许访问 WORK_DIR 以外的路径。');
                 return true;
@@ -41,7 +42,7 @@ export const workspaceCommand: Command = {
         }
 
         case '/read': {
-            const workDir = process.env.WORK_DIR;
+            const workDir = getConfiguredWorkDir();
             if (!workDir) {
                 await reply('⚠️ WORK_DIR 未配置。');
                 return true;
@@ -51,7 +52,7 @@ export const workspaceCommand: Command = {
                 await reply('用法: /read <路径或关键词>\n例: /read 随手记  /read inbox/note.md');
                 return true;
             }
-            const resolvedBase = resolve(workDir);
+            const resolvedBase = workDir;
 
             const sendFile = async (absPath: string, label: string) => {
                 const stat = await fs.stat(absPath);
@@ -137,7 +138,7 @@ export const workspaceCommand: Command = {
         }
 
         case '/today': {
-            const workDir = process.env.WORK_DIR;
+            const workDir = getConfiguredWorkDir();
             const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
             const tenantKey = getActiveTenantKey()!;
 
@@ -149,7 +150,7 @@ export const workspaceCommand: Command = {
             // Daily log from memory/1-Daily/
             let daily: string | null = null;
             if (workDir) {
-                try { daily = await fs.readFile(join(resolve(workDir), 'memory', '1-Daily', `${today}.md`), 'utf-8'); }
+                try { daily = await fs.readFile(join(workDir, 'memory', '1-Daily', `${today}.md`), 'utf-8'); }
                 catch { /* not yet */ }
             }
 
@@ -195,14 +196,14 @@ export const workspaceCommand: Command = {
         }
 
         case '/search': {
-            const workDir = process.env.WORK_DIR;
+            const workDir = getConfiguredWorkDir();
             if (!workDir) { await reply('⚠️ WORK_DIR 未配置。'); return true; }
             const query = text.replace(/^\/search\s*/i, '').trim();
             if (!query) {
                 await reply('用法: `/search <关键词>`\n\n全文搜索 vault 中所有 .md 文件。', true);
                 return true;
             }
-            const absBase = resolve(workDir);
+            const absBase = workDir;
             const MAX_RESULTS = 8;
             const CONTEXT_CHARS = 120;
             interface SearchHit { file: string; line: number; snippet: string; }
@@ -263,7 +264,7 @@ export const workspaceCommand: Command = {
         }
 
         case '/save': {
-            const workDir = process.env.WORK_DIR;
+            const workDir = getConfiguredWorkDir();
             if (!workDir) { await reply('⚠️ WORK_DIR 未配置。'); return true; }
 
             // Content comes from: replied-to message first, then text after command
@@ -307,7 +308,7 @@ export const workspaceCommand: Command = {
             const safeTitle = title.replace(/[\/\\:*?"<>|]/g, '-').slice(0, 128);
 
             try {
-                const absBase = resolve(workDir);
+                const absBase = workDir;
                 const targetDir = join(absBase, 'archives', safeSubDir);
                 // Ensure target is within workspace
                 if (!targetDir.startsWith(absBase)) {

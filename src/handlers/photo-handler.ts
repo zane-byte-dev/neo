@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import { isAuthorized } from '../config.js';
+import { getVaultRoot } from '../utils/helpers.js';
 import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
 import type { Task } from '../core/types.js';
 
@@ -27,7 +28,7 @@ export async function processPhotoMessage(deps: MediaDeps, msg: NormalizedMessag
         return;
     }
 
-    const tmpDir = join(process.env.WORK_DIR || process.cwd(), '.tmp');
+    const tmpDir = join(getVaultRoot(), '.tmp');
     await fs.mkdir(tmpDir, { recursive: true });
     const tmpPath = join(tmpDir, `photo_${messageId}_${Date.now()}.jpg`);
 
