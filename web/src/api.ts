@@ -35,13 +35,14 @@ export async function apiGet<T = unknown>(path: string): Promise<T> {
 // ── Chat SSE stream ───────────────────────────────────────────────────────────
 
 export interface StreamChunk {
-    type: 'text' | 'thought' | 'done' | 'error'
+    type: 'text' | 'thought' | 'tool_call' | 'done' | 'error'
     text?: string
+    toolName?: string
 }
 
 export async function* streamChat(
     message: string,
-    history: string,
+    sessionId: string,
     signal?: AbortSignal,
 ): AsyncGenerator<StreamChunk> {
     const res = await fetch('/api/chat', {
@@ -50,7 +51,7 @@ export async function* streamChat(
             'Content-Type': 'application/json',
             ...authHeaders(),
         },
-        body: JSON.stringify({ message, history }),
+        body: JSON.stringify({ message, sessionId }),
         signal,
     })
 
@@ -100,14 +101,44 @@ export function notebookRead(id: number) {
     return apiGet(`/api/notebook?action=read&id=${id}`)
 }
 
-// ── Auth check ────────────────────────────────────────────────────────────────
+// ── Session API ───────────────────────────────────────────────────────────────
 
-export async function checkAuth(): Promise<boolean> {
+export function sessionNew(sessionId: string, title: string) {
+    return fetch('/api/session/new', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ sessionId, title }),
+    })
+}
+
+export function sessionClear(sessionId: string) {
+    return fetch('/api/session/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ sessionId }),
+    })
+}
+
+export function sessionList() {
+    return apiGet<Array<{ sessionId: string; title: string; updatedAt: string }>>('/api/session/list')
+}
+
+// ── Auth check ────────────────────────────────────────────────────────────────
+export type AuthResult = 'ok' | 'unauthorized' | 'unreachable'
+
+export async function checkAuth(): Promise<AuthResult> {
     try {
         await apiGet('/api/notebook?action=list')
-        return true
+        return 'ok'
     } catch (err: unknown) {
-        const e = err as { status?: number }
-        return e?.status !== 401
+        const e = err as { status?: number; message?: string }
+        if (e?.status === 401) return 'unauthorized'
+        // Network error (ECONNREFUSED, etc.) — backend not running
+        const msg = e?.message ?? ''
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED')) {
+            return 'unreachable'
+        }
+        // Other HTTP error — token may still be valid, treat as ok
+        return 'ok'
     }
 }

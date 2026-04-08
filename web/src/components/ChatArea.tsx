@@ -22,21 +22,13 @@ const ChatInput: React.FC = () => {
         inputValue, setInputValue,
         isGenerating, setIsGenerating,
         activeChatId, addMessage, updateLastAssistantMessage,
-        messages, setAbortController,
+        setAbortController, setThinkingStatus,
     } = useAppStore()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
-
-    const buildHistory = (chatId: string) => {
-        const msgs = messages[chatId] ?? []
-        return msgs
-            .map((m) => (m.role === 'user' ? `User: ${m.content}` : `Assistant: ${m.content}`))
-            .join('\n\n')
-    }
 
     const handleSend = async () => {
         if (!inputValue.trim() || !activeChatId || isGenerating) return
         const text = inputValue.trim()
-        const history = buildHistory(activeChatId)
 
         addMessage(activeChatId, {
             id: Math.random().toString(36).substring(7),
@@ -46,11 +38,11 @@ const ChatInput: React.FC = () => {
         })
         setInputValue('')
         setIsGenerating(true)
+        setThinkingStatus('Thinking…')
 
         // Placeholder for assistant
-        const assistantId = Math.random().toString(36).substring(7)
         addMessage(activeChatId, {
-            id: assistantId,
+            id: Math.random().toString(36).substring(7),
             role: 'assistant',
             content: '',
             timestamp: Date.now(),
@@ -61,14 +53,18 @@ const ChatInput: React.FC = () => {
         let accumulated = ''
 
         try {
-            for await (const chunk of streamChat(text, history, controller.signal)) {
+            for await (const chunk of streamChat(text, activeChatId, controller.signal)) {
                 if (chunk.type === 'done') break
                 if (chunk.type === 'error') throw new Error(chunk.text ?? 'Unknown error')
-                if (chunk.type === 'text' && chunk.text) {
+                if (chunk.type === 'thought') {
+                    setThinkingStatus('Thinking…')
+                } else if (chunk.type === 'tool_call') {
+                    setThinkingStatus(`Calling ${chunk.toolName ?? 'tool'}…`)
+                } else if (chunk.type === 'text' && chunk.text) {
+                    if (!accumulated) setThinkingStatus('')
                     accumulated += chunk.text
                     updateLastAssistantMessage(activeChatId, accumulated)
                 }
-                // 'thought' chunks are silent in web UI for now
             }
         } catch (err: unknown) {
             const name = err instanceof Error ? err.name : ''
@@ -77,6 +73,7 @@ const ChatInput: React.FC = () => {
             }
         } finally {
             setIsGenerating(false)
+            setThinkingStatus('')
             setAbortController(null)
         }
     }
@@ -143,7 +140,7 @@ const ChatInput: React.FC = () => {
 // ── Chat area ─────────────────────────────────────────────────────────────────
 
 export const ChatArea: React.FC = () => {
-    const { chats, activeChatId, messages, isGenerating } = useAppStore()
+    const { chats, activeChatId, messages, isGenerating, thinkingStatus } = useAppStore()
     const activeChat = chats.find((c) => c.id === activeChatId)
     const chatMessages = messages[activeChatId ?? ''] ?? []
     const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -161,8 +158,8 @@ export const ChatArea: React.FC = () => {
                 <span className="text-sm font-semibold truncate text-text">
                     {activeChat?.title ?? 'Welcome'}
                 </span>
-                {isGenerating && (
-                    <span className="ml-3 text-xs text-text-tertiary animate-pulse">Thinking…</span>
+                {isGenerating && thinkingStatus && (
+                    <span className="ml-3 text-xs text-text-tertiary animate-pulse">{thinkingStatus}</span>
                 )}
             </div>
 
@@ -187,6 +184,11 @@ export const ChatArea: React.FC = () => {
                                 <div className="w-full px-1 py-1 text-sm leading-relaxed">
                                     {msg.content ? (
                                         <MD content={msg.content} />
+                                    ) : isGenerating && thinkingStatus ? (
+                                        <span className="inline-flex items-center gap-1.5 text-text-tertiary text-xs animate-pulse">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-primary-mint inline-block" />
+                                            {thinkingStatus}
+                                        </span>
                                     ) : (
                                         <span className="text-text-tertiary italic text-xs">
                                             ● ● ●

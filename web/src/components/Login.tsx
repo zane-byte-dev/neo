@@ -16,12 +16,16 @@ export const Login: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
         setError('')
         saveToken(value)
         setToken(value)
-        const ok = await checkAuth()
+        const result = await checkAuth()
         setLoading(false)
-        if (ok) {
+        if (result === 'ok') {
             onSuccess()
+        } else if (result === 'unreachable') {
+            setError('Cannot reach server. Is the backend running?')
+            saveToken('')
+            setToken('')
         } else {
-            setError('Token invalid or server unreachable')
+            setError('Invalid token.')
             saveToken('')
             setToken('')
         }

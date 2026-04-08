@@ -18,6 +18,7 @@ import { PassThrough } from 'stream';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from '../services/db.js';
+import { ChatHistoryCache } from '../services/chat-history-cache.js';
 import type { GeminiClient } from '../services/gemini-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,6 +26,19 @@ const __dirname = dirname(__filename);
 
 const WEB_PORT = parseInt(process.env.WEB_PORT ?? '3000', 10);
 const WEB_TOKEN = process.env.WEB_TOKEN ?? '';
+
+// ── Per-session history cache ─────────────────────────────────────────────────
+
+const sessionCaches = new Map<string, ChatHistoryCache>();
+
+async function getOrCreateCache(sessionId: string): Promise<ChatHistoryCache> {
+    if (!sessionCaches.has(sessionId)) {
+        const cache = new ChatHistoryCache(getDb(), `web:${sessionId}`);
+        await cache.init();
+        sessionCaches.set(sessionId, cache);
+    }
+    return sessionCaches.get(sessionId)!;
+}
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
@@ -59,13 +73,17 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
     router.post('/api/chat', async (ctx) => {
         const body = ctx.request.body as Record<string, unknown>;
         const message = typeof body.message === 'string' ? body.message.trim() : '';
-        const history = typeof body.history === 'string' ? body.history : '';
+        const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
 
         if (!message) {
             ctx.status = 400;
             ctx.body = { error: 'message is required' };
             return;
         }
+
+        const cache = await getOrCreateCache(sessionId || 'default');
+        await cache.addMessage('user', message);
+        const history = cache.getContextForGemini();
 
         const stream = new PassThrough();
         ctx.status = 200;
@@ -84,11 +102,17 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
             }
         };
 
+        let fullResponse = '';
         try {
             await geminiClient.chatWithContextStreaming(
                 message,
                 history,
-                (chunk) => write(chunk as Record<string, unknown>),
+                (chunk) => {
+                    write(chunk as Record<string, unknown>);
+                    if ((chunk as { type: string; text?: string }).type === 'text') {
+                        fullResponse += (chunk as { text?: string }).text ?? '';
+                    }
+                },
                 abortController.signal,
             );
             write({ type: 'done' });
@@ -99,7 +123,30 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
             }
         } finally {
             stream.end();
+            if (fullResponse) {
+                cache.addMessage('assistant', fullResponse).catch(console.error);
+            }
         }
+    });
+
+    // ── POST /api/session/new — start fresh conversation ──────────────────
+    router.post('/api/session/new', async (ctx) => {
+        const body = ctx.request.body as Record<string, unknown>;
+        const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
+        if (!sessionId) { ctx.status = 400; ctx.body = { error: 'sessionId required' }; return; }
+        const cache = await getOrCreateCache(sessionId);
+        await cache.createNewSession();
+        ctx.body = { ok: true };
+    });
+
+    // ── POST /api/session/clear — alias for new session ───────────────────
+    router.post('/api/session/clear', async (ctx) => {
+        const body = ctx.request.body as Record<string, unknown>;
+        const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
+        if (!sessionId) { ctx.status = 400; ctx.body = { error: 'sessionId required' }; return; }
+        const cache = await getOrCreateCache(sessionId);
+        await cache.createNewSession();
+        ctx.body = { ok: true };
     });
 
     // ── GET /api/notebook ─────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import React from 'react'
-import { Plus, Pin, Trash2, MoreHorizontal, BookOpen, Palette, LogOut } from 'lucide-react'
+import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { clearToken } from '../api'
@@ -12,7 +13,7 @@ const THEMES: { value: Theme; label: string }[] = [
 ]
 
 export const Sidebar: React.FC = () => {
-    const { chats, activeChatId, selectedNote, selectChat, createChat, deleteChat, pinChat, setTheme, theme, setToken } = useAppStore()
+    const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme, setToken } = useAppStore()
     const [menuOpen, setMenuOpen] = React.useState(false)
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
 
@@ -57,7 +58,7 @@ export const Sidebar: React.FC = () => {
                         onContextMenu={(e) => handleChatRightClick(e, chat.id)}
                         className={cn(
                             'group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-colors text-sm',
-                            activeChatId === chat.id && !selectedNote
+                            activeChatId === chat.id
                                 ? 'bg-primary-mint/10 text-text font-medium'
                                 : 'text-text-secondary hover:bg-fill-secondary'
                         )}
@@ -162,15 +163,18 @@ export const Sidebar: React.FC = () => {
                 </div>
             )}
 
-            {/* Notebook shortcut */}
-            <div className="px-2 pb-2">
-                <button
-                    onClick={() => useAppStore.getState().setSelectedNote(null)}
+            {/* Notebook link */}
+            <div className="px-2 pb-2 border-t border-border pt-2">
+                <Link
+                    to="/notebook"
                     className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-tertiary hover:text-text hover:bg-fill-secondary rounded-lg transition-colors"
                 >
-                    <BookOpen size={13} />
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                    </svg>
                     <span>Notebook</span>
-                </button>
+                </Link>
             </div>
         </div>
     )

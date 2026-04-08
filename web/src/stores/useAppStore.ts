@@ -33,6 +33,17 @@ export const useAppStore = create<AppState>()(
                 }))
             },
             selectChat: (id: string) => set({ activeChatId: id, selectedNote: null }),
+            selectOrCreateChat: (id: string, title?: string) => set((state) => {
+                const exists = state.chats.some((c) => c.id === id)
+                if (exists) return { activeChatId: id, selectedNote: null }
+                const newChat: Chat = {
+                    id,
+                    title: title ?? id,
+                    isPinned: false,
+                    createdAt: Date.now(),
+                }
+                return { chats: [newChat, ...state.chats], activeChatId: id, selectedNote: null }
+            }),
             deleteChat: (id: string) => set((state) => {
                 const newChats = state.chats.filter((c) => c.id !== id)
                 return {
@@ -81,6 +92,8 @@ export const useAppStore = create<AppState>()(
             setIsGenerating: (v: boolean) => set({ isGenerating: v }),
             abortController: null,
             setAbortController: (c: AbortController | null) => set({ abortController: c }),
+            thinkingStatus: '',
+            setThinkingStatus: (s: string) => set({ thinkingStatus: s }),
 
             // Notebook
             notebookEntries: [],

@@ -73,27 +73,9 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void }> = ({ note, o
     )
 }
 
-// ── Entry list item ───────────────────────────────────────────────────────────
-
-const EntryItem: React.FC<{ entry: NoteEntry; onClick: () => void }> = ({ entry, onClick }) => (
-    <div
-        onClick={onClick}
-        className="px-4 py-3 hover:bg-fill-secondary cursor-pointer transition-colors border-b border-border last:border-b-0"
-    >
-        <div className="text-sm font-medium text-text truncate mb-0.5">{entry.title}</div>
-        <div className="flex items-center gap-2 text-xs text-text-tertiary">
-            {entry.date && <span>{entry.date}</span>}
-            {entry.source && <span>· {entry.source}</span>}
-        </div>
-        {entry.summary && (
-            <p className="text-xs text-text-tertiary mt-1 line-clamp-2 leading-relaxed">{entry.summary}</p>
-        )}
-    </div>
-)
-
 // ── Main notebook panel ───────────────────────────────────────────────────────
 
-export const NotebookPanel: React.FC = () => {
+export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) => {
     const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries } = useAppStore()
     const [searchQuery, setSearchQuery] = React.useState('')
     const [results, setResults] = React.useState<NoteEntry[]>([])
@@ -129,60 +111,146 @@ export const NotebookPanel: React.FC = () => {
         }, 300)
     }, [searchQuery])
 
+    const displayList = inSearch ? results : notebookEntries
+
+    if (selectedNote && fullPage) {
+        // Full-page: two-column — list stays visible on left, detail on right
+        return (
+            <div className="flex h-full bg-bg-container overflow-hidden">
+                <div className="w-80 shrink-0 border-r border-border flex flex-col">
+                    <NotebookList
+                        entries={displayList}
+                        loading={loading}
+                        error={error}
+                        inSearch={inSearch}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        totalCount={notebookEntries.length}
+                        onSelect={setSelectedNote}
+                        selectedId={selectedNote.id}
+                    />
+                </div>
+                <div className="flex-1 overflow-hidden">
+                    <NoteDetail note={selectedNote} onBack={() => setSelectedNote(null)} />
+                </div>
+            </div>
+        )
+    }
+
+    if (fullPage) {
+        // Full-page, no note selected yet
+        return (
+            <div className="flex h-full bg-bg-container overflow-hidden">
+                <div className="w-80 shrink-0 border-r border-border flex flex-col">
+                    <NotebookList
+                        entries={displayList}
+                        loading={loading}
+                        error={error}
+                        inSearch={inSearch}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        totalCount={notebookEntries.length}
+                        onSelect={setSelectedNote}
+                        selectedId={null}
+                    />
+                </div>
+                <div className="flex-1 flex items-center justify-center text-text-quaternary text-sm">
+                    Select a note to read
+                </div>
+            </div>
+        )
+    }
+
     if (selectedNote) {
         return <NoteDetail note={selectedNote} onBack={() => setSelectedNote(null)} />
     }
 
-    const displayList = inSearch ? results : notebookEntries
-
     return (
         <div className="flex flex-col h-full bg-bg-container overflow-hidden">
-            {/* Header */}
-            <div className="h-12 border-b border-border flex items-center gap-2 px-4 shrink-0">
-                <BookOpen size={15} className="text-primary-mint shrink-0" />
-                <span className="text-sm font-semibold">Notebook</span>
-                <span className="ml-auto text-xs text-text-tertiary">{notebookEntries.length} entries</span>
-            </div>
-
-            {/* Search */}
-            <div className="px-3 py-2.5 border-b border-border shrink-0">
-                <div className="relative">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search notes…"
-                        className="w-full bg-fill-secondary border border-border rounded-lg pl-8 pr-8 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary-mint"
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => setSearchQuery('')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-fill rounded"
-                        >
-                            <X size={12} className="text-text-tertiary" />
-                        </button>
-                    )}
-                </div>
-            </div>
-
-            {/* List */}
-            <div className={cn('flex-1 overflow-y-auto custom-scrollbar', !displayList.length && 'flex items-center justify-center')}>
-                {loading && <p className="text-sm text-text-tertiary text-center py-8">Loading…</p>}
-                {error && <p className="text-xs text-destructive text-center py-8">{error}</p>}
-                {!loading && !error && displayList.length === 0 && (
-                    <p className="text-xs text-text-quaternary">
-                        {inSearch ? 'No results' : 'No entries'}
-                    </p>
-                )}
-                {displayList.map((entry) => (
-                    <EntryItem
-                        key={entry.id}
-                        entry={entry}
-                        onClick={() => setSelectedNote(entry)}
-                    />
-                ))}
-            </div>
+            <NotebookList
+                entries={displayList}
+                loading={loading}
+                error={error}
+                inSearch={inSearch}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                totalCount={notebookEntries.length}
+                onSelect={setSelectedNote}
+                selectedId={null}
+            />
         </div>
     )
 }
+
+// ── Shared list UI ────────────────────────────────────────────────────────────
+
+const NotebookList: React.FC<{
+    entries: NoteEntry[]
+    loading: boolean
+    error: string
+    inSearch: boolean
+    searchQuery: string
+    setSearchQuery: (q: string) => void
+    totalCount: number
+    onSelect: (note: NoteEntry) => void
+    selectedId: number | null
+}> = ({ entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId }) => (
+    <>
+        {/* Header */}
+        <div className="h-12 border-b border-border flex items-center gap-2 px-4 shrink-0">
+            <BookOpen size={15} className="text-primary-mint shrink-0" />
+            <span className="text-sm font-semibold">Notebook</span>
+            <span className="ml-auto text-xs text-text-tertiary">{totalCount} entries</span>
+        </div>
+
+        {/* Search */}
+        <div className="px-3 py-2.5 border-b border-border shrink-0">
+            <div className="relative">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search notes…"
+                    className="w-full bg-fill-secondary border border-border rounded-lg pl-8 pr-8 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary-mint"
+                />
+                {searchQuery && (
+                    <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-fill rounded"
+                    >
+                        <X size={12} className="text-text-tertiary" />
+                    </button>
+                )}
+            </div>
+        </div>
+
+        {/* List */}
+        <div className={cn('flex-1 overflow-y-auto custom-scrollbar', !entries.length && 'flex items-center justify-center')}>
+            {loading && <p className="text-sm text-text-tertiary text-center py-8">Loading…</p>}
+            {error && <p className="text-xs text-destructive text-center py-8">{error}</p>}
+            {!loading && !error && entries.length === 0 && (
+                <p className="text-xs text-text-quaternary">{inSearch ? 'No results' : 'No entries'}</p>
+            )}
+            {entries.map((entry) => (
+                <div
+                    key={entry.id}
+                    onClick={() => onSelect(entry)}
+                    className={cn(
+                        'px-4 py-3 hover:bg-fill-secondary cursor-pointer transition-colors border-b border-border last:border-b-0',
+                        selectedId === entry.id && 'bg-primary-mint/8'
+                    )}
+                >
+                    <div className="text-sm font-medium text-text truncate mb-0.5">{entry.title}</div>
+                    <div className="flex items-center gap-2 text-xs text-text-tertiary">
+                        {entry.date && <span>{entry.date}</span>}
+                        {entry.source && <span>· {entry.source}</span>}
+                    </div>
+                    {entry.summary && (
+                        <p className="text-xs text-text-tertiary mt-1 line-clamp-2 leading-relaxed">{entry.summary}</p>
+                    )}
+                </div>
+            ))}
+        </div>
+    </>
+)

@@ -39,6 +39,7 @@ export interface AppState {
     activeChatId: string | null
     createChat: () => void
     selectChat: (id: string) => void
+    selectOrCreateChat: (id: string, title?: string) => void
     deleteChat: (id: string) => void
     pinChat: (id: string) => void
 
@@ -54,6 +55,8 @@ export interface AppState {
     setIsGenerating: (v: boolean) => void
     abortController: AbortController | null
     setAbortController: (c: AbortController | null) => void
+    thinkingStatus: string
+    setThinkingStatus: (s: string) => void
 
     // Notebook
     notebookEntries: NoteEntry[]

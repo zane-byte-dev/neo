@@ -7,7 +7,7 @@
 
 // ── Platform Enum ────────────────────────────────────────────────────────────
 
-export type Platform = 'telegram' | 'feishu';
+export type Platform = 'telegram' | 'feishu' | 'web';
 
 // ── Tenant Key ───────────────────────────────────────────────────────────────
 
