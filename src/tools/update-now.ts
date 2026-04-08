@@ -27,7 +27,7 @@ export const updateNowTool: Tool = {
     handler: async (args, _workDir) => {
         const { content } = args as { content: string };
         const vaultRoot = getVaultRoot();
-        const outPath = join(vaultRoot, 'NOW.md');
+        const outPath = join(vaultRoot, 'memory', 'NOW.md');
 
         const timestamp = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
         let finalContent = content;
@@ -38,7 +38,7 @@ export const updateNowTool: Tool = {
         }
 
         try {
-            await fs.mkdir(vaultRoot, { recursive: true });
+            await fs.mkdir(join(vaultRoot, 'memory'), { recursive: true });
             await fs.writeFile(outPath, finalContent, 'utf-8');
             return `✅ NOW.md 已更新。内容长度: ${finalContent.length} 字符。`;
         } catch (err: any) {

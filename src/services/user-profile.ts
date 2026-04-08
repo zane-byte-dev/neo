@@ -1,5 +1,7 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import type Database from 'better-sqlite3';
+import type { TenantKey } from '../types/platform.js';
 
 export interface UserProfile {
     name?: string;
@@ -7,61 +9,52 @@ export interface UserProfile {
     timezone?: string;
     language?: string;
     interests?: string[];
-    notes?: string;    // free-form extra context
+    notes?: string;
     updatedAt?: number;
 }
 
 export class UserProfileManager {
-    private profile: UserProfile = {};
-    private dbPath: string;
+    private db: Database.Database;
+    private tenantKey: TenantKey;
 
-    constructor(cacheDir: string) {
-        this.dbPath = join(cacheDir, 'user_profile.json');
+    constructor(db: Database.Database, tenantKey: TenantKey) {
+        this.db = db;
+        this.tenantKey = tenantKey;
     }
 
     async init(): Promise<void> {
-        try {
-            const data = await fs.readFile(this.dbPath, 'utf8');
-            this.profile = JSON.parse(data);
-            console.log('[UserProfile] Loaded profile.');
-        } catch (err: any) {
-            if (err.code !== 'ENOENT') console.error('[UserProfile] Load error:', err.message);
-        }
+        console.log('[UserProfile] Ready (SQLite).');
     }
 
     get(): UserProfile {
-        return { ...this.profile };
+        const row = this.db.prepare(
+            `SELECT data FROM user_profile WHERE tenant_key = ?`
+        ).get(this.tenantKey) as { data: string } | undefined;
+        return row ? JSON.parse(row.data) : {};
     }
 
     async update(patch: Partial<UserProfile>): Promise<void> {
-        this.profile = { ...this.profile, ...patch, updatedAt: Date.now() };
-        await this.saveToDisk();
+        const current = this.get();
+        const next = { ...current, ...patch, updatedAt: Date.now() };
+        this.db.prepare(
+            `INSERT INTO user_profile (tenant_key, data, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(tenant_key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
+        ).run(this.tenantKey, JSON.stringify(next), Date.now());
     }
 
     async clear(): Promise<void> {
-        this.profile = {};
-        await this.saveToDisk();
+        this.db.prepare(`DELETE FROM user_profile WHERE tenant_key = ?`).run(this.tenantKey);
     }
 
-    /**
-     * Returns a compact context string to prepend to Gemini prompts.
-     * Priority: $WORK_DIR/user.md (canonical source) → JSON fields fallback.
-     */
     async toContextString(): Promise<string> {
         const workDir = process.env.WORK_DIR;
         if (workDir) {
             try {
                 const userMd = await fs.readFile(join(workDir, 'user.md'), 'utf8');
-                if (userMd.trim()) {
-                    return `[用户档案]\n${userMd.trim()}`;
-                }
-            } catch {
-                // user.md doesn't exist, fall through to JSON fields
-            }
+                if (userMd.trim()) return `[用户档案]\n${userMd.trim()}`;
+            } catch { /* not found */ }
         }
-
-        // Fallback: build from JSON fields
-        const p = this.profile;
+        const p = this.get();
         const lines: string[] = [];
         if (p.name) lines.push(`用户姓名: ${p.name}`);
         if (p.city) lines.push(`所在城市: ${p.city}`);
@@ -73,11 +66,8 @@ export class UserProfileManager {
         return `[用户画像]\n${lines.join('\n')}`;
     }
 
-    /**
-     * Format profile for display in Telegram.
-     */
     toDisplayString(): string {
-        const p = this.profile;
+        const p = this.get();
         if (Object.keys(p).filter(k => k !== 'updatedAt').length === 0) {
             return '（暂无个人信息，用 /profile set 来设置）';
         }
@@ -90,13 +80,5 @@ export class UserProfileManager {
         if (p.notes) lines.push(`📝 备注: ${p.notes}`);
         if (p.updatedAt) lines.push(`\n_更新于 ${new Date(p.updatedAt).toLocaleString('zh-CN')}_`);
         return lines.join('\n');
-    }
-
-    private async saveToDisk(): Promise<void> {
-        try {
-            await fs.writeFile(this.dbPath, JSON.stringify(this.profile, null, 2), 'utf8');
-        } catch (err: any) {
-            console.error('[UserProfile] Save error:', err.message);
-        }
     }
 }

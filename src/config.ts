@@ -112,6 +112,7 @@ export const CHUNK_LIMIT = 3800;
 // ── File system ──────────────────────────────────────────────────────────────
 
 export const CACHE_DIR = process.env.CHAT_CACHE_DIR || './cache';
+export const DB_PATH = process.env.DB_PATH || './data/neo.db';
 export const SKIP_DIRS = new Set(['.git', 'node_modules', '.tmp', '__pycache__', 'dist', '.cache']);
 export const MAX_SEARCH_DEPTH = 6;
 

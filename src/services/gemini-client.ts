@@ -211,7 +211,7 @@ export class GeminiClient {
 
         // Inject NOW.md (Short-term memory / Workbench)
         try {
-            const nowMdPath = join(this.workDir, 'NOW.md');
+            const nowMdPath = join(this.workDir, 'memory', 'NOW.md');
             const nowMd = await fs.readFile(nowMdPath, 'utf8');
             if (nowMd.trim()) {
                 prompt += `\n[Current Mission/Focus]\n${nowMd.trim()}\n`;

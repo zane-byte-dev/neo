@@ -4,35 +4,30 @@
  * Reads today's session messages and produces a short status update.
  * Useful for long tasks to provide mid-task progress reports.
  */
-import { promises as fs } from 'fs';
-import { join, resolve } from 'path';
 import { callGemini } from '../utils/helpers.js';
 import type { Tool } from './_base.js';
+import { getDb } from '../services/db.js';
+import { getActiveTenantKey } from '../services/tool-context.js';
 
-interface Message {
-    role: 'user' | 'assistant';
+interface MessageRow {
+    role: string;
     content: string;
     timestamp: string;
 }
 
-interface Session {
-    sessionId: string;
-    startTime: string;
-    endTime: string;
-    messages: Message[];
-}
-
-async function getRecentMessages(limit = 20): Promise<Message[]> {
-    const cacheDir = resolve(process.env.CHAT_CACHE_DIR || './cache');
-    const cacheFile = join(cacheDir, 'chat_history.json');
-    try {
-        const raw = await fs.readFile(cacheFile, 'utf8');
-        const { sessions } = JSON.parse(raw) as { sessions: Session[] };
-        const allMessages: Message[] = sessions.flatMap(s => s.messages);
-        return allMessages.slice(-limit);
-    } catch {
-        return [];
-    }
+function getRecentMessages(limit = 20): MessageRow[] {
+    const tenantKey = getActiveTenantKey();
+    if (!tenantKey) return [];
+    const db = getDb();
+    // Get current session id for this tenant
+    const session = db.prepare(
+        `SELECT id FROM chat_sessions WHERE tenant_key = ? AND is_current = 1`
+    ).get(tenantKey) as { id: string } | undefined;
+    if (!session) return [];
+    return db.prepare(
+        `SELECT role, content, timestamp FROM chat_messages
+         WHERE session_id = ? ORDER BY id DESC LIMIT ?`
+    ).all(session.id, limit) as MessageRow[];
 }
 
 export const briefTool: Tool = {
@@ -54,7 +49,7 @@ export const briefTool: Tool = {
     },
     handler: async (args, _workDir) => {
         const focus = args.focus ? String(args.focus) : null;
-        const messages = await getRecentMessages(30);
+        const messages = getRecentMessages(30);
 
         if (messages.length === 0) {
             return '当前没有对话记录可以摘要。';

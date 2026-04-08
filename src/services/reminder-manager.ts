@@ -1,10 +1,10 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import type Database from 'better-sqlite3';
+import type { TenantKey } from '../types/platform.js';
 import { geminiGenerate } from './gemini-client.js';
 
 export interface Reminder {
     id: string;
-    chatId: number;
+    chatId: string;
     content: string;      // brief display text for listings / simple notification
     prompt?: string;      // if set, execute this as a Gemini task when reminder fires
     fireAt: number;       // unix ms
@@ -77,81 +77,87 @@ export async function parseReminderTime(
 }
 
 export class ReminderManager {
-    private reminders = new Map<string, Reminder>();
-    private dbPath: string;
+    private db: Database.Database;
+    private tenantKey: TenantKey;
     private timer: NodeJS.Timeout | null = null;
     private onFire?: FireCallback;
 
-    constructor(cacheDir: string) {
-        this.dbPath = join(cacheDir, 'reminders.json');
+    constructor(db: Database.Database, tenantKey: TenantKey) {
+        this.db = db;
+        this.tenantKey = tenantKey;
     }
 
     async init(onFire: FireCallback): Promise<void> {
         this.onFire = onFire;
-
-        try {
-            const data = await fs.readFile(this.dbPath, 'utf8');
-            const items: Reminder[] = JSON.parse(data);
-            for (const r of items) {
-                if (!r.fired) this.reminders.set(r.id, r);
-            }
-            console.log(`[ReminderManager] Loaded ${this.reminders.size} active reminder(s).`);
-        } catch (err: any) {
-            if (err.code !== 'ENOENT') console.error('[ReminderManager] Load error:', err.message);
-            await this.saveToDisk();
-        }
-
-        // Poll every 30 seconds
+        const count = (this.db.prepare(
+            `SELECT COUNT(*) as n FROM reminders WHERE tenant_key = ? AND fired = 0`
+        ).get(this.tenantKey) as { n: number }).n;
+        console.log(`[ReminderManager] Ready (${count} active reminder(s)).`);
         this.timer = setInterval(() => this.tick(), 30_000);
     }
 
-    async add(chatId: number, content: string, fireAt: number, prompt?: string): Promise<Reminder> {
+    async add(chatId: string, content: string, fireAt: number, prompt?: string): Promise<Reminder> {
         const id = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-        const reminder: Reminder = { id, chatId, content, prompt, fireAt, createdAt: Date.now(), fired: false };
-        this.reminders.set(id, reminder);
-        await this.saveToDisk();
+        const now = Date.now();
+        this.db.prepare(
+            `INSERT INTO reminders (id, tenant_key, chat_id, content, prompt, fire_at, created_at, fired)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+        ).run(id, this.tenantKey, chatId, content, prompt ?? null, fireAt, now);
         const type = prompt ? 'action' : 'notification';
         console.log(`[ReminderManager] Added ${type} reminder #${id} for ${new Date(fireAt).toLocaleString('zh-CN')}`);
-        return reminder;
+        return { id, chatId, content, prompt, fireAt, createdAt: now, fired: false };
     }
 
     async cancel(id: string): Promise<boolean> {
-        if (!this.reminders.has(id)) return false;
-        this.reminders.delete(id);
-        await this.saveToDisk();
-        return true;
+        const result = this.db.prepare(
+            `DELETE FROM reminders WHERE id = ? AND tenant_key = ?`
+        ).run(id, this.tenantKey);
+        return result.changes > 0;
     }
 
     getAll(): Reminder[] {
-        return Array.from(this.reminders.values()).sort((a, b) => a.fireAt - b.fireAt);
+        const rows = this.db.prepare(
+            `SELECT id, chat_id, content, prompt, fire_at, created_at FROM reminders
+             WHERE tenant_key = ? AND fired = 0 ORDER BY fire_at ASC`
+        ).all(this.tenantKey) as Array<{ id: string; chat_id: string; content: string; prompt: string | null; fire_at: number; created_at: number }>;
+        return rows.map(r => ({
+            id: r.id,
+            chatId: r.chat_id,
+            content: r.content,
+            prompt: r.prompt ?? undefined,
+            fireAt: r.fire_at,
+            createdAt: r.created_at,
+            fired: false,
+        }));
     }
 
-    private async tick() {
+    private async tick(): Promise<void> {
         const now = Date.now();
-        for (const reminder of this.reminders.values()) {
-            if (reminder.fireAt <= now) {
-                reminder.fired = true;
-                this.reminders.delete(reminder.id);
-                await this.saveToDisk();
-                try {
-                    await this.onFire?.(reminder);
-                } catch (err: any) {
-                    console.error(`[ReminderManager] Fire error for #${reminder.id}:`, err.message);
-                }
+        const due = this.db.prepare(
+            `SELECT id, chat_id, content, prompt, fire_at, created_at FROM reminders
+             WHERE tenant_key = ? AND fired = 0 AND fire_at <= ?`
+        ).all(this.tenantKey, now) as Array<{ id: string; chat_id: string; content: string; prompt: string | null; fire_at: number; created_at: number }>;
+
+        for (const row of due) {
+            this.db.prepare(`UPDATE reminders SET fired = 1 WHERE id = ?`).run(row.id);
+            const reminder: Reminder = {
+                id: row.id,
+                chatId: row.chat_id,
+                content: row.content,
+                prompt: row.prompt ?? undefined,
+                fireAt: row.fire_at,
+                createdAt: row.created_at,
+                fired: true,
+            };
+            try {
+                await this.onFire?.(reminder);
+            } catch (err: any) {
+                console.error(`[ReminderManager] Fire error for #${row.id}:`, err.message);
             }
         }
     }
 
-    private async saveToDisk() {
-        try {
-            const data = Array.from(this.reminders.values());
-            await fs.writeFile(this.dbPath, JSON.stringify(data, null, 2), 'utf8');
-        } catch (err: any) {
-            console.error('[ReminderManager] Save error:', err.message);
-        }
-    }
-
-    destroy() {
+    destroy(): void {
         if (this.timer) clearInterval(this.timer);
     }
 }

@@ -7,7 +7,8 @@
 
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
-import { ASYNC_TRIGGER_PREFIXES, CACHE_DIR, getAuthorizedForPlatform } from './config.js';
+import { ASYNC_TRIGGER_PREFIXES, getAuthorizedForPlatform } from './config.js';
+import { initDb } from './services/db.js';
 import { GeminiClient } from './services/gemini-client.js';
 import { ChatHistoryCache } from './services/chat-history-cache.js';
 import { AsyncTaskManager } from './services/async-task-manager.js';
@@ -58,6 +59,9 @@ export class App {
     // ── Bootstrap ────────────────────────────────────────────────────────
 
     async init(): Promise<void> {
+        // Initialize single shared SQLite database
+        initDb();
+
         // Auto-discover plugins
         await setupTools();
         await setupCommands();
@@ -65,11 +69,6 @@ export class App {
         // Initialize tenants per adapter
         for (const [platform, adapter] of this.adapters) {
             const tenantKeys = getAuthorizedForPlatform(platform as any);
-
-            // Legacy cache migration for first platform
-            if (platform === 'telegram') {
-                await this.migrateLegacyCache(tenantKeys);
-            }
 
             for (const tk of tenantKeys) {
                 await this.initTenant(tk, adapter);
@@ -149,10 +148,10 @@ export class App {
     // ── Tenant initialization ────────────────────────────────────────────
 
     private async initTenant(tenantKey: TenantKey, adapter: PlatformAdapter): Promise<void> {
-        const tenantCacheDir = join(CACHE_DIR, tenantKey.replace(':', '_'));
-        await fs.mkdir(tenantCacheDir, { recursive: true });
+        const { getDb } = await import('./services/db.js');
+        const db = getDb();
 
-        const chatHistoryCache = new ChatHistoryCache(tenantCacheDir);
+        const chatHistoryCache = new ChatHistoryCache(db, tenantKey);
         await chatHistoryCache.init();
 
         // Session-to-Log: dehydrate on idle timeout
@@ -167,13 +166,13 @@ export class App {
             }
         });
 
-        const asyncTaskManager = new AsyncTaskManager(tenantCacheDir);
+        const asyncTaskManager = new AsyncTaskManager(db, tenantKey);
         await asyncTaskManager.init();
 
-        const messageQueue = new MessageQueue(tenantCacheDir);
-        const reminderManager = new ReminderManager(tenantCacheDir);
-        const scheduledTaskManager = new ScheduledTaskManager(tenantCacheDir);
-        const userProfile = new UserProfileManager(tenantCacheDir);
+        const messageQueue = new MessageQueue(db, tenantKey);
+        const reminderManager = new ReminderManager(db, tenantKey);
+        const scheduledTaskManager = new ScheduledTaskManager(db, tenantKey);
+        const userProfile = new UserProfileManager(db, tenantKey);
 
         const { userId } = parseTenantKey(tenantKey);
 
@@ -187,55 +186,12 @@ export class App {
             userProfile,
             asyncTaskManager,
             messageQueue,
-            cacheDir: tenantCacheDir,
         });
 
-        console.log(`[Tenant] ✅ ${tenantKey} initialized (cache: ${tenantCacheDir})`);
+        console.log(`[Tenant] ✅ ${tenantKey} initialized (SQLite)`);
     }
 
     // ── Legacy cache migration ───────────────────────────────────────────
-
-    private async migrateLegacyCache(tenantKeys: TenantKey[]): Promise<void> {
-        const legacyFiles = [
-            'chat_history.json', 'async_tasks.json', 'message_queue.json',
-            'reminders.json', 'scheduled_tasks.json', 'todos.json', 'user_profile.json',
-        ];
-
-        let hasLegacy = false;
-        for (const f of legacyFiles) {
-            try {
-                await fs.access(join(CACHE_DIR, f));
-                hasLegacy = true;
-                break;
-            } catch { /* not found */ }
-        }
-        if (!hasLegacy) return;
-
-        const firstTk = tenantKeys[0];
-        if (!firstTk) return;
-
-        const targetDir = join(CACHE_DIR, firstTk.replace(':', '_'));
-        try {
-            const entries = await fs.readdir(targetDir);
-            if (entries.length > 0) return;
-        } catch { /* dir doesn't exist yet, proceed */ }
-
-        await fs.mkdir(targetDir, { recursive: true });
-
-        let migrated = 0;
-        for (const f of legacyFiles) {
-            const src = join(CACHE_DIR, f);
-            const dest = join(targetDir, f);
-            try {
-                await fs.copyFile(src, dest);
-                migrated++;
-            } catch { /* file doesn't exist, skip */ }
-        }
-
-        if (migrated > 0) {
-            console.log(`[Migration] Moved ${migrated} cache files from ${CACHE_DIR}/ → ${targetDir}/`);
-        }
-    }
 
     // ── Message processing pipeline ──────────────────────────────────────
 
@@ -350,7 +306,7 @@ export class App {
                 const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' }).replace(':', '');
                 const title = `saved-${dateStr}-${timeStr}`;
 
-                const targetDir = join(resolve(workDir), '3-Library', 'Wiki');
+                const targetDir = join(resolve(workDir), 'archives', 'Library', 'Wiki');
                 await fs.mkdir(targetDir, { recursive: true });
                 const filePath = join(targetDir, `${title}.md`);
 
@@ -358,9 +314,9 @@ export class App {
                 await fs.writeFile(filePath, `# ${title}\n\n${content}\n\n---\n\n时间: ${dateTimeStr}\n`, 'utf-8');
 
                 await adapter.editMessage(chatId, messageId, msgText, {
-                    inlineKeyboard: [[{ text: `✅ 已保存 → Wiki/${title}.md`, callbackData: 'saved_noop' }]],
+                    inlineKeyboard: [[{ text: `✅ 已保存 → Library/Wiki/${title}.md`, callbackData: 'saved_noop' }]],
                 }).catch(() => {});
-                await raw?.answerCbQuery?.('✅ 已保存到 3-Library/Wiki/').catch(() => {});
+                await raw?.answerCbQuery?.('✅ 已保存到 archives/Library/Wiki/').catch(() => {});
             } catch (err: any) {
                 console.error('[SaveCallback] Error:', err.message);
                 await raw?.answerCbQuery?.('❌ 保存失败: ' + err.message).catch(() => {});

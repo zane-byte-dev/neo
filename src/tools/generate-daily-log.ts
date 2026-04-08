@@ -6,76 +6,60 @@
  *   - Cron scheduler (nightly 23:59)
  *   - Session expire handler (mid-day)
  */
-import { join, resolve } from 'path';
+import { join } from 'path';
 import { promises as fs } from 'fs';
 import type { Tool } from './_base.js';
 import { getVaultRoot, callGemini } from '../utils/helpers.js';
+import { getDb } from '../services/db.js';
+import { getActiveTenantKey } from '../services/tool-context.js';
 
 function todayStr(): string {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
 }
 
-interface Message {
-    role: 'user' | 'assistant';
+interface MessageRow {
+    role: string;
     content: string;
-    userName?: string;
+    user_name: string | null;
     timestamp: string;
 }
 
-interface Session {
-    sessionId: string;
-    startTime: string;
-    endTime: string;
-    messages: Message[];
-}
-
-async function loadTodayMessages(): Promise<Message[]> {
-    const cacheDir = resolve(process.env.CHAT_CACHE_DIR || './cache');
-    const cacheFile = join(cacheDir, 'chat_history.json');
+function loadTodayMessages(): MessageRow[] {
+    const tenantKey = getActiveTenantKey();
+    if (!tenantKey) return [];
+    const db = getDb();
     const today = todayStr();
-
-    let raw: string;
-    try {
-        raw = await fs.readFile(cacheFile, 'utf-8');
-    } catch {
-        return [];
-    }
-
-    const { sessions } = JSON.parse(raw) as { sessions: Session[] };
-    const messages: Message[] = [];
-
-    for (const session of sessions) {
-        for (const msg of session.messages) {
-            if (msg.timestamp.startsWith(today)) {
-                messages.push(msg);
-            }
-        }
-    }
-    return messages;
+    return db.prepare(
+        `SELECT m.role, m.content, m.user_name, m.timestamp
+         FROM chat_messages m
+         JOIN chat_sessions s ON m.session_id = s.id
+         WHERE m.tenant_key = ? AND m.timestamp LIKE ?
+         ORDER BY m.id ASC`
+    ).all(tenantKey, `${today}%`) as MessageRow[];
 }
 
 export const generateDailyLogTool: Tool = {
-    meta: { category: 'workspace', version: '1.0.0' },
+    meta: { category: 'workspace', version: '2.0.0' },
     declaration: {
         name: 'generate_daily_log',
         description:
-            '将今天的对话记录脱水提炼成结构化日记，写入 1-Daily/YYYY-MM-DD.md。' +
+            '将今天的对话记录脱水提炼成结构化日记，写入 memory/1-Daily/YYYY-MM-DD.md。' +
             '如果日记已存在或今天没有对话则跳过（幂等）。',
         parameters: { type: 'object', properties: {}, required: [] },
     },
     handler: async (_args, _workDir) => {
         const vaultRoot = getVaultRoot();
         const today = todayStr();
-        const outPath = join(vaultRoot, '1-Daily', `${today}.md`);
+        const outPath = join(vaultRoot, 'memory', '1-Daily', `${today}.md`);
 
-        const messages = await loadTodayMessages();
+        const messages = loadTodayMessages();
         if (messages.length === 0) {
             return `⏭️ 今天（${today}）没有对话记录，跳过。`;
         }
 
         const transcript = messages
             .map(m => {
-                const speaker = m.role === 'user' ? (m.userName ?? 'Me') : 'inkClaw';
+                const speaker = m.role === 'user' ? (m.user_name ?? 'Me') : 'inkClaw';
                 const body = m.content.length > 800 ? m.content.slice(0, 800) + '...' : m.content;
                 return `${speaker}: ${body}`;
             })
@@ -110,9 +94,9 @@ ${transcript}
         const summary = await callGemini(prompt, { temperature: 0.3 });
         if (!summary) return '❌ Gemini 调用失败，日记未生成。';
 
-        await fs.mkdir(join(vaultRoot, '1-Daily'), { recursive: true });
+        await fs.mkdir(join(vaultRoot, 'memory', '1-Daily'), { recursive: true });
         await fs.writeFile(outPath, summary, 'utf-8');
 
-        return `📓 今日日记已更新：1-Daily/${today}.md（${messages.length} 条消息 → ${summary.length} 字）`;
+        return `📓 今日日记已更新：memory/1-Daily/${today}.md（${messages.length} 条消息 → ${summary.length} 字）`;
     },
 };

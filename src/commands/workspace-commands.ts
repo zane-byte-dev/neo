@@ -2,6 +2,8 @@ import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
 import { SKIP_DIRS } from '../config.js';
 import type { Command } from './_base.js';
+import { getDb } from '../services/db.js';
+import { getActiveTenantKey } from '../services/tool-context.js';
 
 export const workspaceCommand: Command = {
     commands: ['/ls', '/read', '/note', '/today', '/task', '/search', '/weekly', '/save'],
@@ -115,29 +117,19 @@ export const workspaceCommand: Command = {
         }
 
         case '/note': {
-            const workDir = process.env.WORK_DIR;
-            if (!workDir) {
-                await reply('⚠️ WORK_DIR 未配置。');
-                return true;
-            }
             const noteContent = text.replace(/^\/note\s*/i, '').trim();
             if (!noteContent) {
                 await reply('用法: `/note <内容>`\n\n快速追加一条碎片到今日 Inbox，不经过 AI。', true);
                 return true;
             }
             try {
+                const tenantKey = getActiveTenantKey()!;
                 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
-                const inboxDir = join(resolve(workDir), '0-Inbox');
-                await fs.mkdir(inboxDir, { recursive: true });
-                const inboxFile = join(inboxDir, `${today}.md`);
                 const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
-                let fileExists = false;
-                try { await fs.access(inboxFile); fileExists = true; } catch { /* new file */ }
-                const entry = fileExists
-                    ? `\n- ${timeStr} ${noteContent}\n`
-                    : `# ${today} Inbox\n\n- ${timeStr} ${noteContent}\n`;
-                await fs.appendFile(inboxFile, entry, 'utf-8');
-                await reply(`✅ 已记入 0-Inbox/${today}.md`);
+                getDb().prepare(
+                    `INSERT INTO notes (tenant_key, content, date, time, created_at) VALUES (?, ?, ?, ?, ?)`
+                ).run(tenantKey, noteContent, today, timeStr, Date.now());
+                await reply(`✅ 已记入 Inbox（${today} ${timeStr}）`);
             } catch (err: any) {
                 await reply(`❌ 写入失败: ${err.message}`);
             }
@@ -146,65 +138,56 @@ export const workspaceCommand: Command = {
 
         case '/today': {
             const workDir = process.env.WORK_DIR;
-            if (!workDir) {
-                await reply('⚠️ WORK_DIR 未配置。');
-                return true;
-            }
             const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
-            const absWorkDir = resolve(workDir);
-            const inboxPath = join(absWorkDir, '0-Inbox', `${today}.md`);
-            const dailyPath = join(absWorkDir, '1-Daily', `${today}.md`);
+            const tenantKey = getActiveTenantKey()!;
 
-            const readOrNull = async (p: string) => {
-                try { return await fs.readFile(p, 'utf-8'); }
-                catch { return null; }
-            };
+            // Inbox entries from SQLite
+            const noteRows = getDb().prepare(
+                `SELECT time, content FROM notes WHERE tenant_key = ? AND date = ? ORDER BY created_at ASC`
+            ).all(tenantKey, today) as Array<{ time: string; content: string }>;
 
-            const inbox = await readOrNull(inboxPath);
-            const daily = await readOrNull(dailyPath);
+            // Daily log from memory/1-Daily/
+            let daily: string | null = null;
+            if (workDir) {
+                try { daily = await fs.readFile(join(resolve(workDir), 'memory', '1-Daily', `${today}.md`), 'utf-8'); }
+                catch { /* not yet */ }
+            }
 
-            if (!inbox && !daily) {
+            if (noteRows.length === 0 && !daily) {
                 await reply(`📭 今天（${today}）还没有任何记录。\n\n用 \`/note <内容>\` 开始记录。`, true);
                 return true;
             }
 
             const MAX = 3500;
-            if (inbox) {
-                const header = `📥 **0-Inbox/${today}.md**\n\n`;
-                const body = inbox.length > MAX ? inbox.slice(0, MAX) + '\n...(已截断)' : inbox;
-                await reply(header + body, true).catch(() =>
-                    reply(header + body));
+            if (noteRows.length > 0) {
+                const inboxText = noteRows.map(r => `- ${r.time} ${r.content}`).join('\n');
+                const header = `📥 **Inbox / ${today}**\n\n`;
+                const body = inboxText.length > MAX ? inboxText.slice(0, MAX) + '\n...(已截断)' : inboxText;
+                await reply(header + body, true).catch(() => reply(header + body));
             }
             if (daily) {
-                const header = `📓 **1-Daily/${today}.md**\n\n`;
+                const header = `📓 **memory/1-Daily/${today}.md**\n\n`;
                 const body = daily.length > MAX ? daily.slice(0, MAX) + '\n...(已截断)' : daily;
-                await reply(header + body, true).catch(() =>
-                    reply(header + body));
+                await reply(header + body, true).catch(() => reply(header + body));
             }
             return true;
         }
 
         case '/task': {
-            const workDir = process.env.WORK_DIR;
-            if (!workDir) { await reply('⚠️ WORK_DIR 未配置。'); return true; }
             const taskContent = text.replace(/^\/task\s*/i, '').trim();
             if (!taskContent) {
-                await reply('用法: `/task <内容>`\n\n快速追加一条任务到 2-Tasks，不经过 AI。', true);
+                await reply('用法: `/task <内容>`\n\n快速追加一条任务，不经过 AI。', true);
                 return true;
             }
             try {
+                const tenantKey = getActiveTenantKey()!;
                 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
-                const tasksDir = join(resolve(workDir), '2-Tasks');
-                await fs.mkdir(tasksDir, { recursive: true });
-                const tasksFile = join(tasksDir, 'tasks.md');
                 const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
-                let fileExists = false;
-                try { await fs.access(tasksFile); fileExists = true; } catch { /* new file */ }
-                const entry = fileExists
-                    ? `\n- [ ] ${taskContent}  _(${today} ${timeStr})_\n`
-                    : `# Tasks\n\n- [ ] ${taskContent}  _(${today} ${timeStr})_\n`;
-                await fs.appendFile(tasksFile, entry, 'utf-8');
-                await reply('✅ 任务已记入 2-Tasks/tasks.md');
+                const id = Math.random().toString(36).slice(2, 10);
+                getDb().prepare(
+                    `INSERT INTO tasks (id, tenant_key, content, status, date, time, created_at) VALUES (?, ?, ?, 'open', ?, ?, ?)`
+                ).run(id, tenantKey, taskContent, today, timeStr, Date.now());
+                await reply('✅ 任务已记录');
             } catch (err: any) {
                 await reply(`❌ 写入失败: ${err.message}`);
             }
@@ -290,7 +273,7 @@ export const workspaceCommand: Command = {
             const rawContent = replyText ?? arg;
             if (!rawContent) {
                 await reply(
-                    '用法：回复任意消息，发送 `/save [标题]` 即可存入 `3-Library/`。\n\n' +
+                    '用法：回复任意消息，发送 `/save [标题]` 即可存入 `archives/`。\n\n' +
                     '示例：\n`/save` — 以时间戳命名\n`/save AI工具对比` — 自定义标题\n`/save Wiki/AI工具对比` — 存入指定子目录',
                     true
                 );
@@ -325,7 +308,7 @@ export const workspaceCommand: Command = {
 
             try {
                 const absBase = resolve(workDir);
-                const targetDir = join(absBase, '3-Library', safeSubDir);
+                const targetDir = join(absBase, 'archives', safeSubDir);
                 // Ensure target is within workspace
                 if (!targetDir.startsWith(absBase)) {
                     await reply('⛔ 不允许访问 WORK_DIR 以外的路径。');
@@ -347,7 +330,7 @@ export const workspaceCommand: Command = {
                     await fs.writeFile(filePath, fileContent, 'utf-8');
                 }
 
-                const relPath = `3-Library/${safeSubDir}/${safeTitle}.md`;
+                const relPath = `archives/${safeSubDir}/${safeTitle}.md`;
                 await reply(`✅ 已保存到 \`${relPath}\``, true);
             } catch (err: any) {
                 await reply(`❌ 保存失败: ${err.message}`);

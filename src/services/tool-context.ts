@@ -20,7 +20,6 @@ export interface TenantContext {
     userProfile: any;
     asyncTaskManager: any;
     messageQueue: any;
-    cacheDir: string;
 }
 
 const _registry = new Map<TenantKey, TenantContext>();

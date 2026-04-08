@@ -1,11 +1,11 @@
-import { promises as fs } from 'fs';
-import { join } from 'path';
+import type Database from 'better-sqlite3';
+import type { TenantKey } from '../types/platform.js';
 import cron, { ScheduledTask as CronJob } from 'node-cron';
 import { geminiGenerate } from './gemini-client.js';
 
 export interface ScheduledTask {
     id: string;
-    chatId: number;
+    chatId: string;
     content: string;    // short description shown in /schedules list
     prompt: string;     // the Gemini instruction executed each time
     cronExpr: string;   // standard 5-field cron expression
@@ -77,69 +77,67 @@ export async function parseScheduledTask(
 }
 
 export class ScheduledTaskManager {
-    private tasks = new Map<string, ScheduledTask>();
+    private db: Database.Database;
+    private tenantKey: TenantKey;
     private cronJobs = new Map<string, CronJob>();
-    private dbPath: string;
     private onExecute?: ExecuteCallback;
 
-    constructor(cacheDir: string) {
-        this.dbPath = join(cacheDir, 'scheduled_tasks.json');
+    constructor(db: Database.Database, tenantKey: TenantKey) {
+        this.db = db;
+        this.tenantKey = tenantKey;
     }
 
     async init(onExecute: ExecuteCallback): Promise<void> {
         this.onExecute = onExecute;
-
-        try {
-            const data = await fs.readFile(this.dbPath, 'utf8');
-            const items: ScheduledTask[] = JSON.parse(data);
-            for (const t of items) {
-                if (t.enabled) {
-                    this.tasks.set(t.id, t);
-                    this.scheduleJob(t);
-                }
-            }
-            console.log(`[ScheduledTaskManager] Loaded ${this.tasks.size} active task(s).`);
-        } catch (err: any) {
-            if (err.code !== 'ENOENT') console.error('[ScheduledTaskManager] Load error:', err.message);
-            await this.saveToDisk();
+        const rows = this.db.prepare(
+            `SELECT id, chat_id, content, prompt, cron_expr, created_at FROM scheduled_tasks
+             WHERE tenant_key = ? AND enabled = 1`
+        ).all(this.tenantKey) as Array<{ id: string; chat_id: string; content: string; prompt: string; cron_expr: string; created_at: number }>;
+        for (const row of rows) {
+            this.scheduleJob(this.rowToTask(row));
         }
+        console.log(`[ScheduledTaskManager] Ready (${rows.length} active task(s)).`);
     }
 
-    async add(chatId: number, content: string, prompt: string, cronExpr: string): Promise<ScheduledTask> {
+    async add(chatId: string, content: string, prompt: string, cronExpr: string): Promise<ScheduledTask> {
         const id = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-        const task: ScheduledTask = { id, chatId, content, prompt, cronExpr, createdAt: Date.now(), enabled: true };
-        this.tasks.set(id, task);
+        const now = Date.now();
+        this.db.prepare(
+            `INSERT INTO scheduled_tasks (id, tenant_key, chat_id, content, prompt, cron_expr, created_at, enabled)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+        ).run(id, this.tenantKey, chatId, content, prompt, cronExpr, now);
+        const task: ScheduledTask = { id, chatId, content, prompt, cronExpr, createdAt: now, enabled: true };
         this.scheduleJob(task);
-        await this.saveToDisk();
         console.log(`[ScheduledTaskManager] Added task #${id} (${cronExpr}): ${content}`);
         return task;
     }
 
     async cancel(id: string): Promise<boolean> {
-        const task = this.tasks.get(id);
-        if (!task) return false;
+        const result = this.db.prepare(
+            `DELETE FROM scheduled_tasks WHERE id = ? AND tenant_key = ?`
+        ).run(id, this.tenantKey);
         const job = this.cronJobs.get(id);
         if (job) {
             job.stop();
             this.cronJobs.delete(id);
         }
-        this.tasks.delete(id);
-        await this.saveToDisk();
-        return true;
+        return result.changes > 0;
     }
 
     getAll(): ScheduledTask[] {
-        return Array.from(this.tasks.values()).sort((a, b) => a.createdAt - b.createdAt);
+        const rows = this.db.prepare(
+            `SELECT id, chat_id, content, prompt, cron_expr, created_at FROM scheduled_tasks
+             WHERE tenant_key = ? AND enabled = 1 ORDER BY created_at ASC`
+        ).all(this.tenantKey) as Array<{ id: string; chat_id: string; content: string; prompt: string; cron_expr: string; created_at: number }>;
+        return rows.map(r => this.rowToTask(r));
     }
 
     destroy(): void {
-        for (const job of this.cronJobs.values()) {
-            job.stop();
-        }
+        for (const job of this.cronJobs.values()) job.stop();
         this.cronJobs.clear();
     }
 
-    private scheduleJob(task: ScheduledTask) {
+    private scheduleJob(task: ScheduledTask): void {
         const job = cron.schedule(task.cronExpr, async () => {
             console.log(`[ScheduledTask] Executing #${task.id}: ${task.content}`);
             try {
@@ -151,12 +149,15 @@ export class ScheduledTaskManager {
         this.cronJobs.set(task.id, job);
     }
 
-    private async saveToDisk() {
-        try {
-            const data = Array.from(this.tasks.values());
-            await fs.writeFile(this.dbPath, JSON.stringify(data, null, 2), 'utf8');
-        } catch (err: any) {
-            console.error('[ScheduledTaskManager] Save error:', err.message);
-        }
+    private rowToTask(row: { id: string; chat_id: string; content: string; prompt: string; cron_expr: string; created_at: number }): ScheduledTask {
+        return {
+            id: row.id,
+            chatId: row.chat_id,
+            content: row.content,
+            prompt: row.prompt,
+            cronExpr: row.cron_expr,
+            createdAt: row.created_at,
+            enabled: true,
+        };
     }
 }
