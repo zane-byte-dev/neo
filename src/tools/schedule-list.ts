@@ -1,8 +1,7 @@
 /**
  * schedule-list.ts — AI tool to list all recurring scheduled tasks.
  */
-import { getToolContext } from '../services/tool-context.js';
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 
 export const scheduleListTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },
@@ -14,15 +13,12 @@ export const scheduleListTool: Tool = {
             properties: {},
         },
     },
-    handler: async (_args, _workDir) => {
-        let ctx;
-        try {
-            ctx = getToolContext();
-        } catch {
+    handler: async (_args, _workDir, context?: ToolContext) => {
+        if (!context) {
             return '[Error] schedule_list is not available in this context';
         }
 
-        const tasks = ctx.scheduledTaskManager.getAll();
+        const tasks = context.scheduledTaskManager.getAll();
         if (tasks.length === 0) return '当前没有定时任务。';
 
         const lines = tasks.map((t: any) => {

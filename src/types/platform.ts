@@ -114,6 +114,9 @@ export interface PlatformAdapter {
 
     // ── Media ────────────────────────────────────────────────────────────
 
+    /** Send a photo (from local file path or Buffer) with optional caption */
+    sendPhoto(chatId: string, photo: string | Buffer, caption?: string): Promise<SentMessage>;
+
     /** Download a file by its platform file ID, returns local path */
     downloadFile(fileId: string, destPath: string): Promise<void>;
 

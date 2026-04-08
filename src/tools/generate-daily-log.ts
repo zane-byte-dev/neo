@@ -8,10 +8,9 @@
  */
 import { join } from 'path';
 import { promises as fs } from 'fs';
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 import { getVaultRoot, callGemini } from '../utils/helpers.js';
 import { getDb } from '../services/db.js';
-import { getActiveTenantKey } from '../services/tool-context.js';
 
 function todayStr(): string {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
@@ -24,8 +23,7 @@ interface MessageRow {
     timestamp: string;
 }
 
-function loadTodayMessages(): MessageRow[] {
-    const tenantKey = getActiveTenantKey();
+function loadTodayMessages(tenantKey: string): MessageRow[] {
     if (!tenantKey) return [];
     const db = getDb();
     const today = todayStr();
@@ -47,12 +45,13 @@ export const generateDailyLogTool: Tool = {
             '如果日记已存在或今天没有对话则跳过（幂等）。',
         parameters: { type: 'object', properties: {}, required: [] },
     },
-    handler: async (_args, _workDir) => {
+    handler: async (_args, _workDir, context?: ToolContext) => {
         const vaultRoot = getVaultRoot();
         const today = todayStr();
         const outPath = join(vaultRoot, 'memory', '1-Daily', `${today}.md`);
 
-        const messages = loadTodayMessages();
+        const tenantKey = context?.tenantKey ?? '';
+        const messages = loadTodayMessages(tenantKey);
         if (messages.length === 0) {
             return `⏭️ 今天（${today}）没有对话记录，跳过。`;
         }

@@ -131,7 +131,8 @@ export class App {
 
         console.log(`🤖 Bot started. Adapters: ${[...this.adapters.keys()].join(', ')}`);
         console.log(`🛠  Gemini Client enabled: ${this.geminiClient.isEnabled()}`);
-        startWebServer(this.geminiClient);
+        const webTenantKey = getAllTenantKeys()[0];
+        startWebServer(this.geminiClient, webTenantKey);
     }
 
     async shutdown(): Promise<void> {

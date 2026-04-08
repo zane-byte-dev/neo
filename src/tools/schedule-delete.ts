@@ -1,8 +1,7 @@
 /**
  * schedule-delete.ts — AI tool to delete a recurring scheduled task by ID.
  */
-import { getToolContext } from '../services/tool-context.js';
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 
 export const scheduleDeleteTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },
@@ -20,18 +19,15 @@ export const scheduleDeleteTool: Tool = {
             required: ['id'],
         },
     },
-    handler: async (args, _workDir) => {
+    handler: async (args, _workDir, context?: ToolContext) => {
         const id = String(args.id ?? '').trim();
         if (!id) return '[Error] id is required';
 
-        let ctx;
-        try {
-            ctx = getToolContext();
-        } catch {
+        if (!context) {
             return '[Error] schedule_delete is not available in this context';
         }
 
-        const deleted = await ctx.scheduledTaskManager.cancel(id);
+        const deleted = await context.scheduledTaskManager.cancel(id);
         if (!deleted) return `[Error] 找不到 ID 为 "${id}" 的定时任务。用 schedule_list 查看所有任务。`;
         return `✅ 定时任务 [${id}] 已删除。`;
     },

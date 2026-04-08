@@ -19,7 +19,9 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from '../services/db.js';
 import { ChatHistoryCache } from '../services/chat-history-cache.js';
-import type { GeminiClient } from '../services/gemini-client.js';
+import { getTenantContext } from '../services/tool-context.js';
+import type { TenantKey } from '../types/platform.js';
+import type { GeminiClient, ToolContext } from '../services/gemini-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -62,7 +64,7 @@ function authMiddleware(): Koa.Middleware {
 
 // ── Server factory ────────────────────────────────────────────────────────────
 
-export function createWebServer(geminiClient: GeminiClient): Koa {
+export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKey): Koa {
     const app = new Koa();
     const router = new Router();
 
@@ -79,6 +81,19 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
             ctx.status = 400;
             ctx.body = { error: 'message is required' };
             return;
+        }
+
+        // Build ToolContext from the tenant registry
+        let toolContext: ToolContext | undefined;
+        if (tenantKey) {
+            const tenantCtx = getTenantContext(tenantKey);
+            toolContext = {
+                tenantKey,
+                chatId: tenantCtx.chatId,
+                adapter: tenantCtx.adapter,
+                reminderManager: tenantCtx.reminderManager,
+                scheduledTaskManager: tenantCtx.scheduledTaskManager,
+            };
         }
 
         const cache = await getOrCreateCache(sessionId || 'default');
@@ -114,6 +129,7 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
                     }
                 },
                 abortController.signal,
+                toolContext,
             );
             write({ type: 'done' });
         } catch (err: unknown) {
@@ -208,11 +224,11 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
     return app;
 }
 
-export function startWebServer(geminiClient: GeminiClient): void {
+export function startWebServer(geminiClient: GeminiClient, tenantKey?: TenantKey): void {
     const webEnabled = process.env.WEB_PORT ?? process.env.WEB_ENABLED;
     if (!webEnabled) return;
 
-    const app = createWebServer(geminiClient);
+    const app = createWebServer(geminiClient, tenantKey);
     app.listen(WEB_PORT, () => {
         console.log(`[WebServer] 🌐 http://localhost:${WEB_PORT}`);
         if (!WEB_TOKEN) {

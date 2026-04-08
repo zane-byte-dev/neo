@@ -6,9 +6,8 @@
  * - Track status: pending / in_progress / done / blocked
  * Scoped per tenant_key via the active tenant context.
  */
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 import { getDb } from '../services/db.js';
-import { getActiveTenantKey } from '../services/tool-context.js';
 
 type TodoStatus = 'pending' | 'in_progress' | 'done' | 'blocked';
 
@@ -21,11 +20,7 @@ interface TodoRow {
     updated_at: string;
 }
 
-function getTenantKey(): string {
-    const tk = getActiveTenantKey();
-    if (!tk) throw new Error('[todo-write] No active tenant key');
-    return tk;
-}
+// tenantKey is now passed via ToolContext
 
 function makeId(): string {
     return Math.random().toString(36).slice(2, 8);
@@ -66,9 +61,10 @@ export const todoWriteTool: Tool = {
             required: ['action'],
         },
     },
-    handler: async (args, _workDir) => {
+    handler: async (args, _workDir, context?: ToolContext) => {
         const db = getDb();
-        const tenantKey = getTenantKey();
+        if (!context?.tenantKey) throw new Error('[todo-write] No tenant key in context');
+        const tenantKey = context.tenantKey;
         const action = String(args.action ?? '');
 
         switch (action) {

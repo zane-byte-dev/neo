@@ -7,7 +7,7 @@ import { promises as fs } from 'node:fs';
 import { execa } from 'execa';
 import { logDangerousCommand, logToolExecution } from '../utils/audit-logger.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
-import type { Tool, FunctionDeclaration } from '../utils/gemini-types.js';
+import type { Tool, FunctionDeclaration, ToolContext } from '../utils/gemini-types.js';
 
 // ── Built-in tool declarations ────────────────────────────────────────────────
 
@@ -94,6 +94,7 @@ export async function executeTool(
     args: Record<string, unknown>,
     workDir: string,
     toolRegistry: Map<string, Tool>,
+    context?: ToolContext,
 ): Promise<string> {
     console.log(`[AgentRuntime] Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
     const startedAt = Date.now();
@@ -187,7 +188,7 @@ ${content}
             default: {
                 const tool = toolRegistry.get(name);
                 if (tool) {
-                    const result = await tool.handler(args, workDir);
+                    const result = await tool.handler(args, workDir, context);
                     return finish(result);
                 }
                 return finish(`[Error] Unknown tool: ${name}`, 'error');
@@ -196,6 +197,9 @@ ${content}
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[AgentRuntime] Tool error (${name}): ${msg}`);
+        if (err instanceof Error && err.stack) {
+            console.error(`[AgentRuntime] Stack:\n${err.stack}`);
+        }
         return finish(`[Error] ${name} failed: ${msg}`, 'error');
     }
 }

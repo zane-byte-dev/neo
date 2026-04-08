@@ -100,6 +100,14 @@ export class TelegramAdapter implements PlatformAdapter {
 
     // ── Media ────────────────────────────────────────────────────────────
 
+    async sendPhoto(chatId: string, photo: string | Buffer, caption?: string): Promise<SentMessage> {
+        const source = typeof photo === 'string' ? { source: photo } : { source: photo };
+        const extra: Record<string, unknown> = {};
+        if (caption) extra.caption = caption;
+        const result = await this.bot.telegram.sendPhoto(parseInt(chatId, 10), source, extra);
+        return { id: String(result.message_id), chatId };
+    }
+
     async downloadFile(fileId: string, destPath: string): Promise<void> {
         const fileLink = await this.bot.telegram.getFileLink(fileId);
         const res = await fetch(fileLink.href);

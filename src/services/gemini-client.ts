@@ -24,6 +24,7 @@ export type {
     FunctionDeclaration,
     ToolMeta,
     Tool,
+    ToolContext,
 } from '../utils/gemini-types.js';
 
 import type {
@@ -32,6 +33,7 @@ import type {
     FileInput,
     GeminiContent,
     Tool,
+    ToolContext,
 } from '../utils/gemini-types.js';
 
 setupLogger();
@@ -233,6 +235,7 @@ export class GeminiClient {
         onChunk?: StreamCallback,
         imageInput?: ImageInput,
         signal?: AbortSignal,
+        context?: ToolContext,
     ): Promise<string | null> {
         if (!this.enabled) {
             console.warn(`[AgentRuntime] Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
@@ -255,6 +258,7 @@ export class GeminiClient {
                 onChunk,
                 imageInput,
                 signal,
+                context,
             );
             const elapsed = Date.now() - start;
             if (!result) {
@@ -277,8 +281,9 @@ export class GeminiClient {
         conversationHistory: string,
         onChunk: StreamCallback,
         signal?: AbortSignal,
+        context?: ToolContext,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, undefined, signal);
+        return this.runAgent(message, conversationHistory, onChunk, undefined, signal, context);
     }
 
     /** Multimodal variant — same as chatWithContextStreaming but attaches an image. */
@@ -288,8 +293,9 @@ export class GeminiClient {
         imageInput: ImageInput,
         onChunk: StreamCallback,
         signal?: AbortSignal,
+        context?: ToolContext,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, imageInput, signal);
+        return this.runAgent(message, conversationHistory, onChunk, imageInput, signal, context);
     }
 
     /** Same as WithImage but semantically for documents (PDF, audio, video via File API). */
@@ -299,31 +305,32 @@ export class GeminiClient {
         fileInput: FileInput,
         onChunk: StreamCallback,
         signal?: AbortSignal,
+        context?: ToolContext,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, fileInput, signal);
+        return this.runAgent(message, conversationHistory, onChunk, fileInput, signal, context);
     }
 
-    async chatWithContext(message: string, conversationHistory: string): Promise<string | null> {
-        return this.runAgent(message, conversationHistory);
+    async chatWithContext(message: string, conversationHistory: string, context?: ToolContext): Promise<string | null> {
+        return this.runAgent(message, conversationHistory, undefined, undefined, undefined, context);
     }
 
-    async chat(message: string): Promise<string | null> {
-        return this.runAgent(message);
+    async chat(message: string, context?: ToolContext): Promise<string | null> {
+        return this.runAgent(message, undefined, undefined, undefined, undefined, context);
     }
 
     /**
      * Async isolated task — same agentic loop, fresh context (no shared history).
      */
-    async chatAsyncWithContext(message: string): Promise<string | null> {
-        return this.runAgent(message);
+    async chatAsyncWithContext(message: string, context?: ToolContext): Promise<string | null> {
+        return this.runAgent(message, undefined, undefined, undefined, undefined, context);
     }
 
-    async runTool(toolName: string, args: string[]): Promise<string | null> {
+    async runTool(toolName: string, args: string[], context?: ToolContext): Promise<string | null> {
         const prompt =
             `Please execute the tool **${toolName}**.\n\n` +
             `Arguments: ${args.join(' ')}\n\n` +
             `(Tool: ${toolName})`;
-        return this.runAgent(prompt);
+        return this.runAgent(prompt, undefined, undefined, undefined, undefined, context);
     }
 
     isEnabled(): boolean {

@@ -111,6 +111,11 @@ export class FeishuAdapter implements PlatformAdapter {
 
     // ── Media ────────────────────────────────────────────────────────────
 
+    async sendPhoto(_chatId: string, _photo: string | Buffer, _caption?: string): Promise<SentMessage> {
+        // TODO: implement Feishu image upload + send
+        throw new Error('sendPhoto not yet implemented for Feishu');
+    }
+
     async downloadFile(fileId: string, destPath: string): Promise<void> {
         // fileId format: "messageId:fileKey"
         const [messageId, fileKey] = fileId.includes(':') ? fileId.split(':') : [fileId, fileId];

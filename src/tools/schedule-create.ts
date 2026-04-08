@@ -5,9 +5,8 @@
  * without the user needing to use the /schedules command flow.
  */
 import cron from 'node-cron';
-import { getToolContext } from '../services/tool-context.js';
 import { TELEGRAM_CHAT_ID } from '../config.js';
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 
 export const scheduleCreateTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },
@@ -38,7 +37,7 @@ export const scheduleCreateTool: Tool = {
             required: ['cron_expr', 'prompt', 'content'],
         },
     },
-    handler: async (args, _workDir) => {
+    handler: async (args, _workDir, context?: ToolContext) => {
         const cronExpr = String(args.cron_expr ?? '').trim();
         const prompt = String(args.prompt ?? '').trim();
         const content = String(args.content ?? '').trim();
@@ -51,17 +50,14 @@ export const scheduleCreateTool: Tool = {
             return `[Error] Invalid cron expression: "${cronExpr}". Use standard 5-field format: "M H DoM Mon DoW"`;
         }
 
-        let ctx;
-        try {
-            ctx = getToolContext();
-        } catch {
+        if (!context) {
             return '[Error] schedule_create is not available in this context (bot not initialized)';
         }
 
-        const chatId = ctx.chatId || parseInt(TELEGRAM_CHAT_ID || '0', 10);
+        const chatId = context.chatId || parseInt(TELEGRAM_CHAT_ID || '0', 10);
         if (!chatId) return '[Error] Cannot determine chat ID for scheduled task';
 
-        const task = await ctx.scheduledTaskManager.add(chatId, content, prompt, cronExpr);
+        const task = await context.scheduledTaskManager.add(chatId, content, prompt, cronExpr);
         return (
             `✅ 定时任务已创建！\n` +
             `🆔 ID: ${task.id}\n` +

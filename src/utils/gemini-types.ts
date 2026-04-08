@@ -43,6 +43,24 @@ export interface FunctionDeclaration {
     };
 }
 
+// ── Tool context (fields available to tools at runtime) ──────────────────────
+
+export interface ToolContext {
+    /** Tenant key (platform:userId) for DB-scoped operations */
+    tenantKey: string;
+    /** Platform-specific chat/channel ID */
+    chatId: string;
+    /** Platform adapter for sending messages, photos, etc. */
+    adapter: {
+        sendMessage(chatId: string, text: string, opts?: Record<string, unknown>): Promise<{ id: string; chatId: string }>;
+        sendPhoto(chatId: string, photo: string | Buffer, caption?: string): Promise<{ id: string; chatId: string }>;
+    };
+    /** Reminder manager instance */
+    reminderManager: any;
+    /** Scheduled task manager instance */
+    scheduledTaskManager: any;
+}
+
 // ── Tool types ───────────────────────────────────────────────────────────────
 
 export interface ToolMeta {
@@ -58,7 +76,7 @@ export interface ToolMeta {
 
 export interface Tool {
     declaration: FunctionDeclaration;
-    handler: (args: Record<string, unknown>, workDir: string) => Promise<string>;
+    handler: (args: Record<string, unknown>, workDir: string, context?: ToolContext) => Promise<string>;
     /** Optional metadata — compatible with MCP tool-manifest conventions */
     meta?: ToolMeta;
 }

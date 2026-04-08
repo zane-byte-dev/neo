@@ -1,8 +1,7 @@
 /**
  * reminder-list.ts — AI tool to list all pending reminders.
  */
-import { getToolContext } from '../services/tool-context.js';
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 
 export const reminderListTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },
@@ -14,15 +13,12 @@ export const reminderListTool: Tool = {
             properties: {},
         },
     },
-    handler: async (_args, _workDir) => {
-        let ctx;
-        try {
-            ctx = getToolContext();
-        } catch {
+    handler: async (_args, _workDir, context?: ToolContext) => {
+        if (!context) {
             return '[Error] reminder_list is not available in this context';
         }
 
-        const reminders: any[] = ctx.reminderManager.getAll().filter((r: any) => !r.fired);
+        const reminders: any[] = context.reminderManager.getAll().filter((r: any) => !r.fired);
         if (reminders.length === 0) return '当前没有待触发的提醒。';
 
         const lines = reminders.map((r: any) => {

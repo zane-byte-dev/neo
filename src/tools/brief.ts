@@ -5,9 +5,8 @@
  * Useful for long tasks to provide mid-task progress reports.
  */
 import { callGemini } from '../utils/helpers.js';
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 import { getDb } from '../services/db.js';
-import { getActiveTenantKey } from '../services/tool-context.js';
 
 interface MessageRow {
     role: string;
@@ -15,8 +14,7 @@ interface MessageRow {
     timestamp: string;
 }
 
-function getRecentMessages(limit = 20): MessageRow[] {
-    const tenantKey = getActiveTenantKey();
+function getRecentMessages(tenantKey: string, limit = 20): MessageRow[] {
     if (!tenantKey) return [];
     const db = getDb();
     // Get current session id for this tenant
@@ -47,9 +45,10 @@ export const briefTool: Tool = {
             },
         },
     },
-    handler: async (args, _workDir) => {
+    handler: async (args, _workDir, context?: ToolContext) => {
         const focus = args.focus ? String(args.focus) : null;
-        const messages = getRecentMessages(30);
+        const tenantKey = context?.tenantKey ?? '';
+        const messages = getRecentMessages(tenantKey, 30);
 
         if (messages.length === 0) {
             return '当前没有对话记录可以摘要。';

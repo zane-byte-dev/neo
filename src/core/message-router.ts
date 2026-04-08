@@ -3,7 +3,6 @@ import { resolve } from 'path';
 import { parseReminderTime } from '../services/reminder-manager.js';
 import { parseScheduledTask } from '../services/scheduled-task-manager.js';
 import { hasPending, resolve as resolveUserInput } from '../services/user-input-waiter.js';
-import { setActiveTenantKey } from '../services/tool-context.js';
 import { isAuthorized, GEMINI_API_KEY } from '../config.js';
 import { getVaultRoot } from '../utils/helpers.js';
 import type { PlatformAdapter, NormalizedMessage, TenantKey } from '../types/platform.js';
@@ -37,9 +36,6 @@ export async function processMessage(deps: MessageRouterDeps, msg: NormalizedMes
         await deps.adapter.sendMessage(chatId, '⛔ Unauthorized.');
         return;
     }
-
-    // Set the active tenant for tools that call getToolContext()
-    setActiveTenantKey(tenantKey);
 
     // If ask_user tool is waiting for input, route this message directly to it
     if (hasPending(chatId)) {

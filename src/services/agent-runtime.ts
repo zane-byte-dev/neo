@@ -11,6 +11,7 @@ import type {
     StreamCallback,
     ImageInput,
     Tool,
+    ToolContext,
 } from '../utils/gemini-types.js';
 
 // ── Internal types ────────────────────────────────────────────────────────────
@@ -152,6 +153,7 @@ export async function agentLoop(
     onChunk?: StreamCallback,
     imageInput?: ImageInput,
     signal?: AbortSignal,
+    context?: ToolContext,
 ): Promise<string> {
     // Inject image into the first user turn when provided
     if (imageInput && initialContents.length > 0 && initialContents[0].role === 'user') {
@@ -243,7 +245,7 @@ export async function agentLoop(
 
         // Execute all tools (parallel for speed)
         const results = await Promise.all(
-            functionCalls.map(fc => executeTool(fc.name, fc.args, workDir, toolRegistry)),
+            functionCalls.map(fc => executeTool(fc.name, fc.args, workDir, toolRegistry, context)),
         );
 
         // Log tool results

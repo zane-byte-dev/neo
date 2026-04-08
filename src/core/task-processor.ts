@@ -1,6 +1,8 @@
 import { promises as fs } from 'fs';
 import { TASK_TIMEOUT_MS, EDIT_INTERVAL_MS, CHUNK_LIMIT } from '../config.js';
 import { registerAbort, unregisterAbort } from '../services/task-abort.js';
+import { getTenantContext } from '../services/tool-context.js';
+import type { ToolContext } from '../utils/gemini-types.js';
 import type { PlatformAdapter } from '../types/platform.js';
 import type { Task } from './types.js';
 
@@ -15,6 +17,16 @@ interface ProcessTaskDeps {
 export async function processTask(deps: ProcessTaskDeps, task: Task) {
     const { adapter, geminiClient, chatHistoryCache, userProfile, sendReply } = deps;
     const { chatId, question, userName, messageId } = task;
+
+    // Build ToolContext from the tenant registry for explicit parameter threading
+    const tenantCtx = getTenantContext(task.tenantKey);
+    const toolContext: ToolContext = {
+        tenantKey: task.tenantKey,
+        chatId,
+        adapter: tenantCtx.adapter,
+        reminderManager: tenantCtx.reminderManager,
+        scheduledTaskManager: tenantCtx.scheduledTaskManager,
+    };
 
     const abortController = new AbortController();
     registerAbort(chatId, abortController);
@@ -143,7 +155,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
                     mimeType: task.imageMimeType!,
                     data: imageData.toString('base64'),
                 };
-                return geminiClient.chatWithContextStreamingWithImage(question, context, imageInput, onChunk, signal);
+                return geminiClient.chatWithContextStreamingWithImage(question, context, imageInput, onChunk, signal, toolContext);
             })()
             : task.fileUri && task.fileMimeType
             ? await geminiClient.chatWithContextStreamingWithFile(
@@ -152,8 +164,9 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
                 { type: 'fileUri', mimeType: task.fileMimeType, fileUri: task.fileUri },
                 onChunk,
                 signal,
+                toolContext,
             )
-            : await geminiClient.chatWithContextStreaming(question, context, onChunk, signal);
+            : await geminiClient.chatWithContextStreaming(question, context, onChunk, signal, toolContext);
 
         if (!responseText) {
             console.error(`[Worker] No response text for task from ${userName}: "${question.slice(0, 80).replace(/\n/g, ' ')}"`);

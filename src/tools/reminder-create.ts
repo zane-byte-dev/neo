@@ -4,9 +4,8 @@
  * Lets the AI autonomously schedule a one-shot notification or timed task
  * without relying on natural language detection in message-router.
  */
-import { getToolContext } from '../services/tool-context.js';
 import { TELEGRAM_CHAT_ID } from '../config.js';
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 
 export const reminderCreateTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },
@@ -38,7 +37,7 @@ export const reminderCreateTool: Tool = {
             required: ['fire_at', 'content'],
         },
     },
-    handler: async (args, _workDir) => {
+    handler: async (args, _workDir, context?: ToolContext) => {
         const fireAtStr = String(args.fire_at ?? '').trim();
         const content = String(args.content ?? '').trim();
         const prompt = args.prompt ? String(args.prompt).trim() : undefined;
@@ -55,17 +54,14 @@ export const reminderCreateTool: Tool = {
             return `[Error] fire_at must be in the future. Current time: ${new Date().toISOString()}`;
         }
 
-        let ctx;
-        try {
-            ctx = getToolContext();
-        } catch {
+        if (!context) {
             return '[Error] reminder_create is not available in this context';
         }
 
-        const chatId = ctx.chatId || parseInt(TELEGRAM_CHAT_ID || '0', 10);
+        const chatId = context.chatId || parseInt(TELEGRAM_CHAT_ID || '0', 10);
         if (!chatId) return '[Error] Cannot determine chat ID';
 
-        const reminder = await ctx.reminderManager.add(chatId, content, fireAt, prompt);
+        const reminder = await context.reminderManager.add(chatId, content, fireAt, prompt);
         const fireStr = new Date(fireAt).toLocaleString('zh-CN', {
             timeZone: 'Asia/Shanghai',
             year: 'numeric', month: '2-digit', day: '2-digit',

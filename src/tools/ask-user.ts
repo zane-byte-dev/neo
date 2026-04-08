@@ -10,9 +10,8 @@
  * Uses user-input-waiter.ts for the pause/resume mechanism.
  * The message-router must check hasPending() before routing messages.
  */
-import { getToolContext } from '../services/tool-context.js';
 import { waitForUserInput } from '../services/user-input-waiter.js';
-import type { Tool } from './_base.js';
+import type { Tool, ToolContext } from './_base.js';
 
 export const askUserTool: Tool = {
     meta: { category: 'utility', version: '1.0.0' },
@@ -41,18 +40,15 @@ export const askUserTool: Tool = {
             required: ['question'],
         },
     },
-    handler: async (args, _workDir) => {
+    handler: async (args, _workDir, context?: ToolContext) => {
         const question = String(args.question ?? '').trim();
         if (!question) return '[Error] question is required';
 
-        let ctx;
-        try {
-            ctx = getToolContext();
-        } catch {
+        if (!context) {
             return '[Error] ask_user is not available in this context';
         }
 
-        const chatId = ctx.chatId;
+        const chatId = context.chatId;
         if (!chatId) return '[Error] Cannot determine chat ID';
 
         const choices = Array.isArray(args.choices)
@@ -77,7 +73,7 @@ export const askUserTool: Tool = {
             : undefined;
 
         try {
-            await ctx.adapter.sendMessage(chatId, messageText, {
+            await context.adapter.sendMessage(chatId, messageText, {
                 parseMode: 'markdown',
                 inlineKeyboard,
             });

@@ -4,8 +4,7 @@
  * Each tenant (platform:userId) gets their own isolated context with
  * independent managers, cache directories, and adapter reference.
  *
- * Tools call `getToolContext()` (uses active tenant) or
- * `getTenantContext(tenantKey)` for explicit access.
+ * Context is threaded explicitly via ToolContext parameters — no global state.
  */
 
 import type { TenantKey, PlatformAdapter } from '../types/platform.js';
@@ -50,35 +49,4 @@ export function getAllTenantKeys(): TenantKey[] {
 /** Remove a tenant context (for cleanup / testing). */
 export function removeTenantContext(tenantKey: TenantKey): void {
     _registry.delete(tenantKey);
-}
-
-// ── Active tenant pointer (set per-message in the router) ────────────────────
-
-let _activeTenantKey: TenantKey | null = null;
-
-export function setActiveTenantKey(tenantKey: TenantKey): void {
-    _activeTenantKey = tenantKey;
-}
-
-export function getActiveTenantKey(): TenantKey | null {
-    return _activeTenantKey;
-}
-
-/**
- * Legacy-compatible: get tool context for the currently active tenant.
- * Prefer getTenantContext(tenantKey) in new code.
- */
-export function getToolContext(): TenantContext {
-    if (!_activeTenantKey) throw new Error('[ToolContext] No active tenant. Call setActiveTenantKey() first.');
-    return getTenantContext(_activeTenantKey);
-}
-
-/** @deprecated Use setActiveTenantKey instead */
-export function setActiveChatId(_chatId: number): void {
-    // no-op — kept for compilation compatibility during migration
-}
-
-/** @deprecated Use registerTenantContext instead */
-export function setToolContext(_ctx: any): void {
-    // no-op — kept for compilation compatibility during migration
 }
