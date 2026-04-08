@@ -26,6 +26,7 @@ import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './core/handlers.js';
 import { initLifecycle } from './core/lifecycle.js';
 import { sendReply as sendReplyFn } from './core/reply.js';
+import { startWebServer } from './web/server.js';
 import { processTask as processTaskFn } from './core/task-processor.js';
 import { processMessage as processMessageFn } from './core/message-router.js';
 import { handleUrlMessage as handleUrlMessageFn } from './handlers/url-handler.js';
@@ -130,6 +131,7 @@ export class App {
 
         console.log(`🤖 Bot started. Adapters: ${[...this.adapters.keys()].join(', ')}`);
         console.log(`🛠  Gemini Client enabled: ${this.geminiClient.isEnabled()}`);
+        startWebServer(this.geminiClient);
     }
 
     async shutdown(): Promise<void> {
