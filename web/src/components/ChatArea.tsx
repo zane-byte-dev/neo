@@ -23,6 +23,7 @@ const ChatInput: React.FC = () => {
         isGenerating, setIsGenerating,
         activeChatId, addMessage, updateLastAssistantMessage, addImageToLastAssistantMessage,
         setAbortController, setThinkingStatus,
+        selectedModel, setSelectedModel,
     } = useAppStore()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
@@ -53,7 +54,7 @@ const ChatInput: React.FC = () => {
         let accumulated = ''
 
         try {
-            for await (const chunk of streamChat(text, activeChatId, controller.signal)) {
+            for await (const chunk of streamChat(text, activeChatId, controller.signal, selectedModel)) {
                 if (chunk.type === 'done') break
                 if (chunk.type === 'error') throw new Error(chunk.text ?? 'Unknown error')
                 if (chunk.type === 'thought') {
@@ -103,7 +104,25 @@ const ChatInput: React.FC = () => {
 
     return (
         <div className="p-4 border-t border-border bg-bg-container shrink-0">
-            <div className="max-w-3xl mx-auto relative">
+            <div className="max-w-3xl mx-auto">
+                {/* Model selector */}
+                <div className="flex items-center gap-1.5 mb-2">
+                    {(['flash', 'pro'] as const).map((m) => (
+                        <button
+                            key={m}
+                            onClick={() => setSelectedModel(m)}
+                            className={cn(
+                                'px-2.5 py-0.5 rounded-full text-xs font-medium transition-all',
+                                selectedModel === m
+                                    ? 'bg-primary-mint text-bg-container'
+                                    : 'bg-fill-secondary text-text-tertiary hover:text-text'
+                            )}
+                        >
+                            {m === 'flash' ? 'Flash' : 'Pro'}
+                        </button>
+                    ))}
+                </div>
+                <div className="relative">
                 <textarea
                     ref={textareaRef}
                     value={inputValue}
@@ -135,6 +154,7 @@ const ChatInput: React.FC = () => {
                             <Send size={15} fill="currentColor" />
                         </button>
                     )}
+                </div>
                 </div>
             </div>
         </div>

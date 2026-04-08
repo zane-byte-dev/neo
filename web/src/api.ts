@@ -47,6 +47,7 @@ export async function* streamChat(
     message: string,
     sessionId: string,
     signal?: AbortSignal,
+    model?: string,
 ): AsyncGenerator<StreamChunk> {
     const res = await fetch('/api/chat', {
         method: 'POST',
@@ -54,7 +55,7 @@ export async function* streamChat(
             'Content-Type': 'application/json',
             ...authHeaders(),
         },
-        body: JSON.stringify({ message, sessionId }),
+        body: JSON.stringify({ message, sessionId, ...(model ? { model } : {}) }),
         signal,
     })
 

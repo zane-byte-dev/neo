@@ -236,6 +236,7 @@ export class GeminiClient {
         imageInput?: ImageInput,
         signal?: AbortSignal,
         context?: ToolContext,
+        modelOverride?: string,
     ): Promise<string | null> {
         if (!this.enabled) {
             console.warn(`[AgentRuntime] Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
@@ -247,10 +248,11 @@ export class GeminiClient {
 
         try {
             const start = Date.now();
-            console.log(`[AgentRuntime] → ${this.model}: ${message.slice(0, 60).replace(/\n/g, ' ')}${imageInput ? ' [+image]' : ''}...`);
+            const effectiveModel = modelOverride ? resolveModel(modelOverride) : this.model;
+            console.log(`[AgentRuntime] → ${effectiveModel}: ${message.slice(0, 60).replace(/\n/g, ' ')}${imageInput ? ' [+image]' : ''}...`);
             const result = await agentLoop(
                 this.apiKey,
-                this.model,
+                effectiveModel,
                 this.systemInstruction,
                 contents,
                 this.workDir,
@@ -282,8 +284,9 @@ export class GeminiClient {
         onChunk: StreamCallback,
         signal?: AbortSignal,
         context?: ToolContext,
+        model?: string,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, undefined, signal, context);
+        return this.runAgent(message, conversationHistory, onChunk, undefined, signal, context, model);
     }
 
     /** Multimodal variant — same as chatWithContextStreaming but attaches an image. */

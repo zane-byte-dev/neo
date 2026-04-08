@@ -76,6 +76,7 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
         const body = ctx.request.body as Record<string, unknown>;
         const message = typeof body.message === 'string' ? body.message.trim() : '';
         const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
+        const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
 
         if (!message) {
             ctx.status = 400;
@@ -137,6 +138,7 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
                 },
                 abortController.signal,
                 toolContext,
+                model,
             );
             write({ type: 'done' });
         } catch (err: unknown) {

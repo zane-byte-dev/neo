@@ -104,6 +104,8 @@ export const useAppStore = create<AppState>()(
             setAbortController: (c: AbortController | null) => set({ abortController: c }),
             thinkingStatus: '',
             setThinkingStatus: (s: string) => set({ thinkingStatus: s }),
+            selectedModel: 'flash',
+            setSelectedModel: (model: string) => set({ selectedModel: model }),
 
             // Notebook
             notebookEntries: [],
@@ -119,6 +121,7 @@ export const useAppStore = create<AppState>()(
                 theme: state.theme,
                 chats: state.chats,
                 messages: state.messages,
+                selectedModel: state.selectedModel,
             }),
         }
     )

@@ -59,6 +59,8 @@ export interface AppState {
     setAbortController: (c: AbortController | null) => void
     thinkingStatus: string
     setThinkingStatus: (s: string) => void
+    selectedModel: string
+    setSelectedModel: (model: string) => void
 
     // Notebook
     notebookEntries: NoteEntry[]
