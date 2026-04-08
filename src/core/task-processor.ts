@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import { TASK_TIMEOUT_MS, EDIT_INTERVAL_MS, CHUNK_LIMIT } from '../config.js';
+import { registerAbort, unregisterAbort } from '../services/task-abort.js';
 import type { PlatformAdapter } from '../types/platform.js';
 import type { Task } from './types.js';
 
@@ -15,6 +16,10 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
     const { adapter, geminiClient, chatHistoryCache, userProfile, sendReply } = deps;
     const { chatId, question, userName, messageId } = task;
 
+    const abortController = new AbortController();
+    registerAbort(chatId, abortController);
+    const { signal } = abortController;
+
     const taskTimeoutMs = TASK_TIMEOUT_MS;
     let taskTimedOut = false;
     const taskTimeoutHandle = setTimeout(async () => {
@@ -25,6 +30,9 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
             `⚠️ 请求处理超时（>${taskTimeoutMs / 60000} 分钟），可能是 AI 引擎无响应，请稍后重试。`
         ).catch(() => {});
     }, taskTimeoutMs);
+
+    // Tracks the most recent bot message id — accessible in the catch block.
+    let activeMsgId = '';
 
     try {
         console.log(`[Worker] Processing task for ${userName}: ${question.substring(0, 20)}...`);
@@ -53,7 +61,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         let textAccum = '';
         let hasTextStarted = false;
 
-        let activeMsgId = placeholderMsg.id;
+        activeMsgId = placeholderMsg.id;
         let committedChars = 0;
 
         let lastEditMs = 0;
@@ -135,16 +143,17 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
                     mimeType: task.imageMimeType!,
                     data: imageData.toString('base64'),
                 };
-                return geminiClient.chatWithContextStreamingWithImage(question, context, imageInput, onChunk);
+                return geminiClient.chatWithContextStreamingWithImage(question, context, imageInput, onChunk, signal);
             })()
             : task.fileUri && task.fileMimeType
             ? await geminiClient.chatWithContextStreamingWithFile(
                 question,
                 context,
                 { type: 'fileUri', mimeType: task.fileMimeType, fileUri: task.fileUri },
-                onChunk
+                onChunk,
+                signal,
             )
-            : await geminiClient.chatWithContextStreaming(question, context, onChunk);
+            : await geminiClient.chatWithContextStreaming(question, context, onChunk, signal);
 
         if (!responseText) {
             console.error(`[Worker] No response text for task from ${userName}: "${question.slice(0, 80).replace(/\n/g, ' ')}"`);
@@ -171,11 +180,17 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
             });
 
     } catch (error) {
+        const isAbort = error instanceof Error && error.name === 'AbortError';
+        if (isAbort) {
+            await adapter.editMessage(chatId, activeMsgId, '⏹️ 已中断。').catch(() => {});
+            return;
+        }
         if (!taskTimedOut) {
             console.error(`[Worker Error] ${error}`);
             await sendReply(chatId, '🔥 处理请求时出现错误，请稍后重试。', 2, messageId);
         }
     } finally {
+        unregisterAbort(chatId);
         clearTimeout(taskTimeoutHandle);
     }
 }

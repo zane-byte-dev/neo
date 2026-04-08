@@ -2,19 +2,16 @@
  * helpers.ts — Shared lightweight utilities (vault path, one-shot Gemini call).
  */
 import { resolve } from 'path';
-
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+import { WORK_DIR, GEMINI_API_KEY, GEMINI_MODEL_ENV, GEMINI_BASE_URL } from '../config.js';
 
 /** Resolve the vault / workspace root from WORK_DIR env. */
 export function getVaultRoot(): string {
-    const raw = process.env.WORK_DIR || '';
-    return raw ? resolve(raw) : process.cwd();
+    return WORK_DIR ? resolve(WORK_DIR) : process.cwd();
 }
 
 /** Return the resolved WORK_DIR path, or undefined if not configured. */
 export function getConfiguredWorkDir(): string | undefined {
-    const raw = process.env.WORK_DIR;
-    return raw ? resolve(raw) : undefined;
+    return WORK_DIR ? resolve(WORK_DIR) : undefined;
 }
 
 /** Lightweight one-shot Gemini call (no tool use, no history). */
@@ -22,11 +19,11 @@ export async function callGemini(
     prompt: string,
     opts: { temperature?: number; maxOutputTokens?: number } = {},
 ): Promise<string | null> {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
 
-    const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash';
-    const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
+    const model = GEMINI_MODEL_ENV ?? 'gemini-2.0-flash';
+    const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
 
     const res = await fetch(url, {
         method: 'POST',

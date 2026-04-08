@@ -41,6 +41,7 @@ async function* streamGeminiApi(
     contents: GeminiContent[],
     toolRegistry: Map<string, Tool>,
     forceText = false,
+    signal?: AbortSignal,
 ): AsyncGenerator<ApiChunk> {
     const url = `${GEMINI_BASE_URL}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
 
@@ -55,11 +56,16 @@ async function* streamGeminiApi(
         body.systemInstruction = { parts: [{ text: systemInstruction }] };
     }
 
+    const timeoutSignal = AbortSignal.timeout(GEMINI_API_TIMEOUT_MS);
+    const fetchSignal = signal
+        ? AbortSignal.any([timeoutSignal, signal])
+        : timeoutSignal;
+
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(GEMINI_API_TIMEOUT_MS),
+        signal: fetchSignal,
     });
 
     if (!res.ok || !res.body) {
@@ -145,6 +151,7 @@ export async function agentLoop(
     toolRegistry: Map<string, Tool>,
     onChunk?: StreamCallback,
     imageInput?: ImageInput,
+    signal?: AbortSignal,
 ): Promise<string> {
     // Inject image into the first user turn when provided
     if (imageInput && initialContents.length > 0 && initialContents[0].role === 'user') {
@@ -181,8 +188,10 @@ export async function agentLoop(
 
         // Consume one full model turn from the streaming API
         dbg.apiRequest(iter, model, contents);
+        if (signal?.aborted) throw Object.assign(new Error('AbortError'), { name: 'AbortError' });
+
         try {
-        for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents, toolRegistry, isLastIter)) {
+        for await (const chunk of streamGeminiApi(apiKey, model, systemInstruction, contents, toolRegistry, isLastIter, signal)) {
             if (chunk.rawPart) modelRawParts.push(chunk.rawPart);
             if (chunk.thought) {
                 // Thinking tokens: stream immediately — always safe to show live

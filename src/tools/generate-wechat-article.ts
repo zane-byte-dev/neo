@@ -1,6 +1,7 @@
 import type { Tool } from './_base.js';
 import { gatherNewsStories } from './_news-helper.js';
 import { geminiGenerate } from '../services/gemini-client.js';
+import { GEMINI_API_KEY } from '../config.js';
 
 export const generateWechatArticleTool: Tool = {
     meta: { category: 'ai', version: '1.0.0', requiresEnv: ['GEMINI_API_KEY'] },
@@ -56,7 +57,7 @@ export const generateWechatArticleTool: Tool = {
             args.subreddits ?? 'artificial,MachineLearning,ChatGPT,LocalLLaMA,singularity',
         ).split(',').map(s => s.trim()).filter(Boolean);
 
-        const apiKey = process.env.GEMINI_API_KEY ?? '';
+        const apiKey = GEMINI_API_KEY;
         if (!apiKey) return '[Error] GEMINI_API_KEY 未设置，无法生成文章。';
 
         const { rawText, stories } = await gatherNewsStories(timeRange, subreddits, maxPerSource);

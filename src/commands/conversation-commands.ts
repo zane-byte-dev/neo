@@ -1,4 +1,5 @@
 import { geminiGenerate } from '../services/gemini-client.js';
+import { GEMINI_API_KEY } from '../config.js';
 import type { Message } from '../services/chat-history-cache.js';
 import type { Command } from './_base.js';
 
@@ -14,7 +15,7 @@ export const conversationCommand: Command = {
     }
 
     const statusMsg = await deps.adapter.sendMessage(msg.chatId, '⏳ 正在压缩上下文...');
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = GEMINI_API_KEY;
     if (!apiKey) {
         await deps.adapter.editMessage(msg.chatId, statusMsg.id, '⚠️ 需要配置 GEMINI_API_KEY。').catch(() => {});
         return true;

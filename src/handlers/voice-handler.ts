@@ -2,7 +2,7 @@ import { join } from 'path';
 import { promises as fs } from 'fs';
 import { geminiGenerate, geminiUploadFile } from '../services/gemini-client.js';
 import { getVaultRoot } from '../utils/helpers.js';
-import { isAuthorized } from '../config.js';
+import { isAuthorized, GEMINI_API_KEY } from '../config.js';
 import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
 import type { Task } from '../core/types.js';
 
@@ -64,7 +64,7 @@ export async function processVoiceMessage(deps: MediaDeps, msg: NormalizedMessag
 }
 
 async function transcribeVoice(filePath: string): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env');
 
     const fileBuffer = await fs.readFile(filePath);

@@ -6,6 +6,7 @@
  */
 import cron from 'node-cron';
 import { getToolContext } from '../services/tool-context.js';
+import { TELEGRAM_CHAT_ID } from '../config.js';
 import type { Tool } from './_base.js';
 
 export const scheduleCreateTool: Tool = {
@@ -57,7 +58,7 @@ export const scheduleCreateTool: Tool = {
             return '[Error] schedule_create is not available in this context (bot not initialized)';
         }
 
-        const chatId = ctx.chatId || parseInt(process.env.TELEGRAM_CHAT_ID || '0', 10);
+        const chatId = ctx.chatId || parseInt(TELEGRAM_CHAT_ID || '0', 10);
         if (!chatId) return '[Error] Cannot determine chat ID for scheduled task';
 
         const task = await ctx.scheduledTaskManager.add(chatId, content, prompt, cronExpr);

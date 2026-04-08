@@ -4,7 +4,7 @@ import { parseReminderTime } from '../services/reminder-manager.js';
 import { parseScheduledTask } from '../services/scheduled-task-manager.js';
 import { hasPending, resolve as resolveUserInput } from '../services/user-input-waiter.js';
 import { setActiveTenantKey } from '../services/tool-context.js';
-import { isAuthorized } from '../config.js';
+import { isAuthorized, GEMINI_API_KEY } from '../config.js';
 import { getVaultRoot } from '../utils/helpers.js';
 import type { PlatformAdapter, NormalizedMessage, TenantKey } from '../types/platform.js';
 import type { Task } from './types.js';
@@ -139,7 +139,7 @@ async function handleBtwMessage(deps: MessageRouterDeps, msg: NormalizedMessage)
 
 async function handleScheduledTaskMessage(deps: MessageRouterDeps, msg: NormalizedMessage) {
     const { chatId, id: messageId, text, tenantKey } = msg;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = GEMINI_API_KEY;
     if (!apiKey) {
         await deps.adapter.sendMessage(chatId, '⚠️ 定时任务功能需要配置 GEMINI_API_KEY。', { replyToId: messageId });
         return;
@@ -174,7 +174,7 @@ async function handleScheduledTaskMessage(deps: MessageRouterDeps, msg: Normaliz
 
 async function handleReminderMessage(deps: MessageRouterDeps, msg: NormalizedMessage) {
     const { chatId, id: messageId, text } = msg;
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = GEMINI_API_KEY;
     if (!apiKey) {
         await deps.adapter.sendMessage(chatId, '⚠️ 提醒功能需要配置 GEMINI_API_KEY。', { replyToId: messageId });
         return;

@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import { join, resolve, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { RESOURCE_DIR } from '../config.js';
 import type { Tool } from './_base.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -9,9 +10,8 @@ const __dirname = dirname(__filename);
 const _PROJECT_ROOT = resolve(__dirname, '../..');
 
 function getKbDir(workDir: string): string {
-    const rawResourceDir = process.env.RESOURCE_DIR ?? '';
-    const resourceDir = rawResourceDir
-        ? (isAbsolute(rawResourceDir) ? rawResourceDir : resolve(_PROJECT_ROOT, rawResourceDir))
+    const resourceDir = RESOURCE_DIR
+        ? (isAbsolute(RESOURCE_DIR) ? RESOURCE_DIR : resolve(_PROJECT_ROOT, RESOURCE_DIR))
         : join(workDir, 'project/@reference');
     return join(resourceDir, 'xifeng-km');
 }

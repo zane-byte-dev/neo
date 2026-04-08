@@ -1,8 +1,9 @@
 import type { Command } from './_base.js';
 import { cancel as cancelUserInput } from '../services/user-input-waiter.js';
+import { abortActiveTask } from '../services/task-abort.js';
 
 export const coreCommand: Command = {
-    commands: ['/start', '/clear', '/new', '/stats'],
+    commands: ['/start', '/clear', '/new', '/stats', '/stop'],
     handler: async (command, _text, msg, deps) => {
     const reply = (t: string, md = false) => deps.adapter.sendMessage(msg.chatId, t, md ? { parseMode: 'markdown' } : undefined);
     switch (command) {
@@ -55,6 +56,13 @@ export const coreCommand: Command = {
                 `Current messages: ${stats.currentMessages}\n` +
                 `Session ID: ${stats.sessionId || 'N/A'}`
             );
+            return true;
+        }
+
+        case '/stop': {
+            cancelUserInput(msg.chatId);
+            const aborted = abortActiveTask(msg.chatId);
+            await reply(aborted ? '⏹️ 已中断当前任务。' : 'ℹ️ 当前没有正在进行的任务。');
             return true;
         }
 

@@ -11,11 +11,12 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
+import { DB_PATH as DEFAULT_DB_PATH } from '../config.js';
 
 let _db: Database.Database | null = null;
 
 export function initDb(dbPath?: string): Database.Database {
-    const path = dbPath ?? resolve(process.env.DB_PATH || './data/neo.db');
+    const path = dbPath ?? resolve(DEFAULT_DB_PATH);
     mkdirSync(dirname(path), { recursive: true });
 
     _db = new Database(path);

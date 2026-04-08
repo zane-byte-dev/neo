@@ -39,6 +39,18 @@
 
 ## change log
 
+### 2026-04-05
+- **[Feature] 多平台支持 (Multi-Platform)**：正式引入 **Feishu (飞书)** 适配器，支持企业级协同场景。
+- **[Architecture] 租户架构 (Tenant Architecture)**：实现租户隔离，每个独立会话（Telegram/Feishu）拥有专属的 `TenantContext`。
+- **[Storage] SQLite 迁移**：全面转向 `better-sqlite3` 持久化存储，对话历史、异步任务、提醒等数据实现高效 SQL 管理。
+- **[Core] 流程归一化**：重构 `MessageRouter` 与 `TaskProcessor`，统一多端消息处理流程。
+
+### 2026-03-20
+- **[Refactor] 命令模块化**：将单体命令处理逻辑拆分为 8 个核心模块 (`core`, `workspace`, `task`, `reminder`, etc.)。
+- **[Security] 安全加固**：上线 `AuditLogger` 审计日志系统，内置针对 Bash 注入、危险指令执行的防御机制。
+- **[Core] 直接调用 SDK**：彻底移除外部 CLI 依赖，通过 Gemini SDK 直接驱动 Function Calling，显著降低延迟。
+- **[Tooling] 浏览器服务**：集成 Puppeteer-core，支持网页内容的动态抓取与分析。
+
 ### 2026-03-14
 彻底去除 gemini-cli 依赖，底层全面迁移为直接调用 Gemini SDK（FunctionCalling 模式），响应速度大幅提升。
 重构项目目录结构，拆分为 `inkClaw-brain`（知识库）、`inkClaw-core`（网关）、`inkClaw-tools`（工具脚本）三仓分离架构。

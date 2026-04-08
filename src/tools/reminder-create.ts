@@ -5,6 +5,7 @@
  * without relying on natural language detection in message-router.
  */
 import { getToolContext } from '../services/tool-context.js';
+import { TELEGRAM_CHAT_ID } from '../config.js';
 import type { Tool } from './_base.js';
 
 export const reminderCreateTool: Tool = {
@@ -61,7 +62,7 @@ export const reminderCreateTool: Tool = {
             return '[Error] reminder_create is not available in this context';
         }
 
-        const chatId = ctx.chatId || parseInt(process.env.TELEGRAM_CHAT_ID || '0', 10);
+        const chatId = ctx.chatId || parseInt(TELEGRAM_CHAT_ID || '0', 10);
         if (!chatId) return '[Error] Cannot determine chat ID';
 
         const reminder = await ctx.reminderManager.add(chatId, content, fireAt, prompt);

@@ -10,7 +10,7 @@
 import { join, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { setupLogger } from '../utils/logger.js';
-import { GEMINI_BASE_URL, GEMINI_FILES_UPLOAD_URL } from '../config.js';
+import { GEMINI_BASE_URL, GEMINI_FILES_UPLOAD_URL, GEMINI_API_KEY, GEMINI_MODEL_ENV, WORK_DIR, GEMINI_WORK_DIR, AGENT_CONFIG_DIR } from '../config.js';
 import { agentLoop, resolveModel } from './agent-runtime.js';
 import { loadOpenClawSkills, formatSkillsPrompt } from './openclaw-skills.js';
 
@@ -113,12 +113,12 @@ export class GeminiClient {
     private systemInstruction = '';
 
     constructor() {
-        this.apiKey = process.env.GEMINI_API_KEY ?? '';
-        this.model = resolveModel(process.env.GEMINI_MODEL ?? 'flash');
+        this.apiKey = GEMINI_API_KEY;
+        this.model = resolveModel(GEMINI_MODEL_ENV ?? 'flash');
         // Always resolve to absolute path so tool calls work regardless of CWD
-        const rawWorkDir = process.env.WORK_DIR ?? process.env.GEMINI_WORK_DIR ?? '';
+        const rawWorkDir = WORK_DIR || GEMINI_WORK_DIR;
         this.workDir = rawWorkDir ? resolve(rawWorkDir) : '';
-        this.configDir = process.env.AGENT_CONFIG_DIR ? resolve(process.env.AGENT_CONFIG_DIR) : '';
+        this.configDir = AGENT_CONFIG_DIR;
 
         if (!this.apiKey) {
             console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
@@ -232,6 +232,7 @@ export class GeminiClient {
         history?: string,
         onChunk?: StreamCallback,
         imageInput?: ImageInput,
+        signal?: AbortSignal,
     ): Promise<string | null> {
         if (!this.enabled) {
             console.warn(`[AgentRuntime] Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
@@ -253,6 +254,7 @@ export class GeminiClient {
                 toolRegistry,
                 onChunk,
                 imageInput,
+                signal,
             );
             const elapsed = Date.now() - start;
             if (!result) {
@@ -274,8 +276,9 @@ export class GeminiClient {
         message: string,
         conversationHistory: string,
         onChunk: StreamCallback,
+        signal?: AbortSignal,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk);
+        return this.runAgent(message, conversationHistory, onChunk, undefined, signal);
     }
 
     /** Multimodal variant — same as chatWithContextStreaming but attaches an image. */
@@ -284,8 +287,9 @@ export class GeminiClient {
         conversationHistory: string,
         imageInput: ImageInput,
         onChunk: StreamCallback,
+        signal?: AbortSignal,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, imageInput);
+        return this.runAgent(message, conversationHistory, onChunk, imageInput, signal);
     }
 
     /** Same as WithImage but semantically for documents (PDF, audio, video via File API). */
@@ -294,8 +298,9 @@ export class GeminiClient {
         conversationHistory: string,
         fileInput: FileInput,
         onChunk: StreamCallback,
+        signal?: AbortSignal,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, fileInput);
+        return this.runAgent(message, conversationHistory, onChunk, fileInput, signal);
     }
 
     async chatWithContext(message: string, conversationHistory: string): Promise<string | null> {

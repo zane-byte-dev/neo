@@ -6,6 +6,7 @@
 import { config as loadEnv } from 'dotenv';
 loadEnv();
 
+import { resolve } from 'path';
 import type { TenantKey, Platform } from './types/platform.js';
 import { makeTenantKey } from './types/platform.js';
 
@@ -151,3 +152,25 @@ export const DANGEROUS_PATTERNS = [
     /\b(?:sudo|su)\b/,                       // sudo/su (privilege escalation)
     />\s*\/dev\/[a-z]/,                      // redirect to /dev/sda, /dev/null, etc.
 ];
+
+// ── Platform credentials ──────────────────────────────────────────────────────
+
+export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
+export const TELEGRAM_CHAT_ID   = process.env.TELEGRAM_CHAT_ID   ?? '';
+export const FEISHU_APP_ID      = process.env.FEISHU_APP_ID      ?? '';
+export const FEISHU_APP_SECRET  = process.env.FEISHU_APP_SECRET  ?? '';
+
+// ── Gemini / AI ───────────────────────────────────────────────────────────────
+
+export const GEMINI_API_KEY   = process.env.GEMINI_API_KEY ?? '';
+/** Raw GEMINI_MODEL env value; consumers apply their own default/alias. */
+export const GEMINI_MODEL_ENV: string | undefined = process.env.GEMINI_MODEL;
+export const GEMINI_WORK_DIR  = process.env.GEMINI_WORK_DIR ?? '';
+
+// ── Agent / workspace paths ───────────────────────────────────────────────────
+
+export const WORK_DIR       = process.env.WORK_DIR ?? '';
+export const AGENT_CONFIG_DIR = process.env.AGENT_CONFIG_DIR
+    ? resolve(process.env.AGENT_CONFIG_DIR)
+    : '';
+export const RESOURCE_DIR   = process.env.RESOURCE_DIR ?? '';

@@ -10,6 +10,7 @@ import {
     SPREADSHEET_EXTENSIONS,
     GEMINI_NATIVE_MIMES,
     isAuthorized,
+    GEMINI_API_KEY,
 } from '../config.js';
 import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';
 import type { Task } from '../core/types.js';
@@ -196,7 +197,7 @@ async function convertSpreadsheetToText(filePath: string, ext: string): Promise<
 }
 
 async function uploadToGeminiFileApi(filePath: string, mimeType: string): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = GEMINI_API_KEY;
     if (!apiKey) throw new Error('GEMINI_API_KEY not set in .env');
 
     const fileBuffer = await fs.readFile(filePath);
