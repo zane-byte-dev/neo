@@ -11,6 +11,7 @@ export interface Message {
     id: string
     role: 'user' | 'assistant'
     content: string
+    images?: string[]   // data URLs for AI-generated images
     timestamp: number
 }
 
@@ -47,6 +48,7 @@ export interface AppState {
     messages: Record<string, Message[]>
     addMessage: (chatId: string, message: Message) => void
     updateLastAssistantMessage: (chatId: string, content: string) => void
+    addImageToLastAssistantMessage: (chatId: string, dataUrl: string) => void
 
     // Input
     inputValue: string

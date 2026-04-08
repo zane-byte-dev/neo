@@ -84,6 +84,16 @@ export const useAppStore = create<AppState>()(
                 }
                 return { messages: { ...state.messages, [chatId]: msgs } }
             }),
+            addImageToLastAssistantMessage: (chatId: string, dataUrl: string) => set((state) => {
+                const msgs = [...(state.messages[chatId] ?? [])]
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    if (msgs[i].role === 'assistant') {
+                        msgs[i] = { ...msgs[i], images: [...(msgs[i].images ?? []), dataUrl] }
+                        break
+                    }
+                }
+                return { messages: { ...state.messages, [chatId]: msgs } }
+            }),
 
             // Input
             inputValue: '',

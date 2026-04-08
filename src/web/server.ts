@@ -117,6 +117,13 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
             }
         };
 
+        // Inject web image callback so generate_image streams via SSE instead of Telegram
+        if (toolContext) {
+            toolContext.imageCallback = async (data, mimeType, caption) => {
+                write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
+            };
+        }
+
         let fullResponse = '';
         try {
             await geminiClient.chatWithContextStreaming(

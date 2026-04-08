@@ -21,7 +21,7 @@ const ChatInput: React.FC = () => {
     const {
         inputValue, setInputValue,
         isGenerating, setIsGenerating,
-        activeChatId, addMessage, updateLastAssistantMessage,
+        activeChatId, addMessage, updateLastAssistantMessage, addImageToLastAssistantMessage,
         setAbortController, setThinkingStatus,
     } = useAppStore()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
@@ -64,6 +64,10 @@ const ChatInput: React.FC = () => {
                     if (!accumulated) setThinkingStatus('')
                     accumulated += chunk.text
                     updateLastAssistantMessage(activeChatId, accumulated)
+                } else if (chunk.type === 'image' && chunk.data && chunk.mimeType) {
+                    setThinkingStatus('')
+                    const dataUrl = `data:${chunk.mimeType};base64,${chunk.data}`
+                    addImageToLastAssistantMessage(activeChatId, dataUrl)
                 }
             }
         } catch (err: unknown) {
@@ -193,6 +197,18 @@ export const ChatArea: React.FC = () => {
                                         <span className="text-text-tertiary italic text-xs">
                                             ● ● ●
                                         </span>
+                                    )}
+                                    {msg.images && msg.images.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            {msg.images.map((src, i) => (
+                                                <img
+                                                    key={i}
+                                                    src={src}
+                                                    alt="Generated image"
+                                                    className="max-w-sm rounded-xl border border-border"
+                                                />
+                                            ))}
+                                        </div>
                                     )}
                                 </div>
                             )}

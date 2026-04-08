@@ -78,21 +78,23 @@ export const generateImageTool: Tool = {
             return '[Error] generate_image requires a platform context to send the image.';
         }
 
-        // Send the image to the user via the platform adapter
-        const buffer = Buffer.from(imageData, 'base64');
-
-        // Save to temp file (Telegraf needs file path or stream)
-        const tmpDir = join('.tmp', 'images');
-        await fs.mkdir(tmpDir, { recursive: true });
-        const ext = mimeType.includes('png') ? 'png' : 'jpg';
-        const tmpPath = join(tmpDir, `gen_${Date.now()}.${ext}`);
-        await fs.writeFile(tmpPath, buffer);
-
-        try {
-            await context.adapter.sendPhoto(context.chatId, tmpPath, textResponse || undefined);
-        } finally {
-            // Clean up temp file
-            await fs.unlink(tmpPath).catch(() => {});
+        if (context.imageCallback) {
+            // Web context: stream the image back via SSE
+            await context.imageCallback(imageData, mimeType, textResponse || undefined);
+        } else {
+            // Platform context (e.g. Telegram): send via adapter
+            const buffer = Buffer.from(imageData, 'base64');
+            // Save to temp file (Telegraf needs file path or stream)
+            const tmpDir = join('.tmp', 'images');
+            await fs.mkdir(tmpDir, { recursive: true });
+            const ext = mimeType.includes('png') ? 'png' : 'jpg';
+            const tmpPath = join(tmpDir, `gen_${Date.now()}.${ext}`);
+            await fs.writeFile(tmpPath, buffer);
+            try {
+                await context.adapter.sendPhoto(context.chatId, tmpPath, textResponse || undefined);
+            } finally {
+                await fs.unlink(tmpPath).catch(() => {});
+            }
         }
 
         return textResponse

@@ -59,6 +59,11 @@ export interface ToolContext {
     reminderManager: any;
     /** Scheduled task manager instance */
     scheduledTaskManager: any;
+    /**
+     * Web-only: stream a generated image back via SSE instead of using the platform adapter.
+     * When present, generate_image will call this instead of adapter.sendPhoto().
+     */
+    imageCallback?: (data: string, mimeType: string, caption?: string) => Promise<void>;
 }
 
 // ── Tool types ───────────────────────────────────────────────────────────────

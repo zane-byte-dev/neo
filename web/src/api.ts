@@ -35,9 +35,12 @@ export async function apiGet<T = unknown>(path: string): Promise<T> {
 // ── Chat SSE stream ───────────────────────────────────────────────────────────
 
 export interface StreamChunk {
-    type: 'text' | 'thought' | 'tool_call' | 'done' | 'error'
+    type: 'text' | 'thought' | 'tool_call' | 'done' | 'error' | 'image'
     text?: string
     toolName?: string
+    data?: string      // base64 image data (for 'image' type)
+    mimeType?: string  // e.g. 'image/png' (for 'image' type)
+    caption?: string   // optional caption (for 'image' type)
 }
 
 export async function* streamChat(
