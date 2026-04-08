@@ -17,7 +17,7 @@ function getKbDir(workDir: string): string {
 }
 
 export const findInKmTool: Tool = {
-    meta: { category: 'knowledge', version: '1.1.0' },
+    meta: { category: 'knowledge', version: '1.1.0', enabled: false },
     declaration: {
         name: 'find_in_km',
         description:

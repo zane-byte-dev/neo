@@ -152,5 +152,44 @@ function createSchema(db: Database.Database): void {
             data        TEXT    NOT NULL,
             updated_at  INTEGER NOT NULL
         );
+
+        -- ── Notebook (knowledge base entries) ────────────────────────────────
+        CREATE TABLE IF NOT EXISTS notebook_entries (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            title       TEXT    NOT NULL,
+            author      TEXT,
+            date        TEXT,
+            source      TEXT,
+            summary     TEXT,
+            tags        TEXT,
+            content     TEXT,
+            created_at  TEXT    NOT NULL,
+            updated_at  TEXT    NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_notebook_date   ON notebook_entries(date);
+        CREATE INDEX IF NOT EXISTS idx_notebook_source ON notebook_entries(source);
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS notebook_fts USING fts5(
+            title, author, source, summary, tags, content,
+            content='notebook_entries',
+            content_rowid='id'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS notebook_ai AFTER INSERT ON notebook_entries BEGIN
+            INSERT INTO notebook_fts(rowid, title, author, source, summary, tags, content)
+            VALUES (new.id, new.title, new.author, new.source, new.summary, new.tags, new.content);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notebook_ad AFTER DELETE ON notebook_entries BEGIN
+            INSERT INTO notebook_fts(notebook_fts, rowid, title, author, source, summary, tags, content)
+            VALUES ('delete', old.id, old.title, old.author, old.source, old.summary, old.tags, old.content);
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS notebook_au AFTER UPDATE ON notebook_entries BEGIN
+            INSERT INTO notebook_fts(notebook_fts, rowid, title, author, source, summary, tags, content)
+            VALUES ('delete', old.id, old.title, old.author, old.source, old.summary, old.tags, old.content);
+            INSERT INTO notebook_fts(rowid, title, author, source, summary, tags, content)
+            VALUES (new.id, new.title, new.author, new.source, new.summary, new.tags, new.content);
+        END;
     `);
 }
