@@ -105,16 +105,6 @@ export class App {
         for (const userId of getAllUserIds()) {
             await this.initUserLifecycle(userId);
         }
-
-        // Cron jobs operate across all tenants
-        setupCronJobs({
-            tenantKeys: getAllTenantKeys(),
-            sendReply: async (tenantKey, text) => {
-                const ctx = getTenantContext(tenantKey);
-                await this.sendReply(ctx.adapter, ctx.chatId, text);
-            },
-            getWorkDir: (tenantKey) => getTenantContext(tenantKey).workDir,
-        });
     }
 
     // ── Start / Stop ─────────────────────────────────────────────────────

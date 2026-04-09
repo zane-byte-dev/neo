@@ -17,19 +17,6 @@ import type { CronJob, CronDeps } from './_base.js';
 
 export type { CronJob, CronDeps } from './_base.js';
 
-function isCronJob(value: unknown): value is CronJob {
-    return (
-        typeof value === 'object' &&
-        value !== null &&
-        'name' in value &&
-        'schedule' in value &&
-        'handler' in value &&
-        typeof (value as CronJob).name === 'string' &&
-        typeof (value as CronJob).schedule === 'string' &&
-        typeof (value as CronJob).handler === 'function'
-    );
-}
-
 /** Map of job name → { job, deps } for manual triggering from the web API */
 const jobRegistry = new Map<string, { job: CronJob; deps: CronDeps }>();
 
@@ -103,49 +90,3 @@ export async function executeJob(jobName: string): Promise<{ status: string; sum
     }
 }
 
-export async function setupCronJobs(deps: CronDeps): Promise<void> {
-    const dir = dirname(fileURLToPath(import.meta.url));
-    const jobs = await autoLoad(dir, isCronJob);
-
-    let count = 0;
-    for (const job of jobs) {
-        const dbState = syncJobToDb(job);
-        // Register for manual trigger even if disabled
-        jobRegistry.set(job.name, { job, deps });
-
-        if (!dbState.enabled) {
-            console.log(`[Cron] ⏸️  ${job.name} (disabled)`);
-            continue;
-        }
-
-        const schedule = dbState.schedule;
-
-        cron.schedule(schedule, async () => {
-            // Re-check enabled at execution time (may have changed via web UI)
-            const db = getDb();
-            const row = db.prepare('SELECT enabled FROM cron_jobs WHERE name = ?').get(job.name) as
-                | { enabled: number }
-                | undefined;
-            if (row && row.enabled === 0) return;
-
-            console.log(`[Cron] Execution starting: ${job.name}`);
-            const runId = recordRunStart(job.name);
-            try {
-                const summary = await job.handler(deps);
-                recordRunEnd(runId, 'success', typeof summary === 'string' ? summary : undefined);
-            } catch (error: any) {
-                const msg = error.message || String(error);
-                console.error(`[Cron Error ${job.name}] ${error}`);
-                recordRunEnd(runId, 'error', undefined, msg);
-                for (const tk of deps.tenantKeys) {
-                    await deps.sendReply(tk, `❌ **${job.name} 失败**:\n${msg}`);
-                }
-            }
-        });
-
-        console.log(`[Cron] ✅ ${job.name} (${schedule})`);
-        count++;
-    }
-
-    console.log(`[Cron] ${count} cron jobs configured`);
-}
