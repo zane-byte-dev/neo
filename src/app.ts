@@ -24,7 +24,6 @@ import { closeBrowser } from './services/browser-service.js';
 import { setupTools } from './tools/index.js';
 import { loadUserSkills, executeSkill } from './skills/index.js';
 import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
-import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './core/handlers.js';
 import { sendReply as sendReplyFn } from './core/reply.js';
 import { processTask as processTaskFn } from './core/task-processor.js';
@@ -34,7 +33,6 @@ import { handleAsyncTask as handleAsyncTaskFn, setupAsyncPolling as setupAsyncPo
 import { findFiles as findFilesFn } from './utils/file-search.js';
 import { parseTenantKey } from './types/platform.js';
 import type { TenantKey, NormalizedMessage, NormalizedCallback, PlatformAdapter, UserId } from './types/platform.js';
-import type { UserContext } from './services/user-context.js';
 import type { Task } from './core/types.js';
 
 export class App {
