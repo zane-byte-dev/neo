@@ -248,8 +248,22 @@ export const workspaceCommand: Command = {
         case '/weekly': {
             const statusMsg = await reply('⏳ 正在生成本周周报...');
             try {
-                const { generateWeeklyReportTool } = await import('../tools/content/generate-weekly-report.js');
-                const text = await generateWeeklyReportTool.handler({}, deps.workDir);
+                const skill = deps.skillRegistry.get('generate_weekly_report');
+                if (!skill) {
+                    await deps.adapter.editMessage(msg.chatId, statusMsg.id, '❌ 技能 generate_weekly_report 未找到，请确认技能文件已部署。').catch(() => {});
+                    return true;
+                }
+                const { executeSkill } = await import('../skills/skill-executor.js');
+                const text = await executeSkill(skill, {}, {
+                    tenantKey: deps.tenantKey,
+                    chatId: deps.chatId,
+                    workDir: deps.workDir,
+                    systemInstruction: '',
+                    adapter: deps.adapter,
+                    reminderManager: deps.reminderManager,
+                    scheduledTaskManager: deps.scheduledTaskManager,
+                    skillRegistry: deps.skillRegistry,
+                });
                 await deps.adapter.editMessage(msg.chatId, statusMsg.id, text.slice(0, 4000)).catch(() =>
                     reply(text.slice(0, 4000)));
             } catch (err: any) {

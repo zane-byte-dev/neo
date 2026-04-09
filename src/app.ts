@@ -22,7 +22,7 @@ import { registerTenantContext, getTenantContext, getAllTenantKeys, getTenantCon
 import { resolve as resolveUserInput, hasPending } from './services/user-input-waiter.js';
 import { closeBrowser } from './services/browser-service.js';
 import { setupTools } from './tools/index.js';
-import { loadUserSkills } from './skills/index.js';
+import { loadUserSkills, executeSkill } from './skills/index.js';
 import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
 import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './core/handlers.js';
@@ -196,9 +196,25 @@ export class App {
         chatHistoryCache.setOnSessionExpire(async (session: any) => {
             if (session.messages.length === 0) return;
             try {
-                const { generateDailyLogTool } = await import('./tools/content/generate-daily-log.js');
-                const result = await generateDailyLogTool.handler({}, userCtx.workDir);
-                console.log(`[SessionExpire] (${tenantKey}) ${result}`);
+                const { getTenantContext } = await import('./services/tool-context.js');
+                const tc = getTenantContext(tenantKey);
+                const skill = tc.skillRegistry.get('generate_daily_log');
+                if (!skill) {
+                    console.warn(`[SessionExpire] (${tenantKey}) skill generate_daily_log not found, skipping`);
+                    return;
+                }
+                const toolCtx = {
+                    tenantKey,
+                    chatId: tc.chatId,
+                    workDir: userCtx.workDir,
+                    systemInstruction: tc.systemInstruction,
+                    adapter: tc.adapter,
+                    reminderManager: tc.reminderManager,
+                    scheduledTaskManager: tc.scheduledTaskManager,
+                    skillRegistry: tc.skillRegistry,
+                };
+                const result = await executeSkill(skill, {}, toolCtx);
+                console.log(`[SessionExpire] (${tenantKey}) ${result.slice(0, 200)}`);
             } catch (err: any) {
                 console.error(`[SessionExpire] (${tenantKey}) session-to-log failed:`, err.message);
             }
@@ -369,6 +385,7 @@ export class App {
                         reminderManager: ctx.reminderManager,
                         scheduledTaskManager: ctx.scheduledTaskManager,
                         userProfile: ctx.userProfile,
+                        skillRegistry: ctx.skillRegistry,
                         pendingReadMatches: this.pendingReadMatches,
                         findFiles: (q, b, r) => findFilesFn(q, b, r),
                     },

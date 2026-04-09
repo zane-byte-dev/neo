@@ -3,6 +3,7 @@
  */
 import type { TenantKey } from '../types/platform.js';
 import type { PlatformAdapter } from '../types/platform.js';
+import type { SkillRegistry } from '../skills/skill-registry.js';
 
 export interface CommandDeps {
     adapter: PlatformAdapter;
@@ -15,6 +16,7 @@ export interface CommandDeps {
     reminderManager: any;
     scheduledTaskManager: any;
     userProfile: any;
+    skillRegistry: SkillRegistry;
     pendingReadMatches: Map<string, { matches: string[]; expiry: number }>;
     findFiles: (query: string, baseDir: string, resolvedBase: string) => Promise<string[]>;
 }
