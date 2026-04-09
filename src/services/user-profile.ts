@@ -1,7 +1,6 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import type Database from 'better-sqlite3';
-import type { TenantKey } from '../types/platform.js';
 
 export interface UserProfile {
     name?: string;
@@ -15,11 +14,11 @@ export interface UserProfile {
 
 export class UserProfileManager {
     private db: Database.Database;
-    private tenantKey: TenantKey;
+    private scopeKey: string;
 
-    constructor(db: Database.Database, tenantKey: TenantKey) {
+    constructor(db: Database.Database, scopeKey: string) {
         this.db = db;
-        this.tenantKey = tenantKey;
+        this.scopeKey = scopeKey;
     }
 
     async init(): Promise<void> {
@@ -29,7 +28,7 @@ export class UserProfileManager {
     get(): UserProfile {
         const row = this.db.prepare(
             `SELECT data FROM user_profile WHERE tenant_key = ?`
-        ).get(this.tenantKey) as { data: string } | undefined;
+        ).get(this.scopeKey) as { data: string } | undefined;
         return row ? JSON.parse(row.data) : {};
     }
 
@@ -39,11 +38,11 @@ export class UserProfileManager {
         this.db.prepare(
             `INSERT INTO user_profile (tenant_key, data, updated_at) VALUES (?, ?, ?)
              ON CONFLICT(tenant_key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
-        ).run(this.tenantKey, JSON.stringify(next), Date.now());
+        ).run(this.scopeKey, JSON.stringify(next), Date.now());
     }
 
     async clear(): Promise<void> {
-        this.db.prepare(`DELETE FROM user_profile WHERE tenant_key = ?`).run(this.tenantKey);
+        this.db.prepare(`DELETE FROM user_profile WHERE tenant_key = ?`).run(this.scopeKey);
     }
 
     async toContextString(workDir?: string): Promise<string> {

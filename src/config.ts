@@ -7,7 +7,8 @@ import { config as loadEnv } from 'dotenv';
 loadEnv();
 
 import { resolve } from 'path';
-import type { TenantKey, Platform } from './types/platform.js';
+import { readFileSync } from 'fs';
+import type { TenantKey, Platform, UserId } from './types/platform.js';
 import { makeTenantKey } from './types/platform.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -17,16 +18,70 @@ function envInt(key: string, fallback: number): number {
     return v ? parseInt(v, 10) : fallback;
 }
 
+// ── User map (users.json) ────────────────────────────────────────────────────
+
+export interface UserEntry {
+    tenants: TenantKey[];
+}
+
+/** userId → UserEntry */
+const _userMap = new Map<UserId, UserEntry>();
+/** tenantKey → userId (reverse index) */
+const _tenantToUser = new Map<TenantKey, UserId>();
+
+function loadUserMap(): void {
+    // Try loading from the workspace directory, fall back to resource/workspace/
+    const candidates = [
+        resolve(process.env.WORK_DIR || '.', 'users.json'),
+        resolve('resource', 'workspace', 'users.json'),
+    ];
+    for (const path of candidates) {
+        try {
+            const raw = readFileSync(path, 'utf8');
+            const data = JSON.parse(raw) as Record<string, { tenants: string[] }>;
+            for (const [userId, entry] of Object.entries(data)) {
+                const tenants = (entry.tenants ?? []) as TenantKey[];
+                _userMap.set(userId, { tenants });
+                for (const tk of tenants) {
+                    _tenantToUser.set(tk, userId);
+                }
+            }
+            console.log(`[Config] 📋 Loaded ${_userMap.size} user(s) from ${path}`);
+            return;
+        } catch { /* try next */ }
+    }
+    console.warn('[Config] ⚠️  users.json not found; falling back to AUTHORIZED_USERS env.');
+}
+
+loadUserMap();
+
+/** Get all defined users */
+export function getAllUsers(): Map<UserId, UserEntry> {
+    return _userMap;
+}
+
+/** Resolve a tenantKey to its owning userId. Returns undefined if not mapped. */
+export function resolveUserId(tenantKey: TenantKey): UserId | undefined {
+    return _tenantToUser.get(tenantKey);
+}
+
+/** Get all tenantKeys belonging to a userId */
+export function getUserTenants(userId: UserId): TenantKey[] {
+    return _userMap.get(userId)?.tenants ?? [];
+}
+
 // ── Multi-tenant authorization ───────────────────────────────────────────────
 
 /**
- * Parse AUTHORIZED_USERS env var.
- * Format: comma-separated `platform:userId` entries.
- * Example: "telegram:123456789,feishu:ou_xxxxxxxxxxxx"
- *
- * Falls back to legacy TELEGRAM_CHAT_ID if AUTHORIZED_USERS is not set.
+ * Authorized tenants: derived from users.json if available, otherwise from
+ * AUTHORIZED_USERS env var (legacy).
  */
 function parseAuthorizedUsers(): Set<TenantKey> {
+    // Prefer users.json
+    if (_tenantToUser.size > 0) {
+        return new Set(_tenantToUser.keys());
+    }
+    // Legacy: AUTHORIZED_USERS env var
     const raw = process.env.AUTHORIZED_USERS;
     if (raw) {
         const keys = raw.split(',').map(s => s.trim()).filter(Boolean) as TenantKey[];

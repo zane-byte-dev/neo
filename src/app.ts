@@ -7,8 +7,8 @@
 
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
-import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, GEMINI_WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform } from './config.js';
-import { resolveWorkspaceDir, ensureWorkspace } from './utils/workspace.js';
+import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, GEMINI_WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform, getAllUsers, resolveUserId, getUserTenants } from './config.js';
+import { resolveUserWorkspaceDir, ensureWorkspace } from './utils/workspace.js';
 import { initDb } from './services/db.js';
 import { GeminiClient, buildTenantSystemInstruction } from './services/gemini-client.js';
 import { ChatHistoryCache } from './services/chat-history-cache.js';
@@ -17,14 +17,14 @@ import { MessageQueue } from './services/message-queue.js';
 import { ReminderManager } from './services/reminder-manager.js';
 import { ScheduledTaskManager } from './services/scheduled-task-manager.js';
 import { UserProfileManager } from './services/user-profile.js';
-import { registerTenantContext, getTenantContext, getAllTenantKeys } from './services/tool-context.js';
+import { registerUserContext, getUserContext, getAllUserIds } from './services/user-context.js';
+import { registerTenantContext, getTenantContext, getAllTenantKeys, getTenantContextsForUser } from './services/tool-context.js';
 import { resolve as resolveUserInput, hasPending } from './services/user-input-waiter.js';
 import { closeBrowser } from './services/browser-service.js';
 import { setupTools } from './tools/index.js';
 import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
 import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './core/handlers.js';
-import { initLifecycle } from './core/lifecycle.js';
 import { sendReply as sendReplyFn } from './core/reply.js';
 import { startWebServer } from './web/server.js';
 import { processTask as processTaskFn } from './core/task-processor.js';
@@ -33,7 +33,8 @@ import { handleUrlMessage as handleUrlMessageFn } from './handlers/url-handler.j
 import { handleAsyncTask as handleAsyncTaskFn, setupAsyncPolling as setupAsyncPollingFn } from './handlers/async-handler.js';
 import { findFiles as findFilesFn } from './utils/file-search.js';
 import { parseTenantKey } from './types/platform.js';
-import type { TenantKey, NormalizedMessage, NormalizedCallback, PlatformAdapter } from './types/platform.js';
+import type { TenantKey, NormalizedMessage, NormalizedCallback, PlatformAdapter, UserId } from './types/platform.js';
+import type { UserContext } from './services/user-context.js';
 import type { Task } from './core/types.js';
 
 export class App {
@@ -68,7 +69,10 @@ export class App {
         await setupTools();
         await setupCommands();
 
-        // Initialize tenants per adapter
+        // Phase 1: Initialize per-user shared contexts (workspace, profile, reminders, schedules)
+        await this.initUsers();
+
+        // Phase 2: Initialize per-tenant client contexts and wire adapters
         for (const [platform, adapter] of this.adapters) {
             const tenantKeys = getAuthorizedForPlatform(platform as any);
 
@@ -94,22 +98,12 @@ export class App {
                 });
             }
 
-            // Initialize lifecycle per tenant
-            for (const tk of tenantKeys) {
-                const ctx = getTenantContext(tk);
-                await initLifecycle({
-                    adapter,
-                    tenantKey: tk,
-                    chatId: ctx.chatId,
-                    userProfile: ctx.userProfile,
-                    reminderManager: ctx.reminderManager,
-                    scheduledTaskManager: ctx.scheduledTaskManager,
-                    messageQueue: ctx.messageQueue,
-                    processTask: (task) => this.processTask(adapter, tk, task),
-                });
-            }
-
             console.log(`[${platform}] ✅ ${tenantKeys.length} tenant(s) configured.`);
+        }
+
+        // Phase 3: Initialize lifecycle per user (reminders & schedules broadcast to all tenants)
+        for (const userId of getAllUserIds()) {
+            await this.initUserLifecycle(userId);
         }
 
         // Cron jobs operate across all tenants
@@ -137,11 +131,10 @@ export class App {
     }
 
     async shutdown(): Promise<void> {
-        const allKeys = getAllTenantKeys();
-        for (const tk of allKeys) {
-            const ctx = getTenantContext(tk);
-            ctx.reminderManager.destroy();
-            ctx.scheduledTaskManager.destroy();
+        for (const userId of getAllUserIds()) {
+            const uc = getUserContext(userId);
+            uc.reminderManager.destroy();
+            uc.scheduledTaskManager.destroy();
         }
         this.geminiClient.close();
         closeBrowser();
@@ -150,25 +143,57 @@ export class App {
         }
     }
 
-    // ── Tenant initialization ────────────────────────────────────────────
+    // ── User initialization (shared per person) ──────────────────────────
+
+    private async initUsers(): Promise<void> {
+        const { getDb } = await import('./services/db.js');
+        const db = getDb();
+        const baseWorkDir = resolve(WORK_DIR || GEMINI_WORK_DIR || '.');
+        const templateDir = AGENT_CONFIG_DIR || undefined;
+
+        for (const [userId, entry] of getAllUsers()) {
+            const workDir = resolveUserWorkspaceDir(baseWorkDir, userId);
+            await ensureWorkspace(workDir, templateDir);
+            console.log(`[User] 📂 ${userId} workspace: ${workDir}`);
+
+            const systemInstruction = await buildTenantSystemInstruction(workDir);
+            if (systemInstruction) {
+                console.log(`[User] 📜 ${userId} system instruction ready (${systemInstruction.length} chars)`);
+            }
+
+            // Per-user managers: keyed by userId for cross-client sharing
+            const userProfile = new UserProfileManager(db, userId);
+            const reminderManager = new ReminderManager(db, userId);
+            const scheduledTaskManager = new ScheduledTaskManager(db, userId);
+
+            registerUserContext({
+                userId,
+                workDir,
+                systemInstruction,
+                userProfile,
+                reminderManager,
+                scheduledTaskManager,
+            });
+
+            console.log(`[User] ✅ ${userId} initialized (${entry.tenants.length} tenant(s))`);
+        }
+    }
+
+    // ── Tenant initialization (per client) ───────────────────────────────
 
     private async initTenant(tenantKey: TenantKey, adapter: PlatformAdapter): Promise<void> {
         const { getDb } = await import('./services/db.js');
         const db = getDb();
 
-        // Resolve per-tenant workspace directory
-        const baseWorkDir = resolve(WORK_DIR || GEMINI_WORK_DIR || '.');
-        const workDir = resolveWorkspaceDir(baseWorkDir, tenantKey);
-        const templateDir = AGENT_CONFIG_DIR || undefined;
-        await ensureWorkspace(workDir, templateDir);
-        console.log(`[Tenant] 📂 ${tenantKey} workspace: ${workDir}`);
-
-        // Load per-tenant system instruction from workspace config
-        const systemInstruction = await buildTenantSystemInstruction(workDir);
-        if (systemInstruction) {
-            console.log(`[Tenant] 📜 ${tenantKey} system instruction ready (${systemInstruction.length} chars)`);
+        // Resolve owning user
+        const userId = resolveUserId(tenantKey);
+        if (!userId) {
+            console.warn(`[Tenant] ⚠️  ${tenantKey} has no user mapping — skipping`);
+            return;
         }
+        const userCtx = getUserContext(userId);
 
+        // Per-tenant managers: keyed by tenantKey for client isolation
         const chatHistoryCache = new ChatHistoryCache(db, tenantKey);
         await chatHistoryCache.init();
 
@@ -177,7 +202,7 @@ export class App {
             if (session.messages.length === 0) return;
             try {
                 const { generateDailyLogTool } = await import('./tools/content/generate-daily-log.js');
-                const result = await generateDailyLogTool.handler({}, workDir);
+                const result = await generateDailyLogTool.handler({}, userCtx.workDir);
                 console.log(`[SessionExpire] (${tenantKey}) ${result}`);
             } catch (err: any) {
                 console.error(`[SessionExpire] (${tenantKey}) session-to-log failed:`, err.message);
@@ -188,30 +213,114 @@ export class App {
         await asyncTaskManager.init();
 
         const messageQueue = new MessageQueue(db, tenantKey);
-        const reminderManager = new ReminderManager(db, tenantKey);
-        const scheduledTaskManager = new ScheduledTaskManager(db, tenantKey);
-        const userProfile = new UserProfileManager(db, tenantKey);
 
-        const { userId } = parseTenantKey(tenantKey);
+        const { userId: platformUserId } = parseTenantKey(tenantKey);
 
         registerTenantContext({
             tenantKey,
-            chatId: userId,
-            workDir,
-            systemInstruction,
+            chatId: platformUserId,
+            userId,
+            user: userCtx,
+            // Convenience: delegate to shared user context
+            workDir: userCtx.workDir,
+            systemInstruction: userCtx.systemInstruction,
             adapter,
-            scheduledTaskManager,
-            reminderManager,
+            // Per-tenant (client-specific)
             chatHistoryCache,
-            userProfile,
             asyncTaskManager,
             messageQueue,
+            // Shared per-user (convenience refs)
+            scheduledTaskManager: userCtx.scheduledTaskManager,
+            reminderManager: userCtx.reminderManager,
+            userProfile: userCtx.userProfile,
         });
 
-        console.log(`[Tenant] ✅ ${tenantKey} initialized (SQLite)`);
+        console.log(`[Tenant] ✅ ${tenantKey} → user:${userId}`);
     }
 
-    // ── Legacy cache migration ───────────────────────────────────────────
+    // ── Per-user lifecycle (reminders & schedules broadcast to all clients) ──
+
+    private async initUserLifecycle(userId: UserId): Promise<void> {
+        const userCtx = getUserContext(userId);
+        const tenants = getTenantContextsForUser(userId);
+        if (tenants.length === 0) return;
+
+        // Use the first tenant for message queue replay (it needs a single processing pipeline)
+        const primaryTenant = tenants[0];
+
+        await userCtx.userProfile.init();
+
+        // Reminders: broadcast to ALL connected clients
+        await userCtx.reminderManager.init(async (reminder: any) => {
+            console.log(`[Reminder] Firing #${reminder.id} (${reminder.prompt ? 'action' : 'notification'}): ${reminder.content}`);
+
+            for (const tc of getTenantContextsForUser(userId)) {
+                if (reminder.prompt) {
+                    const task: Task = {
+                        tenantKey: tc.tenantKey,
+                        chatId: tc.chatId,
+                        question: reminder.prompt,
+                        userName: 'reminder',
+                        messageId: '0',
+                    };
+                    const notifyMsg = await tc.adapter.sendMessage(
+                        tc.chatId,
+                        `⏰ 定时任务触发：**${reminder.content}**\n\n⏳ 正在执行...`,
+                        { parseMode: 'markdown' },
+                    ).catch(() => null);
+
+                    if (notifyMsg) task.messageId = notifyMsg.id;
+                    await tc.messageQueue.enqueue(task, (t: Task) => this.processTask(tc.adapter, tc.tenantKey, t));
+                } else {
+                    await tc.adapter.sendMessage(
+                        tc.chatId,
+                        `⏰ **提醒:** ${reminder.content}`,
+                        { parseMode: 'markdown' },
+                    ).catch((err: any) => console.error(`[Reminder] Send to ${tc.tenantKey} failed:`, err.message));
+                }
+            }
+        });
+
+        // Message queue replay (per-tenant, but init for each tenant under this user)
+        for (const tc of tenants) {
+            const pending = await tc.messageQueue.init();
+            if (pending.length > 0) {
+                console.log(`[MessageQueue] Replaying ${pending.length} task(s) for ${tc.tenantKey}...`);
+                for (const task of pending) {
+                    tc.messageQueue.schedule(task, (t: Task) => this.processTask(tc.adapter, tc.tenantKey, t));
+                }
+                await tc.adapter.sendMessage(
+                    tc.chatId,
+                    `♻️ 检测到 ${pending.length} 条上次未完成的消息，已自动恢复处理。`
+                ).catch(() => {});
+            }
+        }
+
+        // Scheduled tasks: broadcast to ALL connected clients
+        await userCtx.scheduledTaskManager.init(async (task: any) => {
+            console.log(`[ScheduledTask] Executing #${task.id}: ${task.content}`);
+            for (const tc of getTenantContextsForUser(userId)) {
+                try {
+                    const notifyMsg = await tc.adapter.sendMessage(
+                        tc.chatId,
+                        `🕐 定时任务：**${task.content}**\n\n⏳ 正在执行...`,
+                        { parseMode: 'markdown' },
+                    ).catch(() => null);
+
+                    const queueTask: Task = {
+                        tenantKey: tc.tenantKey,
+                        chatId: tc.chatId,
+                        question: task.prompt,
+                        userName: 'scheduled-task',
+                        messageId: notifyMsg?.id ?? '0',
+                    };
+                    await tc.messageQueue.enqueue(queueTask, (t: Task) => this.processTask(tc.adapter, tc.tenantKey, t));
+                } catch (err: any) {
+                    console.error(`[ScheduledTask] Failed for ${tc.tenantKey}:`, err.message);
+                }
+            }
+        });
+    }
 
     // ── Message processing pipeline ──────────────────────────────────────
 

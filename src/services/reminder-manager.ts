@@ -1,5 +1,4 @@
 import type Database from 'better-sqlite3';
-import type { TenantKey } from '../types/platform.js';
 import { geminiGenerate } from './gemini-client.js';
 
 export interface Reminder {
@@ -78,20 +77,20 @@ export async function parseReminderTime(
 
 export class ReminderManager {
     private db: Database.Database;
-    private tenantKey: TenantKey;
+    private scopeKey: string;
     private timer: NodeJS.Timeout | null = null;
     private onFire?: FireCallback;
 
-    constructor(db: Database.Database, tenantKey: TenantKey) {
+    constructor(db: Database.Database, scopeKey: string) {
         this.db = db;
-        this.tenantKey = tenantKey;
+        this.scopeKey = scopeKey;
     }
 
     async init(onFire: FireCallback): Promise<void> {
         this.onFire = onFire;
         const count = (this.db.prepare(
             `SELECT COUNT(*) as n FROM reminders WHERE tenant_key = ? AND fired = 0`
-        ).get(this.tenantKey) as { n: number }).n;
+        ).get(this.scopeKey) as { n: number }).n;
         console.log(`[ReminderManager] Ready (${count} active reminder(s)).`);
         this.timer = setInterval(() => this.tick(), 30_000);
     }
@@ -102,7 +101,7 @@ export class ReminderManager {
         this.db.prepare(
             `INSERT INTO reminders (id, tenant_key, chat_id, content, prompt, fire_at, created_at, fired)
              VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
-        ).run(id, this.tenantKey, chatId, content, prompt ?? null, fireAt, now);
+        ).run(id, this.scopeKey, chatId, content, prompt ?? null, fireAt, now);
         const type = prompt ? 'action' : 'notification';
         console.log(`[ReminderManager] Added ${type} reminder #${id} for ${new Date(fireAt).toLocaleString('zh-CN')}`);
         return { id, chatId, content, prompt, fireAt, createdAt: now, fired: false };
@@ -111,7 +110,7 @@ export class ReminderManager {
     async cancel(id: string): Promise<boolean> {
         const result = this.db.prepare(
             `DELETE FROM reminders WHERE id = ? AND tenant_key = ?`
-        ).run(id, this.tenantKey);
+        ).run(id, this.scopeKey);
         return result.changes > 0;
     }
 
@@ -119,7 +118,7 @@ export class ReminderManager {
         const rows = this.db.prepare(
             `SELECT id, chat_id, content, prompt, fire_at, created_at FROM reminders
              WHERE tenant_key = ? AND fired = 0 ORDER BY fire_at ASC`
-        ).all(this.tenantKey) as Array<{ id: string; chat_id: string; content: string; prompt: string | null; fire_at: number; created_at: number }>;
+        ).all(this.scopeKey) as Array<{ id: string; chat_id: string; content: string; prompt: string | null; fire_at: number; created_at: number }>;
         return rows.map(r => ({
             id: r.id,
             chatId: r.chat_id,
@@ -136,7 +135,7 @@ export class ReminderManager {
         const due = this.db.prepare(
             `SELECT id, chat_id, content, prompt, fire_at, created_at FROM reminders
              WHERE tenant_key = ? AND fired = 0 AND fire_at <= ?`
-        ).all(this.tenantKey, now) as Array<{ id: string; chat_id: string; content: string; prompt: string | null; fire_at: number; created_at: number }>;
+        ).all(this.scopeKey, now) as Array<{ id: string; chat_id: string; content: string; prompt: string | null; fire_at: number; created_at: number }>;
 
         for (const row of due) {
             this.db.prepare(`UPDATE reminders SET fired = 1 WHERE id = ?`).run(row.id);

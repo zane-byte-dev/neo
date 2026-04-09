@@ -1,5 +1,4 @@
 import type Database from 'better-sqlite3';
-import type { TenantKey } from '../types/platform.js';
 import cron, { ScheduledTask as CronJob } from 'node-cron';
 import { geminiGenerate } from './gemini-client.js';
 
@@ -78,13 +77,13 @@ export async function parseScheduledTask(
 
 export class ScheduledTaskManager {
     private db: Database.Database;
-    private tenantKey: TenantKey;
+    private scopeKey: string;
     private cronJobs = new Map<string, CronJob>();
     private onExecute?: ExecuteCallback;
 
-    constructor(db: Database.Database, tenantKey: TenantKey) {
+    constructor(db: Database.Database, scopeKey: string) {
         this.db = db;
-        this.tenantKey = tenantKey;
+        this.scopeKey = scopeKey;
     }
 
     async init(onExecute: ExecuteCallback): Promise<void> {
@@ -92,7 +91,7 @@ export class ScheduledTaskManager {
         const rows = this.db.prepare(
             `SELECT id, chat_id, content, prompt, cron_expr, created_at FROM scheduled_tasks
              WHERE tenant_key = ? AND enabled = 1`
-        ).all(this.tenantKey) as Array<{ id: string; chat_id: string; content: string; prompt: string; cron_expr: string; created_at: number }>;
+        ).all(this.scopeKey) as Array<{ id: string; chat_id: string; content: string; prompt: string; cron_expr: string; created_at: number }>;
         for (const row of rows) {
             this.scheduleJob(this.rowToTask(row));
         }
@@ -105,7 +104,7 @@ export class ScheduledTaskManager {
         this.db.prepare(
             `INSERT INTO scheduled_tasks (id, tenant_key, chat_id, content, prompt, cron_expr, created_at, enabled)
              VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
-        ).run(id, this.tenantKey, chatId, content, prompt, cronExpr, now);
+        ).run(id, this.scopeKey, chatId, content, prompt, cronExpr, now);
         const task: ScheduledTask = { id, chatId, content, prompt, cronExpr, createdAt: now, enabled: true };
         this.scheduleJob(task);
         console.log(`[ScheduledTaskManager] Added task #${id} (${cronExpr}): ${content}`);
@@ -115,7 +114,7 @@ export class ScheduledTaskManager {
     async cancel(id: string): Promise<boolean> {
         const result = this.db.prepare(
             `DELETE FROM scheduled_tasks WHERE id = ? AND tenant_key = ?`
-        ).run(id, this.tenantKey);
+        ).run(id, this.scopeKey);
         const job = this.cronJobs.get(id);
         if (job) {
             job.stop();
@@ -128,7 +127,7 @@ export class ScheduledTaskManager {
         const rows = this.db.prepare(
             `SELECT id, chat_id, content, prompt, cron_expr, created_at FROM scheduled_tasks
              WHERE tenant_key = ? AND enabled = 1 ORDER BY created_at ASC`
-        ).all(this.tenantKey) as Array<{ id: string; chat_id: string; content: string; prompt: string; cron_expr: string; created_at: number }>;
+        ).all(this.scopeKey) as Array<{ id: string; chat_id: string; content: string; prompt: string; cron_expr: string; created_at: number }>;
         return rows.map(r => this.rowToTask(r));
     }
 

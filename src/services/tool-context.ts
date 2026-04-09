@@ -2,27 +2,41 @@
  * tool-context.ts — Multi-tenant runtime context registry.
  *
  * Each tenant (platform:userId) gets their own isolated context with
- * independent managers, cache directories, and adapter reference.
+ * independent chat history, message queue, and adapter reference.
  *
- * Context is threaded explicitly via ToolContext parameters — no global state.
+ * Workspace-level resources (workDir, userProfile, reminderManager,
+ * scheduledTaskManager) are shared via the UserContext — see user-context.ts.
+ *
+ * Context is threaded explicitly via TenantContext parameters — no global state.
  */
 
-import type { TenantKey, PlatformAdapter } from '../types/platform.js';
+import type { TenantKey, PlatformAdapter, UserId } from '../types/platform.js';
+import type { UserContext } from './user-context.js';
 
 export interface TenantContext {
     tenantKey: TenantKey;
     chatId: string;
-    /** Per-tenant workspace root directory (absolute path) */
+    /** The owning user (from users.json) */
+    userId: UserId;
+    /** Shared per-user context (workspace, profile, reminders, schedules) */
+    user: UserContext;
+
+    // ── Convenience accessors (delegated to user) ────────────────────────
+    /** Per-user workspace root directory (absolute path) */
     workDir: string;
-    /** Per-tenant system instruction (loaded from workspace config/) */
+    /** Per-user system instruction (loaded from workspace config/) */
     systemInstruction: string;
+
+    // ── Per-tenant (client-specific) ─────────────────────────────────────
     adapter: PlatformAdapter;
-    scheduledTaskManager: any;
-    reminderManager: any;
     chatHistoryCache: any;
-    userProfile: any;
     asyncTaskManager: any;
     messageQueue: any;
+
+    // ── Shared per-user managers (convenience references) ────────────────
+    scheduledTaskManager: any;
+    reminderManager: any;
+    userProfile: any;
 }
 
 const _registry = new Map<TenantKey, TenantContext>();
@@ -48,6 +62,11 @@ export function hasTenantContext(tenantKey: TenantKey): boolean {
 /** Get all registered tenant keys. */
 export function getAllTenantKeys(): TenantKey[] {
     return [..._registry.keys()];
+}
+
+/** Get all tenant contexts belonging to a specific user. */
+export function getTenantContextsForUser(userId: UserId): TenantContext[] {
+    return [..._registry.values()].filter(ctx => ctx.userId === userId);
 }
 
 /** Remove a tenant context (for cleanup / testing). */

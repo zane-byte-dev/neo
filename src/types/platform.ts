@@ -12,10 +12,19 @@ export type Platform = 'telegram' | 'feishu' | 'web';
 // ── Tenant Key ───────────────────────────────────────────────────────────────
 
 /**
- * Unique identifier for a user across all platforms.
- * Format: `{platform}:{platformUserId}`, e.g. "telegram:123456789" or "feishu:ou_xxxx".
+ * Identifies a specific client connection: `{platform}:{platformUserId}`.
+ * Example: "telegram:123456789", "feishu:ou_xxxx", "web:session_abc".
+ *
+ * Multiple TenantKeys can map to the same UserId (same person, different clients).
  */
 export type TenantKey = `${Platform}:${string}`;
+
+/**
+ * Platform-agnostic user identifier. Defined in users.json.
+ * Example: "zhengchao".
+ * A UserId owns exactly one workspace; multiple TenantKeys can map to it.
+ */
+export type UserId = string;
 
 export function makeTenantKey(platform: Platform, userId: string | number): TenantKey {
     return `${platform}:${userId}` as TenantKey;
