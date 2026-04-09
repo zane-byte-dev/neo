@@ -254,7 +254,6 @@ export class App {
                 ),
                 handleUrlMessage: (innerMsg, url) => handleUrlMessageFn(
                     {
-                        adapter,
                         messageQueue: ctx.messageQueue,
                         processTask: (task) => this.processTask(adapter, tenantKey, task),
                     },
