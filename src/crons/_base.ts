@@ -14,8 +14,10 @@ export interface CronJob {
     name: string;
     /** Cron expression (node-cron format) */
     schedule: string;
-    /** The task to execute */
-    handler: (deps: CronDeps) => Promise<void>;
+    /** Human-readable description for web UI */
+    description?: string;
+    /** The task to execute; may return a summary string for the run log */
+    handler: (deps: CronDeps) => Promise<string | void>;
     /** Set to false to disable without removing the file */
     enabled?: boolean;
 }

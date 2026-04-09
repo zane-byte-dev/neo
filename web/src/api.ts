@@ -254,6 +254,41 @@ export function noteTags() {
     return apiGet<NoteTag[]>('/api/notes/tags')
 }
 
+// ── Cron API ──────────────────────────────────────────────────────────────────
+
+import type { CronJobInfo, CronRunInfo } from './types'
+
+export function cronList() {
+    return apiGet<CronJobInfo[]>('/api/crons')
+}
+
+export function cronToggle(name: string, enabled: boolean) {
+    return fetch(`/api/crons/${encodeURIComponent(name)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ enabled }),
+    }).then((r) => r.json())
+}
+
+export function cronUpdateSchedule(name: string, schedule: string) {
+    return fetch(`/api/crons/${encodeURIComponent(name)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ schedule }),
+    }).then((r) => r.json())
+}
+
+export function cronRuns(name: string, limit = 20) {
+    return apiGet<CronRunInfo[]>(`/api/crons/${encodeURIComponent(name)}/runs?limit=${limit}`)
+}
+
+export function cronTrigger(name: string) {
+    return fetch(`/api/crons/${encodeURIComponent(name)}/run`, {
+        method: 'POST',
+        headers: authHeaders(),
+    }).then((r) => r.json()) as Promise<{ status: string; summary?: string; error?: string }>
+}
+
 // ── Auth check ────────────────────────────────────────────────────────────────
 export type AuthResult = 'ok' | 'unauthorized' | 'unreachable'
 

@@ -193,6 +193,28 @@ function createSchema(db: Database.Database): void {
             INSERT INTO notebook_fts(rowid, title, author, source, summary, tags, content)
             VALUES (new.id, new.title, new.author, new.source, new.summary, new.tags, new.content);
         END;
+
+        -- ── Cron jobs (code-defined, DB-managed metadata) ────────────────────
+        CREATE TABLE IF NOT EXISTS cron_jobs (
+            name        TEXT    PRIMARY KEY,
+            schedule    TEXT    NOT NULL,
+            description TEXT,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            updated_at  INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS cron_runs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_name    TEXT    NOT NULL,
+            status      TEXT    NOT NULL,
+            started_at  INTEGER NOT NULL,
+            finished_at INTEGER,
+            duration_ms INTEGER,
+            error       TEXT,
+            summary     TEXT,
+            FOREIGN KEY (job_name) REFERENCES cron_jobs(name) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_cron_runs_job ON cron_runs(job_name, started_at DESC);
     `);
 
     // ── Migrations ─────────────────────────────────────────────────────────

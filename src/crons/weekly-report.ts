@@ -3,6 +3,7 @@ import { generateWeeklyReportTool } from '../tools/generate-weekly-report.js';
 
 export const weeklyReportCron: CronJob = {
     name: 'Weekly report',
+    description: '每周总结报告：回顾本周重要对话与事项',
     schedule: '0 21 * * 0',
     handler: async (deps) => {
         const result = await generateWeeklyReportTool.handler({}, '');
@@ -11,5 +12,6 @@ export const weeklyReportCron: CronJob = {
                 await deps.sendReply(tk, result);
             }
         }
+        return result;
     },
 };

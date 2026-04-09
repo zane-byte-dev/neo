@@ -277,6 +277,68 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
         ctx.body = { ok: true };
     });
 
+    // ── Cron jobs ─────────────────────────────────────────────────────────
+
+    // GET /api/crons — list all cron jobs with last run info
+    router.get('/api/crons', async (ctx) => {
+        const db = getDb();
+        const jobs = db.prepare(`
+            SELECT
+                j.name, j.schedule, j.description, j.enabled, j.updated_at,
+                r.status       AS last_status,
+                r.started_at   AS last_started_at,
+                r.finished_at  AS last_finished_at,
+                r.duration_ms  AS last_duration_ms,
+                r.error        AS last_error,
+                r.summary      AS last_summary
+            FROM cron_jobs j
+            LEFT JOIN cron_runs r ON r.id = (
+                SELECT id FROM cron_runs WHERE job_name = j.name ORDER BY started_at DESC LIMIT 1
+            )
+            ORDER BY j.name
+        `).all();
+        ctx.body = jobs;
+    });
+
+    // PATCH /api/crons/:name — update enabled / schedule
+    router.patch('/api/crons/:name', async (ctx) => {
+        const db = getDb();
+        const jobName = decodeURIComponent(ctx.params.name);
+        const body = ctx.request.body as Record<string, unknown>;
+        const now = Date.now();
+
+        const existing = db.prepare('SELECT name FROM cron_jobs WHERE name = ?').get(jobName);
+        if (!existing) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+
+        if (body.enabled !== undefined) {
+            const enabled = body.enabled ? 1 : 0;
+            db.prepare('UPDATE cron_jobs SET enabled = ?, updated_at = ? WHERE name = ?').run(enabled, now, jobName);
+        }
+        if (typeof body.schedule === 'string' && body.schedule.trim()) {
+            db.prepare('UPDATE cron_jobs SET schedule = ?, updated_at = ? WHERE name = ?').run(body.schedule.trim(), now, jobName);
+        }
+        ctx.body = { ok: true };
+    });
+
+    // GET /api/crons/:name/runs — recent runs for a job
+    router.get('/api/crons/:name/runs', async (ctx) => {
+        const db = getDb();
+        const jobName = decodeURIComponent(ctx.params.name);
+        const limit = Math.min(Number(ctx.query.limit) || 20, 100);
+        const runs = db.prepare(
+            'SELECT id, job_name, status, started_at, finished_at, duration_ms, error, summary FROM cron_runs WHERE job_name = ? ORDER BY started_at DESC LIMIT ?'
+        ).all(jobName, limit);
+        ctx.body = runs;
+    });
+
+    // POST /api/crons/:name/run — manual trigger
+    router.post('/api/crons/:name/run', async (ctx) => {
+        const jobName = decodeURIComponent(ctx.params.name);
+        const { executeJob } = await import('../crons/index.js');
+        const result = await executeJob(jobName);
+        ctx.body = result;
+    });
+
     // ── POST /api/todos/analyze — AI-parse a todo text ────────────────────
     router.post('/api/todos/analyze', async (ctx) => {
         const body = ctx.request.body as Record<string, unknown>;

@@ -1,12 +1,13 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { MessageSquare, BookOpen, CheckSquare, FileText } from 'lucide-react'
+import { MessageSquare, BookOpen, CheckSquare, FileText, Timer } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NotebookPanel } from './components/NotebookPanel'
 import { TodoPanel } from './components/TodoPanel'
 import { NotePanel } from './components/NotePanel'
+import { CronPanel } from './components/CronPanel'
 import { Login } from './components/Login'
 import { useAppStore } from './stores/useAppStore'
 import { getToken, checkAuth, type AuthResult } from './api'
@@ -26,6 +27,7 @@ const TopNav: React.FC = () => (
             { to: '/notebook', icon: <BookOpen size={14} />,      label: 'Notebook' },
             { to: '/todo',     icon: <CheckSquare size={14} />,   label: 'Todo' },
             { to: '/notes',    icon: <FileText size={14} />,      label: 'Notes' },
+            { to: '/crons',    icon: <Timer size={14} />,         label: 'Crons' },
         ] as const).map(({ to, icon, label }) => (
             <NavLink
                 key={to}
@@ -106,6 +108,14 @@ const NotesPage: React.FC = () => (
     </div>
 )
 
+// ── /crons page ──────────────────────────────────────────────────────────────
+
+const CronsPage: React.FC = () => (
+    <div className="flex-1 overflow-hidden">
+        <CronPanel />
+    </div>
+)
+
 // ── Main shell (after auth) ──────────────────────────────────────────────────
 
 const MainLayout: React.FC = () => {
@@ -123,6 +133,7 @@ const MainLayout: React.FC = () => {
                 <Route path="/notebook" element={<NotebookPage />} />
                 <Route path="/todo"     element={<TodoPage />} />
                 <Route path="/notes"    element={<NotesPage />} />
+                <Route path="/crons"    element={<CronsPage />} />
                 <Route path="*"         element={<Navigate to="/chat" replace />} />
             </Routes>
         </div>

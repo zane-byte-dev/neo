@@ -64,6 +64,33 @@ export interface NoteTag {
     count: number
 }
 
+// ── Cron ─────────────────────────────────────────────────────────────────────
+
+export interface CronJobInfo {
+    name: string
+    schedule: string
+    description: string | null
+    enabled: number          // 0 | 1
+    updated_at: number
+    last_status: string | null
+    last_started_at: number | null
+    last_finished_at: number | null
+    last_duration_ms: number | null
+    last_error: string | null
+    last_summary: string | null
+}
+
+export interface CronRunInfo {
+    id: number
+    job_name: string
+    status: string           // 'running' | 'success' | 'error'
+    started_at: number
+    finished_at: number | null
+    duration_ms: number | null
+    error: string | null
+    summary: string | null
+}
+
 export interface AppState {
     // Auth
     token: string
