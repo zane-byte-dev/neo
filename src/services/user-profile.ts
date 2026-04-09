@@ -4,7 +4,7 @@ import { join } from 'path';
 /**
  * File-based user profile manager.
  *
- * All profile data lives in `{workDir}/user.md` — a human-readable Markdown file
+ * All profile data lives in `{workDir}/USER.md` — a human-readable Markdown file
  * that the user (or AI) can edit directly. No DB storage needed.
  */
 export class UserProfileManager {
@@ -15,11 +15,11 @@ export class UserProfileManager {
     }
 
     private get filePath(): string {
-        return join(this.workDir, 'user.md');
+        return join(this.workDir, 'USER.md');
     }
 
     async init(): Promise<void> {
-        // Ensure user.md exists with a template if missing
+        // Ensure USER.md exists with a template if missing
         try {
             await fs.access(this.filePath);
         } catch {
@@ -28,7 +28,7 @@ export class UserProfileManager {
         console.log('[UserProfile] Ready (file-based).');
     }
 
-    /** Read the raw user.md content */
+    /** Read the raw USER.md content */
     async read(): Promise<string> {
         try {
             return await fs.readFile(this.filePath, 'utf8');
@@ -37,7 +37,7 @@ export class UserProfileManager {
         }
     }
 
-    /** Overwrite user.md with new content */
+    /** Overwrite USER.md with new content */
     async write(content: string): Promise<void> {
         await fs.writeFile(this.filePath, content, 'utf8');
     }
@@ -53,7 +53,7 @@ export class UserProfileManager {
     async toDisplayString(): Promise<string> {
         const content = await this.read();
         if (!content.trim()) {
-            return '（暂无个人信息，直接编辑 workspace 下的 `user.md` 文件）';
+            return '（暂无个人信息，直接编辑 workspace 下的 `USER.md` 文件）';
         }
         return content.trim();
     }

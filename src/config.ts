@@ -184,7 +184,6 @@ export const CHUNK_LIMIT = 3800;
 
 // ── File system ──────────────────────────────────────────────────────────────
 
-export const CACHE_DIR = process.env.CHAT_CACHE_DIR || './cache';
 export const DB_PATH = process.env.DB_PATH || './data/neo.db';
 export const SKIP_DIRS = new Set(['.git', 'node_modules', '.tmp', '__pycache__', 'dist', '.cache']);
 export const MAX_SEARCH_DEPTH = 6;
@@ -245,4 +244,3 @@ export const WORK_DIR       = process.env.WORK_DIR ?? '';
 export const AGENT_CONFIG_DIR = process.env.AGENT_CONFIG_DIR
     ? resolve(process.env.AGENT_CONFIG_DIR)
     : '';
-export const RESOURCE_DIR   = process.env.RESOURCE_DIR ?? '';
