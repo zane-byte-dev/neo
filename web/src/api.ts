@@ -105,6 +105,54 @@ export function notebookRead(id: number) {
     return apiGet(`/api/notebook?action=read&id=${id}`)
 }
 
+export function notebookCreate(data: {
+    title: string
+    author?: string | null
+    date?: string | null
+    source?: string | null
+    summary?: string | null
+    tags?: string | null
+    content?: string | null
+}) {
+    return fetch('/api/notebook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(data),
+    }).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json() as Promise<import('./types').NoteEntry>
+    })
+}
+
+export function notebookUpdate(id: number, data: {
+    title?: string
+    author?: string | null
+    date?: string | null
+    source?: string | null
+    summary?: string | null
+    tags?: string | null
+    content?: string | null
+}) {
+    return fetch(`/api/notebook/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(data),
+    }).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json() as Promise<import('./types').NoteEntry>
+    })
+}
+
+export function notebookDelete(id: number) {
+    return fetch(`/api/notebook/${id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+    }).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+    })
+}
+
 // ── Session API ───────────────────────────────────────────────────────────────
 
 export function sessionNew(sessionId: string, title: string) {
@@ -128,17 +176,25 @@ export function sessionList() {
 }
 
 // ── Todo API ──────────────────────────────────────────────────────────────────
-import type { TodoItem, InboxNote } from './types'
+import type { TodoItem, TodoAnalysis, InboxNote, NoteHeatmapDay, NoteTag } from './types'
 
 export function todoList() {
     return apiGet<TodoItem[]>('/api/todos')
 }
 
-export function todoCreate(content: string, priority?: string) {
+export function todoAnalyze(content: string) {
+    return fetch('/api/todos/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ content }),
+    }).then((r) => r.json() as Promise<TodoAnalysis>)
+}
+
+export function todoCreate(content: string, priority?: string | null, remindAt?: string | null) {
     return fetch('/api/todos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ content, ...(priority ? { priority } : {}) }),
+        body: JSON.stringify({ content, priority: priority ?? undefined, remind_at: remindAt ?? undefined }),
     }).then((r) => r.json() as Promise<TodoItem>)
 }
 
@@ -147,6 +203,14 @@ export function todoUpdateStatus(id: string, status: string) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ status }),
+    }).then((r) => r.json())
+}
+
+export function todoUpdate(id: string, patch: { content?: string; remind_at?: string | null; priority?: string | null }) {
+    return fetch(`/api/todos/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(patch),
     }).then((r) => r.json())
 }
 
@@ -159,16 +223,19 @@ export function todoDelete(id: string) {
 
 // ── Notes (Inbox) API ─────────────────────────────────────────────────────────
 
-export function noteList(date?: string) {
-    const qs = date ? `?date=${encodeURIComponent(date)}` : ''
+export function noteList(opts?: { date?: string; tag?: string }) {
+    const params = new URLSearchParams()
+    if (opts?.date) params.set('date', opts.date)
+    if (opts?.tag) params.set('tag', opts.tag)
+    const qs = params.toString() ? `?${params}` : ''
     return apiGet<InboxNote[]>(`/api/notes${qs}`)
 }
 
-export function noteCreate(content: string) {
+export function noteCreate(content: string, tags?: string[]) {
     return fetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, ...(tags?.length ? { tags } : {}) }),
     }).then((r) => r.json() as Promise<InboxNote>)
 }
 
@@ -177,6 +244,14 @@ export function noteDelete(id: number) {
         method: 'DELETE',
         headers: authHeaders(),
     }).then((r) => r.json())
+}
+
+export function noteStats() {
+    return apiGet<NoteHeatmapDay[]>('/api/notes/stats')
+}
+
+export function noteTags() {
+    return apiGet<NoteTag[]>('/api/notes/tags')
 }
 
 // ── Auth check ────────────────────────────────────────────────────────────────

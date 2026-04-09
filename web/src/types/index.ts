@@ -26,15 +26,22 @@ export interface NoteEntry {
     content?: string
 }
 
-export type TodoStatus = 'not-started' | 'in-progress' | 'completed'
+export type TodoStatus = 'not-started' | 'completed'
 
 export interface TodoItem {
     id: string
     content: string
     status: TodoStatus
     priority: string | null
+    remind_at: string | null
     created_at: string
     updated_at: string
+}
+
+export interface TodoAnalysis {
+    content: string
+    remind_at: string | null
+    priority: string | null
 }
 
 export interface InboxNote {
@@ -43,6 +50,17 @@ export interface InboxNote {
     date: string
     time: string
     created_at: number
+    tags: string | null    // JSON stringified string[] or null
+}
+
+export interface NoteHeatmapDay {
+    date: string
+    count: number
+}
+
+export interface NoteTag {
+    tag: string
+    count: number
 }
 
 export interface AppState {

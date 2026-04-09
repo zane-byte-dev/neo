@@ -118,6 +118,7 @@ function createSchema(db: Database.Database): void {
             content     TEXT    NOT NULL,
             status      TEXT    NOT NULL,
             priority    TEXT,
+            remind_at   TEXT,
             created_at  TEXT    NOT NULL,
             updated_at  TEXT    NOT NULL
         );
@@ -130,7 +131,8 @@ function createSchema(db: Database.Database): void {
             content     TEXT    NOT NULL,
             date        TEXT    NOT NULL,
             time        TEXT    NOT NULL,
-            created_at  INTEGER NOT NULL
+            created_at  INTEGER NOT NULL,
+            tags        TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_notes_tenant_date ON notes(tenant_key, date);
 
@@ -192,4 +194,10 @@ function createSchema(db: Database.Database): void {
             VALUES (new.id, new.title, new.author, new.source, new.summary, new.tags, new.content);
         END;
     `);
+
+    // ── Migrations ─────────────────────────────────────────────────────────
+    // Add remind_at to todos if missing (for existing DBs)
+    try { db.exec('ALTER TABLE todos ADD COLUMN remind_at TEXT'); } catch { /* already exists */ }
+    // Add tags to notes if missing (for existing DBs)
+    try { db.exec('ALTER TABLE notes ADD COLUMN tags TEXT'); } catch { /* already exists */ }
 }

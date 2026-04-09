@@ -1,15 +1,16 @@
 import React from 'react'
-import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X } from 'lucide-react'
+import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X, Plus, Pencil } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { notebookList, notebookSearch, notebookRead } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { NoteEditor } from './NoteEditor'
 import type { NoteEntry } from '../types'
 
 // ── Note detail view ──────────────────────────────────────────────────────────
 
-const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void }> = ({ note, onBack }) => {
+const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => void }> = ({ note, onBack, onEdit }) => {
     const [full, setFull] = React.useState<NoteEntry | null>(null)
     const [loading, setLoading] = React.useState(true)
 
@@ -31,6 +32,13 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void }> = ({ note, o
                     <ArrowLeft size={15} />
                 </button>
                 <span className="text-sm font-semibold flex-1 truncate">{note.title}</span>
+                <button
+                    onClick={onEdit}
+                    className="p-1.5 hover:bg-fill-secondary rounded-lg transition-colors text-text-secondary"
+                    title="编辑"
+                >
+                    <Pencil size={14} />
+                </button>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
@@ -83,6 +91,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
     const [error, setError] = React.useState('')
     const [inSearch, setInSearch] = React.useState(false)
     const searchTimeoutRef = React.useRef<number | null>(null)
+    const [editing, setEditing] = React.useState<NoteEntry | null | 'new'>(null) // null=off, 'new'=create, NoteEntry=edit
 
     // Load all entries on mount (once)
     React.useEffect(() => {
@@ -113,8 +122,40 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
 
     const displayList = inSearch ? results : notebookEntries
 
-    if (selectedNote && fullPage) {
-        // Full-page: two-column — list stays visible on left, detail on right
+    const handleEditorSaved = (entry: NoteEntry) => {
+        if (editing === 'new') {
+            setNotebookEntries([entry, ...notebookEntries])
+        } else {
+            setNotebookEntries(notebookEntries.map((e) => (e.id === entry.id ? { ...e, ...entry } : e)))
+        }
+        setEditing(null)
+        setSelectedNote(entry)
+    }
+
+    const handleEditorDeleted = (id: number) => {
+        setNotebookEntries(notebookEntries.filter((e) => e.id !== id))
+        setEditing(null)
+        setSelectedNote(null)
+    }
+
+    // ── Editor view (full-page or panel) ──────────────────────────────────
+    const editorView = editing !== null && (
+        <NoteEditor
+            note={editing === 'new' ? null : editing}
+            onBack={() => setEditing(null)}
+            onSaved={handleEditorSaved}
+            onDeleted={handleEditorDeleted}
+        />
+    )
+
+    // ── Right pane content ────────────────────────────────────────────────
+    const rightPane = editing !== null
+        ? editorView
+        : selectedNote
+            ? <NoteDetail note={selectedNote} onBack={() => setSelectedNote(null)} onEdit={() => setEditing(selectedNote)} />
+            : <div className="flex-1 flex items-center justify-center text-text-quaternary text-sm">选择一篇文章阅读</div>
+
+    if (fullPage) {
         return (
             <div className="flex h-full bg-bg-container overflow-hidden">
                 <div className="w-80 shrink-0 border-r border-border flex flex-col">
@@ -127,42 +168,22 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                         setSearchQuery={setSearchQuery}
                         totalCount={notebookEntries.length}
                         onSelect={setSelectedNote}
-                        selectedId={selectedNote.id}
+                        selectedId={selectedNote?.id ?? null}
+                        onNew={() => setEditing('new')}
                     />
                 </div>
                 <div className="flex-1 overflow-hidden">
-                    <NoteDetail note={selectedNote} onBack={() => setSelectedNote(null)} />
+                    {rightPane}
                 </div>
             </div>
         )
     }
 
-    if (fullPage) {
-        // Full-page, no note selected yet
-        return (
-            <div className="flex h-full bg-bg-container overflow-hidden">
-                <div className="w-80 shrink-0 border-r border-border flex flex-col">
-                    <NotebookList
-                        entries={displayList}
-                        loading={loading}
-                        error={error}
-                        inSearch={inSearch}
-                        searchQuery={searchQuery}
-                        setSearchQuery={setSearchQuery}
-                        totalCount={notebookEntries.length}
-                        onSelect={setSelectedNote}
-                        selectedId={null}
-                    />
-                </div>
-                <div className="flex-1 flex items-center justify-center text-text-quaternary text-sm">
-                    Select a note to read
-                </div>
-            </div>
-        )
-    }
+    // Non-fullPage: editor takes over
+    if (editing !== null) return <div className="flex flex-col h-full bg-bg-container overflow-hidden">{editorView}</div>
 
     if (selectedNote) {
-        return <NoteDetail note={selectedNote} onBack={() => setSelectedNote(null)} />
+        return <NoteDetail note={selectedNote} onBack={() => setSelectedNote(null)} onEdit={() => setEditing(selectedNote)} />
     }
 
     return (
@@ -177,6 +198,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                 totalCount={notebookEntries.length}
                 onSelect={setSelectedNote}
                 selectedId={null}
+                onNew={() => setEditing('new')}
             />
         </div>
     )
@@ -194,13 +216,23 @@ const NotebookList: React.FC<{
     totalCount: number
     onSelect: (note: NoteEntry) => void
     selectedId: number | null
-}> = ({ entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId }) => (
+    onNew?: () => void
+}> = ({ entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew }) => (
     <>
         {/* Header */}
         <div className="h-12 border-b border-border flex items-center gap-2 px-4 shrink-0">
             <BookOpen size={15} className="text-primary-mint shrink-0" />
             <span className="text-sm font-semibold">Notebook</span>
             <span className="ml-auto text-xs text-text-tertiary">{totalCount} entries</span>
+            {onNew && (
+                <button
+                    onClick={onNew}
+                    className="p-1 hover:bg-fill-secondary rounded-lg transition-colors text-text-secondary hover:text-primary-mint"
+                    title="新建文章"
+                >
+                    <Plus size={15} />
+                </button>
+            )}
         </div>
 
         {/* Search */}

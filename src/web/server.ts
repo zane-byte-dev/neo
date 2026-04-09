@@ -20,6 +20,8 @@ import { fileURLToPath } from 'url';
 import { getDb } from '../services/db.js';
 import { ChatHistoryCache } from '../services/chat-history-cache.js';
 import { getTenantContext } from '../services/tool-context.js';
+import { geminiGenerate } from '../services/gemini-client.js';
+import { GEMINI_API_KEY } from '../config.js';
 import type { TenantKey } from '../types/platform.js';
 import type { GeminiClient, ToolContext } from '../services/gemini-client.js';
 
@@ -223,14 +225,105 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
         }
     });
 
+    // ── POST /api/notebook — create a notebook entry ──────────────────────
+    router.post('/api/notebook', async (ctx) => {
+        const db = getDb();
+        const body = ctx.request.body as Record<string, unknown>;
+        const title = typeof body.title === 'string' ? body.title.trim() : '';
+        if (!title) { ctx.status = 400; ctx.body = { error: 'title required' }; return; }
+        const author  = typeof body.author  === 'string' && body.author.trim()  ? body.author.trim()  : null;
+        const date    = typeof body.date    === 'string' && body.date.trim()    ? body.date.trim()    : null;
+        const source  = typeof body.source  === 'string' && body.source.trim()  ? body.source.trim()  : null;
+        const summary = typeof body.summary === 'string' && body.summary.trim() ? body.summary.trim() : null;
+        const tags    = typeof body.tags    === 'string' && body.tags.trim()    ? body.tags.trim()    : null;
+        const content = typeof body.content === 'string' ? body.content : null;
+        const now = new Date().toISOString();
+        const result = db.prepare(
+            `INSERT INTO notebook_entries (title, author, date, source, summary, tags, content, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(title, author, date, source, summary, tags, content, now, now);
+        ctx.body = { id: result.lastInsertRowid, title, author, date, source, summary, tags, content, created_at: now, updated_at: now };
+    });
+
+    // ── PATCH /api/notebook/:id — update a notebook entry ─────────────────
+    router.patch('/api/notebook/:id', async (ctx) => {
+        const db = getDb();
+        const id = Number(ctx.params.id);
+        if (!id) { ctx.status = 400; ctx.body = { error: 'invalid id' }; return; }
+        const existing = db.prepare('SELECT * FROM notebook_entries WHERE id = ?').get(id) as Record<string, unknown> | undefined;
+        if (!existing) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        const body = ctx.request.body as Record<string, unknown>;
+        const now = new Date().toISOString();
+        const title   = typeof body.title   === 'string' ? body.title.trim()   : existing.title;
+        const author  = body.author  !== undefined ? (typeof body.author  === 'string' && body.author.trim()  ? body.author.trim()  : null) : existing.author;
+        const date    = body.date    !== undefined ? (typeof body.date    === 'string' && body.date.trim()    ? body.date.trim()    : null) : existing.date;
+        const source  = body.source  !== undefined ? (typeof body.source  === 'string' && body.source.trim()  ? body.source.trim()  : null) : existing.source;
+        const summary = body.summary !== undefined ? (typeof body.summary === 'string' && body.summary.trim() ? body.summary.trim() : null) : existing.summary;
+        const tags    = body.tags    !== undefined ? (typeof body.tags    === 'string' && body.tags.trim()    ? body.tags.trim()    : null) : existing.tags;
+        const content = body.content !== undefined ? (typeof body.content === 'string' ? body.content : null) : existing.content;
+        db.prepare(
+            `UPDATE notebook_entries SET title=?, author=?, date=?, source=?, summary=?, tags=?, content=?, updated_at=? WHERE id=?`
+        ).run(title, author, date, source, summary, tags, content, now, id);
+        ctx.body = { id, title, author, date, source, summary, tags, content, updated_at: now };
+    });
+
+    // ── DELETE /api/notebook/:id — delete a notebook entry ────────────────
+    router.delete('/api/notebook/:id', async (ctx) => {
+        const db = getDb();
+        const id = Number(ctx.params.id);
+        if (!id) { ctx.status = 400; ctx.body = { error: 'invalid id' }; return; }
+        const result = db.prepare('DELETE FROM notebook_entries WHERE id = ?').run(id);
+        if (result.changes === 0) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        ctx.body = { ok: true };
+    });
+
+    // ── POST /api/todos/analyze — AI-parse a todo text ────────────────────
+    router.post('/api/todos/analyze', async (ctx) => {
+        const body = ctx.request.body as Record<string, unknown>;
+        const content = typeof body.content === 'string' ? body.content.trim() : '';
+        if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
+
+        const now = new Date();
+        const prompt = `Current datetime: ${now.toISOString()} (${now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })} CST)
+
+Analyze this todo item and return a JSON object:
+"${content}"
+
+Return ONLY valid JSON with these fields:
+- content: slightly cleaned/clarified todo text (keep short, in the original language)
+- remind_at: ISO 8601 datetime string if the text implies a time (e.g. "明天" next day 09:00, "下午3点" today 15:00, "下周一" next Monday 09:00), otherwise null
+- priority: "high" / "medium" / "low" based on urgency keywords, or null
+
+Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","priority":"medium"}`;
+
+        const result = await geminiGenerate(
+            GEMINI_API_KEY,
+            [{ role: 'user', parts: [{ text: prompt }] }],
+            { model: 'flash', generationConfig: { responseMimeType: 'application/json' } }
+        );
+
+        if (!result) { ctx.body = { content, remind_at: null, priority: null }; return; }
+        try {
+            const parsed = JSON.parse(result);
+            ctx.body = {
+                content: typeof parsed.content === 'string' ? parsed.content : content,
+                remind_at: typeof parsed.remind_at === 'string' ? parsed.remind_at : null,
+                priority: typeof parsed.priority === 'string' ? parsed.priority : null,
+            };
+        } catch {
+            ctx.body = { content, remind_at: null, priority: null };
+        }
+    });
+
     // ── GET /api/todos — list all todos ──────────────────────────────────
     router.get('/api/todos', async (ctx) => {
         const db = getDb();
         ctx.body = db.prepare(
-            `SELECT id, content, status, priority, created_at, updated_at
+            `SELECT id, content, status, priority, remind_at, created_at, updated_at
              FROM todos
              ORDER BY
-               CASE status WHEN 'in-progress' THEN 0 WHEN 'not-started' THEN 1 ELSE 2 END,
+               CASE status WHEN 'not-started' THEN 0 ELSE 1 END,
+               remind_at ASC NULLS LAST,
                created_at DESC`
         ).all();
     });
@@ -241,28 +334,42 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
         const body = ctx.request.body as Record<string, unknown>;
         const content = typeof body.content === 'string' ? body.content.trim() : '';
         const priority = typeof body.priority === 'string' && body.priority.trim() ? body.priority.trim() : null;
+        const remindAt = typeof body.remind_at === 'string' && body.remind_at.trim() ? body.remind_at.trim() : null;
         if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
         const id = Math.random().toString(36).slice(2, 10);
         const now = new Date().toISOString();
         db.prepare(
-            `INSERT INTO todos (id, tenant_key, content, status, priority, created_at, updated_at)
-             VALUES (?, 'web', ?, 'not-started', ?, ?, ?)`
-        ).run(id, content, priority, now, now);
-        ctx.body = { id, content, status: 'not-started', priority, created_at: now, updated_at: now };
+            `INSERT INTO todos (id, tenant_key, content, status, priority, remind_at, created_at, updated_at)
+             VALUES (?, 'web', ?, 'not-started', ?, ?, ?, ?)`
+        ).run(id, content, priority, remindAt, now, now);
+        ctx.body = { id, content, status: 'not-started', priority, remind_at: remindAt, created_at: now, updated_at: now };
     });
 
-    // ── PATCH /api/todos/:id — update status / content ────────────────────
+    // ── PATCH /api/todos/:id — update status / content / remind_at / priority
     router.patch('/api/todos/:id', async (ctx) => {
         const db = getDb();
         const todoId = ctx.params.id;
         const body = ctx.request.body as Record<string, unknown>;
-        const validStatuses = ['not-started', 'in-progress', 'completed'];
+        const now = new Date().toISOString();
+        const validStatuses = ['not-started', 'completed'];
         if (body.status !== undefined) {
             const status = body.status as string;
             if (!validStatuses.includes(status)) { ctx.status = 400; ctx.body = { error: 'invalid status' }; return; }
-            const now = new Date().toISOString();
             const result = db.prepare('UPDATE todos SET status = ?, updated_at = ? WHERE id = ?').run(status, now, todoId);
             if (result.changes === 0) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        }
+        if (body.content !== undefined) {
+            const content = typeof body.content === 'string' ? body.content.trim() : '';
+            if (!content) { ctx.status = 400; ctx.body = { error: 'content cannot be empty' }; return; }
+            db.prepare('UPDATE todos SET content = ?, updated_at = ? WHERE id = ?').run(content, now, todoId);
+        }
+        if (body.remind_at !== undefined) {
+            const remindAt = body.remind_at === null ? null : (typeof body.remind_at === 'string' ? body.remind_at.trim() || null : null);
+            db.prepare('UPDATE todos SET remind_at = ?, updated_at = ? WHERE id = ?').run(remindAt, now, todoId);
+        }
+        if (body.priority !== undefined) {
+            const priority = body.priority === null ? null : (typeof body.priority === 'string' ? body.priority.trim() || null : null);
+            db.prepare('UPDATE todos SET priority = ?, updated_at = ? WHERE id = ?').run(priority, now, todoId);
         }
         ctx.body = { ok: true };
     });
@@ -278,15 +385,51 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
     router.get('/api/notes', async (ctx) => {
         const db = getDb();
         const q = ctx.query as Record<string, string>;
-        if (q.date) {
+        if (q.tag) {
+            // Filter by tag: notes whose tags JSON array contains the tag
+            const all = db.prepare(
+                `SELECT id, content, date, time, created_at, tags FROM notes ORDER BY created_at DESC LIMIT 500`
+            ).all() as Array<Record<string, unknown>>;
+            ctx.body = all.filter((n) => {
+                try { return (JSON.parse(n.tags as string) as string[]).includes(q.tag); } catch { return false; }
+            });
+        } else if (q.date) {
             ctx.body = db.prepare(
-                `SELECT id, content, date, time, created_at FROM notes WHERE date = ? ORDER BY created_at DESC`
+                `SELECT id, content, date, time, created_at, tags FROM notes WHERE date = ? ORDER BY created_at DESC`
             ).all(q.date);
         } else {
             ctx.body = db.prepare(
-                `SELECT id, content, date, time, created_at FROM notes ORDER BY created_at DESC LIMIT 200`
+                `SELECT id, content, date, time, created_at, tags FROM notes ORDER BY created_at DESC LIMIT 200`
             ).all();
         }
+    });
+
+    // ── GET /api/notes/stats — heatmap data (counts per date) ────────────
+    router.get('/api/notes/stats', async (ctx) => {
+        const db = getDb();
+        const rows = db.prepare(
+            `SELECT date, COUNT(*) as count FROM notes GROUP BY date ORDER BY date`
+        ).all() as Array<{ date: string; count: number }>;
+        ctx.body = rows;
+    });
+
+    // ── GET /api/notes/tags — all unique tags ────────────────────────────
+    router.get('/api/notes/tags', async (ctx) => {
+        const db = getDb();
+        const rows = db.prepare(
+            `SELECT tags FROM notes WHERE tags IS NOT NULL AND tags != '[]'`
+        ).all() as Array<{ tags: string }>;
+        const tagCount = new Map<string, number>();
+        for (const row of rows) {
+            try {
+                for (const t of JSON.parse(row.tags) as string[]) {
+                    tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
+                }
+            } catch { /* skip */ }
+        }
+        ctx.body = Array.from(tagCount.entries())
+            .map(([tag, count]) => ({ tag, count }))
+            .sort((a, b) => b.count - a.count);
     });
 
     // ── POST /api/notes — capture a note ─────────────────────────────────
@@ -295,14 +438,15 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
         const body = ctx.request.body as Record<string, unknown>;
         const content = typeof body.content === 'string' ? body.content.trim() : '';
         if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
+        const tags = Array.isArray(body.tags) ? JSON.stringify(body.tags) : null;
         const now = new Date();
         const date = now.toISOString().split('T')[0];
         const time = now.toTimeString().split(' ')[0].slice(0, 5);
         const createdAt = now.getTime();
         const result = db.prepare(
-            `INSERT INTO notes (tenant_key, content, date, time, created_at) VALUES ('web', ?, ?, ?, ?)`
-        ).run(content, date, time, createdAt);
-        ctx.body = { id: result.lastInsertRowid, content, date, time, created_at: createdAt };
+            `INSERT INTO notes (tenant_key, content, date, time, created_at, tags) VALUES ('web', ?, ?, ?, ?, ?)`
+        ).run(content, date, time, createdAt, tags);
+        ctx.body = { id: result.lastInsertRowid, content, date, time, created_at: createdAt, tags };
     });
 
     // ── DELETE /api/notes/:id ─────────────────────────────────────────────
