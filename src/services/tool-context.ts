@@ -12,6 +12,10 @@ import type { TenantKey, PlatformAdapter } from '../types/platform.js';
 export interface TenantContext {
     tenantKey: TenantKey;
     chatId: string;
+    /** Per-tenant workspace root directory (absolute path) */
+    workDir: string;
+    /** Per-tenant system instruction (loaded from workspace config/) */
+    systemInstruction: string;
     adapter: PlatformAdapter;
     scheduledTaskManager: any;
     reminderManager: any;

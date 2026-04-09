@@ -6,12 +6,15 @@ export const weeklyReportCron: CronJob = {
     description: '每周总结报告：回顾本周重要对话与事项',
     schedule: '0 21 * * 0',
     handler: async (deps) => {
-        const result = await generateWeeklyReportTool.handler({}, '');
-        if (!result.startsWith('⚠️')) {
-            for (const tk of deps.tenantKeys) {
+        const results: string[] = [];
+        for (const tk of deps.tenantKeys) {
+            const workDir = deps.getWorkDir(tk);
+            const result = await generateWeeklyReportTool.handler({}, workDir);
+            if (!result.startsWith('⚠️')) {
                 await deps.sendReply(tk, result);
             }
+            results.push(result);
         }
-        return result;
+        return results.join('\n---\n');
     },
 };

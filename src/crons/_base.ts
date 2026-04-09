@@ -7,6 +7,8 @@ export interface CronDeps {
     /** All tenant keys this cron should operate on */
     tenantKeys: TenantKey[];
     sendReply: (tenantKey: TenantKey, text: string) => Promise<void>;
+    /** Resolve a tenant's workspace root directory */
+    getWorkDir: (tenantKey: TenantKey) => string;
 }
 
 export interface CronJob {

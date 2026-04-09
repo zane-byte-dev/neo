@@ -9,7 +9,7 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import type { Tool, ToolContext } from '../_base.js';
-import { getVaultRoot, callGemini } from '../../utils/helpers.js';
+import { callGemini } from '../../utils/helpers.js';
 import { getDb } from '../../services/db.js';
 
 function todayStr(): string {
@@ -45,8 +45,8 @@ export const generateDailyLogTool: Tool = {
             '如果日记已存在或今天没有对话则跳过（幂等）。',
         parameters: { type: 'object', properties: {}, required: [] },
     },
-    handler: async (_args, _workDir, context?: ToolContext) => {
-        const vaultRoot = getVaultRoot();
+    handler: async (_args, workDir, context?: ToolContext) => {
+        const vaultRoot = workDir;
         const today = todayStr();
         const outPath = join(vaultRoot, 'memory', '1-Daily', `${today}.md`);
 

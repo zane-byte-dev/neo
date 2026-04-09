@@ -50,6 +50,10 @@ export interface ToolContext {
     tenantKey: string;
     /** Platform-specific chat/channel ID */
     chatId: string;
+    /** Per-tenant workspace root directory (absolute path) */
+    workDir: string;
+    /** Per-tenant system instruction (for sub-agent calls) */
+    systemInstruction: string;
     /** Platform adapter for sending messages, photos, etc. */
     adapter: {
         sendMessage(chatId: string, text: string, opts?: Record<string, unknown>): Promise<{ id: string; chatId: string }>;

@@ -106,114 +106,114 @@ export async function geminiUploadFile(
 
 // ── GeminiClient ─────────────────────────────────────────────────────────────
 
+/**
+ * Load system instruction from a config directory.
+ * Reads AGENTS.md (required) + optional SOUL.md, TOOLS.md, XIFENG.md.
+ * Falls back to legacy agent.md if AGENTS.md not found.
+ *
+ * @param configDir  Absolute path to a config directory to search.
+ * @param fallbackDirs  Additional directories to search (in order).
+ */
+export async function loadSystemInstruction(configDir: string, ...fallbackDirs: string[]): Promise<string> {
+    const dirs = [configDir, ...fallbackDirs].filter(Boolean);
+
+    // Try three-file system: AGENTS.md + SOUL.md (optional) + TOOLS.md (optional)
+    for (const dir of dirs) {
+        try {
+            const agents = await fs.readFile(join(dir, 'AGENTS.md'), 'utf8');
+            const parts: string[] = [agents.trim()];
+            const loadedFiles = ['AGENTS.md'];
+            for (const file of ['SOUL.md', 'TOOLS.md', 'XIFENG.md']) {
+                try {
+                    const content = await fs.readFile(join(dir, file), 'utf8');
+                    if (content.trim()) {
+                        parts.push(content.trim());
+                        loadedFiles.push(file);
+                    }
+                } catch { /* optional */ }
+            }
+            const merged = parts.join('\n\n---\n\n');
+            console.log(`[AgentRuntime] 📜 Loaded prompt from: ${dir} (${loadedFiles.join(' + ')})`);
+            return merged;
+        } catch { /* try next dir */ }
+    }
+
+    // Backward compat: single agent.md
+    for (const dir of dirs) {
+        try {
+            const content = await fs.readFile(join(dir, 'agent.md'), 'utf8');
+            console.log(`[AgentRuntime] 📜 Loaded agent.md from: ${dir}`);
+            return content;
+        } catch { /* try next */ }
+    }
+    return '';
+}
+
+/**
+ * Build the full system instruction for a tenant, combining:
+ * 1. Config files (AGENTS.md, SOUL.md, etc.)
+ * 2. Workspace skills (from {workDir}/config/skills/)
+ * 3. Global OpenClaw skills (from ~/.openclaw/workspace/skills/)
+ */
+export async function buildTenantSystemInstruction(workDir: string): Promise<string> {
+    const configDir = join(workDir, 'config');
+    const parts: string[] = [];
+
+    // 1. Load config md files
+    const si = await loadSystemInstruction(configDir);
+    if (si) parts.push(si);
+
+    // 2. Load workspace skills ({workDir}/config/skills/)
+    const workspaceSkills = await loadOpenClawSkills(join(configDir, 'skills'));
+    if (workspaceSkills.length > 0) {
+        parts.push(formatSkillsPrompt(workspaceSkills));
+        console.log(`[AgentRuntime] 🧩 Workspace skills: ${workspaceSkills.length} — ${workspaceSkills.map(s => s.name).join(', ')}`);
+    }
+
+    // 3. Load global OpenClaw skills
+    const globalSkills = await loadOpenClawSkills();
+    if (globalSkills.length > 0) {
+        parts.push(formatSkillsPrompt(globalSkills));
+        console.log(`[AgentRuntime] 🧩 OpenClaw skills: ${globalSkills.length} — ${globalSkills.map(s => s.name).join(', ')}`);
+    }
+
+    return parts.join('\n\n---\n\n');
+}
+
 export class GeminiClient {
     private enabled = false;
     private apiKey = '';
     private model = '';
-    private workDir = '';
-    private configDir = '';
-    private systemInstruction = '';
+    /** Base WORK_DIR — used only for validation; per-tenant workDir is in TenantContext. */
+    private baseWorkDir = '';
 
     constructor() {
         this.apiKey = GEMINI_API_KEY;
         this.model = resolveModel(GEMINI_MODEL_ENV ?? 'flash');
-        // Always resolve to absolute path so tool calls work regardless of CWD
         const rawWorkDir = WORK_DIR || GEMINI_WORK_DIR;
-        this.workDir = rawWorkDir ? resolve(rawWorkDir) : '';
-        this.configDir = AGENT_CONFIG_DIR;
+        this.baseWorkDir = rawWorkDir ? resolve(rawWorkDir) : '';
 
         if (!this.apiKey) {
             console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
             return;
         }
-        if (!this.workDir) {
+        if (!this.baseWorkDir) {
             console.log('[AgentRuntime] ❌ Disabled: WORK_DIR (or GEMINI_WORK_DIR) not set');
             return;
         }
 
         this.enabled = true;
         console.log(`[AgentRuntime] ✅ Initialized. Model: ${this.model}`);
-        console.log(`[AgentRuntime] 📂 WorkDir: ${this.workDir}`);
-        if (this.configDir) console.log(`[AgentRuntime] ⚙️  ConfigDir: ${this.configDir}`);
-
-        // Load system instruction in the background (non-blocking)
-        this.loadSystemInstruction().then(async si => {
-            const parts: string[] = [];
-            if (si) parts.push(si);
-
-            // Append OpenClaw skills
-            const skillsPrompt = await this.loadOpenClawSkills();
-            if (skillsPrompt) parts.push(skillsPrompt);
-
-            this.systemInstruction = parts.join('\n\n---\n\n');
-
-            if (this.systemInstruction) {
-                console.log(`[AgentRuntime] 📜 System instruction ready (${this.systemInstruction.length} chars)`);
-            } else {
-                console.log('[AgentRuntime] ⚠️  No system instruction loaded');
-            }
-        }).catch(err => console.error('[AgentRuntime] Failed to load system instruction:', err.message));
+        console.log(`[AgentRuntime] 📂 BaseWorkDir: ${this.baseWorkDir}`);
     }
 
-    private async loadSystemInstruction(): Promise<string> {
-        const dirs = [this.configDir, this.workDir].filter(Boolean) as string[];
-
-        // Try three-file system: AGENTS.md + SOUL.md (optional) + TOOLS.md (optional)
-        for (const dir of dirs) {
-            try {
-                const agents = await fs.readFile(join(dir, 'AGENTS.md'), 'utf8');
-                const parts: string[] = [agents.trim()];
-                const loadedFiles = ['AGENTS.md'];
-                for (const file of ['SOUL.md', 'TOOLS.md', 'XIFENG.md']) {
-                    try {
-                        const content = await fs.readFile(join(dir, file), 'utf8');
-                        if (content.trim()) {
-                            parts.push(content.trim());
-                            loadedFiles.push(file);
-                        }
-                    } catch { /* optional */ }
-                }
-                const merged = parts.join('\n\n---\n\n');
-                console.log(`[AgentRuntime] 📜 Loaded prompt from: ${dir} (${loadedFiles.join(' + ')})`)
-                return merged;
-            } catch { /* try next dir */ }
-        }
-
-        // Backward compat: single agent.md
-        for (const dir of dirs) {
-            try {
-                const content = await fs.readFile(join(dir, 'agent.md'), 'utf8');
-                console.log(`[AgentRuntime] 📜 Loaded agent.md from: ${dir}`);
-                return content;
-            } catch { /* try next */ }
-        }
-        return '';
-    }
-
-    /**
-     * Discover and load OpenClaw skills, returning a formatted prompt section.
-     */
-    private async loadOpenClawSkills(): Promise<string> {
-        try {
-            const skills = await loadOpenClawSkills();
-            if (skills.length === 0) return '';
-            const prompt = formatSkillsPrompt(skills);
-            console.log(`[AgentRuntime] 🧩 OpenClaw: ${skills.length} skill(s) loaded — ${skills.map(s => s.name).join(', ')}`);
-            return prompt;
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.warn(`[AgentRuntime] ⚠️  OpenClaw skills load failed: ${msg}`);
-            return '';
-        }
-    }
-
-    private async buildPrompt(message: string, history?: string): Promise<string> {
+    private async buildPrompt(message: string, workDir: string, history?: string): Promise<string> {
         const now = new Date().toLocaleString('zh-CN');
         let prompt = `[Runtime Context]\n- Current Time: ${now}\n`;
 
         // Inject NOW.md (Short-term memory / Workbench)
         try {
-            const nowMdPath = join(this.workDir, 'memory', 'NOW.md');
+            const nowMdPath = join(workDir, 'memory', 'NOW.md');
             const nowMd = await fs.readFile(nowMdPath, 'utf8');
             if (nowMd.trim()) {
                 prompt += `\n[Current Mission/Focus]\n${nowMd.trim()}\n`;
@@ -243,7 +243,11 @@ export class GeminiClient {
             return null;
         }
 
-        const prompt = await this.buildPrompt(message, history);
+        // Resolve per-tenant workDir and systemInstruction from context
+        const workDir = context?.workDir || this.baseWorkDir;
+        const systemInstruction = context?.systemInstruction || '';
+
+        const prompt = await this.buildPrompt(message, workDir, history);
         const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: prompt }] }];
 
         try {
@@ -253,9 +257,9 @@ export class GeminiClient {
             const result = await agentLoop(
                 this.apiKey,
                 effectiveModel,
-                this.systemInstruction,
+                systemInstruction,
                 contents,
-                this.workDir,
+                workDir,
                 toolRegistry,
                 onChunk,
                 imageInput,

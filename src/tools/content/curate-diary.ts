@@ -8,7 +8,7 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import type { Tool } from '../_base.js';
-import { getVaultRoot, callGemini } from '../../utils/helpers.js';
+import { callGemini } from '../../utils/helpers.js';
 
 async function getArchivedDiaries(vaultRoot: string): Promise<string[]> {
     const historyDir = join(vaultRoot, 'history');
@@ -47,8 +47,8 @@ export const curateDiaryTool: Tool = {
             '用于"时空连线"——将过去的记录与当下建立联系。',
         parameters: { type: 'object', properties: {}, required: [] },
     },
-    handler: async (_args, _workDir) => {
-        const vaultRoot = getVaultRoot();
+    handler: async (_args, workDir) => {
+        const vaultRoot = workDir;
         const archives = await getArchivedDiaries(vaultRoot);
 
         if (archives.length === 0) {

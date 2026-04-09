@@ -7,10 +7,10 @@
 
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
-import { ASYNC_TRIGGER_PREFIXES, getAuthorizedForPlatform } from './config.js';
-import { getConfiguredWorkDir } from './utils/helpers.js';
+import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, GEMINI_WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform } from './config.js';
+import { resolveWorkspaceDir, ensureWorkspace } from './utils/workspace.js';
 import { initDb } from './services/db.js';
-import { GeminiClient } from './services/gemini-client.js';
+import { GeminiClient, buildTenantSystemInstruction } from './services/gemini-client.js';
 import { ChatHistoryCache } from './services/chat-history-cache.js';
 import { AsyncTaskManager } from './services/async-task-manager.js';
 import { MessageQueue } from './services/message-queue.js';
@@ -119,6 +119,7 @@ export class App {
                 const ctx = getTenantContext(tenantKey);
                 await this.sendReply(ctx.adapter, ctx.chatId, text);
             },
+            getWorkDir: (tenantKey) => getTenantContext(tenantKey).workDir,
         });
     }
 
@@ -155,6 +156,19 @@ export class App {
         const { getDb } = await import('./services/db.js');
         const db = getDb();
 
+        // Resolve per-tenant workspace directory
+        const baseWorkDir = resolve(WORK_DIR || GEMINI_WORK_DIR || '.');
+        const workDir = resolveWorkspaceDir(baseWorkDir, tenantKey);
+        const templateDir = AGENT_CONFIG_DIR || undefined;
+        await ensureWorkspace(workDir, templateDir);
+        console.log(`[Tenant] 📂 ${tenantKey} workspace: ${workDir}`);
+
+        // Load per-tenant system instruction from workspace config
+        const systemInstruction = await buildTenantSystemInstruction(workDir);
+        if (systemInstruction) {
+            console.log(`[Tenant] 📜 ${tenantKey} system instruction ready (${systemInstruction.length} chars)`);
+        }
+
         const chatHistoryCache = new ChatHistoryCache(db, tenantKey);
         await chatHistoryCache.init();
 
@@ -163,7 +177,7 @@ export class App {
             if (session.messages.length === 0) return;
             try {
                 const { generateDailyLogTool } = await import('./tools/content/generate-daily-log.js');
-                const result = await generateDailyLogTool.handler({}, '');
+                const result = await generateDailyLogTool.handler({}, workDir);
                 console.log(`[SessionExpire] (${tenantKey}) ${result}`);
             } catch (err: any) {
                 console.error(`[SessionExpire] (${tenantKey}) session-to-log failed:`, err.message);
@@ -183,6 +197,8 @@ export class App {
         registerTenantContext({
             tenantKey,
             chatId: userId,
+            workDir,
+            systemInstruction,
             adapter,
             scheduledTaskManager,
             reminderManager,
@@ -242,6 +258,7 @@ export class App {
                         adapter,
                         tenantKey,
                         chatId: innerMsg.chatId,
+                        workDir: ctx.workDir,
                         chatHistoryCache: ctx.chatHistoryCache,
                         asyncTaskManager: ctx.asyncTaskManager,
                         reminderManager: ctx.reminderManager,
@@ -288,7 +305,8 @@ export class App {
         }
 
         if (data === 'save_lib') {
-            const workDir = getConfiguredWorkDir();
+            const tenantCtx = getTenantContext(cb.tenantKey);
+            const workDir = tenantCtx?.workDir;
             const raw = cb._raw as any;
             if (!workDir) {
                 await raw?.answerCbQuery?.('⚠️ WORK_DIR 未配置').catch(() => {});

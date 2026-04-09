@@ -1,7 +1,7 @@
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
 import { SKIP_DIRS } from '../config.js';
-import { getConfiguredWorkDir } from '../utils/helpers.js';
+
 import type { Command } from './_base.js';
 import { getDb } from '../services/db.js';
 
@@ -11,7 +11,7 @@ export const workspaceCommand: Command = {
     const reply = (t: string, md = false) => deps.adapter.sendMessage(msg.chatId, t, md ? { parseMode: 'markdown' } : undefined);
     switch (command) {
         case '/ls': {
-            const workDir = getConfiguredWorkDir();
+            const workDir = deps.workDir;
             if (!workDir) {
                 await reply('⚠️ WORK_DIR 未配置。');
                 return true;
@@ -41,7 +41,7 @@ export const workspaceCommand: Command = {
         }
 
         case '/read': {
-            const workDir = getConfiguredWorkDir();
+            const workDir = deps.workDir;
             if (!workDir) {
                 await reply('⚠️ WORK_DIR 未配置。');
                 return true;
@@ -136,7 +136,7 @@ export const workspaceCommand: Command = {
         }
 
         case '/today': {
-            const workDir = getConfiguredWorkDir();
+            const workDir = deps.workDir;
             const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
             // Inbox entries from SQLite
             const noteRows = getDb().prepare(
@@ -191,7 +191,7 @@ export const workspaceCommand: Command = {
         }
 
         case '/search': {
-            const workDir = getConfiguredWorkDir();
+            const workDir = deps.workDir;
             if (!workDir) { await reply('⚠️ WORK_DIR 未配置。'); return true; }
             const query = text.replace(/^\/search\s*/i, '').trim();
             if (!query) {
@@ -249,7 +249,7 @@ export const workspaceCommand: Command = {
             const statusMsg = await reply('⏳ 正在生成本周周报...');
             try {
                 const { generateWeeklyReportTool } = await import('../tools/content/generate-weekly-report.js');
-                const text = await generateWeeklyReportTool.handler({}, '');
+                const text = await generateWeeklyReportTool.handler({}, deps.workDir);
                 await deps.adapter.editMessage(msg.chatId, statusMsg.id, text.slice(0, 4000)).catch(() =>
                     reply(text.slice(0, 4000)));
             } catch (err: any) {
@@ -259,7 +259,7 @@ export const workspaceCommand: Command = {
         }
 
         case '/save': {
-            const workDir = getConfiguredWorkDir();
+            const workDir = deps.workDir;
             if (!workDir) { await reply('⚠️ WORK_DIR 未配置。'); return true; }
 
             // Content comes from: replied-to message first, then text after command

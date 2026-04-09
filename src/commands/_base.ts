@@ -8,6 +8,8 @@ export interface CommandDeps {
     adapter: PlatformAdapter;
     tenantKey: TenantKey;
     chatId: string;
+    /** Per-tenant workspace root directory (absolute path) */
+    workDir: string;
     chatHistoryCache: any;
     asyncTaskManager: any;
     reminderManager: any;

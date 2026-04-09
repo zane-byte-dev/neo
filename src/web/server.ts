@@ -93,6 +93,8 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
             toolContext = {
                 tenantKey,
                 chatId: tenantCtx.chatId,
+                workDir: tenantCtx.workDir,
+                systemInstruction: tenantCtx.systemInstruction,
                 adapter: tenantCtx.adapter,
                 reminderManager: tenantCtx.reminderManager,
                 scheduledTaskManager: tenantCtx.scheduledTaskManager,

@@ -9,7 +9,7 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import type { Tool } from '../_base.js';
-import { getVaultRoot, callGemini } from '../../utils/helpers.js';
+import { callGemini } from '../../utils/helpers.js';
 
 function lastSevenDays(): string[] {
     const days: string[] = [];
@@ -38,8 +38,8 @@ export const generateWeeklyReportTool: Tool = {
             '读取本周的每日日记（1-Daily/），生成一份结构化的周报，并持久化到 5-Output/。',
         parameters: { type: 'object', properties: {}, required: [] },
     },
-    handler: async (_args, _workDir) => {
-        const vaultRoot = getVaultRoot();
+    handler: async (_args, workDir) => {
+        const vaultRoot = workDir;
         const dailyDir = join(vaultRoot, '1-Daily');
         const days = lastSevenDays();
 

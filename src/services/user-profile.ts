@@ -2,7 +2,6 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import type Database from 'better-sqlite3';
 import type { TenantKey } from '../types/platform.js';
-import { getConfiguredWorkDir } from '../utils/helpers.js';
 
 export interface UserProfile {
     name?: string;
@@ -47,8 +46,7 @@ export class UserProfileManager {
         this.db.prepare(`DELETE FROM user_profile WHERE tenant_key = ?`).run(this.tenantKey);
     }
 
-    async toContextString(): Promise<string> {
-        const workDir = getConfiguredWorkDir();
+    async toContextString(workDir?: string): Promise<string> {
         if (workDir) {
             try {
                 const userMd = await fs.readFile(join(workDir, 'user.md'), 'utf8');

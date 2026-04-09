@@ -23,6 +23,8 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
     const toolContext: ToolContext = {
         tenantKey: task.tenantKey,
         chatId,
+        workDir: tenantCtx.workDir,
+        systemInstruction: tenantCtx.systemInstruction,
         adapter: tenantCtx.adapter,
         reminderManager: tenantCtx.reminderManager,
         scheduledTaskManager: tenantCtx.scheduledTaskManager,
@@ -54,7 +56,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         }
         const historyContext = chatHistoryCache.getContextForGemini();
 
-        const profileCtx = await userProfile.toContextString();
+        const profileCtx = await userProfile.toContextString(toolContext.workDir);
         const context = profileCtx
             ? `${profileCtx}\n\n${historyContext}`
             : historyContext;

@@ -9,7 +9,6 @@ import { execa } from 'execa';
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import type { Tool } from '../_base.js';
-import { getVaultRoot } from '../../utils/helpers.js';
 
 async function archiveDiary(vaultRoot: string): Promise<number> {
     const historyDir = join(vaultRoot, 'history');
@@ -104,8 +103,8 @@ export const runButlerTool: Tool = {
             '有变更时自动 git commit。',
         parameters: { type: 'object', properties: {}, required: [] },
     },
-    handler: async (_args, _workDir) => {
-        const vaultRoot = getVaultRoot();
+    handler: async (_args, workDir) => {
+        const vaultRoot = workDir;
         const logs: string[] = [];
 
         const timeStr = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
