@@ -24,7 +24,7 @@ export interface UserContext {
     userProfile: any;
     reminderManager: any;
     scheduledTaskManager: any;
-    /** Per-user skill registry, populated from resource/workspace/{userId}/skills/ */
+    /** Per-user skill registry, populated from space/{userId}/skills/ */
     skillRegistry: SkillRegistry;
 }
 

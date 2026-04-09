@@ -69,7 +69,7 @@ export interface ToolContext {
      */
     imageCallback?: (data: string, mimeType: string, caption?: string) => Promise<void>;
     /**
-     * Per-user skill registry — populated from resource/workspace/{userId}/skills/*.skill.md.
+     * Per-user skill registry — populated from space/{userId}/skills/*.skill.md.
      * Used by the run_skill tool to look up and execute Markdown-defined skills.
      */
     skillRegistry?: import('../skills/skill-registry.js').SkillRegistry;

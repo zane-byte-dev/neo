@@ -156,7 +156,7 @@ export class App {
             const reminderManager = new ReminderManager(db, userId);
             const scheduledTaskManager = new ScheduledTaskManager(db, userId);
 
-            // Load Markdown skill definitions from resource/workspace/{userId}/skills/
+            // Load Markdown skill definitions from space/{userId}/skills/
             const projectRoot = resolve('.');
             const skillRegistry = await loadUserSkills(userId, projectRoot);
 

@@ -1,7 +1,7 @@
 /**
  * skill-registry.ts — Per-user skill registry.
  *
- * Scans {baseDir}/resource/workspace/{userId}/skills/*.skill.md,
+ * Scans {baseDir}/space/{userId}/skills/*.skill.md,
  * parses each file, and exposes:
  *   - get(name)                → SkillDefinition | undefined
  *   - list()                   → SkillDefinition[]
@@ -61,9 +61,9 @@ export class SkillRegistry {
  * Scan the user's skills directory, parse all *.skill.md files, and return
  * a populated SkillRegistry instance.
  *
- * Skills directory: {projectRoot}/resource/workspace/{userId}/skills/
+ * Skills directory: {projectRoot}/space/{userId}/skills/
  *
- * @param userId     The user identifier (matches resource/workspace/{userId}/)
+ * @param userId     The user identifier (matches space/{userId}/)
  * @param projectRoot Absolute path to the project root (passed in to avoid import.meta coupling)
  */
 export async function loadUserSkills(
@@ -71,7 +71,7 @@ export async function loadUserSkills(
     projectRoot: string,
 ): Promise<SkillRegistry> {
     const registry = new SkillRegistry();
-    const skillsDir = resolve(projectRoot, 'resource', 'workspace', userId, 'skills');
+    const skillsDir = resolve(projectRoot, 'space', userId, 'skills');
 
     let entries: { name: string; isFile(): boolean }[];
     try {

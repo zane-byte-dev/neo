@@ -34,10 +34,10 @@ const _tenantToUser = new Map<TenantKey, UserId>();
 const _webTokenToUser = new Map<string, UserId>();
 
 function loadUserMap(): void {
-    // Try loading from the workspace directory, fall back to resource/workspace/
+    // Try loading from the workspace directory, fall back to space/
     const candidates = [
         resolve(process.env.WORK_DIR || '.', 'users.json'),
-        resolve('resource', 'workspace', 'users.json'),
+        resolve('space', 'users.json'),
     ];
     for (const path of candidates) {
         try {

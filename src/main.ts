@@ -11,7 +11,6 @@ import { setupLogger } from './utils/logger.js';
 import { AUTHORIZED_USERS, BOT_COMMANDS, getAuthorizedForPlatform, TELEGRAM_BOT_TOKEN, FEISHU_APP_ID, FEISHU_APP_SECRET, GEMINI_MODEL_ENV } from './config.js';
 import { App } from './app.js';
 import { TelegramAdapter } from './platform/telegram/telegram-adapter.js';
-import { getTenantContext, getAllTenantKeys } from './services/tool-context.js';
 
 // Initialize Logger
 setupLogger();
@@ -53,20 +52,6 @@ await app.init();
 telegramAdapter.setCommands(BOT_COMMANDS)
     .then(() => console.log('[System] Telegram commands registered.'))
     .catch((err: any) => console.error('[System] Failed to register commands:', err));
-
-// Send startup message to all Telegram tenants
-const timeStr = new Date().toLocaleString('zh-CN');
-const telegramTenantKeys = getAuthorizedForPlatform('telegram');
-for (const tk of telegramTenantKeys) {
-    const ctx = getTenantContext(tk);
-    telegramAdapter.sendMessage(
-        ctx.chatId,
-        `🤖 **inkClaw** 已于 ${timeStr} 启动/重启。\n` +
-        `✅ 网关已上线\n` +
-        `✅ 引擎状态: ${GEMINI_MODEL_ENV ?? 'gemini-3-flash-preview'} (Direct API + Agentic Loop)`,
-        { parseMode: 'markdown' },
-    ).catch((err: any) => console.error(`[Startup Message Failed] ${tk}:`, err));
-}
 
 await app.start();
 
