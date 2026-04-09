@@ -23,7 +23,7 @@
  *   ```
  */
 
-import type { FunctionDeclaration } from '../utils/gemini-types.js';
+import type { FunctionDeclaration } from '../llm/types.js';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 

@@ -19,11 +19,10 @@ import { writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { execa } from 'execa';
-import { agentLoop } from '../services/agent-runtime.js';
+import { agentLoop, resolveModel } from '../llm/providers/gemini/index.js';
 import { GEMINI_API_KEY, GEMINI_MODEL_ENV, DANGEROUS_PATTERNS } from '../config.js';
-import { resolveModel } from '../services/agent-runtime.js';
 import type { SkillDefinition } from './skill-parser.js';
-import type { ToolContext, GeminiContent } from '../utils/gemini-types.js';
+import type { ToolContext, GeminiContent } from '../llm/types.js';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -163,7 +162,7 @@ export async function executeSkill(
     const model = resolveModel(GEMINI_MODEL_ENV ?? 'flash');
 
     // Import toolRegistry lazily to avoid circular dependency
-    const { getToolRegistry } = await import('../services/gemini-client.js');
+    const { getToolRegistry } = await import('../llm/client.js');
 
     return agentLoop(
         apiKey,

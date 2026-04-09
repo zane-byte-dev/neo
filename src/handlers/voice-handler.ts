@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
-import { geminiGenerate, geminiUploadFile } from '../services/gemini-client.js';
+import { geminiGenerate, geminiUploadFile } from '../llm/providers/gemini/index.js';
 import { getTenantContext } from '../services/tool-context.js';
 import { isAuthorized, GEMINI_API_KEY } from '../config.js';
 import type { PlatformAdapter, NormalizedMessage } from '../types/platform.js';

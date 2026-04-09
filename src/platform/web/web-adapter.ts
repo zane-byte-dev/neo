@@ -26,9 +26,10 @@ import { fileURLToPath } from 'url';
 import { getDb } from '../../services/db.js';
 import { getTenantContext } from '../../services/tool-context.js';
 import { getUserContext } from '../../services/user-context.js';
-import { geminiGenerate } from '../../services/gemini-client.js';
+import { geminiGenerate } from '../../llm/providers/gemini/index.js';
 import { GEMINI_API_KEY, resolveUserIdByWebToken, hasWebTokens } from '../../config.js';
-import type { GeminiClient, ToolContext } from '../../services/gemini-client.js';
+import type { LLMClient } from '../../llm/client.js';
+import type { ToolContext } from '../../llm/types.js';
 import type {
     PlatformAdapter,
     NormalizedMessage,
@@ -54,7 +55,7 @@ export class WebAdapter implements PlatformAdapter {
 
     private server?: ReturnType<Koa['listen']>;
 
-    constructor(private readonly geminiClient: GeminiClient) {}
+    constructor(private readonly geminiClient: LLMClient) {}
 
     // ── Lifecycle ────────────────────────────────────────────────────────
 

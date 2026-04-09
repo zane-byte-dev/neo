@@ -10,7 +10,7 @@ import { promises as fs } from 'fs';
 import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform, getAllUsers, resolveUserId, getUserTenants } from './config.js';
 import { resolveUserWorkspaceDir, ensureWorkspace } from './utils/workspace.js';
 import { initDb } from './services/db.js';
-import { GeminiClient, buildTenantSystemInstruction } from './services/gemini-client.js';
+import { LLMClient, buildTenantSystemInstruction } from './llm/client.js';
 import { ChatHistoryCache } from './services/chat-history-cache.js';
 import { AsyncTaskManager } from './services/async-task-manager.js';
 import { MessageQueue } from './services/message-queue.js';
@@ -37,12 +37,12 @@ import type { Task } from './core/types.js';
 
 export class App {
     private adapters = new Map<string, PlatformAdapter>();
-    readonly geminiClient: GeminiClient;
+    readonly geminiClient: LLMClient;
     private activeTaskIds = new Set<string>();
     private pendingReadMatches = new Map<string, { matches: string[]; expiry: number }>();
 
     constructor() {
-        this.geminiClient = new GeminiClient();
+        this.geminiClient = new LLMClient();
     }
 
     // ── Adapter registration ─────────────────────────────────────────────

@@ -34,9 +34,7 @@ export {
 // Client
 export {
     LLMClient,
-    GeminiClient,
     createLLMClient,
-    createGeminiClient,
     registerTool,
     getToolRegistry,
     loadSystemInstruction,

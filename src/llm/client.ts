@@ -38,7 +38,7 @@ export type {
     ToolContext,
 } from './types.js';
 
-// Re-export standalone helpers so callers that import from gemini-client don't break.
+// Re-export standalone helpers for direct callers.
 export { geminiGenerate, geminiUploadFile } from './providers/gemini/index.js';
 
 setupLogger();
@@ -295,16 +295,8 @@ export class LLMClient {
     }
 }
 
-/** @deprecated Use LLMClient directly. */
-export const GeminiClient = LLMClient;
-
 export function createLLMClient(provider?: LLMProvider): LLMClient {
     return new LLMClient(provider);
-}
-
-/** @deprecated Use createLLMClient(). */
-export function createGeminiClient(): LLMClient {
-    return new LLMClient();
 }
 
 // ── Self-test when run directly ───────────────────────────────────────────────

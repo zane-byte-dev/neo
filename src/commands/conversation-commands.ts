@@ -1,4 +1,4 @@
-import { geminiGenerate } from '../services/gemini-client.js';
+import { geminiGenerate } from '../llm/providers/gemini/index.js';
 import { GEMINI_API_KEY } from '../config.js';
 import type { Message } from '../services/chat-history-cache.js';
 import type { Command } from './_base.js';

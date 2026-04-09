@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import { TASK_TIMEOUT_MS, EDIT_INTERVAL_MS, CHUNK_LIMIT } from '../config.js';
 import { registerAbort, unregisterAbort } from '../services/task-abort.js';
 import { getTenantContext } from '../services/tool-context.js';
-import type { ToolContext } from '../utils/gemini-types.js';
+import type { ToolContext } from '../llm/types.js';
 import type { PlatformAdapter } from '../types/platform.js';
 import type { Task } from './types.js';
 

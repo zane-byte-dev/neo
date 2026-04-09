@@ -2,7 +2,7 @@ import { join } from 'path';
 import { promises as fs } from 'fs';
 import { execa } from 'execa';
 import { getTenantContext } from '../services/tool-context.js';
-import { geminiUploadFile } from '../services/gemini-client.js';
+import { geminiUploadFile } from '../llm/providers/gemini/index.js';
 import {
     MAX_FILE_SIZE_BYTES,
     TEXT_MIME_PREFIXES,

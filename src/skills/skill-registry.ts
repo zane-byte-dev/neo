@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseSkillFile } from './skill-parser.js';
 import type { SkillDefinition } from './skill-parser.js';
-import type { FunctionDeclaration } from '../utils/gemini-types.js';
+import type { FunctionDeclaration } from '../llm/types.js';
 
 export type { SkillDefinition };
 

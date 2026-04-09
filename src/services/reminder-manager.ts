@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import { geminiGenerate } from './gemini-client.js';
+import { geminiGenerate } from '../llm/providers/gemini/index.js';
 
 export interface Reminder {
     id: string;
