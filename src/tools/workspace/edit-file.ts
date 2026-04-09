@@ -6,7 +6,7 @@
  */
 import { promises as fs } from 'fs';
 import { join, dirname, isAbsolute } from 'path';
-import type { Tool } from './_base.js';
+import type { Tool } from '../_base.js';
 
 export const editFileTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },

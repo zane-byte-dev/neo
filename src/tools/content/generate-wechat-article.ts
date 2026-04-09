@@ -1,7 +1,7 @@
-import type { Tool } from './_base.js';
-import { gatherNewsStories } from './_news-helper.js';
-import { geminiGenerate } from '../services/gemini-client.js';
-import { GEMINI_API_KEY } from '../config.js';
+import type { Tool } from '../_base.js';
+import { gatherNewsStories } from '../web/_news-helper.js';
+import { geminiGenerate } from '../../services/gemini-client.js';
+import { GEMINI_API_KEY } from '../../config.js';
 
 export const generateWechatArticleTool: Tool = {
     meta: { category: 'ai', version: '1.0.0', requiresEnv: ['GEMINI_API_KEY'] },

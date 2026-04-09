@@ -6,8 +6,8 @@
  * - Track status: pending / in_progress / done / blocked
  * Scoped per tenant_key via the active tenant context.
  */
-import type { Tool, ToolContext } from './_base.js';
-import { getDb } from '../services/db.js';
+import type { Tool, ToolContext } from '../_base.js';
+import { getDb } from '../../services/db.js';
 
 type TodoStatus = 'pending' | 'in_progress' | 'done' | 'blocked';
 

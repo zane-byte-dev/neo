@@ -10,8 +10,8 @@
  * Uses user-input-waiter.ts for the pause/resume mechanism.
  * The message-router must check hasPending() before routing messages.
  */
-import { waitForUserInput } from '../services/user-input-waiter.js';
-import type { Tool, ToolContext } from './_base.js';
+import { waitForUserInput } from '../../services/user-input-waiter.js';
+import type { Tool, ToolContext } from '../_base.js';
 
 export const askUserTool: Tool = {
     meta: { category: 'utility', version: '1.0.0' },

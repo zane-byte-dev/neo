@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import { GEMINI_API_KEY, GEMINI_BASE_URL } from '../config.js';
-import type { Tool, ToolContext } from './_base.js';
+import { GEMINI_API_KEY, GEMINI_BASE_URL } from '../../config.js';
+import type { Tool, ToolContext } from '../_base.js';
 
 const IMAGE_MODEL = 'gemini-2.5-flash-image';
 

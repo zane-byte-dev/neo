@@ -1,5 +1,5 @@
 import type { CronJob } from './_base.js';
-import { generateWeeklyReportTool } from '../tools/generate-weekly-report.js';
+import { generateWeeklyReportTool } from '../tools/content/generate-weekly-report.js';
 
 export const weeklyReportCron: CronJob = {
     name: 'Weekly report',

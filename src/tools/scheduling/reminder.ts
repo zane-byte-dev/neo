@@ -1,11 +1,8 @@
 /**
- * reminder-create.ts — AI tool to set a one-time reminder.
- *
- * Lets the AI autonomously schedule a one-shot notification or timed task
- * without relying on natural language detection in message-router.
+ * reminder.ts — AI tools for one-time reminder management (create / list / delete).
  */
-import { TELEGRAM_CHAT_ID } from '../config.js';
-import type { Tool, ToolContext } from './_base.js';
+import { TELEGRAM_CHAT_ID } from '../../config.js';
+import type { Tool, ToolContext } from '../_base.js';
 
 export const reminderCreateTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },
@@ -77,5 +74,67 @@ export const reminderCreateTool: Tool = {
             `🕐 触发时间: ${fireStr}\n\n` +
             `用 reminder_delete 或 /remindcancel ${reminder.id} 可取消`
         );
+    },
+};
+
+export const reminderListTool: Tool = {
+    meta: { category: 'workspace', version: '1.0.0' },
+    declaration: {
+        name: 'reminder_list',
+        description: '列出所有待触发的提醒，包括 ID、内容和触发时间。',
+        parameters: {
+            type: 'object',
+            properties: {},
+        },
+    },
+    handler: async (_args, _workDir, context?: ToolContext) => {
+        if (!context) {
+            return '[Error] reminder_list is not available in this context';
+        }
+
+        const reminders: any[] = context.reminderManager.getAll().filter((r: any) => !r.fired);
+        if (reminders.length === 0) return '当前没有待触发的提醒。';
+
+        const lines = reminders.map((r: any) => {
+            const fireStr = new Date(r.fireAt).toLocaleString('zh-CN', {
+                timeZone: 'Asia/Shanghai',
+                month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit',
+            });
+            const typeIcon = r.prompt ? '⚡' : '🔔';
+            return `${typeIcon} [${r.id}] ${r.content}\n  🕐 ${fireStr}`;
+        });
+
+        return `共 ${reminders.length} 个待触发提醒：\n\n${lines.join('\n\n')}`;
+    },
+};
+
+export const reminderDeleteTool: Tool = {
+    meta: { category: 'workspace', version: '1.0.0' },
+    declaration: {
+        name: 'reminder_delete',
+        description: '取消一个提醒（按 ID）。先用 reminder_list 查看所有提醒和 ID。',
+        parameters: {
+            type: 'object',
+            properties: {
+                id: {
+                    type: 'string',
+                    description: '要取消的提醒 ID（从 reminder_list 获取）',
+                },
+            },
+            required: ['id'],
+        },
+    },
+    handler: async (args, _workDir, context?: ToolContext) => {
+        const id = String(args.id ?? '').trim();
+        if (!id) return '[Error] id is required';
+
+        if (!context) {
+            return '[Error] reminder_delete is not available in this context';
+        }
+
+        const deleted = await context.reminderManager.cancel(id);
+        if (!deleted) return `[Error] 找不到 ID 为 "${id}" 的提醒。用 reminder_list 查看所有提醒。`;
+        return `✅ 提醒 [${id}] 已取消。`;
     },
 };

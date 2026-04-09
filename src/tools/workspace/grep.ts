@@ -9,7 +9,7 @@
  */
 import { promises as fs } from 'fs';
 import { join, isAbsolute } from 'path';
-import type { Tool } from './_base.js';
+import type { Tool } from '../_base.js';
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.cache', 'cache', '__pycache__', '.next']);
 

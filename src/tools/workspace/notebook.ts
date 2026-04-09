@@ -12,8 +12,8 @@
  *   update — update an existing entry by id
  *   delete — delete an entry by id
  */
-import { getDb } from '../services/db.js';
-import type { Tool } from './_base.js';
+import { getDb } from '../../services/db.js';
+import type { Tool } from '../_base.js';
 
 interface NoteRow {
     id: number;

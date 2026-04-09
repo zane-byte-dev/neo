@@ -248,7 +248,7 @@ export const workspaceCommand: Command = {
         case '/weekly': {
             const statusMsg = await reply('⏳ 正在生成本周周报...');
             try {
-                const { generateWeeklyReportTool } = await import('../tools/generate-weekly-report.js');
+                const { generateWeeklyReportTool } = await import('../tools/content/generate-weekly-report.js');
                 const text = await generateWeeklyReportTool.handler({}, '');
                 await deps.adapter.editMessage(msg.chatId, statusMsg.id, text.slice(0, 4000)).catch(() =>
                     reply(text.slice(0, 4000)));

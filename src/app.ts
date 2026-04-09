@@ -162,7 +162,7 @@ export class App {
         chatHistoryCache.setOnSessionExpire(async (session: any) => {
             if (session.messages.length === 0) return;
             try {
-                const { generateDailyLogTool } = await import('./tools/generate-daily-log.js');
+                const { generateDailyLogTool } = await import('./tools/content/generate-daily-log.js');
                 const result = await generateDailyLogTool.handler({}, '');
                 console.log(`[SessionExpire] (${tenantKey}) ${result}`);
             } catch (err: any) {

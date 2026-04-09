@@ -4,9 +4,9 @@
  * Reads today's session messages and produces a short status update.
  * Useful for long tasks to provide mid-task progress reports.
  */
-import { callGemini } from '../utils/helpers.js';
-import type { Tool, ToolContext } from './_base.js';
-import { getDb } from '../services/db.js';
+import { callGemini } from '../../utils/helpers.js';
+import type { Tool, ToolContext } from '../_base.js';
+import { getDb } from '../../services/db.js';
 
 interface MessageRow {
     role: string;

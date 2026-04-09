@@ -8,9 +8,9 @@
  */
 import { join } from 'path';
 import { promises as fs } from 'fs';
-import type { Tool, ToolContext } from './_base.js';
-import { getVaultRoot, callGemini } from '../utils/helpers.js';
-import { getDb } from '../services/db.js';
+import type { Tool, ToolContext } from '../_base.js';
+import { getVaultRoot, callGemini } from '../../utils/helpers.js';
+import { getDb } from '../../services/db.js';
 
 function todayStr(): string {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });

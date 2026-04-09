@@ -1,4 +1,4 @@
-import type { Tool } from './_base.js';
+import type { Tool } from '../_base.js';
 
 /**
  * WMO Weather interpretation codes (WW)

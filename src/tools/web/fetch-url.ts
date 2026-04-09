@@ -1,4 +1,4 @@
-import type { Tool } from './_base.js';
+import type { Tool } from '../_base.js';
 
 const htmlToText = (html: string): string =>
     html

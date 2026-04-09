@@ -1,4 +1,4 @@
-import type { Tool } from './_base.js';
+import type { Tool } from '../_base.js';
 import { gatherNewsStories } from './_news-helper.js';
 
 export const fetchAiNewsTool: Tool = {

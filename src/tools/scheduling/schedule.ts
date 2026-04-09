@@ -1,12 +1,9 @@
 /**
- * schedule-create.ts — AI tool to create a new recurring scheduled task.
- *
- * Lets the AI autonomously create scheduled tasks during conversation,
- * without the user needing to use the /schedules command flow.
+ * schedule.ts — AI tools for recurring scheduled task management (create / list / delete).
  */
 import cron from 'node-cron';
-import { TELEGRAM_CHAT_ID } from '../config.js';
-import type { Tool, ToolContext } from './_base.js';
+import { TELEGRAM_CHAT_ID } from '../../config.js';
+import type { Tool, ToolContext } from '../_base.js';
 
 export const scheduleCreateTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },
@@ -66,5 +63,62 @@ export const scheduleCreateTool: Tool = {
             `📋 执行指令: ${prompt}\n\n` +
             `用 schedule_delete 或 /unschedule ${task.id} 可删除此任务`
         );
+    },
+};
+
+export const scheduleListTool: Tool = {
+    meta: { category: 'workspace', version: '1.0.0' },
+    declaration: {
+        name: 'schedule_list',
+        description: '列出所有周期性定时任务，包括 ID、cron 表达式和描述。',
+        parameters: {
+            type: 'object',
+            properties: {},
+        },
+    },
+    handler: async (_args, _workDir, context?: ToolContext) => {
+        if (!context) {
+            return '[Error] schedule_list is not available in this context';
+        }
+
+        const tasks = context.scheduledTaskManager.getAll();
+        if (tasks.length === 0) return '当前没有定时任务。';
+
+        const lines = tasks.map((t: any) => {
+            const created = new Date(t.createdAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai' });
+            return `• [${t.id}] ${t.content}\n  ⏰ ${t.cronExpr}  📅 创建于 ${created}`;
+        });
+
+        return `共 ${tasks.length} 个定时任务：\n\n${lines.join('\n\n')}`;
+    },
+};
+
+export const scheduleDeleteTool: Tool = {
+    meta: { category: 'workspace', version: '1.0.0' },
+    declaration: {
+        name: 'schedule_delete',
+        description: '删除一个周期性定时任务（按 ID）。先用 schedule_list 查看所有任务和 ID。',
+        parameters: {
+            type: 'object',
+            properties: {
+                id: {
+                    type: 'string',
+                    description: '要删除的任务 ID（从 schedule_list 获取）',
+                },
+            },
+            required: ['id'],
+        },
+    },
+    handler: async (args, _workDir, context?: ToolContext) => {
+        const id = String(args.id ?? '').trim();
+        if (!id) return '[Error] id is required';
+
+        if (!context) {
+            return '[Error] schedule_delete is not available in this context';
+        }
+
+        const deleted = await context.scheduledTaskManager.cancel(id);
+        if (!deleted) return `[Error] 找不到 ID 为 "${id}" 的定时任务。用 schedule_list 查看所有任务。`;
+        return `✅ 定时任务 [${id}] 已删除。`;
     },
 };

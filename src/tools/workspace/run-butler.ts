@@ -8,8 +8,8 @@
 import { execa } from 'execa';
 import { join } from 'path';
 import { promises as fs } from 'fs';
-import type { Tool } from './_base.js';
-import { getVaultRoot } from '../utils/helpers.js';
+import type { Tool } from '../_base.js';
+import { getVaultRoot } from '../../utils/helpers.js';
 
 async function archiveDiary(vaultRoot: string): Promise<number> {
     const historyDir = join(vaultRoot, 'history');

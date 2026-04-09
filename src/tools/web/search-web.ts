@@ -1,4 +1,4 @@
-import type { Tool } from './_base.js';
+import type { Tool } from '../_base.js';
 
 export const searchWebTool: Tool = {
     meta: { category: 'web', version: '1.0.0' },

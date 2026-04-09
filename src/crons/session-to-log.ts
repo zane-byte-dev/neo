@@ -1,5 +1,5 @@
 import type { CronJob } from './_base.js';
-import { generateDailyLogTool } from '../tools/generate-daily-log.js';
+import { generateDailyLogTool } from '../tools/content/generate-daily-log.js';
 
 export const sessionLogCron: CronJob = {
     name: 'Session-to-Log',

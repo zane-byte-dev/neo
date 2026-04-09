@@ -1,5 +1,5 @@
 import type { CronJob } from './_base.js';
-import { curateDiaryTool } from '../tools/curate-diary.js';
+import { curateDiaryTool } from '../tools/content/curate-diary.js';
 
 export const curatorCron: CronJob = {
     name: 'Curator daily briefing',
