@@ -6,8 +6,6 @@
  *   GET  /api/notebook    — notebook list / search / read
  *   Static files          — serves web/dist/ in production
  *
- * Auth: Bearer token via WEB_TOKEN env var.
- * Enable by setting WEB_PORT (and optionally WEB_TOKEN).
  */
 
 import Koa from 'koa';
@@ -21,7 +19,7 @@ import { getDb } from '../services/db.js';
 import { ChatHistoryCache } from '../services/chat-history-cache.js';
 import { getUserContext } from '../services/user-context.js';
 import { geminiGenerate } from '../services/gemini-client.js';
-import { GEMINI_API_KEY } from '../config.js';
+import { GEMINI_API_KEY, resolveUserIdByWebToken, hasWebTokens } from '../config.js';
 import type { UserId } from '../types/platform.js';
 import type { GeminiClient, ToolContext } from '../services/gemini-client.js';
 
@@ -29,7 +27,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const WEB_PORT = parseInt(process.env.WEB_PORT ?? '3000', 10);
-const WEB_TOKEN = process.env.WEB_TOKEN ?? '';
+
 
 // ── Per-session history cache ─────────────────────────────────────────────────
 
@@ -44,29 +42,41 @@ async function getOrCreateCache(sessionId: string): Promise<ChatHistoryCache> {
     return sessionCaches.get(sessionId)!;
 }
 
-// ── Auth middleware ───────────────────────────────────────────────────────────
+// ── Auth middleware ────────────────────────────────────────────────────
 
+/**
+ * Resolves the Bearer token to a userId (via users.json webToken mapping).
+ * Writes resolved userId to ctx.state.userId, or responds 401.
+ */
 function authMiddleware(): Koa.Middleware {
     return async (ctx, next) => {
         if (!ctx.path.startsWith('/api/')) {
             return next();
         }
-        if (WEB_TOKEN) {
-            const authHeader = ctx.headers.authorization ?? '';
-            const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-            if (token !== WEB_TOKEN) {
-                ctx.status = 401;
-                ctx.body = { error: 'Unauthorized' };
-                return;
-            }
+        const authHeader = ctx.headers.authorization ?? '';
+        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+
+        // Match against per-user webToken in users.json
+        const userId = token ? resolveUserIdByWebToken(token) : undefined;
+        if (userId) {
+            ctx.state.userId = userId;
+            return next();
         }
-        return next();
+
+        // Dev mode: if no webTokens are configured at all, allow through
+        if (!hasWebTokens()) {
+            ctx.state.userId = undefined;
+            return next();
+        }
+
+        ctx.status = 401;
+        ctx.body = { error: 'Unauthorized' };
     };
 }
 
 // ── Server factory ────────────────────────────────────────────────────────────
 
-export function createWebServer(geminiClient: GeminiClient, userId?: UserId): Koa {
+export function createWebServer(geminiClient: GeminiClient): Koa {
     const app = new Koa();
     const router = new Router();
 
@@ -86,12 +96,13 @@ export function createWebServer(geminiClient: GeminiClient, userId?: UserId): Ko
             return;
         }
 
-        // Build ToolContext from the user context registry
+        // Build ToolContext from the per-request resolved userId
+        const reqUserId: UserId | undefined = ctx.state.userId;
         let toolContext: ToolContext | undefined;
-        if (userId) {
-            const userCtx = getUserContext(userId);
+        if (reqUserId) {
+            const userCtx = getUserContext(reqUserId);
             toolContext = {
-                tenantKey: `web:${userId}`,
+                tenantKey: `web:${reqUserId}`,
                 chatId: sessionId || 'web',
                 workDir: userCtx.workDir,
                 systemInstruction: userCtx.systemInstruction,
@@ -165,6 +176,21 @@ export function createWebServer(geminiClient: GeminiClient, userId?: UserId): Ko
                 cache.addMessage('assistant', fullResponse).catch(console.error);
             }
         }
+    });
+
+    // ── GET /api/me — current user identity & profile ────────────────────
+    router.get('/api/me', async (ctx) => {
+        const reqUserId: string | undefined = ctx.state.userId;
+        if (!reqUserId) {
+            ctx.body = { userId: null, displayName: null, profile: null };
+            return;
+        }
+        const userCtx = getUserContext(reqUserId);
+        const profile = await userCtx.userProfile.read() as string;
+        // Extract 姓名 field: "- 姓名: 郑超" → "郑超"
+        const nameMatch = profile.match(/[-*]\s*姓名[:：]\s*(.+)/);
+        const displayName = nameMatch?.[1]?.trim() || reqUserId;
+        ctx.body = { userId: reqUserId, displayName, profile };
     });
 
     // ── POST /api/session/new — start fresh conversation ──────────────────
@@ -541,15 +567,15 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
     return app;
 }
 
-export function startWebServer(geminiClient: GeminiClient, userId?: UserId): void {
+export function startWebServer(geminiClient: GeminiClient): void {
     const webEnabled = process.env.WEB_PORT ?? process.env.WEB_ENABLED;
     if (!webEnabled) return;
 
-    const app = createWebServer(geminiClient, userId);
+    const app = createWebServer(geminiClient);
     app.listen(WEB_PORT, () => {
         console.log(`[WebServer] 🌐 http://localhost:${WEB_PORT}`);
-        if (!WEB_TOKEN) {
-            console.warn('[WebServer] ⚠️  WEB_TOKEN not set — web UI is unprotected!');
+        if (!hasWebTokens()) {
+            console.warn('[WebServer] ⚠️  No webToken configured in users.json — web UI is unprotected!');
         }
     });
 }

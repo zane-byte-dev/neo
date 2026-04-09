@@ -22,14 +22,16 @@ function envInt(key: string, fallback: number): number {
 
 export interface UserEntry {
     tenants: TenantKey[];
-    /** If true, this user owns the WebUI (WEB_TOKEN authenticates as this user) */
-    web?: boolean;
+    /** Per-user web Bearer token. Maps this user from WebUI requests. */
+    webToken?: string;
 }
 
 /** userId → UserEntry */
 const _userMap = new Map<UserId, UserEntry>();
 /** tenantKey → userId (reverse index) */
 const _tenantToUser = new Map<TenantKey, UserId>();
+/** webToken → userId (reverse index) */
+const _webTokenToUser = new Map<string, UserId>();
 
 function loadUserMap(): void {
     // Try loading from the workspace directory, fall back to resource/workspace/
@@ -40,12 +42,15 @@ function loadUserMap(): void {
     for (const path of candidates) {
         try {
             const raw = readFileSync(path, 'utf8');
-            const data = JSON.parse(raw) as Record<string, { tenants: string[]; web?: boolean }>;
+            const data = JSON.parse(raw) as Record<string, { tenants: string[]; webToken?: string }>;
             for (const [userId, entry] of Object.entries(data)) {
                 const tenants = (entry.tenants ?? []) as TenantKey[];
-                _userMap.set(userId, { tenants, web: entry.web ?? false });
+                _userMap.set(userId, { tenants, webToken: entry.webToken });
                 for (const tk of tenants) {
                     _tenantToUser.set(tk, userId);
+                }
+                if (entry.webToken) {
+                    _webTokenToUser.set(entry.webToken, userId);
                 }
             }
             console.log(`[Config] 📋 Loaded ${_userMap.size} user(s) from ${path}`);
@@ -72,12 +77,14 @@ export function getUserTenants(userId: UserId): TenantKey[] {
     return _userMap.get(userId)?.tenants ?? [];
 }
 
-/** Find the userId that owns the WebUI (has "web": true in users.json). Returns first match or undefined. */
-export function resolveWebUserId(): UserId | undefined {
-    for (const [userId, entry] of _userMap) {
-        if (entry.web) return userId;
-    }
-    return undefined;
+/** Resolve a webToken (from Authorization header) to its owning userId. Returns undefined if not mapped. */
+export function resolveUserIdByWebToken(token: string): UserId | undefined {
+    return _webTokenToUser.get(token);
+}
+
+/** Returns true if at least one user has a webToken configured in users.json. */
+export function hasWebTokens(): boolean {
+    return _webTokenToUser.size > 0;
 }
 
 // ── Multi-tenant authorization ───────────────────────────────────────────────
