@@ -22,6 +22,7 @@ const ChatInput: React.FC = () => {
         inputValue, setInputValue,
         isGenerating, setIsGenerating,
         activeChatId, addMessage, updateLastAssistantMessage, addImageToLastAssistantMessage,
+        updateLastAssistantThinking,
         setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
     } = useAppStore()
@@ -52,12 +53,14 @@ const ChatInput: React.FC = () => {
         const controller = new AbortController()
         setAbortController(controller)
         let accumulated = ''
+        let thinkingAccum = ''
 
         try {
             for await (const chunk of streamChat(text, activeChatId, controller.signal, selectedModel)) {
                 if (chunk.type === 'done') break
                 if (chunk.type === 'error') throw new Error(chunk.text ?? 'Unknown error')
                 if (chunk.type === 'thought') {
+                    thinkingAccum += chunk.text ?? ''
                     setThinkingStatus('Thinking…')
                 } else if (chunk.type === 'tool_call') {
                     setThinkingStatus(`Calling ${chunk.toolName ?? 'tool'}…`)
@@ -77,6 +80,9 @@ const ChatInput: React.FC = () => {
                 updateLastAssistantMessage(activeChatId, `⚠️ ${err instanceof Error ? err.message : 'Request failed'}`)
             }
         } finally {
+            if (thinkingAccum) {
+                updateLastAssistantThinking(activeChatId, thinkingAccum)
+            }
             setIsGenerating(false)
             setThinkingStatus('')
             setAbortController(null)
@@ -206,6 +212,17 @@ export const ChatArea: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="w-full px-1 py-1 text-sm leading-relaxed">
+                                    {msg.thinking && (
+                                        <details className="mb-3 group">
+                                            <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5">
+                                                <span className="transition-transform group-open:rotate-90">▶</span>
+                                                💭 Thinking
+                                            </summary>
+                                            <div className="mt-2 pl-4 border-l-2 border-border text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">
+                                                {msg.thinking}
+                                            </div>
+                                        </details>
+                                    )}
                                     {msg.content ? (
                                         <MD content={msg.content} />
                                     ) : isGenerating && thinkingStatus ? (

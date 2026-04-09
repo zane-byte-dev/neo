@@ -94,6 +94,16 @@ export const useAppStore = create<AppState>()(
                 }
                 return { messages: { ...state.messages, [chatId]: msgs } }
             }),
+            updateLastAssistantThinking: (chatId: string, thinking: string) => set((state) => {
+                const msgs = [...(state.messages[chatId] ?? [])]
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    if (msgs[i].role === 'assistant') {
+                        msgs[i] = { ...msgs[i], thinking }
+                        break
+                    }
+                }
+                return { messages: { ...state.messages, [chatId]: msgs } }
+            }),
 
             // Input
             inputValue: '',

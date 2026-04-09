@@ -192,6 +192,24 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
                 await sendReply(chatId, responseText, 2, messageId);
             });
 
+        // Send thinking content as a separate collapsed message
+        if (thoughtAccum.trim()) {
+            const thought = thoughtAccum.trim();
+            const maxLen = 3500;
+            const truncated = thought.length > maxLen
+                ? thought.slice(0, maxLen) + '\n\n[...已截断]'
+                : thought;
+            const escaped = truncated
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            await adapter.sendMessage(
+                chatId,
+                `<blockquote expandable>💭 Thinking\n\n${escaped}</blockquote>`,
+                { parseMode: 'html' },
+            ).catch(() => {});
+        }
+
     } catch (error) {
         const isAbort = error instanceof Error && error.name === 'AbortError';
         if (isAbort) {

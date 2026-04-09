@@ -11,6 +11,7 @@ export interface Message {
     id: string
     role: 'user' | 'assistant'
     content: string
+    thinking?: string   // model's internal reasoning (thinking tokens)
     images?: string[]   // data URLs for AI-generated images
     timestamp: number
 }
@@ -86,6 +87,7 @@ export interface AppState {
     addMessage: (chatId: string, message: Message) => void
     updateLastAssistantMessage: (chatId: string, content: string) => void
     addImageToLastAssistantMessage: (chatId: string, dataUrl: string) => void
+    updateLastAssistantThinking: (chatId: string, thinking: string) => void
 
     // Input
     inputValue: string

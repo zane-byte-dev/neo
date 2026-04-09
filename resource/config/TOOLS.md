@@ -17,7 +17,7 @@
 | 获取天气 | `get_weather` |
 | 拉取 AI 新闻 | `fetch_ai_news` |
 | 生成微信公众号文章 | `generate_wechat_article` |
-| 访问西风知识库（列文章/读文章） | `find_in_km` |
+| 访问笔记本知识库（浏览/搜索/读写） | `notebook` |
 | 管理任务清单（多步骤任务） | `todo_write` |
 | 生成当前对话摘要 | `brief` |
 | 向用户提问并等待回答 | `ask_user` |
