@@ -7,7 +7,7 @@
 
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
-import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, GEMINI_WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform, getAllUsers, resolveUserId, getUserTenants } from './config.js';
+import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, GEMINI_WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform, getAllUsers, resolveUserId, getUserTenants, resolveWebUserId } from './config.js';
 import { resolveUserWorkspaceDir, ensureWorkspace } from './utils/workspace.js';
 import { initDb } from './services/db.js';
 import { GeminiClient, buildTenantSystemInstruction } from './services/gemini-client.js';
@@ -126,8 +126,8 @@ export class App {
 
         console.log(`🤖 Bot started. Adapters: ${[...this.adapters.keys()].join(', ')}`);
         console.log(`🛠  Gemini Client enabled: ${this.geminiClient.isEnabled()}`);
-        const webTenantKey = getAllTenantKeys()[0];
-        startWebServer(this.geminiClient, webTenantKey);
+        const webUserId = resolveWebUserId() ?? getAllUserIds()[0];
+        startWebServer(this.geminiClient, webUserId);
     }
 
     async shutdown(): Promise<void> {

@@ -22,6 +22,8 @@ function envInt(key: string, fallback: number): number {
 
 export interface UserEntry {
     tenants: TenantKey[];
+    /** If true, this user owns the WebUI (WEB_TOKEN authenticates as this user) */
+    web?: boolean;
 }
 
 /** userId → UserEntry */
@@ -38,10 +40,10 @@ function loadUserMap(): void {
     for (const path of candidates) {
         try {
             const raw = readFileSync(path, 'utf8');
-            const data = JSON.parse(raw) as Record<string, { tenants: string[] }>;
+            const data = JSON.parse(raw) as Record<string, { tenants: string[]; web?: boolean }>;
             for (const [userId, entry] of Object.entries(data)) {
                 const tenants = (entry.tenants ?? []) as TenantKey[];
-                _userMap.set(userId, { tenants });
+                _userMap.set(userId, { tenants, web: entry.web ?? false });
                 for (const tk of tenants) {
                     _tenantToUser.set(tk, userId);
                 }
@@ -68,6 +70,14 @@ export function resolveUserId(tenantKey: TenantKey): UserId | undefined {
 /** Get all tenantKeys belonging to a userId */
 export function getUserTenants(userId: UserId): TenantKey[] {
     return _userMap.get(userId)?.tenants ?? [];
+}
+
+/** Find the userId that owns the WebUI (has "web": true in users.json). Returns first match or undefined. */
+export function resolveWebUserId(): UserId | undefined {
+    for (const [userId, entry] of _userMap) {
+        if (entry.web) return userId;
+    }
+    return undefined;
 }
 
 // ── Multi-tenant authorization ───────────────────────────────────────────────

@@ -19,10 +19,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from '../services/db.js';
 import { ChatHistoryCache } from '../services/chat-history-cache.js';
-import { getTenantContext } from '../services/tool-context.js';
+import { getUserContext } from '../services/user-context.js';
 import { geminiGenerate } from '../services/gemini-client.js';
 import { GEMINI_API_KEY } from '../config.js';
-import type { TenantKey } from '../types/platform.js';
+import type { UserId } from '../types/platform.js';
 import type { GeminiClient, ToolContext } from '../services/gemini-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,7 +66,7 @@ function authMiddleware(): Koa.Middleware {
 
 // ── Server factory ────────────────────────────────────────────────────────────
 
-export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKey): Koa {
+export function createWebServer(geminiClient: GeminiClient, userId?: UserId): Koa {
     const app = new Koa();
     const router = new Router();
 
@@ -86,18 +86,27 @@ export function createWebServer(geminiClient: GeminiClient, tenantKey?: TenantKe
             return;
         }
 
-        // Build ToolContext from the tenant registry
+        // Build ToolContext from the user context registry
         let toolContext: ToolContext | undefined;
-        if (tenantKey) {
-            const tenantCtx = getTenantContext(tenantKey);
+        if (userId) {
+            const userCtx = getUserContext(userId);
             toolContext = {
-                tenantKey,
-                chatId: tenantCtx.chatId,
-                workDir: tenantCtx.workDir,
-                systemInstruction: tenantCtx.systemInstruction,
-                adapter: tenantCtx.adapter,
-                reminderManager: tenantCtx.reminderManager,
-                scheduledTaskManager: tenantCtx.scheduledTaskManager,
+                tenantKey: `web:${userId}`,
+                chatId: sessionId || 'web',
+                workDir: userCtx.workDir,
+                systemInstruction: userCtx.systemInstruction,
+                adapter: {
+                    sendMessage: async (_chatId, text) => {
+                        write({ type: 'text', text });
+                        return { id: 'web', chatId: _chatId };
+                    },
+                    sendPhoto: async (_chatId, _photo, caption) => {
+                        if (caption) write({ type: 'text', text: caption });
+                        return { id: 'web', chatId: _chatId };
+                    },
+                },
+                reminderManager: userCtx.reminderManager,
+                scheduledTaskManager: userCtx.scheduledTaskManager,
             };
         }
 
@@ -532,11 +541,11 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
     return app;
 }
 
-export function startWebServer(geminiClient: GeminiClient, tenantKey?: TenantKey): void {
+export function startWebServer(geminiClient: GeminiClient, userId?: UserId): void {
     const webEnabled = process.env.WEB_PORT ?? process.env.WEB_ENABLED;
     if (!webEnabled) return;
 
-    const app = createWebServer(geminiClient, tenantKey);
+    const app = createWebServer(geminiClient, userId);
     app.listen(WEB_PORT, () => {
         console.log(`[WebServer] 🌐 http://localhost:${WEB_PORT}`);
         if (!WEB_TOKEN) {
