@@ -1,5 +1,8 @@
 {
   "zhengchao": {
-    "tenants": ["telegram:8094416266"]
+    "tenants": ["telegram:8094416266"],
+    "prefs": {
+      "location": "杭州"
+    }
   }
 }

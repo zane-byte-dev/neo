@@ -22,6 +22,7 @@ function envInt(key: string, fallback: number): number {
 
 export interface UserEntry {
     tenants: TenantKey[];
+    prefs?: Record<string, unknown>;
 }
 
 /** userId → UserEntry */
@@ -38,10 +39,10 @@ function loadUserMap(): void {
     for (const path of candidates) {
         try {
             const raw = readFileSync(path, 'utf8');
-            const data = JSON.parse(raw) as Record<string, { tenants: string[] }>;
+            const data = JSON.parse(raw) as Record<string, { tenants: string[]; prefs?: Record<string, unknown> }>;
             for (const [userId, entry] of Object.entries(data)) {
                 const tenants = (entry.tenants ?? []) as TenantKey[];
-                _userMap.set(userId, { tenants });
+                _userMap.set(userId, { tenants, prefs: entry.prefs });
                 for (const tk of tenants) {
                     _tenantToUser.set(tk, userId);
                 }
