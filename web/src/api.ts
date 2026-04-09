@@ -308,3 +308,15 @@ export async function checkAuth(): Promise<AuthResult> {
         return 'ok'
     }
 }
+
+// ── Current user ─────────────────────────────────────────────────────────────
+
+export interface MeInfo {
+    userId: string | null
+    displayName: string | null
+    profile: string | null
+}
+
+export function fetchMe(): Promise<MeInfo> {
+    return apiGet<MeInfo>('/api/me')
+}

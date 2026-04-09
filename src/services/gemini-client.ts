@@ -253,7 +253,8 @@ export class GeminiClient {
         try {
             const start = Date.now();
             const effectiveModel = modelOverride ? resolveModel(modelOverride) : this.model;
-            console.log(`[AgentRuntime] → ${effectiveModel}: ${message.slice(0, 60).replace(/\n/g, ' ')}${imageInput ? ' [+image]' : ''}...`);
+            const scope = context?.tenantKey ?? 'web';
+            console.log(`[AgentRuntime|${scope}] → ${effectiveModel}: ${message.slice(0, 60).replace(/\n/g, ' ')}${imageInput ? ' [+image]' : ''}...`);
             const result = await agentLoop(
                 this.apiKey,
                 effectiveModel,
@@ -268,15 +269,14 @@ export class GeminiClient {
             );
             const elapsed = Date.now() - start;
             if (!result) {
-                console.warn(`[AgentRuntime] Empty result after ${elapsed}ms for: ${message.slice(0, 80).replace(/\n/g, ' ')}`);
+                console.warn(`[AgentRuntime|${scope}] Empty result after ${elapsed}ms for: ${message.slice(0, 80).replace(/\n/g, ' ')}`);
             } else {
-                console.log(`[AgentRuntime] ✅ Done in ${elapsed}ms, response length=${result.length}`);
+                console.log(`[AgentRuntime|${scope}] ✅ Done in ${elapsed}ms, response length=${result.length}`);
             }
             return result || null;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[AgentRuntime] Error: ${msg}`);
-            return `🔥 Agent error: ${msg}`;
+            console.error(`[AgentRuntime|${context?.tenantKey ?? 'web'}] Error: ${msg}`);            return `🔥 Agent error: ${msg}`;
         }
     }
 

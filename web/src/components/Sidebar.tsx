@@ -3,7 +3,7 @@ import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut } from 'lucide-react
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { clearToken } from '../api'
+import { clearToken, fetchMe, type MeInfo } from '../api'
 import type { Theme } from '../types'
 
 const THEMES: { value: Theme; label: string }[] = [
@@ -16,6 +16,11 @@ export const Sidebar: React.FC = () => {
     const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme, setToken } = useAppStore()
     const [menuOpen, setMenuOpen] = React.useState(false)
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
+    const [me, setMe] = React.useState<MeInfo | null>(null)
+
+    React.useEffect(() => {
+        fetchMe().then(setMe).catch(() => {})
+    }, [])
 
     const handleLogout = () => {
         clearToken()
@@ -93,11 +98,16 @@ export const Sidebar: React.FC = () => {
                     onClick={() => setMenuOpen(!menuOpen)}
                     className="flex items-center gap-3 px-3 py-3 hover:bg-fill-secondary cursor-pointer transition-colors"
                 >
-                    <div className="w-7 h-7 rounded-full bg-primary-mint/20 border border-primary-mint/30 flex items-center justify-center text-primary-mint text-xs font-bold">
-                        N
+                    <div className="w-7 h-7 rounded-full bg-primary-mint/20 border border-primary-mint/30 flex items-center justify-center text-primary-mint text-xs font-bold shrink-0">
+                        {me?.displayName?.[0]?.toUpperCase() ?? 'N'}
                     </div>
-                    <span className="text-sm font-medium flex-1">Neo Web</span>
-                    <MoreHorizontal size={14} className="text-text-tertiary" />
+                    <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-sm font-medium truncate leading-tight">{me?.displayName ?? 'Neo Web'}</span>
+                        {me?.userId && (
+                            <span className="text-[11px] text-text-tertiary truncate leading-tight">{me.userId}</span>
+                        )}
+                    </div>
+                    <MoreHorizontal size={14} className="text-text-tertiary shrink-0" />
                 </div>
 
                 {menuOpen && (

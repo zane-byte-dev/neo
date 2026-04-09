@@ -33,13 +33,16 @@ const WEB_PORT = parseInt(process.env.WEB_PORT ?? '3000', 10);
 
 const sessionCaches = new Map<string, ChatHistoryCache>();
 
-async function getOrCreateCache(sessionId: string): Promise<ChatHistoryCache> {
-    if (!sessionCaches.has(sessionId)) {
-        const cache = new ChatHistoryCache(getDb(), `web:${sessionId}`);
+async function getOrCreateCache(sessionId: string, userId?: string): Promise<ChatHistoryCache> {
+    // Cache key includes userId so different users' sessions are isolated
+    const cacheKey = userId ? `${userId}:${sessionId}` : sessionId;
+    const tenantKey = (userId ? `web:${userId}:${sessionId}` : `web:${sessionId}`) as import('../types/platform.js').TenantKey;
+    if (!sessionCaches.has(cacheKey)) {
+        const cache = new ChatHistoryCache(getDb(), tenantKey);
         await cache.init();
-        sessionCaches.set(sessionId, cache);
+        sessionCaches.set(cacheKey, cache);
     }
-    return sessionCaches.get(sessionId)!;
+    return sessionCaches.get(cacheKey)!;
 }
 
 // ── Auth middleware ────────────────────────────────────────────────────
@@ -121,7 +124,7 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
             };
         }
 
-        const cache = await getOrCreateCache(sessionId || 'default');
+        const cache = await getOrCreateCache(sessionId || 'default', reqUserId);
         await cache.addMessage('user', message);
         const history = cache.getContextForGemini();
 
@@ -198,17 +201,19 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
         const body = ctx.request.body as Record<string, unknown>;
         const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
         if (!sessionId) { ctx.status = 400; ctx.body = { error: 'sessionId required' }; return; }
-        const cache = await getOrCreateCache(sessionId);
+        const reqUserId: string | undefined = ctx.state.userId;
+        const cache = await getOrCreateCache(sessionId, reqUserId);
         await cache.createNewSession();
         ctx.body = { ok: true };
     });
 
-    // ── POST /api/session/clear — alias for new session ───────────────────
+    // ── POST /api/session/clear — alias for new session ─────────────────────────
     router.post('/api/session/clear', async (ctx) => {
         const body = ctx.request.body as Record<string, unknown>;
         const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
         if (!sessionId) { ctx.status = 400; ctx.body = { error: 'sessionId required' }; return; }
-        const cache = await getOrCreateCache(sessionId);
+        const reqUserId: string | undefined = ctx.state.userId;
+        const cache = await getOrCreateCache(sessionId, reqUserId);
         await cache.createNewSession();
         ctx.body = { ok: true };
     });
