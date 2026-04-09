@@ -1,82 +1,60 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import type Database from 'better-sqlite3';
 
-export interface UserProfile {
-    name?: string;
-    city?: string;
-    timezone?: string;
-    language?: string;
-    interests?: string[];
-    notes?: string;
-    updatedAt?: number;
-}
-
+/**
+ * File-based user profile manager.
+ *
+ * All profile data lives in `{workDir}/user.md` — a human-readable Markdown file
+ * that the user (or AI) can edit directly. No DB storage needed.
+ */
 export class UserProfileManager {
-    private db: Database.Database;
-    private scopeKey: string;
+    private workDir: string;
 
-    constructor(db: Database.Database, scopeKey: string) {
-        this.db = db;
-        this.scopeKey = scopeKey;
+    constructor(workDir: string) {
+        this.workDir = workDir;
+    }
+
+    private get filePath(): string {
+        return join(this.workDir, 'user.md');
     }
 
     async init(): Promise<void> {
-        console.log('[UserProfile] Ready (SQLite).');
-    }
-
-    get(): UserProfile {
-        const row = this.db.prepare(
-            `SELECT data FROM user_profile WHERE tenant_key = ?`
-        ).get(this.scopeKey) as { data: string } | undefined;
-        return row ? JSON.parse(row.data) : {};
-    }
-
-    async update(patch: Partial<UserProfile>): Promise<void> {
-        const current = this.get();
-        const next = { ...current, ...patch, updatedAt: Date.now() };
-        this.db.prepare(
-            `INSERT INTO user_profile (tenant_key, data, updated_at) VALUES (?, ?, ?)
-             ON CONFLICT(tenant_key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`
-        ).run(this.scopeKey, JSON.stringify(next), Date.now());
-    }
-
-    async clear(): Promise<void> {
-        this.db.prepare(`DELETE FROM user_profile WHERE tenant_key = ?`).run(this.scopeKey);
-    }
-
-    async toContextString(workDir?: string): Promise<string> {
-        if (workDir) {
-            try {
-                const userMd = await fs.readFile(join(workDir, 'user.md'), 'utf8');
-                if (userMd.trim()) return `[用户档案]\n${userMd.trim()}`;
-            } catch { /* not found */ }
+        // Ensure user.md exists with a template if missing
+        try {
+            await fs.access(this.filePath);
+        } catch {
+            await fs.writeFile(this.filePath, '# 用户档案\n\n- 姓名: \n- 城市: \n- 时区: Asia/Shanghai\n- 语言偏好: 中文\n', 'utf8');
         }
-        const p = this.get();
-        const lines: string[] = [];
-        if (p.name) lines.push(`用户姓名: ${p.name}`);
-        if (p.city) lines.push(`所在城市: ${p.city}`);
-        if (p.timezone) lines.push(`时区: ${p.timezone}`);
-        if (p.language) lines.push(`偏好语言: ${p.language}`);
-        if (p.interests?.length) lines.push(`兴趣/关注: ${p.interests.join('、')}`);
-        if (p.notes) lines.push(`备注: ${p.notes}`);
-        if (lines.length === 0) return '';
-        return `[用户画像]\n${lines.join('\n')}`;
+        console.log('[UserProfile] Ready (file-based).');
     }
 
-    toDisplayString(): string {
-        const p = this.get();
-        if (Object.keys(p).filter(k => k !== 'updatedAt').length === 0) {
-            return '（暂无个人信息，用 /profile set 来设置）';
+    /** Read the raw user.md content */
+    async read(): Promise<string> {
+        try {
+            return await fs.readFile(this.filePath, 'utf8');
+        } catch {
+            return '';
         }
-        const lines: string[] = [];
-        if (p.name) lines.push(`👤 姓名: ${p.name}`);
-        if (p.city) lines.push(`📍 城市: ${p.city}`);
-        if (p.timezone) lines.push(`🕐 时区: ${p.timezone}`);
-        if (p.language) lines.push(`🗣 语言偏好: ${p.language}`);
-        if (p.interests?.length) lines.push(`⭐ 兴趣: ${p.interests.join('、')}`);
-        if (p.notes) lines.push(`📝 备注: ${p.notes}`);
-        if (p.updatedAt) lines.push(`\n_更新于 ${new Date(p.updatedAt).toLocaleString('zh-CN')}_`);
-        return lines.join('\n');
+    }
+
+    /** Overwrite user.md with new content */
+    async write(content: string): Promise<void> {
+        await fs.writeFile(this.filePath, content, 'utf8');
+    }
+
+    /** Build context string for AI system prompt */
+    async toContextString(): Promise<string> {
+        const content = await this.read();
+        if (content.trim()) return `[用户档案]\n${content.trim()}`;
+        return '';
+    }
+
+    /** Format for /profile display */
+    async toDisplayString(): Promise<string> {
+        const content = await this.read();
+        if (!content.trim()) {
+            return '（暂无个人信息，直接编辑 workspace 下的 `user.md` 文件）';
+        }
+        return content.trim();
     }
 }

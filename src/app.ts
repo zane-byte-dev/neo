@@ -162,7 +162,7 @@ export class App {
             }
 
             // Per-user managers: keyed by userId for cross-client sharing
-            const userProfile = new UserProfileManager(db, userId);
+            const userProfile = new UserProfileManager(workDir);
             const reminderManager = new ReminderManager(db, userId);
             const scheduledTaskManager = new ScheduledTaskManager(db, userId);
 

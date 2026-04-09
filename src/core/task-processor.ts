@@ -56,7 +56,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         }
         const historyContext = chatHistoryCache.getContextForGemini();
 
-        const profileCtx = await userProfile.toContextString(toolContext.workDir);
+        const profileCtx = await userProfile.toContextString();
         const context = profileCtx
             ? `${profileCtx}\n\n${historyContext}`
             : historyContext;
