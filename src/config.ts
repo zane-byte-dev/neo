@@ -51,6 +51,12 @@ function loadUserMap(): void {
                 }
                 if (entry.webToken) {
                     _webTokenToUser.set(entry.webToken, userId);
+                    // Auto-register a web tenant for this user
+                    const webTk = `web:${userId}` as TenantKey;
+                    if (!tenants.includes(webTk)) {
+                        tenants.push(webTk);
+                        _tenantToUser.set(webTk, userId);
+                    }
                 }
             }
             console.log(`[Config] 📋 Loaded ${_userMap.size} user(s) from ${path}`);

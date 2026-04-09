@@ -44,6 +44,15 @@ if (FEISHU_APP_ID && FEISHU_APP_SECRET) {
     console.log('[Feishu] Skipped — FEISHU_APP_ID / FEISHU_APP_SECRET not set.');
 }
 
+// Register Web adapter (optional — only when WEB_PORT or WEB_ENABLED is set)
+if (process.env.WEB_PORT ?? process.env.WEB_ENABLED) {
+    const { WebAdapter } = await import('./platform/web/web-adapter.js');
+    const webAdapter = new WebAdapter(app.geminiClient);
+    app.registerAdapter(webAdapter);
+} else {
+    console.log('[Web] Skipped — WEB_PORT / WEB_ENABLED not set.');
+}
+
 // ── Initialize & launch ──────────────────────────────────────────────────────
 
 await app.init();

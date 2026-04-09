@@ -27,7 +27,6 @@ import { setupCommands, handleCommand as handleCommandFn } from './commands/inde
 import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './core/handlers.js';
 import { sendReply as sendReplyFn } from './core/reply.js';
-import { startWebServer } from './web/server.js';
 import { processTask as processTaskFn } from './core/task-processor.js';
 import { processMessage as processMessageFn } from './core/message-router.js';
 import { handleUrlMessage as handleUrlMessageFn } from './handlers/url-handler.js';
@@ -40,7 +39,7 @@ import type { Task } from './core/types.js';
 
 export class App {
     private adapters = new Map<string, PlatformAdapter>();
-    private geminiClient: GeminiClient;
+    readonly geminiClient: GeminiClient;
     private activeTaskIds = new Set<string>();
     private pendingReadMatches = new Map<string, { matches: string[]; expiry: number }>();
 
@@ -117,7 +116,6 @@ export class App {
 
         console.log(`🤖 Bot started. Adapters: ${[...this.adapters.keys()].join(', ')}`);
         console.log(`🛠  Gemini Client enabled: ${this.geminiClient.isEnabled()}`);
-        startWebServer(this.geminiClient);
     }
 
     async shutdown(): Promise<void> {

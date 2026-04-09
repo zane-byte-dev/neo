@@ -8,7 +8,7 @@
  *   - toFunctionDeclarations() → FunctionDeclaration[] (for Gemini tool schema)
  */
 
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseSkillFile } from './skill-parser.js';
@@ -63,6 +63,10 @@ export class SkillRegistry {
  *
  * Skills directory: {projectRoot}/space/{userId}/skills/
  *
+ * Supports two file layouts:
+ *   - Flat:  skills/brief.skill.md
+ *   - Nested: skills/xifeng/skill.md  (subdirectory with skill.md)
+ *
  * @param userId     The user identifier (matches space/{userId}/)
  * @param projectRoot Absolute path to the project root (passed in to avoid import.meta coupling)
  */
@@ -89,10 +93,24 @@ export async function loadUserSkills(
     let loaded = 0;
     let skipped = 0;
 
+    // Collect candidate file paths:
+    // 1. top-level *.skill.md  (e.g. brief.skill.md)
+    // 2. subdirectory skill.md (e.g. xifeng/skill.md)
+    const candidatePaths: string[] = [];
     for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith('.skill.md')) continue;
+        if (entry.isFile() && entry.name.endsWith('.skill.md')) {
+            candidatePaths.push(join(skillsDir, entry.name));
+        } else if (!entry.isFile()) {
+            // Check for {subdir}/skill.md
+            const subSkill = join(skillsDir, entry.name, 'skill.md');
+            try {
+                await stat(subSkill);
+                candidatePaths.push(subSkill);
+            } catch { /* no skill.md in this subdir */ }
+        }
+    }
 
-        const filePath = join(skillsDir, entry.name);
+    for (const filePath of candidatePaths) {
         try {
             const content = await readFile(filePath, 'utf-8');
             const skill = parseSkillFile(content, filePath);
