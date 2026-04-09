@@ -95,7 +95,7 @@ export class ScheduledTaskManager {
         for (const row of rows) {
             this.scheduleJob(this.rowToTask(row));
         }
-        console.log(`[ScheduledTaskManager] Ready (${rows.length} active task(s)).`);
+        console.log(`[ScheduledTaskManager|${this.scopeKey}] Ready (${rows.length} active task(s)).`);
     }
 
     async add(chatId: string, content: string, prompt: string, cronExpr: string): Promise<ScheduledTask> {
@@ -107,7 +107,7 @@ export class ScheduledTaskManager {
         ).run(id, this.scopeKey, chatId, content, prompt, cronExpr, now);
         const task: ScheduledTask = { id, chatId, content, prompt, cronExpr, createdAt: now, enabled: true };
         this.scheduleJob(task);
-        console.log(`[ScheduledTaskManager] Added task #${id} (${cronExpr}): ${content}`);
+        console.log(`[ScheduledTaskManager|${this.scopeKey}] Added task #${id} (${cronExpr}): ${content}`);
         return task;
     }
 

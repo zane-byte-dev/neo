@@ -45,7 +45,7 @@ export class MessageQueue {
 
         const tasks = rows.map(r => this.rowToTask(r));
         if (tasks.length > 0) {
-            console.log(`[MessageQueue] ${tasks.length} unfinished task(s) found for replay.`);
+            console.log(`[MessageQueue|${this.tenantKey}] ${tasks.length} unfinished task(s) found for replay.`);
         }
         return tasks;
     }

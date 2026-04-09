@@ -96,7 +96,8 @@ export async function executeTool(
     toolRegistry: Map<string, Tool>,
     context?: ToolContext,
 ): Promise<string> {
-    console.log(`[AgentRuntime] Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
+    const scope = context?.tenantKey ?? 'unknown';
+    console.log(`[AgentRuntime|${scope}] Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
     const startedAt = Date.now();
 
     const finish = async (result: string, status: 'ok' | 'blocked' | 'error' = 'ok'): Promise<string> => {
@@ -196,9 +197,9 @@ ${content}
         }
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[AgentRuntime] Tool error (${name}): ${msg}`);
+        console.error(`[AgentRuntime|${scope}] Tool error (${name}): ${msg}`);
         if (err instanceof Error && err.stack) {
-            console.error(`[AgentRuntime] Stack:\n${err.stack}`);
+            console.error(`[AgentRuntime|${scope}] Stack:\n${err.stack}`);
         }
         return finish(`[Error] ${name} failed: ${msg}`, 'error');
     }

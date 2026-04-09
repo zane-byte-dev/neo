@@ -91,7 +91,7 @@ export class ReminderManager {
         const count = (this.db.prepare(
             `SELECT COUNT(*) as n FROM reminders WHERE tenant_key = ? AND fired = 0`
         ).get(this.scopeKey) as { n: number }).n;
-        console.log(`[ReminderManager] Ready (${count} active reminder(s)).`);
+        console.log(`[ReminderManager|${this.scopeKey}] Ready (${count} active reminder(s)).`);
         this.timer = setInterval(() => this.tick(), 30_000);
     }
 
@@ -103,7 +103,7 @@ export class ReminderManager {
              VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
         ).run(id, this.scopeKey, chatId, content, prompt ?? null, fireAt, now);
         const type = prompt ? 'action' : 'notification';
-        console.log(`[ReminderManager] Added ${type} reminder #${id} for ${new Date(fireAt).toLocaleString('zh-CN')}`);
+        console.log(`[ReminderManager|${this.scopeKey}] Added ${type} reminder #${id} for ${new Date(fireAt).toLocaleString('zh-CN')}`);
         return { id, chatId, content, prompt, fireAt, createdAt: now, fired: false };
     }
 

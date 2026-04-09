@@ -29,7 +29,7 @@ export class AsyncTaskManager {
         const count = (this.db.prepare(
             `SELECT COUNT(*) as n FROM async_tasks WHERE tenant_key = ?`
         ).get(this.tenantKey) as { n: number }).n;
-        console.log(`[AsyncTaskManager] Ready (${count} existing tasks).`);
+        console.log(`[AsyncTaskManager|${this.tenantKey}] Ready (${count} existing tasks).`);
     }
 
     async createTask(chatId: string, prompt: string): Promise<AsyncTask> {
@@ -39,7 +39,7 @@ export class AsyncTaskManager {
             `INSERT INTO async_tasks (id, tenant_key, chat_id, prompt, status, created_at, updated_at)
              VALUES (?, ?, ?, ?, 'pending', ?, ?)`
         ).run(id, this.tenantKey, chatId, prompt, now, now);
-        console.log(`[AsyncTaskManager] Created task: ${id}`);
+        console.log(`[AsyncTaskManager|${this.tenantKey}] Created task: ${id}`);
         return this.getTask(id)!;
     }
 

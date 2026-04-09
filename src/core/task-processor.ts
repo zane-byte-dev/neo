@@ -38,7 +38,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
     let taskTimedOut = false;
     const taskTimeoutHandle = setTimeout(async () => {
         taskTimedOut = true;
-        console.error(`[Worker] Task timed out after ${taskTimeoutMs / 1000}s for: ${question.substring(0, 60)}`);
+        console.error(`[Worker|${task.tenantKey}] Task timed out after ${taskTimeoutMs / 1000}s for: ${question.substring(0, 60)}`);
         await adapter.sendMessage(
             chatId,
             `⚠️ 请求处理超时（>${taskTimeoutMs / 60000} 分钟），可能是 AI 引擎无响应，请稍后重试。`
@@ -49,7 +49,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
     let activeMsgId = '';
 
     try {
-        console.log(`[Worker] Processing task for ${userName}: ${question.substring(0, 20)}...`);
+        console.log(`[Worker|${task.tenantKey}] Processing task for ${userName}: ${question.substring(0, 20)}...`);
 
         if (!task.skipHistory) {
             await chatHistoryCache.addMessage('user', question, userName);
@@ -171,7 +171,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
             : await geminiClient.chatWithContextStreaming(question, context, onChunk, signal, toolContext);
 
         if (!responseText) {
-            console.error(`[Worker] No response text for task from ${userName}: "${question.slice(0, 80).replace(/\n/g, ' ')}"`);
+            console.error(`[Worker|${task.tenantKey}] No response text for task from ${userName}: "${question.slice(0, 80).replace(/\n/g, ' ')}"`);
             await adapter.editMessage(chatId, activeMsgId, '⚠️ Failed to generate response.').catch(() => {});
             return;
         }
@@ -219,7 +219,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
             return;
         }
         if (!taskTimedOut) {
-            console.error(`[Worker Error] ${error}`);
+            console.error(`[Worker|${task.tenantKey}] Error: ${error}`);
             await sendReply(chatId, '🔥 处理请求时出现错误，请稍后重试。', 2, messageId);
         }
     } finally {

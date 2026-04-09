@@ -56,14 +56,15 @@ export class ChatHistoryCache {
             `SELECT COUNT(*) as n FROM chat_sessions WHERE tenant_key = ?`
         ).get(this.tenantKey) as { n: number }).n;
 
-        console.log('[ChatHistoryCache] ✅ Initialized (SQLite)');
-        console.log(`[ChatHistoryCache] ⏱️  Session timeout: ${CHAT_SESSION_TIMEOUT_HOURS}h`);
-        console.log(`[ChatHistoryCache] 📝 Total sessions: ${total}`);
+        const tag = `[ChatHistoryCache|${this.tenantKey}]`;
+        console.log(`${tag} ✅ Initialized (SQLite)`);
+        console.log(`${tag} ⏱️  Session timeout: ${CHAT_SESSION_TIMEOUT_HOURS}h`);
+        console.log(`${tag} 📝 Total sessions: ${total}`);
         if (this.currentSessionId) {
             const msgCount = (this.db.prepare(
                 `SELECT COUNT(*) as n FROM chat_messages WHERE session_id = ?`
             ).get(this.currentSessionId) as { n: number }).n;
-            console.log(`[ChatHistoryCache] 🔄 Current session: ${this.currentSessionId} (${msgCount} messages)`);
+            console.log(`${tag} 🔄 Current session: ${this.currentSessionId} (${msgCount} messages)`);
         }
     }
 
