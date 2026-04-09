@@ -7,7 +7,7 @@
 
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
-import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, GEMINI_WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform, getAllUsers, resolveUserId, getUserTenants } from './config.js';
+import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform, getAllUsers, resolveUserId, getUserTenants } from './config.js';
 import { resolveUserWorkspaceDir, ensureWorkspace } from './utils/workspace.js';
 import { initDb } from './services/db.js';
 import { GeminiClient, buildTenantSystemInstruction } from './services/gemini-client.js';
@@ -138,7 +138,7 @@ export class App {
     private async initUsers(): Promise<void> {
         const { getDb } = await import('./services/db.js');
         const db = getDb();
-        const baseWorkDir = resolve(WORK_DIR || GEMINI_WORK_DIR || '.');
+        const baseWorkDir = resolve(WORK_DIR || '.');
         const templateDir = AGENT_CONFIG_DIR || undefined;
 
         for (const [userId, entry] of getAllUsers()) {

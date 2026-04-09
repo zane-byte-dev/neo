@@ -236,7 +236,6 @@ export const FEISHU_APP_SECRET  = process.env.FEISHU_APP_SECRET  ?? '';
 export const GEMINI_API_KEY   = process.env.GEMINI_API_KEY ?? '';
 /** Raw GEMINI_MODEL env value; consumers apply their own default/alias. */
 export const GEMINI_MODEL_ENV: string | undefined = process.env.GEMINI_MODEL;
-export const GEMINI_WORK_DIR  = process.env.GEMINI_WORK_DIR ?? '';
 
 // ── Agent / workspace paths ───────────────────────────────────────────────────
 

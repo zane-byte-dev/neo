@@ -10,7 +10,7 @@
 import { join, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { setupLogger } from '../utils/logger.js';
-import { GEMINI_BASE_URL, GEMINI_FILES_UPLOAD_URL, GEMINI_API_KEY, GEMINI_MODEL_ENV, WORK_DIR, GEMINI_WORK_DIR, AGENT_CONFIG_DIR } from '../config.js';
+import { GEMINI_BASE_URL, GEMINI_FILES_UPLOAD_URL, GEMINI_API_KEY, GEMINI_MODEL_ENV, WORK_DIR, AGENT_CONFIG_DIR } from '../config.js';
 import { agentLoop, resolveModel } from './agent-runtime.js';
 import { loadOpenClawSkills, formatSkillsPrompt } from './openclaw-skills.js';
 
@@ -195,15 +195,14 @@ export class GeminiClient {
     constructor() {
         this.apiKey = GEMINI_API_KEY;
         this.model = resolveModel(GEMINI_MODEL_ENV ?? 'flash');
-        const rawWorkDir = WORK_DIR || GEMINI_WORK_DIR;
-        this.baseWorkDir = rawWorkDir ? resolve(rawWorkDir) : '';
+        this.baseWorkDir = WORK_DIR ? resolve(WORK_DIR) : '';
 
         if (!this.apiKey) {
             console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
             return;
         }
         if (!this.baseWorkDir) {
-            console.log('[AgentRuntime] ❌ Disabled: WORK_DIR (or GEMINI_WORK_DIR) not set');
+            console.log('[AgentRuntime] ❌ Disabled: WORK_DIR not set');
             return;
         }
 
