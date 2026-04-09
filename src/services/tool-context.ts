@@ -37,6 +37,8 @@ export interface TenantContext {
     scheduledTaskManager: any;
     reminderManager: any;
     userProfile: any;
+    /** Per-user skill registry (Markdown skill definitions) */
+    skillRegistry: import('../skills/skill-registry.js').SkillRegistry;
 }
 
 const _registry = new Map<TenantKey, TenantContext>();

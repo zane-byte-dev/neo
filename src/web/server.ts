@@ -121,6 +121,7 @@ export function createWebServer(geminiClient: GeminiClient): Koa {
                 },
                 reminderManager: userCtx.reminderManager,
                 scheduledTaskManager: userCtx.scheduledTaskManager,
+                skillRegistry: userCtx.skillRegistry,
             };
         }
 

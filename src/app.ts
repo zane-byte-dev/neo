@@ -22,6 +22,7 @@ import { registerTenantContext, getTenantContext, getAllTenantKeys, getTenantCon
 import { resolve as resolveUserInput, hasPending } from './services/user-input-waiter.js';
 import { closeBrowser } from './services/browser-service.js';
 import { setupTools } from './tools/index.js';
+import { loadUserSkills } from './skills/index.js';
 import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
 import { setupCronJobs } from './crons/index.js';
 import { setupHandlers } from './core/handlers.js';
@@ -155,6 +156,10 @@ export class App {
             const reminderManager = new ReminderManager(db, userId);
             const scheduledTaskManager = new ScheduledTaskManager(db, userId);
 
+            // Load Markdown skill definitions from resource/workspace/{userId}/skills/
+            const projectRoot = resolve('.');
+            const skillRegistry = await loadUserSkills(userId, projectRoot);
+
             registerUserContext({
                 userId,
                 workDir,
@@ -162,6 +167,7 @@ export class App {
                 userProfile,
                 reminderManager,
                 scheduledTaskManager,
+                skillRegistry,
             });
 
             console.log(`[User] ✅ ${userId} initialized (${entry.tenants.length} tenant(s))`);
@@ -222,6 +228,7 @@ export class App {
             scheduledTaskManager: userCtx.scheduledTaskManager,
             reminderManager: userCtx.reminderManager,
             userProfile: userCtx.userProfile,
+            skillRegistry: userCtx.skillRegistry,
         });
 
         console.log(`[Tenant] ✅ ${tenantKey} → user:${userId}`);

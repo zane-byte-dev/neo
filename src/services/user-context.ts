@@ -12,6 +12,7 @@
  */
 
 import type { UserId } from '../types/platform.js';
+import type { SkillRegistry } from '../skills/skill-registry.js';
 
 export interface UserContext {
     userId: UserId;
@@ -23,6 +24,8 @@ export interface UserContext {
     userProfile: any;
     reminderManager: any;
     scheduledTaskManager: any;
+    /** Per-user skill registry, populated from resource/workspace/{userId}/skills/ */
+    skillRegistry: SkillRegistry;
 }
 
 const _registry = new Map<UserId, UserContext>();

@@ -28,6 +28,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         adapter: tenantCtx.adapter,
         reminderManager: tenantCtx.reminderManager,
         scheduledTaskManager: tenantCtx.scheduledTaskManager,
+        skillRegistry: tenantCtx.skillRegistry,
     };
 
     const abortController = new AbortController();

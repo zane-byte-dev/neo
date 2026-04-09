@@ -47,6 +47,11 @@ export function registerTool(tool: Tool): void {
     console.log(`[AgentRuntime] 🔧 Tool registered: ${tool.declaration.name}`);
 }
 
+/** Expose the tool registry for skill execution. */
+export function getToolRegistry(): Map<string, Tool> {
+    return toolRegistry;
+}
+
 // ── Simple (non-streaming) API calls ──────────────────────────────────────────
 
 /**
