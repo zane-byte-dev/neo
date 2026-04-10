@@ -150,7 +150,6 @@ export class WebAdapter implements PlatformAdapter {
         this._installSessionRoutes(router);
         this._installMeRoute(router);
         _installNotebookRoutes(router);
-        _installCronRoutes(router);
         _installTodoRoutes(router);
         _installNoteRoutes(router);
 
@@ -402,59 +401,6 @@ function _installNotebookRoutes(router: Router): void {
     });
 }
 
-// ── Cron routes ──────────────────────────────────────────────────────────────
-
-function _installCronRoutes(router: Router): void {
-    router.get('/api/crons', async (ctx) => {
-        const db = getDb();
-        ctx.body = db.prepare(`
-            SELECT
-                j.name, j.schedule, j.description, j.enabled, j.updated_at,
-                r.status       AS last_status,
-                r.started_at   AS last_started_at,
-                r.finished_at  AS last_finished_at,
-                r.duration_ms  AS last_duration_ms,
-                r.error        AS last_error,
-                r.summary      AS last_summary
-            FROM cron_jobs j
-            LEFT JOIN cron_runs r ON r.id = (
-                SELECT id FROM cron_runs WHERE job_name = j.name ORDER BY started_at DESC LIMIT 1
-            )
-            ORDER BY j.name
-        `).all();
-    });
-
-    router.patch('/api/crons/:name', async (ctx) => {
-        const db = getDb();
-        const jobName = decodeURIComponent(ctx.params.name);
-        const body = ctx.request.body as Record<string, unknown>;
-        const now = Date.now();
-        const existing = db.prepare('SELECT name FROM cron_jobs WHERE name = ?').get(jobName);
-        if (!existing) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
-        if (body.enabled !== undefined) {
-            db.prepare('UPDATE cron_jobs SET enabled = ?, updated_at = ? WHERE name = ?').run(body.enabled ? 1 : 0, now, jobName);
-        }
-        if (typeof body.schedule === 'string' && body.schedule.trim()) {
-            db.prepare('UPDATE cron_jobs SET schedule = ?, updated_at = ? WHERE name = ?').run(body.schedule.trim(), now, jobName);
-        }
-        ctx.body = { ok: true };
-    });
-
-    router.get('/api/crons/:name/runs', async (ctx) => {
-        const db = getDb();
-        const jobName = decodeURIComponent(ctx.params.name);
-        const limit = Math.min(Number(ctx.query.limit) || 20, 100);
-        ctx.body = db.prepare(
-            'SELECT id, job_name, status, started_at, finished_at, duration_ms, error, summary FROM cron_runs WHERE job_name = ? ORDER BY started_at DESC LIMIT ?'
-        ).all(jobName, limit);
-    });
-
-    router.post('/api/crons/:name/run', async (ctx) => {
-        const jobName = decodeURIComponent(ctx.params.name);
-        const { executeJob } = await import('../../crons/index.js');
-        ctx.body = await executeJob(jobName);
-    });
-}
 
 // ── Todo routes ──────────────────────────────────────────────────────────────
 
