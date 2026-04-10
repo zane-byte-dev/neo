@@ -3,7 +3,7 @@ import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut } from 'lucide-react
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { clearToken, fetchMe, type MeInfo } from '../api'
+import { logout, fetchMe, type MeInfo } from '../api'
 import type { Theme } from '../types'
 
 const THEMES: { value: Theme; label: string }[] = [
@@ -13,7 +13,7 @@ const THEMES: { value: Theme; label: string }[] = [
 ]
 
 export const Sidebar: React.FC = () => {
-    const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme, setToken } = useAppStore()
+    const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme } = useAppStore()
     const [menuOpen, setMenuOpen] = React.useState(false)
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
     const [me, setMe] = React.useState<MeInfo | null>(null)
@@ -23,9 +23,7 @@ export const Sidebar: React.FC = () => {
     }, [])
 
     const handleLogout = () => {
-        clearToken()
-        setToken('')
-        window.location.reload()
+        logout().finally(() => window.location.reload())
     }
 
     const handleChatRightClick = (e: React.MouseEvent, id: string) => {

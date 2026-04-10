@@ -1,35 +1,27 @@
 /**
  * api.ts — HTTP client for the Neo Koa backend.
- * Token is stored in localStorage and sent as Authorization: Bearer <token>.
+ * Authentication uses httpOnly session cookies set by /api/auth/login.
+ * All fetch calls use credentials: 'include' so cookies are sent automatically.
  */
-
-export function getToken(): string {
-    return localStorage.getItem('neo_token') ?? ''
-}
-
-export function saveToken(token: string) {
-    localStorage.setItem('neo_token', token)
-}
-
-export function clearToken() {
-    localStorage.removeItem('neo_token')
-}
-
-function authHeaders(): HeadersInit {
-    const token = getToken()
-    return token ? { Authorization: `Bearer ${token}` } : {}
-}
 
 // ── REST helper ───────────────────────────────────────────────────────────────
 
 export async function apiGet<T = unknown>(path: string): Promise<T> {
-    const res = await fetch(path, { headers: authHeaders() })
+    const res = await fetch(path, { credentials: 'include' })
     if (res.status === 401) {
-        clearToken()
         throw Object.assign(new Error('Unauthorized'), { status: 401 })
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
+}
+
+function _post(path: string, body?: unknown): Promise<Response> {
+    return fetch(path, {
+        method: 'POST',
+        credentials: 'include',
+        headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+    })
 }
 
 // ── Chat SSE stream ───────────────────────────────────────────────────────────
@@ -51,18 +43,13 @@ export async function* streamChat(
 ): AsyncGenerator<StreamChunk> {
     const res = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...authHeaders(),
-        },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, sessionId, ...(model ? { model } : {}) }),
         signal,
     })
 
-    if (res.status === 401) {
-        clearToken()
-        throw Object.assign(new Error('Unauthorized'), { status: 401 })
-    }
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     if (!res.body) return
 
@@ -114,11 +101,7 @@ export function notebookCreate(data: {
     tags?: string | null
     content?: string | null
 }) {
-    return fetch('/api/notebook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(data),
-    }).then((r) => {
+    return _post('/api/notebook', data).then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json() as Promise<import('./types').NoteEntry>
     })
@@ -135,7 +118,8 @@ export function notebookUpdate(id: number, data: {
 }) {
     return fetch(`/api/notebook/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
     }).then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -146,7 +130,7 @@ export function notebookUpdate(id: number, data: {
 export function notebookDelete(id: number) {
     return fetch(`/api/notebook/${id}`, {
         method: 'DELETE',
-        headers: authHeaders(),
+        credentials: 'include',
     }).then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -156,19 +140,11 @@ export function notebookDelete(id: number) {
 // ── Session API ───────────────────────────────────────────────────────────────
 
 export function sessionNew(sessionId: string, title: string) {
-    return fetch('/api/session/new', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ sessionId, title }),
-    })
+    return _post('/api/session/new', { sessionId, title })
 }
 
 export function sessionClear(sessionId: string) {
-    return fetch('/api/session/clear', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ sessionId }),
-    })
+    return _post('/api/session/clear', { sessionId })
 }
 
 export function sessionList() {
@@ -183,25 +159,19 @@ export function todoList() {
 }
 
 export function todoAnalyze(content: string) {
-    return fetch('/api/todos/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ content }),
-    }).then((r) => r.json() as Promise<TodoAnalysis>)
+    return _post('/api/todos/analyze', { content }).then((r) => r.json() as Promise<TodoAnalysis>)
 }
 
 export function todoCreate(content: string, priority?: string | null, remindAt?: string | null) {
-    return fetch('/api/todos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ content, priority: priority ?? undefined, remind_at: remindAt ?? undefined }),
-    }).then((r) => r.json() as Promise<TodoItem>)
+    return _post('/api/todos', { content, priority: priority ?? undefined, remind_at: remindAt ?? undefined })
+        .then((r) => r.json() as Promise<TodoItem>)
 }
 
 export function todoUpdateStatus(id: string, status: string) {
     return fetch(`/api/todos/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
     }).then((r) => r.json())
 }
@@ -209,7 +179,8 @@ export function todoUpdateStatus(id: string, status: string) {
 export function todoUpdate(id: string, patch: { content?: string; remind_at?: string | null; priority?: string | null }) {
     return fetch(`/api/todos/${encodeURIComponent(id)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
     }).then((r) => r.json())
 }
@@ -217,7 +188,7 @@ export function todoUpdate(id: string, patch: { content?: string; remind_at?: st
 export function todoDelete(id: string) {
     return fetch(`/api/todos/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        headers: authHeaders(),
+        credentials: 'include',
     }).then((r) => r.json())
 }
 
@@ -232,18 +203,12 @@ export function noteList(opts?: { date?: string; tag?: string }) {
 }
 
 export function noteCreate(content: string, tags?: string[]) {
-    return fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ content, ...(tags?.length ? { tags } : {}) }),
-    }).then((r) => r.json() as Promise<InboxNote>)
+    return _post('/api/notes', { content, ...(tags?.length ? { tags } : {}) })
+        .then((r) => r.json() as Promise<InboxNote>)
 }
 
 export function noteDelete(id: number) {
-    return fetch(`/api/notes/${id}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-    }).then((r) => r.json())
+    return fetch(`/api/notes/${id}`, { method: 'DELETE', credentials: 'include' }).then((r) => r.json())
 }
 
 export function noteStats() {
@@ -265,7 +230,8 @@ export function cronList() {
 export function cronToggle(name: string, enabled: boolean) {
     return fetch(`/api/crons/${encodeURIComponent(name)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled }),
     }).then((r) => r.json())
 }
@@ -273,7 +239,8 @@ export function cronToggle(name: string, enabled: boolean) {
 export function cronUpdateSchedule(name: string, schedule: string) {
     return fetch(`/api/crons/${encodeURIComponent(name)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schedule }),
     }).then((r) => r.json())
 }
@@ -285,12 +252,31 @@ export function cronRuns(name: string, limit = 20) {
 export function cronTrigger(name: string) {
     return fetch(`/api/crons/${encodeURIComponent(name)}/run`, {
         method: 'POST',
-        headers: authHeaders(),
+        credentials: 'include',
     }).then((r) => r.json()) as Promise<{ status: string; summary?: string; error?: string }>
 }
 
-// ── Auth check ────────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
 export type AuthResult = 'ok' | 'unauthorized' | 'unreachable'
+
+/** Exchange a webToken for a session cookie. */
+export async function login(token: string): Promise<AuthResult> {
+    try {
+        const res = await _post('/api/auth/login', { token })
+        if (res.ok) return 'ok'
+        if (res.status === 401) return 'unauthorized'
+        return 'unauthorized'
+    } catch (err: unknown) {
+        const msg = (err as { message?: string })?.message ?? ''
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) return 'unreachable'
+        return 'unauthorized'
+    }
+}
+
+/** Clear the session cookie. */
+export async function logout(): Promise<void> {
+    await _post('/api/auth/logout')
+}
 
 export async function checkAuth(): Promise<AuthResult> {
     try {
@@ -299,12 +285,10 @@ export async function checkAuth(): Promise<AuthResult> {
     } catch (err: unknown) {
         const e = err as { status?: number; message?: string }
         if (e?.status === 401) return 'unauthorized'
-        // Network error (ECONNREFUSED, etc.) — backend not running
         const msg = e?.message ?? ''
         if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('ECONNREFUSED')) {
             return 'unreachable'
         }
-        // Other HTTP error — token may still be valid, treat as ok
         return 'ok'
     }
 }

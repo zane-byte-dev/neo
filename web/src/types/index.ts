@@ -92,10 +92,6 @@ export interface CronRunInfo {
 }
 
 export interface AppState {
-    // Auth
-    token: string
-    setToken: (token: string) => void
-
     // Theme
     theme: Theme
     setTheme: (theme: Theme) => void

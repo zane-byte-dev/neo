@@ -1,11 +1,8 @@
 import React from 'react'
 import { Lock } from 'lucide-react'
-import { saveToken } from '../api'
-import { useAppStore } from '../stores/useAppStore'
-import { checkAuth } from '../api'
+import { login } from '../api'
 
 export const Login: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
-    const setToken = useAppStore((s) => s.setToken)
     const [value, setValue] = React.useState('')
     const [error, setError] = React.useState('')
     const [loading, setLoading] = React.useState(false)
@@ -14,20 +11,14 @@ export const Login: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
         e.preventDefault()
         setLoading(true)
         setError('')
-        saveToken(value)
-        setToken(value)
-        const result = await checkAuth()
+        const result = await login(value)
         setLoading(false)
         if (result === 'ok') {
             onSuccess()
         } else if (result === 'unreachable') {
             setError('Cannot reach server. Is the backend running?')
-            saveToken('')
-            setToken('')
         } else {
             setError('Invalid token.')
-            saveToken('')
-            setToken('')
         }
     }
 

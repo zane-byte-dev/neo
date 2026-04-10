@@ -5,10 +5,6 @@ import type { AppState, Chat, Message, NoteEntry, Theme } from '../types'
 export const useAppStore = create<AppState>()(
     persist(
         (set) => ({
-            // Auth
-            token: '',
-            setToken: (token: string) => set({ token }),
-
             // Theme
             theme: 'light' as Theme,
             setTheme: (theme: Theme) => {
@@ -127,7 +123,6 @@ export const useAppStore = create<AppState>()(
             name: 'neo-web-store',
             // Persist chats + messages + theme, not UI state
             partialize: (state) => ({
-                token: state.token,
                 theme: state.theme,
                 chats: state.chats,
                 messages: state.messages,

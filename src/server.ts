@@ -8,6 +8,8 @@ import { fileURLToPath } from 'url';
 
 import {
     GEMINI_API_KEY,
+    SESSION_SECRET,
+    resolveUserIdByWebToken,
 } from './config.js';
 import { initDb } from './services/db.js';
 import { LLMClient } from './llm/client.js';
@@ -48,11 +50,13 @@ export class CoreServer {
         await setupTools();
 
         const app = new Koa();
+        app.keys = [SESSION_SECRET];
         const router = new Router();
 
         app.use(_authMiddleware());
         app.use(bodyParser());
 
+        _installAuthRoutes(router);
         _installChatRoute(router, this.llm);
         _installSessionRoutes(router);
         _installMeRoute(router);
@@ -89,15 +93,24 @@ export class CoreServer {
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
 
+const SESSION_COOKIE = 'neo_uid';
+const COOKIE_OPTS: Parameters<Koa.Context['cookies']['set']>[2] = {
+    httpOnly: true,
+    sameSite: 'lax',
+    signed: true,
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    overwrite: true,
+};
+
 function _authMiddleware(): Koa.Middleware {
     return async (ctx, next) => {
+        // Skip non-API paths and the login endpoint itself
         if (!ctx.path.startsWith('/api/')) return next();
+        if (ctx.path === '/api/auth/login') return next();
 
-        const authHeader = ctx.headers.authorization ?? '';
-        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-        const user = await calcUser(token);
-        if (user) {
-            ctx.user = user;
+        const userId = ctx.cookies.get(SESSION_COOKIE, { signed: true });
+        if (userId) {
+            ctx.state.userId = userId;
             return next();
         }
 
@@ -105,6 +118,27 @@ function _authMiddleware(): Koa.Middleware {
         ctx.body = { error: 'Unauthorized' };
     };
 }
+// ── /api/auth ─────────────────────────────────────────────────────────
+function _installAuthRoutes(router: Router): void {
+    router.post('/api/auth/login', async (ctx) => {
+        const body = ctx.request.body as Record<string, unknown>;
+        const token = typeof body.token === 'string' ? body.token.trim() : '';
+        const userId = token ? resolveUserIdByWebToken(token) : undefined;
+        if (!userId) {
+            ctx.status = 401;
+            ctx.body = { error: 'Invalid token' };
+            return;
+        }
+        ctx.cookies.set(SESSION_COOKIE, userId, COOKIE_OPTS);
+        ctx.body = { ok: true, userId };
+    });
+
+    router.post('/api/auth/logout', (ctx) => {
+        ctx.cookies.set(SESSION_COOKIE, '', { ...COOKIE_OPTS, maxAge: 0 });
+        ctx.body = { ok: true };
+    });
+}
+
 // ── /api/chat (SSE streaming) ─────────────────────────────────────────
 
 function _installChatRoute(router: Router, llm: LLMClient): void {
@@ -119,7 +153,7 @@ function _installChatRoute(router: Router, llm: LLMClient): void {
             return;
         }
 
-        const reqUserId: string | undefined = ctx.user.userId;
+        const reqUserId: string | undefined = ctx.state.userId;
         const tenantKey = reqUserId ? (`web:${reqUserId}` as TenantKey) : undefined;
         const tenantCtx = tenantKey ? (() => {
             try { return getTenantContext(tenantKey); } catch { return undefined; }
@@ -202,7 +236,7 @@ function _installChatRoute(router: Router, llm: LLMClient): void {
 // ── /api/session ──────────────────────────────────────────────────────
 function _installSessionRoutes(router: Router): void {
     const newSession = async (ctx: Koa.Context) => {
-        const reqUserId: string | undefined = ctx.user?.userId;
+        const reqUserId: string | undefined = ctx.state.userId;
         if (reqUserId) {
             new ChatSession(reqUserId).createNewSession();
         }
@@ -218,8 +252,7 @@ function _installSessionRoutes(router: Router): void {
 
 function _installMeRoute(router: Router): void {
     router.get('/api/me', async (ctx) => {
-        const reqUserId: string | undefined = ctx.user.userId;
-        console.log(reqUserId);
+        const reqUserId: string | undefined = ctx.state.userId;
         if (!reqUserId) {
             ctx.body = { userId: null, displayName: null, profile: null };
             return;

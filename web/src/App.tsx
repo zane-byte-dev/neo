@@ -10,7 +10,7 @@ import { NotePanel } from './components/NotePanel'
 import { CronPanel } from './components/CronPanel'
 import { Login } from './components/Login'
 import { useAppStore } from './stores/useAppStore'
-import { getToken, checkAuth, type AuthResult } from './api'
+import { checkAuth, type AuthResult } from './api'
 import { cn } from './lib/utils'
 
 const ResizeHandle: React.FC = () => (
@@ -161,15 +161,13 @@ const ServerUnreachable: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
 
 const App: React.FC = () => {
     const { theme } = useAppStore()
-    const [authState, setAuthState] = React.useState<AuthResult | 'loading' | 'notoken'>('loading')
+    const [authState, setAuthState] = React.useState<AuthResult | 'loading'>('loading')
 
     React.useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme)
     }, [theme])
 
     const runAuthCheck = React.useCallback(() => {
-        const token = getToken()
-        if (!token) { setAuthState('notoken'); return }
         setAuthState('loading')
         checkAuth().then(setAuthState)
     }, [])
@@ -188,7 +186,7 @@ const App: React.FC = () => {
         return <ServerUnreachable onRetry={runAuthCheck} />
     }
 
-    if (authState === 'notoken' || authState === 'unauthorized') {
+    if (authState === 'unauthorized') {
         return <Login onSuccess={runAuthCheck} />
     }
 

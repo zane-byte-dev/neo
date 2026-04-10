@@ -244,3 +244,6 @@ export const WORK_DIR       = process.env.WORK_DIR ?? '';
 export const AGENT_CONFIG_DIR = process.env.AGENT_CONFIG_DIR
     ? resolve(process.env.AGENT_CONFIG_DIR)
     : '';
+
+/** Secret used to sign session cookies. Override via SESSION_SECRET env var. */
+export const SESSION_SECRET = process.env.SESSION_SECRET ?? 'neo-default-secret-change-me';
