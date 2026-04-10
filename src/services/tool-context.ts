@@ -4,8 +4,8 @@
  * Each tenant (platform:userId) gets their own isolated context with
  * independent chat history, message queue, and adapter reference.
  *
- * Workspace-level resources (workDir, userProfile, reminderManager,
- * scheduledTaskManager) are shared via the UserContext — see user-context.ts.
+ * Workspace-level resources (workDir, userProfile, todoManager)
+ * are shared via the UserContext — see user-context.ts.
  *
  * Context is threaded explicitly via TenantContext parameters — no global state.
  */
@@ -34,8 +34,7 @@ export interface TenantContext {
     messageQueue: any;
 
     // ── Shared per-user managers (convenience references) ────────────────
-    scheduledTaskManager: any;
-    reminderManager: any;
+    todoManager: import('./todo-manager.js').TodoManager;
     userProfile: any;
     /** Per-user skill registry (Markdown skill definitions) */
     skillRegistry: import('../skills/skill-registry.js').SkillRegistry;

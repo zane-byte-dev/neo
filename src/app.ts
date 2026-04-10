@@ -8,14 +8,13 @@
 import { join, resolve } from 'path';
 import { promises as fs } from 'fs';
 import { ASYNC_TRIGGER_PREFIXES, WORK_DIR, AGENT_CONFIG_DIR, getAuthorizedForPlatform, getAllUsers, resolveUserId, getUserTenants } from './config.js';
-import { resolveUserWorkspaceDir, ensureWorkspace } from './utils/workspace.js';
+import { resolveUserWorkspaceDir } from './utils/workspace.js';
 import { initDb } from './services/db.js';
 import { LLMClient, buildTenantSystemInstruction } from './llm/client.js';
 import { ChatHistoryCache } from './services/chat-history-cache.js';
 import { AsyncTaskManager } from './services/async-task-manager.js';
 import { MessageQueue } from './services/message-queue.js';
-import { ReminderManager } from './services/reminder-manager.js';
-import { ScheduledTaskManager } from './services/scheduled-task-manager.js';
+import { TodoManager } from './services/todo-manager.js';
 import { UserProfileManager } from './services/user-profile.js';
 import { registerUserContext, getUserContext, getAllUserIds } from './services/user-context.js';
 import { registerTenantContext, getTenantContext, getAllTenantKeys, getTenantContextsForUser } from './services/tool-context.js';
@@ -119,8 +118,7 @@ export class App {
     async shutdown(): Promise<void> {
         for (const userId of getAllUserIds()) {
             const uc = getUserContext(userId);
-            uc.reminderManager.destroy();
-            uc.scheduledTaskManager.destroy();
+            uc.todoManager.destroy();
         }
         this.geminiClient.close();
         closeBrowser();
@@ -139,7 +137,6 @@ export class App {
 
         for (const [userId, entry] of getAllUsers()) {
             const workDir = resolveUserWorkspaceDir(baseWorkDir, userId);
-            await ensureWorkspace(workDir, templateDir);
             console.log(`[User] 📂 ${userId} workspace: ${workDir}`);
 
             const systemInstruction = await buildTenantSystemInstruction(workDir);
@@ -149,8 +146,7 @@ export class App {
 
             // Per-user managers: keyed by userId for cross-client sharing
             const userProfile = new UserProfileManager(workDir);
-            const reminderManager = new ReminderManager(db, userId);
-            const scheduledTaskManager = new ScheduledTaskManager(db, userId);
+            const todoManager = new TodoManager(db, userId);
 
             // Load Markdown skill definitions from space/{userId}/skills/
             const projectRoot = resolve('.');
@@ -161,8 +157,7 @@ export class App {
                 workDir,
                 systemInstruction,
                 userProfile,
-                reminderManager,
-                scheduledTaskManager,
+                todoManager,
                 skillRegistry,
             });
 
@@ -205,8 +200,7 @@ export class App {
                     workDir: userCtx.workDir,
                     systemInstruction: tc.systemInstruction,
                     adapter: tc.adapter,
-                    reminderManager: tc.reminderManager,
-                    scheduledTaskManager: tc.scheduledTaskManager,
+                    todoManager: tc.todoManager,
                     skillRegistry: tc.skillRegistry,
                 };
                 const result = await executeSkill(skill, {}, toolCtx);
@@ -237,8 +231,7 @@ export class App {
             asyncTaskManager,
             messageQueue,
             // Shared per-user (convenience refs)
-            scheduledTaskManager: userCtx.scheduledTaskManager,
-            reminderManager: userCtx.reminderManager,
+            todoManager: userCtx.todoManager,
             userProfile: userCtx.userProfile,
             skillRegistry: userCtx.skillRegistry,
         });
@@ -255,38 +248,7 @@ export class App {
 
         await userCtx.userProfile.init();
 
-        // Reminders: broadcast to ALL connected clients
-        await userCtx.reminderManager.init(async (reminder: any) => {
-            console.log(`[Reminder] Firing #${reminder.id} (${reminder.prompt ? 'action' : 'notification'}): ${reminder.content}`);
-
-            for (const tc of getTenantContextsForUser(userId)) {
-                if (reminder.prompt) {
-                    const task: Task = {
-                        tenantKey: tc.tenantKey,
-                        chatId: tc.chatId,
-                        question: reminder.prompt,
-                        userName: 'reminder',
-                        messageId: '0',
-                    };
-                    const notifyMsg = await tc.adapter.sendMessage(
-                        tc.chatId,
-                        `⏰ 定时任务触发：**${reminder.content}**\n\n⏳ 正在执行...`,
-                        { parseMode: 'markdown' },
-                    ).catch(() => null);
-
-                    if (notifyMsg) task.messageId = notifyMsg.id;
-                    await tc.messageQueue.enqueue(task, (t: Task) => this.processTask(tc.adapter, tc.tenantKey, t));
-                } else {
-                    await tc.adapter.sendMessage(
-                        tc.chatId,
-                        `⏰ **提醒:** ${reminder.content}`,
-                        { parseMode: 'markdown' },
-                    ).catch((err: any) => console.error(`[Reminder] Send to ${tc.tenantKey} failed:`, err.message));
-                }
-            }
-        });
-
-        // Message queue replay (per-tenant, but init for each tenant under this user)
+        // Message queue replay (per-tenant)
         for (const tc of tenants) {
             const pending = await tc.messageQueue.init();
             if (pending.length > 0) {
@@ -301,30 +263,61 @@ export class App {
             }
         }
 
-        // Scheduled tasks: broadcast to ALL connected clients
-        await userCtx.scheduledTaskManager.init(async (task: any) => {
-            console.log(`[ScheduledTask] Executing #${task.id}: ${task.content}`);
-            for (const tc of getTenantContextsForUser(userId)) {
-                try {
-                    const notifyMsg = await tc.adapter.sendMessage(
-                        tc.chatId,
-                        `🕐 定时任务：**${task.content}**\n\n⏳ 正在执行...`,
-                        { parseMode: 'markdown' },
-                    ).catch(() => null);
-
-                    const queueTask: Task = {
-                        tenantKey: tc.tenantKey,
-                        chatId: tc.chatId,
-                        question: task.prompt,
-                        userName: 'scheduled-task',
-                        messageId: notifyMsg?.id ?? '0',
-                    };
-                    await tc.messageQueue.enqueue(queueTask, (t: Task) => this.processTask(tc.adapter, tc.tenantKey, t));
-                } catch (err: any) {
-                    console.error(`[ScheduledTask] Failed for ${tc.tenantKey}:`, err.message);
+        // Unified TodoManager: handles one-time reminders and recurring cron tasks
+        await userCtx.todoManager.init(
+            // onFire: one-time fire_at todos
+            async (todo) => {
+                console.log(`[Todo] Firing #${todo.id} (${todo.prompt ? 'action' : 'notification'}): ${todo.content}`);
+                for (const tc of getTenantContextsForUser(userId)) {
+                    if (todo.prompt) {
+                        const task: Task = {
+                            tenantKey: tc.tenantKey,
+                            chatId: tc.chatId,
+                            question: todo.prompt,
+                            userName: 'reminder',
+                            messageId: '0',
+                        };
+                        const notifyMsg = await tc.adapter.sendMessage(
+                            tc.chatId,
+                            `⏰ 定时任务触发：**${todo.content}**\n\n⏳ 正在执行...`,
+                            { parseMode: 'markdown' },
+                        ).catch(() => null);
+                        if (notifyMsg) task.messageId = notifyMsg.id;
+                        await tc.messageQueue.enqueue(task, (t: Task) => this.processTask(tc.adapter, tc.tenantKey, t));
+                    } else {
+                        await tc.adapter.sendMessage(
+                            tc.chatId,
+                            `⏰ **提醒:** ${todo.content}`,
+                            { parseMode: 'markdown' },
+                        ).catch((err: any) => console.error(`[Todo] Send to ${tc.tenantKey} failed:`, err.message));
+                    }
                 }
-            }
-        });
+            },
+            // onCron: recurring cron_expr todos
+            async (todo) => {
+                console.log(`[Todo] Cron #${todo.id}: ${todo.content}`);
+                for (const tc of getTenantContextsForUser(userId)) {
+                    try {
+                        const notifyMsg = await tc.adapter.sendMessage(
+                            tc.chatId,
+                            `🕐 定时任务：**${todo.content}**\n\n⏳ 正在执行...`,
+                            { parseMode: 'markdown' },
+                        ).catch(() => null);
+
+                        const queueTask: Task = {
+                            tenantKey: tc.tenantKey,
+                            chatId: tc.chatId,
+                            question: todo.prompt!,
+                            userName: 'scheduled-task',
+                            messageId: notifyMsg?.id ?? '0',
+                        };
+                        await tc.messageQueue.enqueue(queueTask, (t: Task) => this.processTask(tc.adapter, tc.tenantKey, t));
+                    } catch (err: any) {
+                        console.error(`[Todo] Cron failed for ${tc.tenantKey}:`, err.message);
+                    }
+                }
+            },
+        );
     }
 
     // ── Message processing pipeline ──────────────────────────────────────
@@ -354,8 +347,7 @@ export class App {
                 adapter,
                 asyncTriggerPrefixes: ASYNC_TRIGGER_PREFIXES,
                 pendingReadMatches: this.pendingReadMatches,
-                scheduledTaskManager: ctx.scheduledTaskManager,
-                reminderManager: ctx.reminderManager,
+                todoManager: ctx.todoManager,
                 messageQueue: ctx.messageQueue,
                 processTask: (task) => this.processTask(adapter, tenantKey, task),
                 handleAsyncTask: (innerMsg) => handleAsyncTaskFn(
@@ -375,8 +367,7 @@ export class App {
                         workDir: ctx.workDir,
                         chatHistoryCache: ctx.chatHistoryCache,
                         asyncTaskManager: ctx.asyncTaskManager,
-                        reminderManager: ctx.reminderManager,
-                        scheduledTaskManager: ctx.scheduledTaskManager,
+                        todoManager: ctx.todoManager,
                         userProfile: ctx.userProfile,
                         skillRegistry: ctx.skillRegistry,
                         pendingReadMatches: this.pendingReadMatches,

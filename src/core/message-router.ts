@@ -5,6 +5,7 @@ import { parseScheduledTask } from '../services/scheduled-task-manager.js';
 import { hasPending, resolve as resolveUserInput } from '../services/user-input-waiter.js';
 import { isAuthorized, GEMINI_API_KEY } from '../config.js';
 import { getTenantContext } from '../services/tool-context.js';
+import type { TodoManager } from '../services/todo-manager.js';
 import type { PlatformAdapter, NormalizedMessage, TenantKey } from '../types/platform.js';
 import type { Task } from './types.js';
 
@@ -12,8 +13,7 @@ interface MessageRouterDeps {
     adapter: PlatformAdapter;
     asyncTriggerPrefixes: string[];
     pendingReadMatches: Map<string, { matches: string[]; expiry: number }>;
-    scheduledTaskManager: any;
-    reminderManager: any;
+    todoManager: TodoManager;
     messageQueue: any;
     processTask: (task: Task) => Promise<void>;
     handleAsyncTask: (msg: NormalizedMessage) => Promise<void>;
@@ -157,7 +157,7 @@ async function handleScheduledTaskMessage(deps: MessageRouterDeps, msg: Normaliz
         return;
     }
 
-    const task = await deps.scheduledTaskManager.add(chatId, result.content, result.prompt, result.cronExpr);
+    const task = deps.todoManager.add({ content: result.content, prompt: result.prompt, cronExpr: result.cronExpr });
     await deps.adapter.editMessage(chatId, statusMsg.id,
         `✅ 定时任务已创建！\n\n` +
         `📌 任务: ${result.content}\n` +
@@ -192,7 +192,7 @@ async function handleReminderMessage(deps: MessageRouterDeps, msg: NormalizedMes
         return;
     }
 
-    const reminder = await deps.reminderManager.add(chatId, result.content, result.fireAt, result.prompt);
+    const reminder = deps.todoManager.add({ content: result.content, fireAt: result.fireAt, prompt: result.prompt });
     const fireStr = new Date(result.fireAt).toLocaleString('zh-CN', {
         month: '2-digit',
         day: '2-digit',

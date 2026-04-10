@@ -13,8 +13,7 @@ export interface CommandDeps {
     workDir: string;
     chatHistoryCache: any;
     asyncTaskManager: any;
-    reminderManager: any;
-    scheduledTaskManager: any;
+    todoManager: any;
     userProfile: any;
     skillRegistry: SkillRegistry;
     pendingReadMatches: Map<string, { matches: string[]; expiry: number }>;

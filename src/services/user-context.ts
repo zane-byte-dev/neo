@@ -13,6 +13,7 @@
 
 import type { UserId } from '../types/platform.js';
 import type { SkillRegistry } from '../skills/skill-registry.js';
+import type { TodoManager } from './todo-manager.js';
 
 export interface UserContext {
     userId: UserId;
@@ -22,8 +23,7 @@ export interface UserContext {
     systemInstruction: string;
     /** Shared managers — initialized in app.ts */
     userProfile: any;
-    reminderManager: any;
-    scheduledTaskManager: any;
+    todoManager: TodoManager;
     /** Per-user skill registry, populated from space/{userId}/skills/ */
     skillRegistry: SkillRegistry;
 }

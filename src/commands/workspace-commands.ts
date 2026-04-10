@@ -260,8 +260,7 @@ export const workspaceCommand: Command = {
                     workDir: deps.workDir,
                     systemInstruction: '',
                     adapter: deps.adapter,
-                    reminderManager: deps.reminderManager,
-                    scheduledTaskManager: deps.scheduledTaskManager,
+                    todoManager: deps.todoManager,
                     skillRegistry: deps.skillRegistry,
                 });
                 await deps.adapter.editMessage(msg.chatId, statusMsg.id, text.slice(0, 4000)).catch(() =>

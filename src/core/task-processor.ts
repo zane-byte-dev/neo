@@ -26,8 +26,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         workDir: tenantCtx.workDir,
         systemInstruction: tenantCtx.systemInstruction,
         adapter: tenantCtx.adapter,
-        reminderManager: tenantCtx.reminderManager,
-        scheduledTaskManager: tenantCtx.scheduledTaskManager,
+        todoManager: tenantCtx.todoManager,
         skillRegistry: tenantCtx.skillRegistry,
     };
 

@@ -25,10 +25,10 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from '../../services/db.js';
 import { nbList, nbSearch, nbGet, nbCreate, nbUpdate, nbDelete } from '../../services/notebook-service.js';
-import { todoList, todoCreate, todoPatch, todoDelete } from '../../services/todo-service.js';
 import { noteList, noteStats, noteTags, noteCreate, noteDelete } from '../../services/note-service.js';
 import { getTenantContext } from '../../services/tool-context.js';
 import { getUserContext } from '../../services/user-context.js';
+import { TodoManager } from '../../services/todo-manager.js';
 import { geminiGenerate } from '../../llm/providers/gemini/index.js';
 import { GEMINI_API_KEY, resolveUserIdByWebToken, hasWebTokens } from '../../config.js';
 import type { LLMClient } from '../../llm/client.js';
@@ -224,8 +224,7 @@ export class WebAdapter implements PlatformAdapter {
                             return { id: 'web', chatId: _chatId };
                         },
                     },
-                    reminderManager: tenantCtx.reminderManager,
-                    scheduledTaskManager: tenantCtx.scheduledTaskManager,
+                    todoManager: tenantCtx.todoManager,
                     skillRegistry: tenantCtx.skillRegistry,
                     imageCallback: async (data, mimeType, caption) => {
                         write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
@@ -459,6 +458,17 @@ function _installCronRoutes(router: Router): void {
 
 // ── Todo routes ──────────────────────────────────────────────────────────────
 
+/** Lazy-init a lightweight TodoManager for web-scoped todos (no cron/fire callbacks needed). */
+let _webTodoManager: TodoManager | null = null;
+function getWebTodoManager(): TodoManager {
+    if (!_webTodoManager) {
+        _webTodoManager = new TodoManager(getDb(), 'web');
+        // Web todos are plain items — no fire/cron callbacks needed, init with no-ops
+        _webTodoManager.init(async () => {}, async () => {});
+    }
+    return _webTodoManager;
+}
+
 function _installTodoRoutes(router: Router): void {
     router.post('/api/todos/analyze', async (ctx) => {
         const body = ctx.request.body as Record<string, unknown>;
@@ -498,7 +508,18 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
     });
 
     router.get('/api/todos', (ctx) => {
-        ctx.body = todoList('web');
+        const tm = getWebTodoManager();
+        const todos = tm.getTodos();
+        // Map to the shape the web frontend expects
+        ctx.body = todos.map(t => ({
+            id: t.id,
+            content: t.content,
+            status: t.status === 'done' ? 'completed' : t.status === 'pending' ? 'not-started' : t.status,
+            priority: t.priority,
+            remind_at: t.fireAt ? new Date(t.fireAt).toISOString() : null,
+            created_at: new Date(t.createdAt).toISOString(),
+            updated_at: new Date(t.updatedAt).toISOString(),
+        }));
     });
 
     router.post('/api/todos', async (ctx) => {
@@ -507,37 +528,60 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
         if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
         const priority = typeof body.priority === 'string' && body.priority.trim() ? body.priority.trim() : null;
         const remindAt = typeof body.remind_at === 'string' && body.remind_at.trim() ? body.remind_at.trim() : null;
-        ctx.body = todoCreate({ content, status: 'not-started', priority, remind_at: remindAt, tenantKey: 'web' });
+        const fireAt = remindAt ? new Date(remindAt).getTime() : null;
+
+        const tm = getWebTodoManager();
+        const todo = tm.add({ content, status: 'pending', priority, fireAt });
+        ctx.body = {
+            id: todo.id,
+            content: todo.content,
+            status: 'not-started',
+            priority: todo.priority,
+            remind_at: todo.fireAt ? new Date(todo.fireAt).toISOString() : null,
+            created_at: new Date(todo.createdAt).toISOString(),
+            updated_at: new Date(todo.updatedAt).toISOString(),
+        };
     });
 
     router.patch('/api/todos/:id', async (ctx) => {
         const todoId = ctx.params.id;
         const body = ctx.request.body as Record<string, unknown>;
-        const validStatuses = ['not-started', 'completed'];
+        const tm = getWebTodoManager();
+
+        const patch: Record<string, any> = {};
+
         if (body.status !== undefined) {
             const status = body.status as string;
+            const validStatuses = ['not-started', 'completed'];
             if (!validStatuses.includes(status)) { ctx.status = 400; ctx.body = { error: 'invalid status' }; return; }
-            const ok = todoPatch(todoId, { status });
-            if (!ok) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+            // Map web statuses to internal: not-started → pending, completed → done
+            patch.status = status === 'completed' ? 'done' : 'pending';
         }
         if (body.content !== undefined) {
             const content = typeof body.content === 'string' ? body.content.trim() : '';
             if (!content) { ctx.status = 400; ctx.body = { error: 'content cannot be empty' }; return; }
-            todoPatch(todoId, { content });
+            patch.content = content;
         }
         if (body.remind_at !== undefined) {
-            const remindAt = body.remind_at === null ? null : (typeof body.remind_at === 'string' ? body.remind_at.trim() || null : null);
-            todoPatch(todoId, { remind_at: remindAt });
+            if (body.remind_at === null) {
+                patch.fireAt = null;
+            } else {
+                const remindAt = typeof body.remind_at === 'string' ? body.remind_at.trim() || null : null;
+                patch.fireAt = remindAt ? new Date(remindAt).getTime() : null;
+            }
         }
         if (body.priority !== undefined) {
-            const priority = body.priority === null ? null : (typeof body.priority === 'string' ? body.priority.trim() || null : null);
-            todoPatch(todoId, { priority });
+            patch.priority = body.priority === null ? null : (typeof body.priority === 'string' ? body.priority.trim() || null : null);
         }
+
+        const ok = tm.patch(todoId, patch);
+        if (!ok) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
         ctx.body = { ok: true };
     });
 
     router.delete('/api/todos/:id', (ctx) => {
-        todoDelete(ctx.params.id);
+        const tm = getWebTodoManager();
+        tm.delete(ctx.params.id);
         ctx.body = { ok: true };
     });
 }

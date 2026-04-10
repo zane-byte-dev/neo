@@ -217,9 +217,88 @@ function createSchema(db: Database.Database): void {
         CREATE INDEX IF NOT EXISTS idx_cron_runs_job ON cron_runs(job_name, started_at DESC);
     `);
 
+    // ── Unified todos_v2 table ─────────────────────────────────────────────
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS todos_v2 (
+            id          TEXT    PRIMARY KEY,
+            scope_key   TEXT    NOT NULL,
+            content     TEXT    NOT NULL,
+            status      TEXT    NOT NULL DEFAULT 'pending',
+            priority    TEXT,
+            prompt      TEXT,
+            fire_at     INTEGER,
+            cron_expr   TEXT,
+            fired       INTEGER NOT NULL DEFAULT 0,
+            enabled     INTEGER NOT NULL DEFAULT 0,
+            created_at  INTEGER NOT NULL,
+            updated_at  INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_todos_v2_scope  ON todos_v2(scope_key);
+        CREATE INDEX IF NOT EXISTS idx_todos_v2_fire   ON todos_v2(scope_key, fire_at) WHERE fire_at IS NOT NULL AND fired = 0;
+        CREATE INDEX IF NOT EXISTS idx_todos_v2_cron   ON todos_v2(scope_key, enabled)  WHERE cron_expr IS NOT NULL;
+    `);
+
     // ── Migrations ─────────────────────────────────────────────────────────
     // Add remind_at to todos if missing (for existing DBs)
     try { db.exec('ALTER TABLE todos ADD COLUMN remind_at TEXT'); } catch { /* already exists */ }
     // Add tags to notes if missing (for existing DBs)
     try { db.exec('ALTER TABLE notes ADD COLUMN tags TEXT'); } catch { /* already exists */ }
+
+    // Migrate reminders → todos_v2
+    try {
+        const existingReminders = db.prepare(
+            `SELECT id, tenant_key, content, prompt, fire_at, created_at, fired FROM reminders`
+        ).all() as any[];
+        if (existingReminders.length > 0) {
+            const insert = db.prepare(
+                `INSERT OR IGNORE INTO todos_v2 (id, scope_key, content, status, prompt, fire_at, fired, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            );
+            for (const r of existingReminders) {
+                insert.run(r.id, r.tenant_key, r.content, r.fired ? 'done' : 'pending', r.prompt ?? null, r.fire_at, r.fired, r.created_at, r.created_at);
+            }
+            console.log(`[DB] Migrated ${existingReminders.length} reminders → todos_v2`);
+        }
+    } catch { /* table may not exist or already migrated */ }
+
+    // Migrate scheduled_tasks → todos_v2
+    try {
+        const existingSchedules = db.prepare(
+            `SELECT id, tenant_key, content, prompt, cron_expr, created_at, enabled FROM scheduled_tasks`
+        ).all() as any[];
+        if (existingSchedules.length > 0) {
+            const insert = db.prepare(
+                `INSERT OR IGNORE INTO todos_v2 (id, scope_key, content, status, prompt, cron_expr, enabled, created_at, updated_at)
+                 VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)`
+            );
+            for (const s of existingSchedules) {
+                insert.run(s.id, s.tenant_key, s.content, s.prompt, s.cron_expr, s.enabled, s.created_at, s.created_at);
+            }
+            console.log(`[DB] Migrated ${existingSchedules.length} scheduled_tasks → todos_v2`);
+        }
+    } catch { /* table may not exist or already migrated */ }
+
+    // Migrate old todos → todos_v2
+    try {
+        const existingTodos = db.prepare(
+            `SELECT id, tenant_key, content, status, priority, remind_at, created_at, updated_at FROM todos`
+        ).all() as any[];
+        if (existingTodos.length > 0) {
+            const insert = db.prepare(
+                `INSERT OR IGNORE INTO todos_v2 (id, scope_key, content, status, priority, fire_at, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            );
+            for (const t of existingTodos) {
+                const fireAt = t.remind_at ? new Date(t.remind_at).getTime() : null;
+                const createdTs = typeof t.created_at === 'string' ? new Date(t.created_at).getTime() : t.created_at;
+                const updatedTs = typeof t.updated_at === 'string' ? new Date(t.updated_at).getTime() : t.updated_at;
+                // Map old statuses: not-started → pending, completed → done
+                let status = t.status;
+                if (status === 'not-started') status = 'pending';
+                else if (status === 'completed') status = 'done';
+                insert.run(t.id, t.tenant_key, t.content, status, t.priority ?? null, fireAt, createdTs, updatedTs);
+            }
+            console.log(`[DB] Migrated ${existingTodos.length} todos → todos_v2`);
+        }
+    } catch { /* table may not exist or already migrated */ }
 }
