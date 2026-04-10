@@ -8,8 +8,6 @@ import { fileURLToPath } from 'url';
 
 import {
     GEMINI_API_KEY,
-    resolveUserIdByWebToken,
-    hasWebTokens,
 } from './config.js';
 import { initDb } from './services/db.js';
 import { LLMClient } from './llm/client.js';
@@ -71,9 +69,6 @@ export class CoreServer {
 
         this.httpServer = app.listen(WEB_PORT, () => {
             console.log(`[CoreServer] 🌐 http://localhost:${WEB_PORT}`);
-            if (!hasWebTokens()) {
-                console.warn('[CoreServer] ⚠️  No webToken in users.json — web UI is unprotected!');
-            }
         });
         console.log(`🤖 CoreServer started. Clients: ${[...this.clients.keys()].join(', ')}`);
         console.log(`🛠  LLM enabled: ${this.llm.isEnabled()}`);
@@ -100,15 +95,9 @@ function _authMiddleware(): Koa.Middleware {
 
         const authHeader = ctx.headers.authorization ?? '';
         const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-
-        const userId = token ? resolveUserIdByWebToken(token) : undefined;
-        if (userId) {
-            ctx.state.userId = userId;
-            return next();
-        }
-
-        if (!hasWebTokens()) {
-            ctx.state.userId = undefined;
+        const user = await calcUser(token);
+        if (user) {
+            ctx.user = user;
             return next();
         }
 
@@ -130,7 +119,7 @@ function _installChatRoute(router: Router, llm: LLMClient): void {
             return;
         }
 
-        const reqUserId: string | undefined = ctx.state.userId;
+        const reqUserId: string | undefined = ctx.user.userId;
         const tenantKey = reqUserId ? (`web:${reqUserId}` as TenantKey) : undefined;
         const tenantCtx = tenantKey ? (() => {
             try { return getTenantContext(tenantKey); } catch { return undefined; }
@@ -213,7 +202,7 @@ function _installChatRoute(router: Router, llm: LLMClient): void {
 // ── /api/session ──────────────────────────────────────────────────────
 function _installSessionRoutes(router: Router): void {
     const newSession = async (ctx: Koa.Context) => {
-        const reqUserId: string | undefined = ctx.state.userId;
+        const reqUserId: string | undefined = ctx.user?.userId;
         if (reqUserId) {
             new ChatSession(reqUserId).createNewSession();
         }
@@ -229,7 +218,7 @@ function _installSessionRoutes(router: Router): void {
 
 function _installMeRoute(router: Router): void {
     router.get('/api/me', async (ctx) => {
-        const reqUserId: string | undefined = ctx.state.userId;
+        const reqUserId: string | undefined = ctx.user.userId;
         console.log(reqUserId);
         if (!reqUserId) {
             ctx.body = { userId: null, displayName: null, profile: null };

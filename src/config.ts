@@ -88,11 +88,6 @@ export function resolveUserIdByWebToken(token: string): UserId | undefined {
     return _webTokenToUser.get(token);
 }
 
-/** Returns true if at least one user has a webToken configured in users.json. */
-export function hasWebTokens(): boolean {
-    return _webTokenToUser.size > 0;
-}
-
 // ── Multi-tenant authorization ───────────────────────────────────────────────
 
 /**
