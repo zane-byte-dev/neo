@@ -6,7 +6,7 @@ export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export interface AsyncTask {
     id: string;
-    chatId: string;
+    sessionId: string;
     prompt: string;
     status: TaskStatus;
     result?: string;
@@ -33,13 +33,13 @@ export class AsyncTaskManager {
         console.log(`[AsyncTaskManager|${this.userId}] Ready (${count} existing tasks).`);
     }
 
-    async createTask(chatId: string, prompt: string): Promise<AsyncTask> {
+    async createTask(sessionId: string, prompt: string): Promise<AsyncTask> {
         const id = this.generateId();
         const now = Date.now();
         this.db.prepare(
             `INSERT INTO async_tasks (id, user_id, chat_id, prompt, status, created_at, updated_at)
              VALUES (?, ?, ?, ?, 'pending', ?, ?)`
-        ).run(id, this.userId, chatId, prompt, now, now);
+        ).run(id, this.userId, sessionId, prompt, now, now);
         console.log(`[AsyncTaskManager|${this.userId}] Created task: ${id}`);
         return this.getTask(id)!;
     }
@@ -125,7 +125,7 @@ export class AsyncTaskManager {
     private rowToTask(row: { id: string; chat_id: string; prompt: string; status: string; result: string | null; error: string | null; created_at: number; updated_at: number }): AsyncTask {
         return {
             id: row.id,
-            chatId: row.chat_id,
+            sessionId: row.chat_id,
             prompt: row.prompt,
             status: row.status as TaskStatus,
             result: row.result ?? undefined,

@@ -48,7 +48,7 @@ export interface NormalizedMessage {
     /** Platform this message originated from */
     platform: Platform;
     /** Platform-specific chat/channel ID (numeric for Telegram, string for Feishu) */
-    chatId: string;
+    sessionId: string;
     /** Display name of the sender */
     userName: string;
     /** Text content */
@@ -89,7 +89,7 @@ export interface InlineButton {
 
 export interface SentMessage {
     id: string;
-    chatId: string;
+    sessionId: string;
 }
 
 // ── Callback Query ───────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ export interface SentMessage {
 export interface NormalizedCallback {
     tenantKey: TenantKey;
     platform: Platform;
-    chatId: string;
+    sessionId: string;
     messageId: string;
     data: string;
     /** Raw platform context for adapter-specific responses (e.g. answerCbQuery) */
@@ -117,12 +117,12 @@ export interface PlatformAdapter {
 
     // ── Outbound messaging ───────────────────────────────────────────────
 
-    deleteMessage(chatId: string, messageId: string): Promise<void>;
+    deleteMessage(sessionId: string, messageId: string): Promise<void>;
 
     // ── Media ────────────────────────────────────────────────────────────
 
     /** Send a photo (from local file path or Buffer) with optional caption */
-    sendPhoto(chatId: string, photo: string | Buffer, caption?: string): Promise<SentMessage>;
+    sendPhoto(sessionId: string, photo: string | Buffer, caption?: string): Promise<SentMessage>;
 
     /** Download a file by its platform file ID, returns local path */
     downloadFile(fileId: string, destPath: string): Promise<void>;

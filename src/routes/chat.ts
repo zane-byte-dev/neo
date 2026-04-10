@@ -1,8 +1,9 @@
 import { PassThrough } from 'stream';
 import type Router from '@koa/router';
-import { ChatSession } from '../services/chat-service.js';
-import { LLMClient } from '../llm/client.js';
+import { ChatSession, getGeminiHistory, messageAdd, sessionGet } from '../services/chat-service.js';
+import { LLMClient, ToolContext } from '../llm/client.js';
 import { calcUser } from '../services/user-service.js';
+import { get } from 'http';
     
 const llm = new LLMClient();
 
@@ -11,10 +12,16 @@ export function chatRoute(router: Router): void {
         const body = ctx.request.body as Record<string, unknown>;
         const message = typeof body.message === 'string' ? body.message.trim() : '';
         const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
-        const chatId = typeof body.chatId === 'string' && body.chatId.trim() ? body.chatId.trim() : undefined;
+        const sessionId = typeof body.sessionId === 'string' && body.sessionId.trim() ? body.sessionId.trim() : undefined;
         if (!message) {
             ctx.status = 400;
             ctx.body = { error: 'message is required' };
+            return;
+        }
+
+        if (!sessionId){
+            ctx.status = 400;
+            ctx.body = { error: 'sessionId is required' };
             return;
         }
 
@@ -34,20 +41,17 @@ export function chatRoute(router: Router): void {
             if (!stream.destroyed) stream.write(`data: ${JSON.stringify(obj)}\n\n`);
         };
 
-        let toolContext = {
-                userId,
-                chatId,
-                workDir: userCtx.workDir,
-                systemInstruction: userCtx.systemInstruction,
-                skillRegistry: userCtx.skillRegistry,
-                imageCallback: async (data, mimeType, caption) => {
-                    write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
-                },
-            };
+        let toolContext:ToolContext = {
+            userId,
+            sessionId,
+            workDir: userCtx.workDir,
+            systemInstruction: userCtx.systemInstruction,
+            skillRegistry: userCtx.skillRegistry,
+        };
+        const session = sessionGet(sessionId, userId);
+        if (session) messageAdd(session.id, userId, 'user', message);
 
-        const cache = userId ? new ChatSession(userId) : undefined;
-        if (cache) cache.addMessage('user', message);
-        const history = cache?.getHistoryText() ?? '';
+        const history = getGeminiHistory(sessionId, userId);
 
         let fullResponse = '';
         try {
@@ -71,8 +75,8 @@ export function chatRoute(router: Router): void {
             }
         } finally {
             stream.end();
-            if (fullResponse && cache) {
-                cache.addMessage('assistant', fullResponse);
+            if (fullResponse) {
+                messageAdd(sessionId, userId, 'assistant', fullResponse);
             }
         }
     });

@@ -190,8 +190,6 @@ export class LLMClient {
         try {
             const start = Date.now();
             const effectiveModel = modelOverride ? this.provider.resolveModel(modelOverride) : this.model;
-            const scope = context?.tenantKey ?? 'web';
-            console.log(`[AgentRuntime|${scope}] → ${effectiveModel}: ${message.slice(0, 60).replace(/\n/g, ' ')}${imageInput ? ' [+image]' : ''}...`);
 
             const result = await this.provider.agentLoop({
                 apiKey: this.apiKey,
@@ -206,16 +204,9 @@ export class LLMClient {
                 context,
             });
 
-            const elapsed = Date.now() - start;
-            if (!result) {
-                console.warn(`[AgentRuntime|${scope}] Empty result after ${elapsed}ms for: ${message.slice(0, 80).replace(/\n/g, ' ')}`);
-            } else {
-                console.log(`[AgentRuntime|${scope}] ✅ Done in ${elapsed}ms, response length=${result.length}`);
-            }
             return result || null;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[AgentRuntime|${context?.tenantKey ?? 'web'}] Error: ${msg}`);
             return `🔥 Agent error: ${msg}`;
         }
     }
@@ -231,40 +222,6 @@ export class LLMClient {
         model?: string,
     ): Promise<string | null> {
         return this.runAgent(message, context, conversationHistory, onChunk, undefined, signal,model);
-    }
-
-    async chatWithContextStreamingWithImage(
-        message: string,
-        context: ToolContext,
-        conversationHistory: string,
-        imageInput: ImageInput,
-        onChunk: StreamCallback,
-        signal?: AbortSignal,
-    ): Promise<string | null> {
-        return this.runAgent(message, context, conversationHistory, onChunk, imageInput, signal);
-    }
-
-    async chatWithContextStreamingWithFile(
-        message: string,
-        context: ToolContext,
-        conversationHistory: string,
-        fileInput: FileInput,
-        onChunk: StreamCallback,
-        signal?: AbortSignal,
-    ): Promise<string | null> {
-        return this.runAgent(message, context, conversationHistory, onChunk, fileInput, signal);
-    }
-
-    async chat(message: string, context: ToolContext): Promise<string | null> {
-        return this.runAgent(message, context);
-    }
-
-    async runTool(toolName: string, args: string[], context: ToolContext): Promise<string | null> {
-        const prompt =
-            `Please execute the tool **${toolName}**.\n\n` +
-            `Arguments: ${args.join(' ')}\n\n` +
-            `(Tool: ${toolName})`;
-        return this.runAgent(prompt, context);
     }
 
     /** No-op: no subprocess to terminate. */

@@ -91,7 +91,7 @@ export const generateImageTool: Tool = {
             const tmpPath = join(tmpDir, `gen_${Date.now()}.${ext}`);
             await fs.writeFile(tmpPath, buffer);
             try {
-                await context.adapter.sendPhoto(context.chatId, tmpPath, textResponse || undefined);
+                await context.adapter.sendPhoto(context.sessionId, tmpPath, textResponse || undefined);
             } finally {
                 await fs.unlink(tmpPath).catch(() => {});
             }

@@ -107,10 +107,10 @@ export interface AppState {
 
     // Messages
     messages: Record<string, Message[]>
-    addMessage: (chatId: string, message: Message) => void
-    updateLastAssistantMessage: (chatId: string, content: string) => void
-    addImageToLastAssistantMessage: (chatId: string, dataUrl: string) => void
-    updateLastAssistantThinking: (chatId: string, thinking: string) => void
+    addMessage: (sessionId: string, message: Message) => void
+    updateLastAssistantMessage: (sessionId: string, content: string) => void
+    addImageToLastAssistantMessage: (sessionId: string, dataUrl: string) => void
+    updateLastAssistantThinking: (sessionId: string, thinking: string) => void
 
     // Input
     inputValue: string

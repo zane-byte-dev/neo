@@ -32,6 +32,13 @@ export interface MessageRow {
 
 // ── Session operations ────────────────────────────────────────────────────────
 
+export function sessionGet(sessionId: string, userId: string): SessionRow | null {
+    return (getDb().prepare(
+        `SELECT id, user_id, start_time, end_time, is_current
+         FROM chat_sessions WHERE id = ? AND user_id = ?`
+    ).get(sessionId, userId) ?? null) as SessionRow | null;
+}
+
 /** Return the current (is_current=1) session for a user, or null. */
 export function sessionGetCurrent(userId: string): SessionRow | null {
     return (getDb().prepare(
@@ -161,62 +168,3 @@ export function getGeminiHistory(sessionId: string, limit = 100): GeminiContent[
     return contents;
 }
 
-// ── Per-user session helper ───────────────────────────────────────────────────
-
-/**
- * Stateful wrapper for a single user's chat session.
- * Mirrors the legacy `cache` API used in server.ts.
- *
- * Usage:
- *   const chat = new ChatSession('zhengchao');
- *   await chat.addMessage('user', 'Hello');
- *   const history = chat.getContextForGemini();
- *   await chat.createNewSession();
- */
-export class ChatSession {
-    private _userId: string;
-    private _session: SessionRow;
-
-    constructor(userId: string) {
-        this._userId = userId;
-        this._session = sessionGetOrCreate(userId);
-    }
-
-    get sessionId(): string {
-        return this._session.id;
-    }
-
-    /** Append a message to the current session. */
-    addMessage(role: 'user' | 'assistant', content: string, userName?: string): MessageRow {
-        return messageAdd(this._session.id, this._userId, role, content, userName);
-    }
-
-    /** Return conversation history formatted for the Gemini API. */
-    getContextForGemini(limit = 100): GeminiContent[] {
-        return getGeminiHistory(this._session.id, limit);
-    }
-
-    /**
-     * Return conversation history as a plain text string,
-     * suitable for passing to LLMClient.chatWithContextStreaming().
-     */
-    getHistoryText(limit = 100): string {
-        const rows = messageList(this._session.id, limit);
-        if (rows.length === 0) return '';
-        return rows
-            .map((r) => `${r.role === 'assistant' ? 'Assistant' : 'User'}: ${r.content}`)
-            .join('\n');
-    }
-
-    /** Start a fresh session (closes old one, creates new). */
-    createNewSession(): SessionRow {
-        sessionClose(this._session.id);
-        this._session = sessionCreate(this._userId);
-        return this._session;
-    }
-
-    /** List all messages in the current session. */
-    listMessages(limit = 200): MessageRow[] {
-        return messageList(this._session.id, limit);
-    }
-}

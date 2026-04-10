@@ -4,7 +4,7 @@ export interface Task {
     /** Tenant key: platform:userId */
     tenantKey: TenantKey;
     /** Platform-specific chat ID (string for cross-platform compat) */
-    chatId: string;
+    sessionId: string;
     question: string;
     userName: string;
     messageId: string;

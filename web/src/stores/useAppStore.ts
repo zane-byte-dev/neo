@@ -58,47 +58,47 @@ export const useAppStore = create<AppState>()(
 
             // Messages
             messages: {},
-            addMessage: (chatId: string, message: Message) => set((state) => ({
+            addMessage: (sessionId: string, message: Message) => set((state) => ({
                 messages: {
                     ...state.messages,
-                    [chatId]: [...(state.messages[chatId] ?? []), message],
+                    [sessionId]: [...(state.messages[sessionId] ?? []), message],
                 },
                 // Auto-title from first user message
                 chats: state.chats.map((c) =>
-                    c.id === chatId && c.title === 'New Chat' && message.role === 'user'
+                    c.id === sessionId && c.title === 'New Chat' && message.role === 'user'
                         ? { ...c, title: message.content.slice(0, 40) }
                         : c
                 ),
             })),
-            updateLastAssistantMessage: (chatId: string, content: string) => set((state) => {
-                const msgs = [...(state.messages[chatId] ?? [])]
+            updateLastAssistantMessage: (sessionId: string, content: string) => set((state) => {
+                const msgs = [...(state.messages[sessionId] ?? [])]
                 for (let i = msgs.length - 1; i >= 0; i--) {
                     if (msgs[i].role === 'assistant') {
                         msgs[i] = { ...msgs[i], content }
                         break
                     }
                 }
-                return { messages: { ...state.messages, [chatId]: msgs } }
+                return { messages: { ...state.messages, [sessionId]: msgs } }
             }),
-            addImageToLastAssistantMessage: (chatId: string, dataUrl: string) => set((state) => {
-                const msgs = [...(state.messages[chatId] ?? [])]
+            addImageToLastAssistantMessage: (sessionId: string, dataUrl: string) => set((state) => {
+                const msgs = [...(state.messages[sessionId] ?? [])]
                 for (let i = msgs.length - 1; i >= 0; i--) {
                     if (msgs[i].role === 'assistant') {
                         msgs[i] = { ...msgs[i], images: [...(msgs[i].images ?? []), dataUrl] }
                         break
                     }
                 }
-                return { messages: { ...state.messages, [chatId]: msgs } }
+                return { messages: { ...state.messages, [sessionId]: msgs } }
             }),
-            updateLastAssistantThinking: (chatId: string, thinking: string) => set((state) => {
-                const msgs = [...(state.messages[chatId] ?? [])]
+            updateLastAssistantThinking: (sessionId: string, thinking: string) => set((state) => {
+                const msgs = [...(state.messages[sessionId] ?? [])]
                 for (let i = msgs.length - 1; i >= 0; i--) {
                     if (msgs[i].role === 'assistant') {
                         msgs[i] = { ...msgs[i], thinking }
                         break
                     }
                 }
-                return { messages: { ...state.messages, [chatId]: msgs } }
+                return { messages: { ...state.messages, [sessionId]: msgs } }
             }),
 
             // Input

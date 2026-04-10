@@ -58,7 +58,7 @@ export interface FunctionDeclaration {
 
 export interface ToolContext {
     userId: string;
-    chatId: string;
+    sessionId: string;
     workDir: string;
     systemInstruction: string;
     imageCallback?: (data: string, mimeType: string, caption?: string) => Promise<void>;

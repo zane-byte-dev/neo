@@ -5,7 +5,7 @@ import { getDb } from './db.js';
 
 export interface QueuedTask {
     id: string;
-    chatId: string;
+    sessionId: string;
     question: string;
     userName: string;
     messageId: string;
@@ -60,7 +60,7 @@ export class MessageQueue {
         this.db.prepare(
             `INSERT INTO message_queue (id, user_id, chat_id, question, user_name, message_id, status, created_at)
              VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
-        ).run(id, this.userId, data.chatId, data.question, data.userName, data.messageId, now);
+        ).run(id, this.userId, data.sessionId, data.question, data.userName, data.messageId, now);
         const task: QueuedTask = { ...data, id, status: 'pending', createdAt: now };
         this.schedule(task, worker);
         return task;
@@ -85,7 +85,7 @@ export class MessageQueue {
     private rowToTask(r: { id: string; chat_id: string; question: string; user_name: string; message_id: string; status: string; created_at: number }): QueuedTask {
         return {
             id: r.id,
-            chatId: r.chat_id,
+            sessionId: r.chat_id,
             question: r.question,
             userName: r.user_name,
             messageId: r.message_id,
