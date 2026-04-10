@@ -23,10 +23,6 @@ export function logToolExecution(
     args: Record<string, unknown>,
     resultSummary?: string,
 ): Promise<void> {
-    log.info('tool-execution', `TOOL_${toolName.toUpperCase()}`, {
-        args: JSON.stringify(args).slice(0, 300),
-        resultSummary,
-    });
     return Promise.resolve();
 }
 
