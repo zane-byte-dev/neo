@@ -117,8 +117,6 @@ export interface PlatformAdapter {
 
     // ── Outbound messaging ───────────────────────────────────────────────
 
-    sendMessage(chatId: string, text: string, opts?: SendMessageOptions): Promise<SentMessage>;
-    editMessage(chatId: string, messageId: string, text: string, opts?: SendMessageOptions): Promise<void>;
     deleteMessage(chatId: string, messageId: string): Promise<void>;
 
     // ── Media ────────────────────────────────────────────────────────────

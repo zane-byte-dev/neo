@@ -1,7 +1,6 @@
 import type Router from '@koa/router';
 import { userGetByWebToken } from '../services/user-service.js';
 import { COOKIE_OPTS, SESSION_COOKIE } from '../const/cookie.js';
-import type { RouteContext } from './_base.js';
 
 export function login(router: Router): void {
     router.post('/api/auth/login', async (ctx) => {
@@ -26,7 +25,3 @@ export function logout(router: Router): void {
     });
 }
 
-export function register(router: Router, _ctx: RouteContext): void {
-    login(router);
-    logout(router);
-}

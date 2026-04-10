@@ -1,6 +1,5 @@
 import type Router from '@koa/router';
 import { ChatSession } from '../services/chat-service.js';
-import type { RouteContext } from './_base.js';
 
 export function newSession(router: Router): void {
     const handler = async (ctx: import('koa').Context) => {
@@ -15,6 +14,4 @@ export function newSession(router: Router): void {
     router.post('/api/session/clear', handler);
 }
 
-export function register(router: Router, _ctx: RouteContext): void {
-    newSession(router);
-}
+

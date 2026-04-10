@@ -1,6 +1,5 @@
 import type Router from '@koa/router';
 import { nbList, nbSearch, nbGet, nbCreate, nbUpdate, nbDelete } from '../services/notebook-service.js';
-import type { RouteContext } from './_base.js';
 
 export function notebookGet(router: Router): void {
     router.get('/api/notebook', async (ctx) => {
@@ -75,9 +74,4 @@ export function notebookDelete(router: Router): void {
     });
 }
 
-export function register(router: Router, _ctx: RouteContext): void {
-    notebookGet(router);
-    notebookCreate(router);
-    notebookUpdate(router);
-    notebookDelete(router);
-}
+

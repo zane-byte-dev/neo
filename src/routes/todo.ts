@@ -2,7 +2,6 @@ import type Router from '@koa/router';
 import { todoList, todoAdd, todoPatch, todoDelete } from '../services/todo-service.js';
 import { geminiGenerate } from '../llm/providers/gemini/index.js';
 import { GEMINI_API_KEY } from '../config.js';
-import type { RouteContext } from './_base.js';
 
 export function todoAnalyze(router: Router): void {
     router.post('/api/todos/analyze', async (ctx) => {
@@ -122,10 +121,4 @@ export function todoRemove(router: Router): void {
     });
 }
 
-export function register(router: Router, _ctx: RouteContext): void {
-    todoAnalyze(router);
-    todoGetAll(router);
-    todoCreate(router);
-    todoPatch_(router);
-    todoRemove(router);
-}
+

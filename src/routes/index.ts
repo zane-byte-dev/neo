@@ -11,17 +11,16 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type Router from '@koa/router';
 import { autoLoad } from '../utils/auto-loader.js';
-import type { RouteContext, RouteRegistrar } from './_base.js';
 
-function isRouteRegistrar(value: unknown): value is RouteRegistrar {
-    return typeof value === 'function' && (value as { name?: string }).name === 'register';
+function isRouteHandler(value: unknown): value is (router: Router) => void {
+    return typeof value === 'function';
 }
 
-export async function setupRoutes(router: Router, ctx: RouteContext): Promise<void> {
+export async function setupRoutes(router: Router): Promise<void> {
     const dir = dirname(fileURLToPath(import.meta.url));
-    const registrars = await autoLoad(dir, isRouteRegistrar);
-    for (const register of registrars) {
-        register(router, ctx);
+    const handlers = await autoLoad(dir, isRouteHandler);
+    for (const handler of handlers) {
+        handler(router);
     }
-    console.log(`[Routes] ✅ ${registrars.length} route modules loaded`);
+    console.log(`[Routes] ✅ ${handlers.length} route handlers registered`);
 }

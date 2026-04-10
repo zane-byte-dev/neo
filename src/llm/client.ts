@@ -130,27 +130,20 @@ export class LLMClient {
     private enabled = false;
     private apiKey = '';
     private model = '';
-    private baseWorkDir = '';
     private provider: LLMProvider;
 
     constructor(provider?: LLMProvider) {
         this.provider = provider ?? new GeminiProvider();
         this.apiKey = GEMINI_API_KEY;
         this.model = this.provider.resolveModel(GEMINI_MODEL_ENV ?? 'flash');
-        this.baseWorkDir = WORK_DIR ? resolve(WORK_DIR) : '';
 
         if (!this.apiKey) {
             console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
             return;
         }
-        if (!this.baseWorkDir) {
-            console.log('[AgentRuntime] ❌ Disabled: WORK_DIR not set');
-            return;
-        }
 
         this.enabled = true;
         console.log(`[AgentRuntime] ✅ Initialized. Provider: ${this.provider.name}, Model: ${this.model}`);
-        console.log(`[AgentRuntime] 📂 BaseWorkDir: ${this.baseWorkDir}`);
     }
 
     private async buildPrompt(message: string, workDir: string, history?: string): Promise<string> {
@@ -176,11 +169,11 @@ export class LLMClient {
 
     private async runAgent(
         message: string,
+        context: ToolContext,
         history?: string,
         onChunk?: StreamCallback,
         imageInput?: ImageInput,
         signal?: AbortSignal,
-        context?: ToolContext,
         modelOverride?: string,
     ): Promise<string | null> {
         if (!this.enabled) {
@@ -188,7 +181,7 @@ export class LLMClient {
             return null;
         }
 
-        const workDir = context?.workDir || this.baseWorkDir;
+        const workDir = context?.workDir;
         const systemInstruction = context?.systemInstruction || '';
 
         const prompt = await this.buildPrompt(message, workDir, history);
@@ -232,54 +225,46 @@ export class LLMClient {
     async chatWithContextStreaming(
         message: string,
         conversationHistory: string,
+        context: ToolContext,
         onChunk: StreamCallback,
         signal?: AbortSignal,
-        context?: ToolContext,
         model?: string,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, undefined, signal, context, model);
+        return this.runAgent(message, context, conversationHistory, onChunk, undefined, signal,model);
     }
 
     async chatWithContextStreamingWithImage(
         message: string,
+        context: ToolContext,
         conversationHistory: string,
         imageInput: ImageInput,
         onChunk: StreamCallback,
         signal?: AbortSignal,
-        context?: ToolContext,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, imageInput, signal, context);
+        return this.runAgent(message, context, conversationHistory, onChunk, imageInput, signal);
     }
 
     async chatWithContextStreamingWithFile(
         message: string,
+        context: ToolContext,
         conversationHistory: string,
         fileInput: FileInput,
         onChunk: StreamCallback,
         signal?: AbortSignal,
-        context?: ToolContext,
     ): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, onChunk, fileInput, signal, context);
+        return this.runAgent(message, context, conversationHistory, onChunk, fileInput, signal);
     }
 
-    async chatWithContext(message: string, conversationHistory: string, context?: ToolContext): Promise<string | null> {
-        return this.runAgent(message, conversationHistory, undefined, undefined, undefined, context);
+    async chat(message: string, context: ToolContext): Promise<string | null> {
+        return this.runAgent(message, context);
     }
 
-    async chat(message: string, context?: ToolContext): Promise<string | null> {
-        return this.runAgent(message, undefined, undefined, undefined, undefined, context);
-    }
-
-    async chatAsyncWithContext(message: string, context?: ToolContext): Promise<string | null> {
-        return this.runAgent(message, undefined, undefined, undefined, undefined, context);
-    }
-
-    async runTool(toolName: string, args: string[], context?: ToolContext): Promise<string | null> {
+    async runTool(toolName: string, args: string[], context: ToolContext): Promise<string | null> {
         const prompt =
             `Please execute the tool **${toolName}**.\n\n` +
             `Arguments: ${args.join(' ')}\n\n` +
             `(Tool: ${toolName})`;
-        return this.runAgent(prompt, undefined, undefined, undefined, undefined, context);
+        return this.runAgent(prompt, context);
     }
 
     isEnabled(): boolean {
@@ -297,15 +282,4 @@ export class LLMClient {
 
 export function createLLMClient(provider?: LLMProvider): LLMClient {
     return new LLMClient(provider);
-}
-
-// ── Self-test when run directly ───────────────────────────────────────────────
-if (import.meta.url === `file://${process.argv[1]}`) {
-    const client = createLLMClient();
-    if (client.isEnabled()) {
-        console.log('\n[Test] Sending a simple prompt...');
-        const res = await client.chat('用一句话描述你现在的通信机制。');
-        console.log('\n[Response]:', res);
-        client.close();
-    }
 }

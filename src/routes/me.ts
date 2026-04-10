@@ -1,6 +1,5 @@
 import type Router from '@koa/router';
 import { calcUser } from '../services/user-service.js';
-import type { RouteContext } from './_base.js';
 
 export function me(router: Router): void {
     router.get('/api/me', async (ctx) => {
@@ -17,6 +16,4 @@ export function me(router: Router): void {
     });
 }
 
-export function register(router: Router, _ctx: RouteContext): void {
-    me(router);
-}
+

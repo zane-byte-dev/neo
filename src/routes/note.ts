@@ -1,6 +1,5 @@
 import type Router from '@koa/router';
 import { noteList, noteStats, noteTags, noteCreate, noteDelete } from '../services/note-service.js';
-import type { RouteContext } from './_base.js';
 
 export function noteGetAll(router: Router): void {
     router.get('/api/notes', (ctx) => {
@@ -40,10 +39,4 @@ export function noteRemove(router: Router): void {
     });
 }
 
-export function register(router: Router, _ctx: RouteContext): void {
-    noteGetAll(router);
-    noteGetStats(router);
-    noteGetTags(router);
-    notePost(router);
-    noteRemove(router);
-}
+
