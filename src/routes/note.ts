@@ -1,5 +1,6 @@
 import type Router from '@koa/router';
 import { noteList, noteStats, noteTags, noteCreate, noteDelete } from '../services/note-service.js';
+import { MAX_INPUT_LENGTH } from '../config.js';
 
 export function noteGetAll(router: Router): void {
     router.get('/api/notes', (ctx) => {
@@ -25,6 +26,7 @@ export function notePost(router: Router): void {
         const body = ctx.request.body as Record<string, unknown>;
         const content = typeof body.content === 'string' ? body.content.trim() : '';
         if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
+        if (content.length > MAX_INPUT_LENGTH) { ctx.status = 400; ctx.body = { error: `content too long (max ${MAX_INPUT_LENGTH} chars)` }; return; }
         const tags = Array.isArray(body.tags) ? (body.tags as string[]) : undefined;
         ctx.body = noteCreate(content, tags);
     });

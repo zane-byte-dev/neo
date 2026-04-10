@@ -31,11 +31,11 @@ export const generateImageTool: Tool = {
         const prompt = String(args.prompt ?? '');
         if (!prompt) return '[Error] prompt is required.';
 
-        const url = `${GEMINI_BASE_URL}/${IMAGE_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+        const url = `${GEMINI_BASE_URL}/${IMAGE_MODEL}:generateContent`;
 
         const res = await fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {
@@ -50,7 +50,7 @@ export const generateImageTool: Tool = {
             return `[Error] Image generation API failed (${res.status}): ${errorText.slice(0, 200)}`;
         }
 
-        const data = (await res.json()) as any;
+        const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ inlineData?: { data: string; mimeType?: string }; text?: string }> } }> };
         const parts = data.candidates?.[0]?.content?.parts;
         if (!parts || parts.length === 0) {
             return '[Error] No image generated. The model may have refused the prompt.';
@@ -83,6 +83,8 @@ export const generateImageTool: Tool = {
             await context.imageCallback(imageData, mimeType, textResponse || undefined);
         } else {
             // Platform context (e.g. Telegram): send via adapter
+            const adapter = (context as unknown as Record<string, unknown>).adapter as { sendPhoto: (sessionId: string, path: string, caption?: string) => Promise<void> } | undefined;
+            if (!adapter) return textResponse || '[Error] No image delivery method available.';
             const buffer = Buffer.from(imageData, 'base64');
             // Save to temp file (Telegraf needs file path or stream)
             const tmpDir = join('.tmp', 'images');
@@ -91,7 +93,7 @@ export const generateImageTool: Tool = {
             const tmpPath = join(tmpDir, `gen_${Date.now()}.${ext}`);
             await fs.writeFile(tmpPath, buffer);
             try {
-                await context.adapter.sendPhoto(context.sessionId, tmpPath, textResponse || undefined);
+                await adapter.sendPhoto(context.sessionId, tmpPath, textResponse || undefined);
             } finally {
                 await fs.unlink(tmpPath).catch(() => {});
             }

@@ -2,12 +2,24 @@
  * tool-executor.ts — Built-in tool declarations, security checks, and tool execution.
  */
 
-import { join, dirname, isAbsolute } from 'node:path';
+import { join, dirname, isAbsolute, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { execa } from 'execa';
 import { logDangerousCommand, logToolExecution } from '../utils/audit-logger.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
 import type { Tool, FunctionDeclaration, ToolContext } from '../llm/types.js';
+
+/**
+ * Resolve and validate a file path stays within workDir.
+ * Throws if the resolved path escapes the sandbox.
+ */
+function safePath(filePath: string, workDir: string): string {
+    const resolved = isAbsolute(filePath) ? resolve(filePath) : resolve(workDir, filePath);
+    if (!resolved.startsWith(resolve(workDir))) {
+        throw new Error(`Path traversal blocked: ${filePath} resolves outside workDir`);
+    }
+    return resolved;
+}
 
 // ── Built-in tool declarations ────────────────────────────────────────────────
 
@@ -140,7 +152,7 @@ export async function executeTool(
 
             case 'read_file': {
                 const filePath = String(args.path ?? '');
-                const resolved = isAbsolute(filePath) ? filePath : join(workDir, filePath);
+                const resolved = safePath(filePath, workDir);
                 let content = await fs.readFile(resolved, 'utf8');
                 
                 // Guard against enormous files flooding the context window
@@ -165,7 +177,7 @@ ${content}
             case 'write_file': {
                 const filePath = String(args.path ?? '');
                 const content = String(args.content ?? '');
-                const resolved = isAbsolute(filePath) ? filePath : join(workDir, filePath);
+                const resolved = safePath(filePath, workDir);
                 await fs.mkdir(dirname(resolved), { recursive: true });
                 await fs.writeFile(resolved, content, 'utf8');
                 return finish(`OK: wrote ${content.length} chars to ${resolved}`);
@@ -173,7 +185,7 @@ ${content}
 
             case 'list_dir': {
                 const dirPath = String(args.path ?? '.');
-                const resolved = isAbsolute(dirPath) ? dirPath : join(workDir, dirPath);
+                const resolved = safePath(dirPath, workDir);
                 const entries = await fs.readdir(resolved, { withFileTypes: true });
                 const sorted = entries.sort((a, b) => {
                     if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;

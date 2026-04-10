@@ -23,11 +23,11 @@ export async function callGemini(
     if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
 
     const model = GEMINI_MODEL_ENV ?? 'gemini-2.0-flash';
-    const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
+    const url = `${GEMINI_BASE_URL}/${model}:generateContent`;
 
     const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: {
@@ -44,7 +44,7 @@ export async function callGemini(
         return null;
     }
 
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     return (
         (data.candidates?.[0]?.content?.parts?.[0]?.text as string | undefined)?.trim() ?? null
     );

@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import type { TenantKey } from '../types/platform.js';
 import PQueue from 'p-queue';
 import { getDb } from './db.js';
+import { generateId } from '../utils/id-generator.js';
 
 export interface QueuedTask {
     id: string;
@@ -55,7 +56,7 @@ export class MessageQueue {
         data: Omit<QueuedTask, 'id' | 'status' | 'createdAt'>,
         worker: (task: QueuedTask) => Promise<void>
     ): Promise<QueuedTask> {
-        const id = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+        const id = generateId();
         const now = Date.now();
         this.db.prepare(
             `INSERT INTO message_queue (id, user_id, chat_id, question, user_name, message_id, status, created_at)

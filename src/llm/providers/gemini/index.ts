@@ -49,7 +49,7 @@ async function* streamGeminiApi(
     forceText = false,
     signal?: AbortSignal,
 ): AsyncGenerator<ApiChunk> {
-    const url = `${GEMINI_BASE_URL}/${model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+    const url = `${GEMINI_BASE_URL}/${model}:streamGenerateContent?alt=sse`;
 
     const body: Record<string, unknown> = {
         contents,
@@ -69,7 +69,7 @@ async function* streamGeminiApi(
 
     const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(body),
         signal: fetchSignal,
     });
@@ -173,8 +173,7 @@ export async function agentLoop(
 
     const lastUserEntry = [...initialContents].reverse().find((c: GeminiContent) => c.role === 'user');
     const lastUserParts = lastUserEntry?.parts ?? [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lastUserMsg = lastUserParts.map((p: any) => p.text ?? '').join(' ');
+    const lastUserMsg = lastUserParts.map((p: GeminiPart) => ('text' in p && typeof p.text === 'string') ? p.text : '').join(' ');
     dbg.agentStart(model, initialContents.length, lastUserMsg);
 
     for (let iter = 0; iter <= MAX_TOOL_ITERATIONS; iter++) {
@@ -257,22 +256,21 @@ export async function agentLoop(
 
 export async function geminiGenerate(
     apiKey: string,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    contents: any[],
+    contents: GeminiContent[],
     options: { model?: string; generationConfig?: Record<string, unknown> } = {},
 ): Promise<string | null> {
     const model = resolveModel(options.model ?? 'flash');
-    const url = `${GEMINI_BASE_URL}/${model}:generateContent?key=${apiKey}`;
+    const url = `${GEMINI_BASE_URL}/${model}:generateContent`;
     const body: Record<string, unknown> = { contents };
     if (options.generationConfig) body.generationConfig = options.generationConfig;
     const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) return null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = await res.json() as any;
+    const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     return (data.candidates?.[0]?.content?.parts?.[0]?.text as string | undefined)?.trim() ?? null;
 }
 
@@ -284,11 +282,12 @@ export async function geminiUploadFile(
     mimeType: string,
 ): Promise<string> {
     const res = await fetch(
-        `${GEMINI_FILES_UPLOAD_URL}?uploadType=media&key=${apiKey}`,
+        `${GEMINI_FILES_UPLOAD_URL}?uploadType=media`,
         {
             method: 'POST',
             headers: {
                 'Content-Type': mimeType,
+                'x-goog-api-key': apiKey,
                 'X-Goog-Upload-Command': 'upload, finalize',
                 'X-Goog-Upload-Header-Content-Length': String(buffer.length),
             },
@@ -296,8 +295,7 @@ export async function geminiUploadFile(
         },
     );
     if (!res.ok) throw new Error(`Gemini File API upload failed: ${res.status} ${await res.text()}`);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = await res.json() as any;
+    const data = await res.json() as { file?: { uri?: string } };
     const uri: string | undefined = data.file?.uri;
     if (!uri) throw new Error('No fileUri returned from Gemini File API');
     return uri;

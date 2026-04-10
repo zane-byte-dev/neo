@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { TenantKey } from '../types/platform.js';
 import { getDb } from './db.js';
+import { generateId } from '../utils/id-generator.js';
 
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -34,7 +35,7 @@ export class AsyncTaskManager {
     }
 
     async createTask(sessionId: string, prompt: string): Promise<AsyncTask> {
-        const id = this.generateId();
+        const id = generateId();
         const now = Date.now();
         this.db.prepare(
             `INSERT INTO async_tasks (id, user_id, chat_id, prompt, status, created_at, updated_at)
@@ -133,9 +134,5 @@ export class AsyncTaskManager {
             createdAt: row.created_at,
             updatedAt: row.updated_at,
         };
-    }
-
-    private generateId(): string {
-        return Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
     }
 }

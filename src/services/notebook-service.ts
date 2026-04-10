@@ -69,8 +69,10 @@ export function nbSearch(query: string, limit = 20): NotebookSearchResult[] {
             ORDER BY rank
             LIMIT ?
         `).all(query, cap) as NotebookSearchResult[];
-    } catch {
-        // Fallback to LIKE when FTS query syntax is invalid
+    } catch (err: unknown) {
+        // Only fallback to LIKE for FTS syntax errors, re-throw real errors
+        const msg = err instanceof Error ? err.message : '';
+        if (!msg.includes('fts5') && !msg.includes('MATCH') && !msg.includes('syntax')) throw err;
         return db.prepare(
             `SELECT id, title, author, date, source, tags, summary
              FROM notebook_entries WHERE title LIKE ? OR content LIKE ?

@@ -82,6 +82,7 @@ function createSchema(db: Database.Database): void {
             updated_at  INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_async_tenant ON async_tasks(user_id);
+        CREATE INDEX IF NOT EXISTS idx_async_status ON async_tasks(user_id, status);
 
         -- ── Message queue ────────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS message_queue (

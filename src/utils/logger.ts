@@ -15,7 +15,8 @@
  *   Stderr: coloured human-readable (levels >= LOG_LEVEL)
  */
 
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { inspect } from 'node:util';
 
@@ -65,14 +66,12 @@ function ensureLogDir(): void {
 
 function writeEntry(entry: Record<string, unknown>): void {
     if (isWriting) return;
-    try {
-        isWriting = true;
-        ensureLogDir();
-        const date = new Date().toISOString().slice(0, 10);
-        appendFileSync(join(LOG_DIR, `${date}.jsonl`), JSON.stringify(entry) + '\n', 'utf8');
-    } catch { /* never crash over logging */ } finally {
-        isWriting = false;
-    }
+    isWriting = true;
+    ensureLogDir();
+    const date = new Date().toISOString().slice(0, 10);
+    appendFile(join(LOG_DIR, `${date}.jsonl`), JSON.stringify(entry) + '\n', 'utf8')
+        .catch(() => { /* never crash over logging */ })
+        .finally(() => { isWriting = false; });
 }
 
 // ── Core emit ─────────────────────────────────────────────────────────────────

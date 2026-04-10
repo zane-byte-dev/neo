@@ -5,6 +5,7 @@
  * The web API uses user_id = 'web'.
  */
 import { getDb } from './db.js';
+import { jsonParse } from '../utils/json-safe.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,13 +35,11 @@ export function noteList(opts?: { tenantKey?: string; date?: string; tag?: strin
     const tenantKey = opts?.tenantKey ?? 'web';
 
     if (opts?.tag) {
-        const all = db.prepare(
+        // Use SQL JSON filtering to avoid fetching all rows
+        return db.prepare(
             `SELECT id, content, date, time, created_at, tags
-             FROM notes WHERE user_id = ? ORDER BY created_at DESC LIMIT 500`
-        ).all(tenantKey) as NoteRow[];
-        return all.filter((n) => {
-            try { return (JSON.parse(n.tags ?? '[]') as string[]).includes(opts.tag!); } catch { return false; }
-        });
+             FROM notes WHERE user_id = ? AND tags LIKE ? ORDER BY created_at DESC LIMIT 200`
+        ).all(tenantKey, `%${JSON.stringify(opts.tag).slice(1, -1)}%`) as NoteRow[];
     }
 
     if (opts?.date) {
@@ -70,7 +69,7 @@ export function noteTags(tenantKey = 'web'): NoteTag[] {
     const tagCount = new Map<string, number>();
     for (const row of rows) {
         try {
-            for (const t of JSON.parse(row.tags) as string[]) {
+            for (const t of jsonParse<string[]>(row.tags, [])) {
                 tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
             }
         } catch { /* skip malformed */ }

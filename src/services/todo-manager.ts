@@ -17,6 +17,7 @@
 import type Database from 'better-sqlite3';
 import cron, { ScheduledTask as CronJob } from 'node-cron';
 import { getDb } from './db.js';
+import { generateId } from '../utils/id-generator.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,7 +113,7 @@ export class TodoManager {
     // ── CRUD ─────────────────────────────────────────────────────────────
 
     add(input: TodoCreateInput): Todo {
-        const id = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+        const id = generateId();
         const now = Date.now();
         const status = input.status ?? 'pending';
         const priority = input.priority ?? null;
@@ -242,12 +243,13 @@ export class TodoManager {
         ).all(this.scopeKey, now) as RawRow[];
 
         for (const row of due) {
-            this.db.prepare(`UPDATE todos_v2 SET fired = 1, status = 'done', updated_at = ? WHERE id = ?`).run(now, row.id);
-            const todo = this.rowToTodo({ ...row, fired: 1, status: 'done' });
             try {
+                this.db.prepare(`UPDATE todos_v2 SET fired = 1, status = 'done', updated_at = ? WHERE id = ?`).run(now, row.id);
+                const todo = this.rowToTodo({ ...row, fired: 1, status: 'done' });
                 await this.onFire?.(todo);
-            } catch (err: any) {
-                console.error(`[TodoManager] Fire error for #${row.id}:`, err.message);
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.error(`[TodoManager] Fire error for #${row.id}: ${msg}`);
             }
         }
     }

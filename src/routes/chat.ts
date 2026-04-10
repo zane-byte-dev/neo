@@ -3,6 +3,7 @@ import type Router from '@koa/router';
 import { messageList, messageAdd, sessionGet, sessionCreate } from '../services/chat-service.js';
 import { LLMClient, ToolContext } from '../llm/client.js';
 import { calcUser } from '../services/user-service.js';
+import { MAX_INPUT_LENGTH } from '../config.js';
     
 const llm = new LLMClient();
 
@@ -15,6 +16,11 @@ export function chatRoute(router: Router): void {
         if (!message) {
             ctx.status = 400;
             ctx.body = { error: 'message is required' };
+            return;
+        }
+        if (message.length > MAX_INPUT_LENGTH) {
+            ctx.status = 400;
+            ctx.body = { error: `message too long (max ${MAX_INPUT_LENGTH} chars)` };
             return;
         }
 

@@ -8,6 +8,7 @@
  *  - ChatSession helper: per-user stateful wrapper matching the legacy cache API
  */
 import { getDb } from './db.js';
+import { generateId } from '../utils/id-generator.js';
 import type { GeminiContent } from '../llm/types.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ export function sessionGetCurrent(userId: string): SessionRow | null {
 /** Create a new session and mark it as current (deactivates previous ones). */
 export function sessionCreate(userId: string, id?: string): SessionRow {
     const db = getDb();
-    id = id ?? `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    id = id ?? generateId();
     const now = new Date().toISOString();
 
     // Deactivate existing current session
@@ -107,23 +108,27 @@ export function messageAdd(
     const db = getDb();
     const timestamp = new Date().toISOString();
 
-    const result = db.prepare(
-        `INSERT INTO chat_messages (session_id, user_id, role, content, user_name, timestamp)
-         VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(sessionId, userId, role, content, userName ?? null, timestamp);
+    const row = db.transaction(() => {
+        const result = db.prepare(
+            `INSERT INTO chat_messages (session_id, user_id, role, content, user_name, timestamp)
+             VALUES (?, ?, ?, ?, ?, ?)`
+        ).run(sessionId, userId, role, content, userName ?? null, timestamp);
 
-    // Keep end_time in sync
-    db.prepare(`UPDATE chat_sessions SET end_time = ? WHERE id = ?`).run(timestamp, sessionId);
+        // Keep end_time in sync
+        db.prepare(`UPDATE chat_sessions SET end_time = ? WHERE id = ?`).run(timestamp, sessionId);
 
-    return {
-        id: result.lastInsertRowid as number,
-        session_id: sessionId,
-        user_id: userId,
-        role,
-        content,
-        user_name: userName ?? null,
-        timestamp,
-    };
+        return {
+            id: result.lastInsertRowid as number,
+            session_id: sessionId,
+            user_id: userId,
+            role,
+            content,
+            user_name: userName ?? null,
+            timestamp,
+        };
+    })();
+
+    return row;
 }
 
 /** List messages for a session, oldest first. */

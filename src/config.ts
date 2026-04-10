@@ -129,5 +129,12 @@ export const AGENT_CONFIG_DIR = process.env.AGENT_CONFIG_DIR
     ? resolve(process.env.AGENT_CONFIG_DIR)
     : '';
 
-/** Secret used to sign session cookies. Override via SESSION_SECRET env var. */
-export const SESSION_SECRET = process.env.SESSION_SECRET ?? 'neo-default-secret-change-me';
+/** Maximum character length for user text inputs (notes, todos, messages). */
+export const MAX_INPUT_LENGTH = 50_000;
+
+/** Secret used to sign session cookies. Must be set via SESSION_SECRET env var. */
+export const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+    console.error('[Config] FATAL: SESSION_SECRET env var is not set. Refusing to start with an insecure default.');
+    process.exit(1);
+}

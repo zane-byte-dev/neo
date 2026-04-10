@@ -27,10 +27,10 @@ export const searchWebTool: Tool = {
             // 1. Instant Answer API
             const iaRes = await fetch(
                 `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
-                { headers: { 'User-Agent': 'inkClaw/2.0' } },
+                { headers: { 'User-Agent': 'inkClaw/2.0' }, signal: AbortSignal.timeout(15_000) },
             );
             if (iaRes.ok) {
-                const data = await iaRes.json() as any;
+                const data = await iaRes.json() as { Answer?: string; AbstractText?: string; AbstractURL?: string; RelatedTopics?: Array<{ FirstURL?: string; Text?: string }> };
                 const lines: string[] = [];
 
                 if (data.Answer) lines.push(`💡 **答案**: ${data.Answer}\n`);
@@ -40,7 +40,7 @@ export const searchWebTool: Tool = {
                     lines.push('');
                 }
 
-                const topics: any[] = (data.RelatedTopics ?? []).filter((t: any) => t.FirstURL && t.Text);
+                const topics = (data.RelatedTopics ?? []).filter((t) => t.FirstURL && t.Text);
                 for (const topic of topics.slice(0, maxResults)) {
                     lines.push(`• ${topic.Text}`);
                     lines.push(`  🔗 ${topic.FirstURL}`);
@@ -54,7 +54,7 @@ export const searchWebTool: Tool = {
             // 2. Fallback: DuckDuckGo Lite HTML
             const liteRes = await fetch(
                 `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
-                { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; inkClaw/2.0)' } },
+                { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; inkClaw/2.0)' }, signal: AbortSignal.timeout(15_000) },
             );
             if (!liteRes.ok) return `[Error] 搜索失败: HTTP ${liteRes.status}`;
 

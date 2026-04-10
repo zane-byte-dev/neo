@@ -5,8 +5,16 @@
  * leaving the rest of the file untouched. Essential for large files.
  */
 import { promises as fs } from 'fs';
-import { join, dirname, isAbsolute } from 'path';
+import { join, dirname, isAbsolute, resolve } from 'path';
 import type { Tool } from '../_base.js';
+
+function safePath(filePath: string, workDir: string): string {
+    const resolved = isAbsolute(filePath) ? resolve(filePath) : resolve(workDir, filePath);
+    if (!resolved.startsWith(resolve(workDir))) {
+        throw new Error(`Path traversal blocked: ${filePath} resolves outside workDir`);
+    }
+    return resolved;
+}
 
 export const editFileTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0' },
@@ -45,7 +53,7 @@ export const editFileTool: Tool = {
 
         if (!filePath) return '[Error] path is required';
 
-        const resolved = isAbsolute(filePath) ? filePath : join(workDir, filePath);
+        const resolved = safePath(filePath, workDir);
 
         // Append / create mode (old_str is empty)
         if (oldStr === '') {

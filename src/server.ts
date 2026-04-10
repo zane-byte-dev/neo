@@ -25,7 +25,7 @@ export class CoreServer {
         await setupTools();
 
         const app = new Koa();
-        app.keys = [SESSION_SECRET];
+        app.keys = [SESSION_SECRET!];
         const router = new Router();
 
         app.use(_authMiddleware());

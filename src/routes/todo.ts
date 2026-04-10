@@ -1,7 +1,7 @@
 import type Router from '@koa/router';
 import { todoList, todoAdd, todoPatch, todoDelete } from '../services/todo-service.js';
 import { geminiGenerate } from '../llm/providers/gemini/index.js';
-import { GEMINI_API_KEY } from '../config.js';
+import { GEMINI_API_KEY, MAX_INPUT_LENGTH } from '../config.js';
 
 export function todoAnalyze(router: Router): void {
     router.post('/api/todos/analyze', async (ctx) => {
@@ -62,6 +62,7 @@ export function todoCreate(router: Router): void {
         const body = ctx.request.body as Record<string, unknown>;
         const content = typeof body.content === 'string' ? body.content.trim() : '';
         if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
+        if (content.length > MAX_INPUT_LENGTH) { ctx.status = 400; ctx.body = { error: `content too long (max ${MAX_INPUT_LENGTH} chars)` }; return; }
         const priority = typeof body.priority === 'string' && body.priority.trim() ? body.priority.trim() : null;
         const remindAt = typeof body.remind_at === 'string' && body.remind_at.trim() ? body.remind_at.trim() : null;
         const fireAt = remindAt ? new Date(remindAt).getTime() : null;

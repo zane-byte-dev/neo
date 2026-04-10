@@ -5,9 +5,11 @@ export function notebookGet(router: Router): void {
     router.get('/api/notebook', async (ctx) => {
         const q = ctx.query as Record<string, string>;
         switch (q.action) {
-            case 'list':
-                ctx.body = nbList({ limit: 1000 });
+            case 'list': {
+                const limit = Math.min(Number(q.limit) || 50, 200);
+                ctx.body = nbList({ limit });
                 break;
+            }
             case 'search': {
                 const term = q.q?.trim() ?? '';
                 if (!term) { ctx.body = []; return; }
