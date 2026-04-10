@@ -1,8 +1,8 @@
 /**
  * note-service.ts — Business logic for the notes (inbox) table.
  *
- * Notes are quick-capture inbox items scoped to a tenant_key.
- * The web API uses tenant_key = 'web'.
+ * Notes are quick-capture inbox items scoped to a user_id.
+ * The web API uses user_id = 'web'.
  */
 import { getDb } from './db.js';
 
@@ -36,7 +36,7 @@ export function noteList(opts?: { tenantKey?: string; date?: string; tag?: strin
     if (opts?.tag) {
         const all = db.prepare(
             `SELECT id, content, date, time, created_at, tags
-             FROM notes WHERE tenant_key = ? ORDER BY created_at DESC LIMIT 500`
+             FROM notes WHERE user_id = ? ORDER BY created_at DESC LIMIT 500`
         ).all(tenantKey) as NoteRow[];
         return all.filter((n) => {
             try { return (JSON.parse(n.tags ?? '[]') as string[]).includes(opts.tag!); } catch { return false; }
@@ -46,25 +46,25 @@ export function noteList(opts?: { tenantKey?: string; date?: string; tag?: strin
     if (opts?.date) {
         return db.prepare(
             `SELECT id, content, date, time, created_at, tags
-             FROM notes WHERE tenant_key = ? AND date = ? ORDER BY created_at DESC`
+             FROM notes WHERE user_id = ? AND date = ? ORDER BY created_at DESC`
         ).all(tenantKey, opts.date) as NoteRow[];
     }
 
     return db.prepare(
         `SELECT id, content, date, time, created_at, tags
-         FROM notes WHERE tenant_key = ? ORDER BY created_at DESC LIMIT 200`
+         FROM notes WHERE user_id = ? ORDER BY created_at DESC LIMIT 200`
     ).all(tenantKey) as NoteRow[];
 }
 
 export function noteStats(tenantKey = 'web'): NoteHeatmapDay[] {
     return getDb().prepare(
-        `SELECT date, COUNT(*) as count FROM notes WHERE tenant_key = ? GROUP BY date ORDER BY date`
+        `SELECT date, COUNT(*) as count FROM notes WHERE user_id = ? GROUP BY date ORDER BY date`
     ).all(tenantKey) as NoteHeatmapDay[];
 }
 
 export function noteTags(tenantKey = 'web'): NoteTag[] {
     const rows = getDb().prepare(
-        `SELECT tags FROM notes WHERE tenant_key = ? AND tags IS NOT NULL AND tags != '[]'`
+        `SELECT tags FROM notes WHERE user_id = ? AND tags IS NOT NULL AND tags != '[]'`
     ).all(tenantKey) as Array<{ tags: string }>;
 
     const tagCount = new Map<string, number>();
@@ -89,13 +89,13 @@ export function noteCreate(content: string, tags?: string[] | null, tenantKey = 
     const tagsJson = tags?.length ? JSON.stringify(tags) : null;
 
     const result = db.prepare(
-        `INSERT INTO notes (tenant_key, content, date, time, created_at, tags) VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT INTO notes (user_id, content, date, time, created_at, tags) VALUES (?, ?, ?, ?, ?, ?)`
     ).run(tenantKey, content, date, time, createdAt, tagsJson);
 
     return { id: result.lastInsertRowid as number, content, date, time, created_at: createdAt, tags: tagsJson };
 }
 
 export function noteDelete(id: number, tenantKey = 'web'): boolean {
-    const result = getDb().prepare('DELETE FROM notes WHERE id = ? AND tenant_key = ?').run(id, tenantKey);
+    const result = getDb().prepare('DELETE FROM notes WHERE id = ? AND user_id = ?').run(id, tenantKey);
     return result.changes > 0;
 }

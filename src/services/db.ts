@@ -38,17 +38,17 @@ function createSchema(db: Database.Database): void {
         -- ── Chat ────────────────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS chat_sessions (
             id          TEXT    PRIMARY KEY,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             start_time  TEXT    NOT NULL,
             end_time    TEXT    NOT NULL,
             is_current  INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS idx_sessions_tenant ON chat_sessions(tenant_key);
+        CREATE INDEX IF NOT EXISTS idx_sessions_tenant ON chat_sessions(user_id);
 
         CREATE TABLE IF NOT EXISTS chat_messages (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id  TEXT    NOT NULL,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             role        TEXT    NOT NULL,
             content     TEXT    NOT NULL,
             user_name   TEXT,
@@ -56,12 +56,12 @@ function createSchema(db: Database.Database): void {
             FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id);
-        CREATE INDEX IF NOT EXISTS idx_messages_tenant  ON chat_messages(tenant_key, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_messages_tenant  ON chat_messages(user_id, timestamp);
 
         -- ── Async tasks ──────────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS async_tasks (
             id          TEXT    PRIMARY KEY,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             chat_id     TEXT    NOT NULL,
             prompt      TEXT    NOT NULL,
             status      TEXT    NOT NULL,
@@ -70,12 +70,12 @@ function createSchema(db: Database.Database): void {
             created_at  INTEGER NOT NULL,
             updated_at  INTEGER NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_async_tenant ON async_tasks(tenant_key);
+        CREATE INDEX IF NOT EXISTS idx_async_tenant ON async_tasks(user_id);
 
         -- ── Message queue ────────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS message_queue (
             id          TEXT    PRIMARY KEY,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             chat_id     TEXT    NOT NULL,
             question    TEXT    NOT NULL,
             user_name   TEXT    NOT NULL,
@@ -83,12 +83,12 @@ function createSchema(db: Database.Database): void {
             status      TEXT    NOT NULL,
             created_at  INTEGER NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_queue_tenant ON message_queue(tenant_key, status);
+        CREATE INDEX IF NOT EXISTS idx_queue_tenant ON message_queue(user_id, status);
 
         -- ── Reminders ────────────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS reminders (
             id          TEXT    PRIMARY KEY,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             chat_id     TEXT    NOT NULL,
             content     TEXT    NOT NULL,
             prompt      TEXT,
@@ -96,12 +96,12 @@ function createSchema(db: Database.Database): void {
             created_at  INTEGER NOT NULL,
             fired       INTEGER NOT NULL DEFAULT 0
         );
-        CREATE INDEX IF NOT EXISTS idx_reminders_tenant ON reminders(tenant_key, fire_at);
+        CREATE INDEX IF NOT EXISTS idx_reminders_tenant ON reminders(user_id, fire_at);
 
         -- ── Scheduled tasks ──────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS scheduled_tasks (
             id          TEXT    PRIMARY KEY,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             chat_id     TEXT    NOT NULL,
             content     TEXT    NOT NULL,
             prompt      TEXT    NOT NULL,
@@ -109,12 +109,12 @@ function createSchema(db: Database.Database): void {
             created_at  INTEGER NOT NULL,
             enabled     INTEGER NOT NULL DEFAULT 1
         );
-        CREATE INDEX IF NOT EXISTS idx_schedules_tenant ON scheduled_tasks(tenant_key);
+        CREATE INDEX IF NOT EXISTS idx_schedules_tenant ON scheduled_tasks(user_id);
 
         -- ── AI todos (per-session task tracking) ─────────────────────────────
         CREATE TABLE IF NOT EXISTS todos (
             id          TEXT    PRIMARY KEY,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             content     TEXT    NOT NULL,
             status      TEXT    NOT NULL,
             priority    TEXT,
@@ -122,35 +122,35 @@ function createSchema(db: Database.Database): void {
             created_at  TEXT    NOT NULL,
             updated_at  TEXT    NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_todos_tenant ON todos(tenant_key);
+        CREATE INDEX IF NOT EXISTS idx_todos_tenant ON todos(user_id);
 
         -- ── Notes (was 0-Inbox) ──────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS notes (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             content     TEXT    NOT NULL,
             date        TEXT    NOT NULL,
             time        TEXT    NOT NULL,
             created_at  INTEGER NOT NULL,
             tags        TEXT
         );
-        CREATE INDEX IF NOT EXISTS idx_notes_tenant_date ON notes(tenant_key, date);
+        CREATE INDEX IF NOT EXISTS idx_notes_tenant_date ON notes(user_id, date);
 
         -- ── User tasks (was 2-Tasks) ─────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS tasks (
             id          TEXT    PRIMARY KEY,
-            tenant_key  TEXT    NOT NULL,
+            user_id     TEXT    NOT NULL,
             content     TEXT    NOT NULL,
             status      TEXT    NOT NULL DEFAULT 'open',
             date        TEXT    NOT NULL,
             time        TEXT    NOT NULL,
             created_at  INTEGER NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_tasks_tenant_status ON tasks(tenant_key, status);
+        CREATE INDEX IF NOT EXISTS idx_tasks_tenant_status ON tasks(user_id, status);
 
         -- ── User profile ──────────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS user_profile (
-            tenant_key  TEXT    PRIMARY KEY,
+            user_id     TEXT    PRIMARY KEY,
             data        TEXT    NOT NULL,
             updated_at  INTEGER NOT NULL
         );
@@ -247,7 +247,7 @@ function createSchema(db: Database.Database): void {
     // Migrate reminders → todos_v2
     try {
         const existingReminders = db.prepare(
-            `SELECT id, tenant_key, content, prompt, fire_at, created_at, fired FROM reminders`
+            `SELECT id, user_id, content, prompt, fire_at, created_at, fired FROM reminders`
         ).all() as any[];
         if (existingReminders.length > 0) {
             const insert = db.prepare(
@@ -255,7 +255,7 @@ function createSchema(db: Database.Database): void {
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
             );
             for (const r of existingReminders) {
-                insert.run(r.id, r.tenant_key, r.content, r.fired ? 'done' : 'pending', r.prompt ?? null, r.fire_at, r.fired, r.created_at, r.created_at);
+                insert.run(r.id, r.user_id, r.content, r.fired ? 'done' : 'pending', r.prompt ?? null, r.fire_at, r.fired, r.created_at, r.created_at);
             }
             console.log(`[DB] Migrated ${existingReminders.length} reminders → todos_v2`);
         }
@@ -264,7 +264,7 @@ function createSchema(db: Database.Database): void {
     // Migrate scheduled_tasks → todos_v2
     try {
         const existingSchedules = db.prepare(
-            `SELECT id, tenant_key, content, prompt, cron_expr, created_at, enabled FROM scheduled_tasks`
+            `SELECT id, user_id, content, prompt, cron_expr, created_at, enabled FROM scheduled_tasks`
         ).all() as any[];
         if (existingSchedules.length > 0) {
             const insert = db.prepare(
@@ -272,7 +272,7 @@ function createSchema(db: Database.Database): void {
                  VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)`
             );
             for (const s of existingSchedules) {
-                insert.run(s.id, s.tenant_key, s.content, s.prompt, s.cron_expr, s.enabled, s.created_at, s.created_at);
+                insert.run(s.id, s.user_id, s.content, s.prompt, s.cron_expr, s.enabled, s.created_at, s.created_at);
             }
             console.log(`[DB] Migrated ${existingSchedules.length} scheduled_tasks → todos_v2`);
         }
@@ -281,7 +281,7 @@ function createSchema(db: Database.Database): void {
     // Migrate old todos → todos_v2
     try {
         const existingTodos = db.prepare(
-            `SELECT id, tenant_key, content, status, priority, remind_at, created_at, updated_at FROM todos`
+            `SELECT id, user_id, content, status, priority, remind_at, created_at, updated_at FROM todos`
         ).all() as any[];
         if (existingTodos.length > 0) {
             const insert = db.prepare(
@@ -296,7 +296,7 @@ function createSchema(db: Database.Database): void {
                 let status = t.status;
                 if (status === 'not-started') status = 'pending';
                 else if (status === 'completed') status = 'done';
-                insert.run(t.id, t.tenant_key, t.content, status, t.priority ?? null, fireAt, createdTs, updatedTs);
+                insert.run(t.id, t.user_id, t.content, status, t.priority ?? null, fireAt, createdTs, updatedTs);
             }
             console.log(`[DB] Migrated ${existingTodos.length} todos → todos_v2`);
         }

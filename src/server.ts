@@ -1,73 +1,32 @@
-/**
- * server.ts — CoreServer: central application hub.
- *
- * Architecture: Server + Client model.
- *   - CoreServer owns the message pipeline, all services, and the HTTP layer
- *   - Platform clients (TelegramClient, FeishuClient) are thin ingress/egress
- *     wrappers that call server.handleMessage() / server.handleCallbackQuery()
- *   - Web UI is served directly by CoreServer (Koa HTTP + SSE)
- *
- * Previously split across app.ts (orchestration) and platform/web/web-adapter.ts
- * (HTTP routes). Both are now unified here.
- */
-
 import Koa from 'koa';
 import Router from '@koa/router';
 import { bodyParser } from '@koa/bodyparser';
 import serve from 'koa-static';
 import { PassThrough } from 'stream';
-import { join, resolve, dirname } from 'path';
-import { promises as fs } from 'fs';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 import {
-    ASYNC_TRIGGER_PREFIXES,
-    WORK_DIR,
-    getAuthorizedForPlatform,
-    resolveUserId,
     GEMINI_API_KEY,
     resolveUserIdByWebToken,
     hasWebTokens,
 } from './config.js';
-import { resolveUserWorkspaceDir } from './utils/workspace.js';
 import { initDb } from './services/db.js';
-import { LLMClient, buildTenantSystemInstruction } from './llm/client.js';
-import { ChatHistoryCache } from './services/history-service.js';
-import { AsyncTaskManager } from './services/async-task-manager.js';
-import { MessageQueue } from './services/message-queue.js';
-import { initTodoScope } from './services/todo-service.js';
-import { UserProfileManager } from './services/user-profile.js';
-import { registerUserContext, getUserContext, hasUserContext, getAllUserIds } from './services/user-context.js';
+import { LLMClient } from './llm/client.js';
+import { getUserContext } from './services/user-context.js';
 import {
-    registerTenantContext,
     getTenantContext,
-    getTenantContextsForUser,
-    hasTenantContext,
 } from './services/tool-context.js';
-import { closeBrowser } from './services/browser-service.js';
 import { setupTools } from './tools/index.js';
-import { loadUserSkills } from './skills/index.js';
-import { setupCommands, handleCommand as handleCommandFn } from './commands/index.js';
-import { sendReply as sendReplyFn } from './core/reply.js';
-import { processTask as processTaskFn } from './core/task-processor.js';
-import { processMessage as processMessageFn } from './core/message-router.js';
-import { handleUrlMessage as handleUrlMessageFn } from './handlers/url-handler.js';
-import { handleAsyncTask as handleAsyncTaskFn, setupAsyncPolling as setupAsyncPollingFn } from './handlers/async-handler.js';
-import { findFiles as findFilesFn } from './utils/file-search.js';
 import { nbList, nbSearch, nbGet, nbCreate, nbUpdate, nbDelete } from './services/notebook-service.js';
 import { noteList, noteStats, noteTags, noteCreate, noteDelete } from './services/note-service.js';
 import { todoList, todoAdd, todoPatch, todoDelete } from './services/todo-service.js';
 import { geminiGenerate } from './llm/providers/gemini/index.js';
-import { parseTenantKey } from './types/platform.js';
 import type {
     TenantKey,
-    NormalizedMessage,
-    NormalizedCallback,
     PlatformAdapter,
-    UserId,
 } from './types/platform.js';
 import type { ToolContext } from './llm/types.js';
-import type { Task } from './core/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -79,392 +38,25 @@ export class CoreServer {
     private clients = new Map<string, PlatformAdapter>();
 
     readonly llm: LLMClient;
-
-    private activeTaskIds = new Set<string>();
-    private pendingReadMatches = new Map<string, { matches: string[]; expiry: number }>();
-    private _userInitPromises = new Map<string, Promise<void>>();
-    private _tenantInitPromises = new Map<TenantKey, Promise<void>>();
-
-    /** SSE push streams for web clients: userId → active PassThrough */
-    private activeStreams = new Map<string, PassThrough>();
-
     private httpServer?: ReturnType<Koa['listen']>;
 
     constructor() {
         this.llm = new LLMClient();
     }
 
-    // ── Client registration ──────────────────────────────────────────────
-
-    registerClient(client: PlatformAdapter): void {
-        this.clients.set(client.platform, client);
-    }
-
-    getClient(platform: string): PlatformAdapter {
-        const c = this.clients.get(platform);
-        if (!c) throw new Error(`[CoreServer] Client not registered: ${platform}`);
-        return c;
-    }
-
-    // ── Bootstrap ────────────────────────────────────────────────────────
-
-    async init(): Promise<void> {
+    async start(): Promise<void> {
         initDb();
         await setupTools();
-        await setupCommands();
 
-        // Init tenants — user contexts are lazily created on first tenant reference
-        for (const [platform, client] of this.clients) {
-            const tenantKeys = getAuthorizedForPlatform(platform as any);
-            for (const tk of tenantKeys) {
-                await this._ensureTenantContext(tk, client);
-                this._setupAsyncPolling(tk, client);
-            }
-            console.log(`[${platform}] ✅ ${tenantKeys.length} tenant(s) configured.`);
-        }
-
-        // Web tenants (synthesized egress via SSE)
-        await this._initWebTenants();
-
-        // Per-user lifecycle (reminders, schedules, message queue replay)
-        for (const userId of getAllUserIds()) {
-            await this._initUserLifecycle(userId);
-        }
-    }
-
-    // ── Start / Stop ─────────────────────────────────────────────────────
-
-    async start(): Promise<void> {
-        // Start HTTP server if web is enabled
-        if (process.env.WEB_PORT ?? process.env.WEB_ENABLED) {
-            const koa = this._buildKoa();
-            this.httpServer = koa.listen(WEB_PORT, () => {
-                console.log(`[CoreServer] 🌐 http://localhost:${WEB_PORT}`);
-                if (!hasWebTokens()) {
-                    console.warn('[CoreServer] ⚠️  No webToken in users.json — web UI is unprotected!');
-                }
-            });
-        }
-
-        // Start platform clients
-        for (const [, client] of this.clients) {
-            await client.start();
-        }
-
-        console.log(`🤖 CoreServer started. Clients: ${[...this.clients.keys()].join(', ')}`);
-        console.log(`🛠  LLM enabled: ${this.llm.isEnabled()}`);
-    }
-
-    async shutdown(): Promise<void> {
-        for (const userId of getAllUserIds()) {
-            getUserContext(userId).todoManager.destroy();
-        }
-        this.llm.close();
-        closeBrowser();
-        for (const [, client] of this.clients) {
-            await client.stop();
-        }
-        await new Promise<void>((res) => {
-            if (this.httpServer) this.httpServer.close(() => res());
-            else res();
-        });
-    }
-
-    // ── Public API (called by platform clients for ingress) ──────────────
-
-    async handleMessage(msg: NormalizedMessage): Promise<void> {
-        const { platform } = parseTenantKey(msg.tenantKey);
-        const client = this.clients.get(platform);
-        if (!client) {
-            console.warn(`[CoreServer] No client for platform: ${platform}`);
-            return;
-        }
-        return this._processMessage(client, msg.tenantKey, msg);
-    }
-
-    // ── Web SSE registry ─────────────────────────────────────────────────
-
-    registerWebStream(userId: string, stream: PassThrough): void {
-        this.activeStreams.set(userId, stream);
-    }
-
-    unregisterWebStream(userId: string): void {
-        this.activeStreams.delete(userId);
-    }
-
-    sendWebPush(userId: string, text: string): void {
-        const stream = this.activeStreams.get(userId);
-        if (stream && !stream.destroyed) {
-            stream.write(`data: ${JSON.stringify({ type: 'push', text })}\n\n`);
-        }
-    }
-
-    // ── Context initialization (lazy, idempotent) ─────────────────────────
-
-    /** Ensure user context exists. Promise-cached — safe to call concurrently or repeatedly. */
-    private _ensureUserContext(userId: UserId): Promise<void> {
-        if (!this._userInitPromises.has(userId)) {
-            this._userInitPromises.set(userId, this._doInitUserContext(userId));
-        }
-        return this._userInitPromises.get(userId)!;
-    }
-
-    private async _doInitUserContext(userId: UserId): Promise<void> {
-        if (hasUserContext(userId)) return;
-        const baseWorkDir = resolve(WORK_DIR || '.');
-        const workDir = resolveUserWorkspaceDir(baseWorkDir, userId);
-        console.log(`[User] 📂 ${userId} workspace: ${workDir}`);
-
-        const systemInstruction = await buildTenantSystemInstruction(workDir);
-        if (systemInstruction) {
-            console.log(`[User] 📜 ${userId} system instruction ready (${systemInstruction.length} chars)`);
-        }
-
-        const userProfile = new UserProfileManager(workDir);
-        const todoManager = initTodoScope(userId);
-        const skillRegistry = await loadUserSkills(userId, resolve('.'));
-        const chatHistoryCache = new ChatHistoryCache(userId);
-        await chatHistoryCache.init();
-
-        registerUserContext({ userId, workDir, systemInstruction, userProfile, todoManager, skillRegistry, chatHistoryCache });
-        console.log(`[User] ✅ ${userId} initialized`);
-    }
-
-    /** Ensure tenant context exists. Promise-cached — safe to call concurrently or repeatedly. */
-    private _ensureTenantContext(tenantKey: TenantKey, adapter: PlatformAdapter): Promise<void> {
-        if (!this._tenantInitPromises.has(tenantKey)) {
-            this._tenantInitPromises.set(tenantKey, this._doInitTenantContext(tenantKey, adapter));
-        }
-        return this._tenantInitPromises.get(tenantKey)!;
-    }
-
-    private async _doInitTenantContext(tenantKey: TenantKey, adapter: PlatformAdapter): Promise<void> {
-        if (hasTenantContext(tenantKey)) return;
-        const userId = resolveUserId(tenantKey);
-        if (!userId) {
-            console.warn(`[Tenant] ⚠️  ${tenantKey} has no user mapping — skipping`);
-            return;
-        }
-
-        await this._ensureUserContext(userId);
-        const userCtx = getUserContext(userId);
-
-        const asyncTaskManager = new AsyncTaskManager(tenantKey);
-        await asyncTaskManager.init();
-        const messageQueue = new MessageQueue(tenantKey);
-        const { userId: platformUserId } = parseTenantKey(tenantKey);
-
-        registerTenantContext({
-            tenantKey,
-            chatId: platformUserId,
-            userId,
-            user: userCtx,
-            workDir: userCtx.workDir,
-            systemInstruction: userCtx.systemInstruction,
-            adapter,
-            messageQueue,
-            userProfile: userCtx.userProfile,
-            skillRegistry: userCtx.skillRegistry,
-        });
-
-        console.log(`[Tenant] ✅ ${tenantKey} → user:${userId}`);
-    }
-
-    /** Initialize web tenants — one synthetic SSE-backed tenant per user with webToken. */
-    private async _initWebTenants(): Promise<void> {
-        if (!(process.env.WEB_PORT ?? process.env.WEB_ENABLED)) return;
-
-        const webTenantKeys = getAuthorizedForPlatform('web');
-        for (const tk of webTenantKeys) {
-            const { userId } = parseTenantKey(tk);
-            const webEgress = this._makeWebEgress(userId);
-            await this._ensureTenantContext(tk, webEgress);
-            this._setupAsyncPolling(tk, webEgress);
-        }
-        if (webTenantKeys.length > 0) {
-            console.log(`[web] ✅ ${webTenantKeys.length} web tenant(s) configured.`);
-        }
-    }
-
-    /** Create a synthetic PlatformAdapter for web tenants that pushes via SSE. */
-    private _makeWebEgress(userId: string): PlatformAdapter {
-        return {
-            platform: 'web',
-            start: async () => {},
-            stop: async () => {},
-            onMessage: () => {},
-            onCallbackQuery: () => {},
-            sendMessage: async (chatId: string, text: string) => {
-                this.sendWebPush(chatId, text);
-                return { id: 'web', chatId };
-            },
-            editMessage: async () => {},
-            deleteMessage: async () => {},
-            sendPhoto: async (chatId: string) => ({ id: 'web', chatId }),
-            downloadFile: async () => { throw new Error('[WebEgress] downloadFile not supported'); },
-            formatMarkdown: (md: string) => md,
-        };
-    }
-
-    // ── Per-user lifecycle (reminders & schedules) ────────────────────────
-
-    private async _initUserLifecycle(userId: UserId): Promise<void> {
-        const userCtx = getUserContext(userId);
-        const tenants = getTenantContextsForUser(userId);
-        if (tenants.length === 0) return;
-
-        await userCtx.userProfile.init();
-
-        // Message queue replay (per-tenant)
-        for (const tc of tenants) {
-            const pending = await tc.messageQueue.init();
-            if (pending.length > 0) {
-                console.log(`[MessageQueue] Replaying ${pending.length} task(s) for ${tc.tenantKey}...`);
-                for (const task of pending) {
-                    tc.messageQueue.schedule(task, (t: Task) => this._processTask(tc.adapter, tc.tenantKey, t));
-                }
-                await tc.adapter.sendMessage(
-                    tc.chatId,
-                    `♻️ 检测到 ${pending.length} 条上次未完成的消息，已自动恢复处理。`
-                ).catch(() => {});
-            }
-        }
-
-        // Unified TodoManager: one-time reminders + recurring cron tasks
-        await userCtx.todoManager.init(
-            async (todo) => {
-                console.log(`[Todo] Firing #${todo.id} (${todo.prompt ? 'action' : 'notification'}): ${todo.content}`);
-                for (const tc of getTenantContextsForUser(userId)) {
-                    if (todo.prompt) {
-                        const task: Task = {
-                            tenantKey: tc.tenantKey,
-                            chatId: tc.chatId,
-                            question: todo.prompt,
-                            userName: 'reminder',
-                            messageId: '0',
-                        };
-                        const notifyMsg = await tc.adapter.sendMessage(
-                            tc.chatId,
-                            `⏰ 定时任务触发：**${todo.content}**\n\n⏳ 正在执行...`,
-                            { parseMode: 'markdown' },
-                        ).catch(() => null);
-                        if (notifyMsg) task.messageId = notifyMsg.id;
-                        await tc.messageQueue.enqueue(task, (t: Task) => this._processTask(tc.adapter, tc.tenantKey, t));
-                    } else {
-                        await tc.adapter.sendMessage(
-                            tc.chatId,
-                            `⏰ **提醒:** ${todo.content}`,
-                            { parseMode: 'markdown' },
-                        ).catch((err: any) => console.error(`[Todo] Send to ${tc.tenantKey} failed:`, err.message));
-                    }
-                }
-            },
-            async (todo) => {
-                console.log(`[Todo] Cron #${todo.id}: ${todo.content}`);
-                for (const tc of getTenantContextsForUser(userId)) {
-                    try {
-                        const notifyMsg = await tc.adapter.sendMessage(
-                            tc.chatId,
-                            `🕐 定时任务：**${todo.content}**\n\n⏳ 正在执行...`,
-                            { parseMode: 'markdown' },
-                        ).catch(() => null);
-
-                        const queueTask: Task = {
-                            tenantKey: tc.tenantKey,
-                            chatId: tc.chatId,
-                            question: todo.prompt!,
-                            userName: 'scheduled-task',
-                            messageId: notifyMsg?.id ?? '0',
-                        };
-                        await tc.messageQueue.enqueue(queueTask, (t: Task) => this._processTask(tc.adapter, tc.tenantKey, t));
-                    } catch (err: any) {
-                        console.error(`[Todo] Cron failed for ${tc.tenantKey}:`, err.message);
-                    }
-                }
-            },
-        );
-    }
-
-    // ── Message processing pipeline ──────────────────────────────────────
-
-    private _sendReply(adapter: PlatformAdapter, chatId: string, text: string, retries = 2, replyToMessageId?: string) {
-        return sendReplyFn(adapter, chatId, text, retries, replyToMessageId);
-    }
-
-    private _processTask(adapter: PlatformAdapter, tenantKey: TenantKey, task: Task) {
-        const ctx = getTenantContext(tenantKey);
-        return processTaskFn(
-            {
-                adapter,
-                geminiClient: this.llm,
-                chatHistoryCache: ctx.chatHistoryCache,
-                userProfile: ctx.userProfile,
-                sendReply: (cId, text, retries, rId) => this._sendReply(adapter, cId, text, retries, rId),
-            },
-            task,
-        );
-    }
-
-    private _processMessage(adapter: PlatformAdapter, tenantKey: TenantKey, msg: NormalizedMessage) {
-        const ctx = getTenantContext(tenantKey);
-        return processMessageFn(
-            {
-                adapter,
-                asyncTriggerPrefixes: ASYNC_TRIGGER_PREFIXES,
-                pendingReadMatches: this.pendingReadMatches,
-                todoManager: ctx.todoManager,
-                messageQueue: ctx.messageQueue,
-                processTask: (task) => this._processTask(adapter, tenantKey, task),
-                handleAsyncTask: (innerMsg) => handleAsyncTaskFn(
-                    {
-                        asyncTaskManager: ctx.asyncTaskManager,
-                        geminiClient: this.llm,
-                        sendReply: (cId, text, retries, rId) => this._sendReply(adapter, cId, text, retries, rId),
-                        activeTaskIds: this.activeTaskIds,
-                    },
-                    innerMsg,
-                ),
-                handleCommand: (innerMsg) => handleCommandFn(
-                    {
-                        adapter,
-                        tenantKey,
-                        chatId: innerMsg.chatId,
-                        workDir: ctx.workDir,
-                        chatHistoryCache: ctx.chatHistoryCache,
-                        asyncTaskManager: ctx.asyncTaskManager,
-                        todoManager: ctx.todoManager,
-                        userProfile: ctx.userProfile,
-                        skillRegistry: ctx.skillRegistry,
-                        pendingReadMatches: this.pendingReadMatches,
-                        findFiles: (q, b, r) => findFilesFn(q, b, r),
-                    },
-                    { text: innerMsg.text, chatId: innerMsg.chatId, messageId: innerMsg.id, quotedText: innerMsg.quotedText },
-                ),
-                handleUrlMessage: (innerMsg, url) => handleUrlMessageFn(
-                    {
-                        messageQueue: ctx.messageQueue,
-                        processTask: (task) => this._processTask(adapter, tenantKey, task),
-                    },
-                    innerMsg,
-                    url,
-                ),
-            },
-            msg,
-        );
-    }
-
-    // ── HTTP Server (Koa) ─────────────────────────────────────────────────
-
-    private _buildKoa(): Koa {
         const app = new Koa();
         const router = new Router();
 
         app.use(_authMiddleware());
         app.use(bodyParser());
 
-        this._installChatRoute(router);
-        this._installSessionRoutes(router);
-        this._installMeRoute(router);
+        _installChatRoute(router);
+        _installSessionRoutes(router);
+        _installMeRoute(router);
         _installNotebookRoutes(router);
         _installTodoRoutes(router);
         _installNoteRoutes(router);
@@ -476,144 +68,27 @@ export class CoreServer {
         const distDir = join(__dirname, '../web/dist');
         app.use(serve(distDir));
 
-        return app;
+        this.httpServer = app.listen(WEB_PORT, () => {
+            console.log(`[CoreServer] 🌐 http://localhost:${WEB_PORT}`);
+            if (!hasWebTokens()) {
+                console.warn('[CoreServer] ⚠️  No webToken in users.json — web UI is unprotected!');
+            }
+        });
+        console.log(`🤖 CoreServer started. Clients: ${[...this.clients.keys()].join(', ')}`);
+        console.log(`🛠  LLM enabled: ${this.llm.isEnabled()}`);
     }
 
-    // ── /api/chat (SSE streaming) ─────────────────────────────────────────
-
-    private _installChatRoute(router: Router): void {
-        router.post('/api/chat', async (ctx) => {
-            const body = ctx.request.body as Record<string, unknown>;
-            const message = typeof body.message === 'string' ? body.message.trim() : '';
-            const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
-
-            if (!message) {
-                ctx.status = 400;
-                ctx.body = { error: 'message is required' };
-                return;
-            }
-
-            const reqUserId: string | undefined = ctx.state.userId;
-            const tenantKey = reqUserId ? (`web:${reqUserId}` as TenantKey) : undefined;
-            const tenantCtx = tenantKey ? (() => {
-                try { return getTenantContext(tenantKey); } catch { return undefined; }
-            })() : undefined;
-
-            // Set up SSE response
-            const stream = new PassThrough();
-            ctx.status = 200;
-            ctx.set('Content-Type', 'text/event-stream');
-            ctx.set('Cache-Control', 'no-cache');
-            ctx.set('Connection', 'keep-alive');
-            ctx.set('X-Accel-Buffering', 'no');
-            ctx.body = stream;
-
-            if (reqUserId) this.registerWebStream(reqUserId, stream);
-
-            const abortController = new AbortController();
-            ctx.req.on('close', () => {
-                abortController.abort();
-                if (reqUserId) this.unregisterWebStream(reqUserId);
-            });
-
-            const write = (obj: Record<string, unknown>) => {
-                if (!stream.destroyed) stream.write(`data: ${JSON.stringify(obj)}\n\n`);
-            };
-
-            // Build per-request ToolContext (uses tenant's shared services)
-            let toolContext: ToolContext | undefined;
-            if (tenantCtx) {
-                toolContext = {
-                    tenantKey: tenantCtx.tenantKey,
-                    userId: tenantCtx.userId,
-                    chatId: reqUserId!,
-                    workDir: tenantCtx.workDir,
-                    systemInstruction: tenantCtx.systemInstruction,
-                    adapter: {
-                        sendMessage: async (_chatId, text) => {
-                            write({ type: 'text', text });
-                            return { id: 'web', chatId: _chatId };
-                        },
-                        sendPhoto: async (_chatId, _photo, caption) => {
-                            if (caption) write({ type: 'text', text: caption });
-                            return { id: 'web', chatId: _chatId };
-                        },
-                    },
-                    skillRegistry: tenantCtx.skillRegistry,
-                    imageCallback: async (data, mimeType, caption) => {
-                        write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
-                    },
-                };
-            }
-
-            if (cache) await cache.addMessage('user', message);
-            const history = cache?.getContextForGemini() ?? [];
-
-            let fullResponse = '';
-            try {
-                await this.llm.chatWithContextStreaming(
-                    message,
-                    history,
-                    (chunk) => {
-                        write(chunk as Record<string, unknown>);
-                        if ((chunk as { type: string; text?: string }).type === 'text') {
-                            fullResponse += (chunk as { text?: string }).text ?? '';
-                        }
-                    },
-                    abortController.signal,
-                    toolContext,
-                    model,
-                );
-                write({ type: 'done' });
-            } catch (err: unknown) {
-                if (!(err instanceof Error && err.name === 'AbortError')) {
-                    write({ type: 'error', text: err instanceof Error ? err.message : String(err) });
-                }
-            } finally {
-                stream.end();
-                if (fullResponse && cache) {
-                    cache.addMessage('assistant', fullResponse).catch(console.error);
-                }
-            }
+    async shutdown(): Promise<void> {
+        this.llm.close();
+        for (const [, client] of this.clients) {
+            await client.stop();
+        }
+        await new Promise<void>((res) => {
+            if (this.httpServer) this.httpServer.close(() => res());
+            else res();
         });
     }
 
-    // ── /api/session ──────────────────────────────────────────────────────
-
-    private _installSessionRoutes(router: Router): void {
-        const newSession = async (ctx: Koa.Context) => {
-            const reqUserId: string | undefined = ctx.state.userId;
-            const tenantKey = reqUserId ? (`web:${reqUserId}` as TenantKey) : undefined;
-            const tenantCtx = tenantKey ? (() => {
-                try { return getTenantContext(tenantKey); } catch { return undefined; }
-            })() : undefined;
-
-            if (tenantCtx) {
-                await chatHistoryCache.createNewSession();
-            }
-            ctx.body = { ok: true };
-        };
-
-        router.post('/api/session/new', newSession);
-        router.post('/api/session/clear', newSession);
-    }
-
-    // ── /api/me ───────────────────────────────────────────────────────────
-
-    private _installMeRoute(router: Router): void {
-        router.get('/api/me', async (ctx) => {
-            const reqUserId: string | undefined = ctx.state.userId;
-            if (!reqUserId) {
-                ctx.body = { userId: null, displayName: null, profile: null };
-                return;
-            }
-            const userCtx = getUserContext(reqUserId);
-            const profile = await userCtx.userProfile.read() as string;
-            const nameMatch = profile.match(/[-*]\s*姓名[:：]\s*(.+)/);
-            const displayName = nameMatch?.[1]?.trim() || reqUserId;
-            ctx.body = { userId: reqUserId, displayName, profile };
-        });
-    }
 }
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
@@ -639,6 +114,135 @@ function _authMiddleware(): Koa.Middleware {
         ctx.status = 401;
         ctx.body = { error: 'Unauthorized' };
     };
+}
+// ── /api/chat (SSE streaming) ─────────────────────────────────────────
+
+function _installChatRoute(router: Router): void {
+    router.post('/api/chat', async (ctx) => {
+        const body = ctx.request.body as Record<string, unknown>;
+        const message = typeof body.message === 'string' ? body.message.trim() : '';
+        const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
+
+        if (!message) {
+            ctx.status = 400;
+            ctx.body = { error: 'message is required' };
+            return;
+        }
+
+        const reqUserId: string | undefined = ctx.state.userId;
+        const tenantKey = reqUserId ? (`web:${reqUserId}` as TenantKey) : undefined;
+        const tenantCtx = tenantKey ? (() => {
+            try { return getTenantContext(tenantKey); } catch { return undefined; }
+        })() : undefined;
+
+        // Set up SSE response
+        const stream = new PassThrough();
+        ctx.status = 200;
+        ctx.set('Content-Type', 'text/event-stream');
+        ctx.set('Cache-Control', 'no-cache');
+        ctx.set('Connection', 'keep-alive');
+        ctx.set('X-Accel-Buffering', 'no');
+        ctx.body = stream;
+
+
+        const abortController = new AbortController();
+        const write = (obj: Record<string, unknown>) => {
+            if (!stream.destroyed) stream.write(`data: ${JSON.stringify(obj)}\n\n`);
+        };
+
+        // Build per-request ToolContext (uses tenant's shared services)
+        let toolContext: ToolContext | undefined;
+        if (tenantCtx) {
+            toolContext = {
+                tenantKey: tenantCtx.tenantKey,
+                userId: tenantCtx.userId,
+                chatId: reqUserId!,
+                workDir: tenantCtx.workDir,
+                systemInstruction: tenantCtx.systemInstruction,
+                adapter: {
+                    sendMessage: async (_chatId, text) => {
+                        write({ type: 'text', text });
+                        return { id: 'web', chatId: _chatId };
+                    },
+                    sendPhoto: async (_chatId, _photo, caption) => {
+                        if (caption) write({ type: 'text', text: caption });
+                        return { id: 'web', chatId: _chatId };
+                    },
+                },
+                skillRegistry: tenantCtx.skillRegistry,
+                imageCallback: async (data, mimeType, caption) => {
+                    write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
+                },
+            };
+        }
+
+        if (cache) await cache.addMessage('user', message);
+        const history = cache?.getContextForGemini() ?? [];
+
+        let fullResponse = '';
+        try {
+            await this.llm.chatWithContextStreaming(
+                message,
+                history,
+                (chunk) => {
+                    write(chunk as Record<string, unknown>);
+                    if ((chunk as { type: string; text?: string }).type === 'text') {
+                        fullResponse += (chunk as { text?: string }).text ?? '';
+                    }
+                },
+                abortController.signal,
+                toolContext,
+                model,
+            );
+            write({ type: 'done' });
+        } catch (err: unknown) {
+            if (!(err instanceof Error && err.name === 'AbortError')) {
+                write({ type: 'error', text: err instanceof Error ? err.message : String(err) });
+            }
+        } finally {
+            stream.end();
+            if (fullResponse && cache) {
+                cache.addMessage('assistant', fullResponse).catch(console.error);
+            }
+        }
+    });
+}
+
+// ── /api/session ──────────────────────────────────────────────────────
+function _installSessionRoutes(router: Router): void {
+    const newSession = async (ctx: Koa.Context) => {
+        const reqUserId: string | undefined = ctx.state.userId;
+        const tenantKey = reqUserId ? (`web:${reqUserId}` as TenantKey) : undefined;
+        const tenantCtx = tenantKey ? (() => {
+            try { return getTenantContext(tenantKey); } catch { return undefined; }
+        })() : undefined;
+
+        if (tenantCtx) {
+            await chatHistoryCache.createNewSession();
+        }
+        ctx.body = { ok: true };
+    };
+
+    router.post('/api/session/new', newSession);
+    router.post('/api/session/clear', newSession);
+}
+
+// ── /api/me ───────────────────────────────────────────────────────────
+
+
+function _installMeRoute(router: Router): void {
+    router.get('/api/me', async (ctx) => {
+        const reqUserId: string | undefined = ctx.state.userId;
+        if (!reqUserId) {
+            ctx.body = { userId: null, displayName: null, profile: null };
+            return;
+        }
+        const userCtx = getUserContext(reqUserId);
+        const profile = await userCtx.userProfile.read() as string;
+        const nameMatch = profile.match(/[-*]\s*姓名[:：]\s*(.+)/);
+        const displayName = nameMatch?.[1]?.trim() || reqUserId;
+        ctx.body = { userId: reqUserId, displayName, profile };
+    });
 }
 
 // ── Notebook routes ───────────────────────────────────────────────────────────
@@ -676,11 +280,11 @@ function _installNotebookRoutes(router: Router): void {
         if (!title) { ctx.status = 400; ctx.body = { error: 'title required' }; return; }
         ctx.body = nbCreate({
             title,
-            author:  typeof body.author  === 'string' ? body.author  : null,
-            date:    typeof body.date    === 'string' ? body.date    : null,
-            source:  typeof body.source  === 'string' ? body.source  : null,
+            author: typeof body.author === 'string' ? body.author : null,
+            date: typeof body.date === 'string' ? body.date : null,
+            source: typeof body.source === 'string' ? body.source : null,
             summary: typeof body.summary === 'string' ? body.summary : null,
-            tags:    typeof body.tags    === 'string' ? body.tags    : null,
+            tags: typeof body.tags === 'string' ? body.tags : null,
             content: typeof body.content === 'string' ? body.content : null,
         });
     });
@@ -690,12 +294,12 @@ function _installNotebookRoutes(router: Router): void {
         if (!id) { ctx.status = 400; ctx.body = { error: 'invalid id' }; return; }
         const body = ctx.request.body as Record<string, unknown>;
         const updated = nbUpdate(id, {
-            title:   body.title   !== undefined ? String(body.title)   : undefined,
-            author:  body.author  !== undefined ? (body.author  === null ? null : String(body.author))  : undefined,
-            date:    body.date    !== undefined ? (body.date    === null ? null : String(body.date))    : undefined,
-            source:  body.source  !== undefined ? (body.source  === null ? null : String(body.source))  : undefined,
+            title: body.title !== undefined ? String(body.title) : undefined,
+            author: body.author !== undefined ? (body.author === null ? null : String(body.author)) : undefined,
+            date: body.date !== undefined ? (body.date === null ? null : String(body.date)) : undefined,
+            source: body.source !== undefined ? (body.source === null ? null : String(body.source)) : undefined,
             summary: body.summary !== undefined ? (body.summary === null ? null : String(body.summary)) : undefined,
-            tags:    body.tags    !== undefined ? (body.tags    === null ? null : String(body.tags))    : undefined,
+            tags: body.tags !== undefined ? (body.tags === null ? null : String(body.tags)) : undefined,
             content: body.content !== undefined ? (body.content === null ? null : String(body.content)) : undefined,
         });
         if (!updated) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }

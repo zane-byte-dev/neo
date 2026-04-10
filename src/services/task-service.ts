@@ -1,7 +1,7 @@
 /**
  * task-service.ts — Business logic for the tasks table.
  *
- * Tasks are quick-capture action items scoped to a tenant_key.
+ * Tasks are quick-capture action items scoped to a user_id.
  */
 import { getDb } from './db.js';
 
@@ -27,7 +27,7 @@ export function taskCreate(content: string, tenantKey: string): TaskRow {
     const id = Math.random().toString(36).slice(2, 10);
 
     db.prepare(
-        `INSERT INTO tasks (id, tenant_key, content, status, date, time, created_at) VALUES (?, ?, ?, 'open', ?, ?, ?)`
+        `INSERT INTO tasks (id, user_id, content, status, date, time, created_at) VALUES (?, ?, ?, 'open', ?, ?, ?)`
     ).run(id, tenantKey, content, date, time, createdAt);
 
     return { id, content, status: 'open', date, time, created_at: createdAt };
@@ -37,7 +37,7 @@ export function taskList(opts?: { tenantKey?: string; status?: string; date?: st
     const db = getDb();
     const tenantKey = opts?.tenantKey ?? 'web';
 
-    const conditions: string[] = ['tenant_key = ?'];
+    const conditions: string[] = ['user_id = ?'];
     const params: unknown[] = [tenantKey];
 
     if (opts?.status) {

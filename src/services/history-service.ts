@@ -42,12 +42,12 @@ export class ChatHistoryCache {
     async init(): Promise<void> {
         // Restore current session pointer from DB
         const row = this.db.prepare(
-            `SELECT id FROM chat_sessions WHERE tenant_key = ? AND is_current = 1`
+            `SELECT id FROM chat_sessions WHERE user_id = ? AND is_current = 1`
         ).get(this.userId) as { id: string } | undefined;
         this.currentSessionId = row?.id ?? null;
 
         const total = (this.db.prepare(
-            `SELECT COUNT(*) as n FROM chat_sessions WHERE tenant_key = ?`
+            `SELECT COUNT(*) as n FROM chat_sessions WHERE user_id = ?`
         ).get(this.userId) as { n: number }).n;
 
         const tag = `[ChatHistoryCache|${this.userId}]`;
@@ -77,7 +77,7 @@ export class ChatHistoryCache {
 
         const timestamp = new Date().toISOString();
         this.db.prepare(
-            `INSERT INTO chat_messages (session_id, tenant_key, role, content, user_name, timestamp)
+            `INSERT INTO chat_messages (session_id, user_id, role, content, user_name, timestamp)
              VALUES (?, ?, ?, ?, ?, ?)`
         ).run(this.currentSessionId, this.userId, role, content, userName ?? null, timestamp);
 
@@ -124,11 +124,11 @@ export class ChatHistoryCache {
 
         // Mark old current session as not current
         this.db.prepare(
-            `UPDATE chat_sessions SET is_current = 0 WHERE tenant_key = ? AND is_current = 1`
+            `UPDATE chat_sessions SET is_current = 0 WHERE user_id = ? AND is_current = 1`
         ).run(this.userId);
 
         this.db.prepare(
-            `INSERT INTO chat_sessions (id, tenant_key, start_time, end_time, is_current) VALUES (?, ?, ?, ?, 1)`
+            `INSERT INTO chat_sessions (id, user_id, start_time, end_time, is_current) VALUES (?, ?, ?, ?, 1)`
         ).run(sessionId, this.userId, iso, iso);
 
         this.currentSessionId = sessionId;
@@ -140,7 +140,7 @@ export class ChatHistoryCache {
         const now = new Date().toISOString();
         this.db.prepare(`DELETE FROM chat_messages WHERE session_id = ?`).run(this.currentSessionId);
         this.db.prepare(
-            `INSERT INTO chat_messages (session_id, tenant_key, role, content, user_name, timestamp)
+            `INSERT INTO chat_messages (session_id, user_id, role, content, user_name, timestamp)
              VALUES (?, ?, 'assistant', ?, NULL, ?)`
         ).run(this.currentSessionId, this.userId, `[对话摘要]\n${summary}`, now);
         this.db.prepare(`UPDATE chat_sessions SET end_time = ? WHERE id = ?`).run(now, this.currentSessionId);
@@ -148,14 +148,14 @@ export class ChatHistoryCache {
     }
 
     async clearHistory(): Promise<void> {
-        this.db.prepare(`DELETE FROM chat_sessions WHERE tenant_key = ?`).run(this.userId);
+        this.db.prepare(`DELETE FROM chat_sessions WHERE user_id = ?`).run(this.userId);
         this.currentSessionId = null;
         console.log('[ChatHistoryCache] 🗑️  History cleared');
     }
 
     getStats(): { totalSessions: number; currentMessages: number; sessionId: string | null } {
         const total = (this.db.prepare(
-            `SELECT COUNT(*) as n FROM chat_sessions WHERE tenant_key = ?`
+            `SELECT COUNT(*) as n FROM chat_sessions WHERE user_id = ?`
         ).get(this.userId) as { n: number }).n;
         const currentMessages = this.currentSessionId
             ? (this.db.prepare(

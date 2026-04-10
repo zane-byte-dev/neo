@@ -21,11 +21,11 @@ export interface QueuedTask {
 export class MessageQueue {
     private pqueue = new PQueue({ concurrency: 1 });
     private db: Database.Database;
-    private tenantKey: TenantKey;
+    private userId: TenantKey;
 
     constructor(tenantKey: TenantKey) {
         this.db = getDb();
-        this.tenantKey = tenantKey;
+        this.userId = tenantKey;
     }
 
     /**
@@ -36,17 +36,17 @@ export class MessageQueue {
     async init(): Promise<QueuedTask[]> {
         // Reset any stuck 'processing' tasks to 'pending'
         this.db.prepare(
-            `UPDATE message_queue SET status = 'pending' WHERE tenant_key = ? AND status = 'processing'`
-        ).run(this.tenantKey);
+            `UPDATE message_queue SET status = 'pending' WHERE user_id = ? AND status = 'processing'`
+        ).run(this.userId);
 
         const rows = this.db.prepare(
             `SELECT id, chat_id, question, user_name, message_id, status, created_at
-             FROM message_queue WHERE tenant_key = ? AND status != 'done' ORDER BY created_at ASC`
-        ).all(this.tenantKey) as Array<{ id: string; chat_id: string; question: string; user_name: string; message_id: string; status: string; created_at: number }>;
+             FROM message_queue WHERE user_id = ? AND status != 'done' ORDER BY created_at ASC`
+        ).all(this.userId) as Array<{ id: string; chat_id: string; question: string; user_name: string; message_id: string; status: string; created_at: number }>;
 
         const tasks = rows.map(r => this.rowToTask(r));
         if (tasks.length > 0) {
-            console.log(`[MessageQueue|${this.tenantKey}] ${tasks.length} unfinished task(s) found for replay.`);
+            console.log(`[MessageQueue|${this.userId}] ${tasks.length} unfinished task(s) found for replay.`);
         }
         return tasks;
     }
@@ -58,9 +58,9 @@ export class MessageQueue {
         const id = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
         const now = Date.now();
         this.db.prepare(
-            `INSERT INTO message_queue (id, tenant_key, chat_id, question, user_name, message_id, status, created_at)
+            `INSERT INTO message_queue (id, user_id, chat_id, question, user_name, message_id, status, created_at)
              VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
-        ).run(id, this.tenantKey, data.chatId, data.question, data.userName, data.messageId, now);
+        ).run(id, this.userId, data.chatId, data.question, data.userName, data.messageId, now);
         const task: QueuedTask = { ...data, id, status: 'pending', createdAt: now };
         this.schedule(task, worker);
         return task;

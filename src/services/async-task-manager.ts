@@ -17,30 +17,30 @@ export interface AsyncTask {
 
 export class AsyncTaskManager {
     private db: Database.Database;
-    private tenantKey: TenantKey;
+    private userId: TenantKey;
     private pollingInterval: NodeJS.Timeout | null = null;
     private isPolling = false;
 
     constructor(tenantKey: TenantKey) {
         this.db = getDb();
-        this.tenantKey = tenantKey;
+        this.userId = tenantKey;
     }
 
     async init(): Promise<void> {
         const count = (this.db.prepare(
-            `SELECT COUNT(*) as n FROM async_tasks WHERE tenant_key = ?`
-        ).get(this.tenantKey) as { n: number }).n;
-        console.log(`[AsyncTaskManager|${this.tenantKey}] Ready (${count} existing tasks).`);
+            `SELECT COUNT(*) as n FROM async_tasks WHERE user_id = ?`
+        ).get(this.userId) as { n: number }).n;
+        console.log(`[AsyncTaskManager|${this.userId}] Ready (${count} existing tasks).`);
     }
 
     async createTask(chatId: string, prompt: string): Promise<AsyncTask> {
         const id = this.generateId();
         const now = Date.now();
         this.db.prepare(
-            `INSERT INTO async_tasks (id, tenant_key, chat_id, prompt, status, created_at, updated_at)
+            `INSERT INTO async_tasks (id, user_id, chat_id, prompt, status, created_at, updated_at)
              VALUES (?, ?, ?, ?, 'pending', ?, ?)`
-        ).run(id, this.tenantKey, chatId, prompt, now, now);
-        console.log(`[AsyncTaskManager|${this.tenantKey}] Created task: ${id}`);
+        ).run(id, this.userId, chatId, prompt, now, now);
+        console.log(`[AsyncTaskManager|${this.userId}] Created task: ${id}`);
         return this.getTask(id)!;
     }
 
@@ -76,16 +76,16 @@ export class AsyncTaskManager {
     getTasksByStatus(status: TaskStatus): AsyncTask[] {
         const rows = this.db.prepare(
             `SELECT id, chat_id, prompt, status, result, error, created_at, updated_at
-             FROM async_tasks WHERE tenant_key = ? AND status = ?`
-        ).all(this.tenantKey, status) as Array<{ id: string; chat_id: string; prompt: string; status: string; result: string | null; error: string | null; created_at: number; updated_at: number }>;
+             FROM async_tasks WHERE user_id = ? AND status = ?`
+        ).all(this.userId, status) as Array<{ id: string; chat_id: string; prompt: string; status: string; result: string | null; error: string | null; created_at: number; updated_at: number }>;
         return rows.map(r => this.rowToTask(r));
     }
 
     getAllTasks(): AsyncTask[] {
         const rows = this.db.prepare(
             `SELECT id, chat_id, prompt, status, result, error, created_at, updated_at
-             FROM async_tasks WHERE tenant_key = ? ORDER BY created_at DESC`
-        ).all(this.tenantKey) as Array<{ id: string; chat_id: string; prompt: string; status: string; result: string | null; error: string | null; created_at: number; updated_at: number }>;
+             FROM async_tasks WHERE user_id = ? ORDER BY created_at DESC`
+        ).all(this.userId) as Array<{ id: string; chat_id: string; prompt: string; status: string; result: string | null; error: string | null; created_at: number; updated_at: number }>;
         return rows.map(r => this.rowToTask(r));
     }
 
