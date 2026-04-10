@@ -9,11 +9,6 @@ const CHAT_MAX_HISTORY_MESSAGES = parseInt(
     process.env.CHAT_MAX_HISTORY_MESSAGES || '20',
     10
 );
-// ~4 chars per token; 3000 tokens leaves room for Persona + system context + response
-const CHAT_MAX_CONTEXT_TOKENS = parseInt(
-    process.env.CHAT_MAX_CONTEXT_TOKENS || '3000',
-    10
-);
 
 export interface Message {
     role: 'user' | 'assistant';
@@ -31,7 +26,6 @@ export interface Session {
 
 export class ChatHistoryCache {
     private db: Database.Database;
-    /** Scope key — the resolved userId, shared across all tenants of the same user */
     private userId: string;
     private currentSessionId: string | null = null;
     private sessionTimeoutMs: number;
@@ -43,7 +37,6 @@ export class ChatHistoryCache {
         this.userId = userId;
         this.sessionTimeoutMs = CHAT_SESSION_TIMEOUT_HOURS * 60 * 60 * 1000;
         this.maxHistoryMessages = CHAT_MAX_HISTORY_MESSAGES;
-        // no async state in constructor — all reads happen lazily via DB
     }
 
     async init(): Promise<void> {
@@ -122,30 +115,6 @@ export class ChatHistoryCache {
             userName: r.user_name ?? undefined,
             timestamp: r.timestamp,
         }));
-    }
-
-    getContextForGemini(): string {
-        const messages = this.getCurrentSessionHistory();
-        if (messages.length === 0) return '';
-
-        const recent = messages.slice(-this.maxHistoryMessages);
-        const formatted = recent.map(msg =>
-            msg.role === 'user'
-                ? `${msg.userName ?? 'User'}: ${msg.content}`
-                : `Assistant: ${msg.content}`
-        );
-
-        const maxChars = CHAT_MAX_CONTEXT_TOKENS * 4;
-        let totalChars = formatted.reduce((s, x) => s + x.length, 0);
-        let start = 0;
-        while (totalChars > maxChars && start < formatted.length - 1) {
-            totalChars -= formatted[start].length;
-            start++;
-        }
-        if (start > 0) {
-            console.log(`[ChatHistoryCache] ✂️  Token budget hit: dropped ${start} oldest messages`);
-        }
-        return formatted.slice(start).join('\n\n');
     }
 
     async createNewSession(): Promise<void> {
@@ -228,24 +197,4 @@ export class ChatHistoryCache {
             })),
         };
     }
-}
-
-// ── Standalone query (for tools that don't hold a ChatHistoryCache instance) ──
-
-export interface ChatMessageRow {
-    role: string;
-    content: string;
-    user_name: string | null;
-    timestamp: string;
-}
-
-export function getChatHistory(userId: string, date: string, limit: number): ChatMessageRow[] {
-    return getDb().prepare(
-        `SELECT m.role, m.content, m.user_name, m.timestamp
-         FROM chat_messages m
-         JOIN chat_sessions s ON m.session_id = s.id
-         WHERE m.tenant_key = ? AND m.timestamp LIKE ?
-         ORDER BY m.id ASC
-         LIMIT ?`
-    ).all(userId, `${date}%`, limit) as ChatMessageRow[];
 }

@@ -32,7 +32,7 @@ import {
 import { resolveUserWorkspaceDir } from './utils/workspace.js';
 import { initDb } from './services/db.js';
 import { LLMClient, buildTenantSystemInstruction } from './llm/client.js';
-import { ChatHistoryCache } from './services/chat-history-cache.js';
+import { ChatHistoryCache } from './services/history-service.js';
 import { AsyncTaskManager } from './services/async-task-manager.js';
 import { MessageQueue } from './services/message-queue.js';
 import { initTodoScope } from './services/todo-service.js';
@@ -44,7 +44,6 @@ import {
     getTenantContextsForUser,
     hasTenantContext,
 } from './services/tool-context.js';
-import { resolve as resolveUserInput, hasPending } from './services/user-input-waiter.js';
 import { closeBrowser } from './services/browser-service.js';
 import { setupTools } from './tools/index.js';
 import { loadUserSkills } from './skills/index.js';
@@ -263,25 +262,12 @@ export class CoreServer {
             workDir: userCtx.workDir,
             systemInstruction: userCtx.systemInstruction,
             adapter,
-            chatHistoryCache: userCtx.chatHistoryCache,
-            asyncTaskManager,
             messageQueue,
-            todoManager: userCtx.todoManager,
             userProfile: userCtx.userProfile,
             skillRegistry: userCtx.skillRegistry,
         });
 
         console.log(`[Tenant] ✅ ${tenantKey} → user:${userId}`);
-    }
-
-    private _setupAsyncPolling(tenantKey: TenantKey, client: PlatformAdapter): void {
-        const ctx = getTenantContext(tenantKey);
-        setupAsyncPollingFn({
-            asyncTaskManager: ctx.asyncTaskManager,
-            geminiClient: this.llm,
-            sendReply: (cId, text, retries, rId) => this._sendReply(client, cId, text, retries, rId),
-            activeTaskIds: this.activeTaskIds,
-        });
     }
 
     /** Initialize web tenants — one synthetic SSE-backed tenant per user with webToken. */
@@ -467,56 +453,6 @@ export class CoreServer {
         );
     }
 
-    private async _handleCallbackQuery(adapter: PlatformAdapter, cb: NormalizedCallback) {
-        const { data, chatId, messageId } = cb;
-        if (data === 'save_lib') {
-            const tenantCtx = getTenantContext(cb.tenantKey);
-            const workDir = tenantCtx?.workDir;
-            const raw = cb._raw as any;
-            if (!workDir) {
-                await raw?.answerCbQuery?.('⚠️ WORK_DIR 未配置').catch(() => {});
-                return;
-            }
-
-            const msgText: string = raw?.callbackQuery?.message?.text || '';
-            const content = msgText.replace(/^(?:\[\d+\/\d+\]\n)?🤖 inkClaw \(\d{2}:\d{2}\)\n\n/, '');
-
-            if (!content.trim()) {
-                await raw?.answerCbQuery?.('❌ 消息内容为空').catch(() => {});
-                return;
-            }
-
-            try {
-                const now = new Date();
-                const dateStr = now.toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
-                const timeStr = now.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' }).replace(':', '');
-                const title = `saved-${dateStr}-${timeStr}`;
-
-                const targetDir = join(workDir, 'archives', 'Library', 'Wiki');
-                await fs.mkdir(targetDir, { recursive: true });
-                const filePath = join(targetDir, `${title}.md`);
-
-                const dateTimeStr = now.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-                await fs.writeFile(filePath, `# ${title}\n\n${content}\n\n---\n\n时间: ${dateTimeStr}\n`, 'utf-8');
-
-                await adapter.editMessage(chatId, messageId, msgText, {
-                    inlineKeyboard: [[{ text: `✅ 已保存 → Library/Wiki/${title}.md`, callbackData: 'saved_noop' }]],
-                }).catch(() => {});
-                await raw?.answerCbQuery?.('✅ 已保存到 archives/Library/Wiki/').catch(() => {});
-            } catch (err: any) {
-                console.error('[SaveCallback] Error:', err.message);
-                await raw?.answerCbQuery?.('❌ 保存失败: ' + err.message).catch(() => {});
-            }
-            return;
-        }
-
-        if (data === 'saved_noop') {
-            if (cb._raw && typeof (cb._raw as any).answerCbQuery === 'function') {
-                await (cb._raw as any).answerCbQuery('已保存过了').catch(() => {});
-            }
-        }
-    }
-
     // ── HTTP Server (Koa) ─────────────────────────────────────────────────
 
     private _buildKoa(): Koa {
@@ -603,7 +539,6 @@ export class CoreServer {
                             return { id: 'web', chatId: _chatId };
                         },
                     },
-                    todoManager: tenantCtx.todoManager,
                     skillRegistry: tenantCtx.skillRegistry,
                     imageCallback: async (data, mimeType, caption) => {
                         write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
@@ -611,7 +546,6 @@ export class CoreServer {
                 };
             }
 
-            const cache = tenantCtx?.chatHistoryCache;
             if (cache) await cache.addMessage('user', message);
             const history = cache?.getContextForGemini() ?? [];
 
@@ -655,7 +589,7 @@ export class CoreServer {
             })() : undefined;
 
             if (tenantCtx) {
-                await tenantCtx.chatHistoryCache.createNewSession();
+                await chatHistoryCache.createNewSession();
             }
             ctx.body = { ok: true };
         };

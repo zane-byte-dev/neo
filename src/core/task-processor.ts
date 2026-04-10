@@ -27,7 +27,6 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
         workDir: tenantCtx.workDir,
         systemInstruction: tenantCtx.systemInstruction,
         adapter: tenantCtx.adapter,
-        todoManager: tenantCtx.todoManager,
         skillRegistry: tenantCtx.skillRegistry,
     };
 

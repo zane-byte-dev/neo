@@ -26,15 +26,9 @@ export interface TenantContext {
     workDir: string;
     /** Per-user system instruction (loaded from workspace config/) */
     systemInstruction: string;
-
     // ── Per-tenant (client-specific) ─────────────────────────────────────
     adapter: PlatformAdapter;
-    chatHistoryCache: any;
-    asyncTaskManager: any;
     messageQueue: any;
-
-    // ── Shared per-user managers (convenience references) ────────────────
-    todoManager: import('./todo-manager.js').TodoManager;
     userProfile: any;
     /** Per-user skill registry (Markdown skill definitions) */
     skillRegistry: import('../skills/skill-registry.js').SkillRegistry;
