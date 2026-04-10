@@ -13,7 +13,7 @@ import {
 } from './config.js';
 import { initDb } from './services/db.js';
 import { LLMClient } from './llm/client.js';
-import { getUserContext } from './services/user-context.js';
+import { calcUser } from './services/user-service.js';
 import {
     getTenantContext,
 } from './services/tool-context.js';
@@ -179,7 +179,7 @@ function _installChatRoute(router: Router, llm: LLMClient): void {
 
         const cache = reqUserId ? new ChatSession(reqUserId) : undefined;
         if (cache) cache.addMessage('user', message);
-        const history = cache?.getContextForGemini() ?? [];
+        const history = cache?.getHistoryText() ?? '';
 
         let fullResponse = '';
         try {
@@ -204,7 +204,7 @@ function _installChatRoute(router: Router, llm: LLMClient): void {
         } finally {
             stream.end();
             if (fullResponse && cache) {
-                cache.addMessage('assistant', fullResponse).catch(console.error);
+                cache.addMessage('assistant', fullResponse);
             }
         }
     });
@@ -230,11 +230,12 @@ function _installSessionRoutes(router: Router): void {
 function _installMeRoute(router: Router): void {
     router.get('/api/me', async (ctx) => {
         const reqUserId: string | undefined = ctx.state.userId;
+        console.log(reqUserId);
         if (!reqUserId) {
             ctx.body = { userId: null, displayName: null, profile: null };
             return;
         }
-        const userCtx = getUserContext(reqUserId);
+        const userCtx = await calcUser(reqUserId);
         const profile = await userCtx.userProfile.read() as string;
         const nameMatch = profile.match(/[-*]\s*姓名[:：]\s*(.+)/);
         const displayName = nameMatch?.[1]?.trim() || reqUserId;

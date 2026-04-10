@@ -11,7 +11,7 @@
  */
 
 import type { TenantKey, PlatformAdapter, UserId } from '../types/platform.js';
-import type { UserContext } from './user-context.js';
+import type { UserContext } from './user-service.js';
 
 export interface TenantContext {
     tenantKey: TenantKey;

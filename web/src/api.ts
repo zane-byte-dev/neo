@@ -294,7 +294,7 @@ export type AuthResult = 'ok' | 'unauthorized' | 'unreachable'
 
 export async function checkAuth(): Promise<AuthResult> {
     try {
-        await apiGet('/api/notebook?action=list')
+        await apiGet('/api/me')
         return 'ok'
     } catch (err: unknown) {
         const e = err as { status?: number; message?: string }

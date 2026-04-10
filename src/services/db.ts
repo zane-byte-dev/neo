@@ -9,7 +9,7 @@
  * Call getDb() anywhere else to access the shared instance.
  */
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
+import { mkdirSync, readFileSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { DB_PATH as DEFAULT_DB_PATH } from '../config.js';
 
@@ -35,6 +35,17 @@ export function getDb(): Database.Database {
 
 function createSchema(db: Database.Database): void {
     db.exec(`
+        -- ── Users ────────────────────────────────────────────────────────────
+        CREATE TABLE IF NOT EXISTS users (
+            id          TEXT    PRIMARY KEY,
+            name        TEXT    NOT NULL,
+            workspace   TEXT    NOT NULL,
+            tenants     TEXT    NOT NULL DEFAULT '[]',
+            web_token   TEXT,
+            created_at  INTEGER NOT NULL,
+            updated_at  INTEGER NOT NULL
+        );
+
         -- ── Chat ────────────────────────────────────────────────────────────
         CREATE TABLE IF NOT EXISTS chat_sessions (
             id          TEXT    PRIMARY KEY,
@@ -301,4 +312,43 @@ function createSchema(db: Database.Database): void {
             console.log(`[DB] Migrated ${existingTodos.length} todos → todos_v2`);
         }
     } catch { /* table may not exist or already migrated */ }
+
+    // Migrate users from space/config.json → users table
+    try {
+        const configPath = resolve(dirname(DEFAULT_DB_PATH), '..', 'space', 'config.json');
+        const raw = readFileSync(configPath, 'utf8');
+        const data = JSON.parse(raw) as { users?: Array<{
+            id: number | string;
+            name: string;
+            workspace: string;
+            tenants?: string[];
+            webToken?: string;
+        }> };
+        const entries = data.users ?? [];
+        if (entries.length > 0) {
+            const now = Date.now();
+            const upsert = db.prepare(`
+                INSERT INTO users (id, name, workspace, tenants, web_token, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    name       = excluded.name,
+                    workspace  = excluded.workspace,
+                    tenants    = excluded.tenants,
+                    web_token  = excluded.web_token,
+                    updated_at = excluded.updated_at
+            `);
+            for (const u of entries) {
+                upsert.run(
+                    String(u.id),
+                    u.name,
+                    u.workspace,
+                    JSON.stringify(u.tenants ?? []),
+                    u.webToken ?? null,
+                    now,
+                    now,
+                );
+            }
+            console.log(`[DB] Migrated ${entries.length} user(s) from space/config.json → users`);
+        }
+    } catch { /* config.json not found or already migrated */ }
 }
