@@ -3,8 +3,8 @@
 /**
  * main.ts — Application entry point.
  *
- * Thin bootstrap: validates env, registers platform adapters, starts the app.
- * To add a new platform, import its adapter and call app.registerAdapter().
+ * Thin bootstrap: validates env, registers platform clients, starts CoreServer.
+ * To add a new platform, create a client and call server.registerClient().
  */
 
 import { setupLogger } from './utils/logger.js';
