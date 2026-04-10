@@ -14,6 +14,7 @@
 import type { UserId } from '../types/platform.js';
 import type { SkillRegistry } from '../skills/skill-registry.js';
 import type { TodoManager } from './todo-manager.js';
+import type { ChatHistoryCache } from './chat-history-cache.js';
 
 export interface UserContext {
     userId: UserId;
@@ -26,6 +27,8 @@ export interface UserContext {
     todoManager: TodoManager;
     /** Per-user skill registry, populated from space/{userId}/skills/ */
     skillRegistry: SkillRegistry;
+    /** Per-user chat history (scoped by userId, shared across all tenants) */
+    chatHistoryCache: ChatHistoryCache;
 }
 
 const _registry = new Map<UserId, UserContext>();

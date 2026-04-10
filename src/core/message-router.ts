@@ -34,7 +34,6 @@ export async function processMessage(deps: MessageRouterDeps, msg: NormalizedMes
         return;
     }
 
-    // If ask_user tool is waiting for input, route this message directly to it
     if (hasPending(chatId)) {
         resolveUserInput(chatId, rawText);
         return;

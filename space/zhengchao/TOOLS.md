@@ -20,7 +20,6 @@
 | 访问笔记本知识库（浏览/搜索/读写） | `notebook` |
 | 管理任务清单（多步骤任务） | `todo_write` |
 | 生成当前对话摘要 | `brief` |
-| 向用户提问并等待回答 | `ask_user` |
 | 暂停等待（轮询/限速） | `sleep` |
 | 创建周期定时任务 | `schedule_create` |
 | 查看/删除定时任务 | `schedule_list` / `schedule_delete` |
@@ -44,7 +43,6 @@
 ## 任务管理原则
 
 - 处理**多步骤复杂任务**时，先用 `todo_write` 列出步骤，每步执行前标 `in_progress`，完成后标 `done`
-- 需要用户做决策（破坏性操作/方向选择）→ 先用 `ask_user` 确认，再执行
 - 长任务中途汇报进度 → 用 `brief`
 
 ## 网络与 AI 工具原则

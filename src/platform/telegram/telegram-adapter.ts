@@ -190,24 +190,6 @@ export class TelegramAdapter implements PlatformAdapter {
             await this.server.handleMessage(msg);
         });
 
-        // Callback queries
-        this.bot.on('callback_query', async (ctx) => {
-            const data = (ctx.callbackQuery as any)?.data;
-            if (!data) return;
-            const chatId = String(ctx.callbackQuery.message?.chat?.id ?? '');
-            const messageId = String(ctx.callbackQuery.message?.message_id ?? '');
-            const tenantKey = `telegram:${chatId}` as any;
-
-            await this.server.handleCallbackQuery({
-                tenantKey,
-                platform: 'telegram',
-                chatId,
-                messageId,
-                data,
-                _raw: ctx,
-            });
-        });
-
         this.bot.catch((err: any) => {
             console.error(`[TelegramAdapter Error] ${err}`);
         });

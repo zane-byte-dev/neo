@@ -24,7 +24,6 @@ import {
     ASYNC_TRIGGER_PREFIXES,
     WORK_DIR,
     getAuthorizedForPlatform,
-    getAllUsers,
     resolveUserId,
     GEMINI_API_KEY,
     resolveUserIdByWebToken,
@@ -38,7 +37,7 @@ import { AsyncTaskManager } from './services/async-task-manager.js';
 import { MessageQueue } from './services/message-queue.js';
 import { initTodoScope } from './services/todo-service.js';
 import { UserProfileManager } from './services/user-profile.js';
-import { registerUserContext, getUserContext, getAllUserIds } from './services/user-context.js';
+import { registerUserContext, getUserContext, hasUserContext, getAllUserIds } from './services/user-context.js';
 import {
     registerTenantContext,
     getTenantContext,
@@ -84,6 +83,8 @@ export class CoreServer {
 
     private activeTaskIds = new Set<string>();
     private pendingReadMatches = new Map<string, { matches: string[]; expiry: number }>();
+    private _userInitPromises = new Map<string, Promise<void>>();
+    private _tenantInitPromises = new Map<TenantKey, Promise<void>>();
 
     /** SSE push streams for web clients: userId → active PassThrough */
     private activeStreams = new Map<string, PassThrough>();
@@ -113,25 +114,20 @@ export class CoreServer {
         await setupTools();
         await setupCommands();
 
-        // Phase 1: per-user shared context (workspace, profile, skills, todos)
-        await this._initUsers();
-
-        // Phase 2: per-platform-client + their tenants
+        // Init tenants — user contexts are lazily created on first tenant reference
         for (const [platform, client] of this.clients) {
             const tenantKeys = getAuthorizedForPlatform(platform as any);
             for (const tk of tenantKeys) {
-                await this._initTenant(tk, client);
-            }
-            for (const tk of tenantKeys) {
+                await this._ensureTenantContext(tk, client);
                 this._setupAsyncPolling(tk, client);
             }
             console.log(`[${platform}] ✅ ${tenantKeys.length} tenant(s) configured.`);
         }
 
-        // Phase 3: web tenants (synthesized egress via SSE — only when web is enabled)
+        // Web tenants (synthesized egress via SSE)
         await this._initWebTenants();
 
-        // Phase 4: per-user lifecycle (reminders, schedules, message queue replay)
+        // Per-user lifecycle (reminders, schedules, message queue replay)
         for (const userId of getAllUserIds()) {
             await this._initUserLifecycle(userId);
         }
@@ -187,13 +183,6 @@ export class CoreServer {
         return this._processMessage(client, msg.tenantKey, msg);
     }
 
-    async handleCallbackQuery(cb: NormalizedCallback): Promise<void> {
-        const { platform } = parseTenantKey(cb.tenantKey);
-        const client = this.clients.get(platform);
-        if (!client) return;
-        return this._handleCallbackQuery(client, cb);
-    }
-
     // ── Web SSE registry ─────────────────────────────────────────────────
 
     registerWebStream(userId: string, stream: PassThrough): void {
@@ -211,45 +200,59 @@ export class CoreServer {
         }
     }
 
-    // ── User initialization ───────────────────────────────────────────────
+    // ── Context initialization (lazy, idempotent) ─────────────────────────
 
-    private async _initUsers(): Promise<void> {
-        const baseWorkDir = resolve(WORK_DIR || '.');
-
-        for (const [userId, entry] of getAllUsers()) {
-            const workDir = resolveUserWorkspaceDir(baseWorkDir, userId);
-            console.log(`[User] 📂 ${userId} workspace: ${workDir}`);
-
-            const systemInstruction = await buildTenantSystemInstruction(workDir);
-            if (systemInstruction) {
-                console.log(`[User] 📜 ${userId} system instruction ready (${systemInstruction.length} chars)`);
-            }
-
-            const userProfile = new UserProfileManager(workDir);
-            const todoManager = initTodoScope(userId);
-            const skillRegistry = await loadUserSkills(userId, resolve('.'));
-
-            registerUserContext({ userId, workDir, systemInstruction, userProfile, todoManager, skillRegistry });
-            console.log(`[User] ✅ ${userId} initialized (${entry.tenants.length} tenant(s))`);
+    /** Ensure user context exists. Promise-cached — safe to call concurrently or repeatedly. */
+    private _ensureUserContext(userId: UserId): Promise<void> {
+        if (!this._userInitPromises.has(userId)) {
+            this._userInitPromises.set(userId, this._doInitUserContext(userId));
         }
+        return this._userInitPromises.get(userId)!;
     }
 
-    // ── Tenant initialization ─────────────────────────────────────────────
+    private async _doInitUserContext(userId: UserId): Promise<void> {
+        if (hasUserContext(userId)) return;
+        const baseWorkDir = resolve(WORK_DIR || '.');
+        const workDir = resolveUserWorkspaceDir(baseWorkDir, userId);
+        console.log(`[User] 📂 ${userId} workspace: ${workDir}`);
 
-    private async _initTenant(tenantKey: TenantKey, client: PlatformAdapter): Promise<void> {
+        const systemInstruction = await buildTenantSystemInstruction(workDir);
+        if (systemInstruction) {
+            console.log(`[User] 📜 ${userId} system instruction ready (${systemInstruction.length} chars)`);
+        }
+
+        const userProfile = new UserProfileManager(workDir);
+        const todoManager = initTodoScope(userId);
+        const skillRegistry = await loadUserSkills(userId, resolve('.'));
+        const chatHistoryCache = new ChatHistoryCache(userId);
+        await chatHistoryCache.init();
+
+        registerUserContext({ userId, workDir, systemInstruction, userProfile, todoManager, skillRegistry, chatHistoryCache });
+        console.log(`[User] ✅ ${userId} initialized`);
+    }
+
+    /** Ensure tenant context exists. Promise-cached — safe to call concurrently or repeatedly. */
+    private _ensureTenantContext(tenantKey: TenantKey, adapter: PlatformAdapter): Promise<void> {
+        if (!this._tenantInitPromises.has(tenantKey)) {
+            this._tenantInitPromises.set(tenantKey, this._doInitTenantContext(tenantKey, adapter));
+        }
+        return this._tenantInitPromises.get(tenantKey)!;
+    }
+
+    private async _doInitTenantContext(tenantKey: TenantKey, adapter: PlatformAdapter): Promise<void> {
+        if (hasTenantContext(tenantKey)) return;
         const userId = resolveUserId(tenantKey);
         if (!userId) {
             console.warn(`[Tenant] ⚠️  ${tenantKey} has no user mapping — skipping`);
             return;
         }
+
+        await this._ensureUserContext(userId);
         const userCtx = getUserContext(userId);
 
-        const chatHistoryCache = new ChatHistoryCache(userId);
-        await chatHistoryCache.init();
         const asyncTaskManager = new AsyncTaskManager(tenantKey);
         await asyncTaskManager.init();
         const messageQueue = new MessageQueue(tenantKey);
-
         const { userId: platformUserId } = parseTenantKey(tenantKey);
 
         registerTenantContext({
@@ -259,8 +262,8 @@ export class CoreServer {
             user: userCtx,
             workDir: userCtx.workDir,
             systemInstruction: userCtx.systemInstruction,
-            adapter: client,
-            chatHistoryCache,
+            adapter,
+            chatHistoryCache: userCtx.chatHistoryCache,
             asyncTaskManager,
             messageQueue,
             todoManager: userCtx.todoManager,
@@ -287,10 +290,9 @@ export class CoreServer {
 
         const webTenantKeys = getAuthorizedForPlatform('web');
         for (const tk of webTenantKeys) {
-            if (hasTenantContext(tk)) continue;
             const { userId } = parseTenantKey(tk);
             const webEgress = this._makeWebEgress(userId);
-            await this._initTenant(tk, webEgress);
+            await this._ensureTenantContext(tk, webEgress);
             this._setupAsyncPolling(tk, webEgress);
         }
         if (webTenantKeys.length > 0) {
@@ -467,23 +469,6 @@ export class CoreServer {
 
     private async _handleCallbackQuery(adapter: PlatformAdapter, cb: NormalizedCallback) {
         const { data, chatId, messageId } = cb;
-
-        if (data.startsWith('ask_user:')) {
-            const choice = data.slice('ask_user:'.length);
-            if (hasPending(chatId)) {
-                resolveUserInput(chatId, choice);
-                await adapter.editMessage(chatId, messageId, '', { inlineKeyboard: [] }).catch(() => {});
-                if (cb._raw && typeof (cb._raw as any).answerCbQuery === 'function') {
-                    await (cb._raw as any).answerCbQuery(`已选择：${choice}`).catch(() => {});
-                }
-            } else {
-                if (cb._raw && typeof (cb._raw as any).answerCbQuery === 'function') {
-                    await (cb._raw as any).answerCbQuery('已超时或无待处理问题').catch(() => {});
-                }
-            }
-            return;
-        }
-
         if (data === 'save_lib') {
             const tenantCtx = getTenantContext(cb.tenantKey);
             const workDir = tenantCtx?.workDir;
