@@ -8,8 +8,8 @@
  */
 
 import { setupLogger } from './utils/logger.js';
-import { AUTHORIZED_USERS, BOT_COMMANDS, getAuthorizedForPlatform, TELEGRAM_BOT_TOKEN, FEISHU_APP_ID, FEISHU_APP_SECRET, GEMINI_MODEL_ENV } from './config.js';
-import { App } from './app.js';
+import { AUTHORIZED_USERS, BOT_COMMANDS, TELEGRAM_BOT_TOKEN, FEISHU_APP_ID, FEISHU_APP_SECRET } from './config.js';
+import { CoreServer } from './server.js';
 import { TelegramAdapter } from './platform/telegram/telegram-adapter.js';
 
 // Initialize Logger
@@ -27,45 +27,42 @@ if (AUTHORIZED_USERS.size === 0) {
     process.exit(1);
 }
 
-// ── Build app ────────────────────────────────────────────────────────────────
+// ── Build server ─────────────────────────────────────────────────────────────
 
-const app = new App();
+const server = new CoreServer();
 
-// Register Telegram adapter
-const telegramAdapter = new TelegramAdapter(TELEGRAM_BOT_TOKEN);
-app.registerAdapter(telegramAdapter);
+// Register Telegram client
+const telegramAdapter = new TelegramAdapter(TELEGRAM_BOT_TOKEN, server);
+server.registerClient(telegramAdapter);
 
-// Register Feishu adapter (optional — only when env vars are set)
+// Register Feishu client (optional — only when env vars are set)
 if (FEISHU_APP_ID && FEISHU_APP_SECRET) {
     const { FeishuAdapter } = await import('./platform/feishu/feishu-adapter.js');
-    const feishuAdapter = new FeishuAdapter({ appId: FEISHU_APP_ID, appSecret: FEISHU_APP_SECRET });
-    app.registerAdapter(feishuAdapter);
+    const feishuAdapter = new FeishuAdapter({ appId: FEISHU_APP_ID, appSecret: FEISHU_APP_SECRET }, server);
+    server.registerClient(feishuAdapter);
 } else {
     console.log('[Feishu] Skipped — FEISHU_APP_ID / FEISHU_APP_SECRET not set.');
 }
 
-// Register Web adapter (optional — only when WEB_PORT or WEB_ENABLED is set)
-if (process.env.WEB_PORT ?? process.env.WEB_ENABLED) {
-    const { WebAdapter } = await import('./platform/web/web-adapter.js');
-    const webAdapter = new WebAdapter(app.geminiClient);
-    app.registerAdapter(webAdapter);
-} else {
+// Web is handled directly by CoreServer — no separate adapter needed.
+// Set WEB_PORT or WEB_ENABLED env var to enable the HTTP server.
+if (!(process.env.WEB_PORT ?? process.env.WEB_ENABLED)) {
     console.log('[Web] Skipped — WEB_PORT / WEB_ENABLED not set.');
 }
 
 // ── Initialize & launch ──────────────────────────────────────────────────────
 
-await app.init();
+await server.init();
 
 // Register Telegram command menu
 telegramAdapter.setCommands(BOT_COMMANDS)
     .then(() => console.log('[System] Telegram commands registered.'))
     .catch((err: any) => console.error('[System] Failed to register commands:', err));
 
-await app.start();
+await server.start();
 
 // ── Graceful shutdown ────────────────────────────────────────────────────────
 
-const shutdown = () => app.shutdown();
+const shutdown = () => server.shutdown();
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);

@@ -10,9 +10,13 @@
  * In the Feishu Developer Console, go to:
  *   Events and Callbacks → Mode of event/callback subscription
  *     → "Receive events/callbacks through persistent connection"
+ *
+ * Architecture: Client model — FeishuAdapter calls server.handleMessage() directly
+ * for all ingress messages.
  */
 
 import * as lark from '@larksuiteoapi/node-sdk';
+import type { CoreServer } from '../../server.js';
 import type {
     PlatformAdapter,
     NormalizedMessage,
@@ -24,16 +28,13 @@ import type {
 export class FeishuAdapter implements PlatformAdapter {
     readonly platform = 'feishu' as const;
 
-    private messageHandler?: (msg: NormalizedMessage) => Promise<void>;
-    private callbackHandler?: (cb: NormalizedCallback) => Promise<void>;
-
     private appId: string;
     private appSecret: string;
     private client: InstanceType<typeof lark.Client>;
     private wsClient?: InstanceType<typeof lark.WSClient>;
     private eventDispatcher?: InstanceType<typeof lark.EventDispatcher>;
 
-    constructor(opts: { appId: string; appSecret: string }) {
+    constructor(opts: { appId: string; appSecret: string }, private readonly server: CoreServer) {
         this.appId = opts.appId;
         this.appSecret = opts.appSecret;
         this.client = new lark.Client({
@@ -135,15 +136,11 @@ export class FeishuAdapter implements PlatformAdapter {
         return md;
     }
 
-    // ── Event registration ───────────────────────────────────────────────
+    // ── Event registration (no-op — clients call server directly) ─────────
 
-    onMessage(handler: (msg: NormalizedMessage) => Promise<void>): void {
-        this.messageHandler = handler;
-    }
+    onMessage(_handler: (msg: NormalizedMessage) => Promise<void>): void {}
 
-    onCallbackQuery(handler: (cb: NormalizedCallback) => Promise<void>): void {
-        this.callbackHandler = handler;
-    }
+    onCallbackQuery(_handler: (cb: NormalizedCallback) => Promise<void>): void {}
 
     // ── Internal: build message content ──────────────────────────────────
 
@@ -165,8 +162,6 @@ export class FeishuAdapter implements PlatformAdapter {
     // ── Internal: normalize incoming Feishu events ───────────────────────
 
     private async _handleMessageEvent(data: any): Promise<void> {
-        if (!this.messageHandler) return;
-
         const message = data?.message;
         const sender = data?.sender;
         if (!message || !sender) return;
@@ -248,6 +243,6 @@ export class FeishuAdapter implements PlatformAdapter {
             _raw: data,
         };
 
-        await this.messageHandler(normalized);
+        await this.server.handleMessage(normalized);
     }
 }

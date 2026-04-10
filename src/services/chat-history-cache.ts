@@ -69,10 +69,6 @@ export class ChatHistoryCache {
         }
     }
 
-    setOnSessionExpire(cb: (session: Session) => Promise<void>): void {
-        this.onSessionExpire = cb;
-    }
-
     async addMessage(role: 'user' | 'assistant', content: string, userName?: string): Promise<void> {
         if (this.shouldCreateNewSession()) {
             if (this.currentSessionId && this.onSessionExpire) {

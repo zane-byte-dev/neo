@@ -1,7 +1,6 @@
 import { promises as fs } from 'fs';
-import { resolve } from 'path';
 import { hasPending, resolve as resolveUserInput } from '../services/user-input-waiter.js';
-import { isAuthorized, GEMINI_API_KEY } from '../config.js';
+import { isAuthorized } from '../config.js';
 import { getTenantContext } from '../services/tool-context.js';
 import type { TodoManager } from '../services/todo-manager.js';
 import type { PlatformAdapter, NormalizedMessage, TenantKey } from '../types/platform.js';

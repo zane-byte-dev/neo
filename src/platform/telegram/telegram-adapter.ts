@@ -3,12 +3,16 @@
  *
  * Wraps Telegraf and normalizes all platform-specific APIs into the
  * PlatformAdapter interface so the core engine never touches Telegraf directly.
+ *
+ * Architecture: Client model — TelegramAdapter calls server.handleMessage() and
+ * server.handleCallbackQuery() directly for all ingress messages.
  */
 
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { promises as fs } from 'fs';
 import { markdownToTelegram } from '../../utils/markdown-converter.js';
+import type { CoreServer } from '../../server.js';
 import type {
     PlatformAdapter,
     NormalizedMessage,
@@ -21,10 +25,8 @@ import type {
 export class TelegramAdapter implements PlatformAdapter {
     readonly platform = 'telegram' as const;
     private bot: Telegraf;
-    private messageHandler?: (msg: NormalizedMessage) => Promise<void>;
-    private callbackHandler?: (cb: NormalizedCallback) => Promise<void>;
 
-    constructor(token: string) {
+    constructor(token: string, private readonly server: CoreServer) {
         this.bot = new Telegraf(token);
     }
 
@@ -121,15 +123,11 @@ export class TelegramAdapter implements PlatformAdapter {
         return markdownToTelegram(md);
     }
 
-    // ── Event registration ───────────────────────────────────────────────
+    // ── Event registration (no-op — clients call server directly) ─────────
 
-    onMessage(handler: (msg: NormalizedMessage) => Promise<void>): void {
-        this.messageHandler = handler;
-    }
+    onMessage(_handler: (msg: NormalizedMessage) => Promise<void>): void {}
 
-    onCallbackQuery(handler: (cb: NormalizedCallback) => Promise<void>): void {
-        this.callbackHandler = handler;
-    }
+    onCallbackQuery(_handler: (cb: NormalizedCallback) => Promise<void>): void {}
 
     // ── Telegram command menu ────────────────────────────────────────────
 
@@ -142,14 +140,12 @@ export class TelegramAdapter implements PlatformAdapter {
     private _setupListeners(): void {
         // Text messages
         this.bot.on(message('text'), async (ctx) => {
-            if (!this.messageHandler) return;
             const msg = this._normalizeTextMessage(ctx);
-            await this.messageHandler(msg);
+            await this.server.handleMessage(msg);
         });
 
         // Photo messages
         this.bot.on(message('photo'), async (ctx) => {
-            if (!this.messageHandler) return;
             const photos = ctx.message.photo;
             const largest = photos[photos.length - 1];
             const msg = this._normalizeMediaMessage(ctx, {
@@ -158,33 +154,30 @@ export class TelegramAdapter implements PlatformAdapter {
                 mimeType: 'image/jpeg',
                 caption: ctx.message.caption || undefined,
             });
-            await this.messageHandler(msg);
+            await this.server.handleMessage(msg);
         });
 
         // Voice / audio messages
         this.bot.on(message('voice'), async (ctx) => {
-            if (!this.messageHandler) return;
             const msg = this._normalizeMediaMessage(ctx, {
                 type: 'voice',
                 fileId: ctx.message.voice.file_id,
                 mimeType: 'audio/ogg',
             });
-            await this.messageHandler(msg);
+            await this.server.handleMessage(msg);
         });
 
         this.bot.on(message('audio'), async (ctx) => {
-            if (!this.messageHandler) return;
             const msg = this._normalizeMediaMessage(ctx, {
                 type: 'voice',
                 fileId: ctx.message.audio.file_id,
                 mimeType: ctx.message.audio.mime_type || 'audio/mpeg',
             });
-            await this.messageHandler(msg);
+            await this.server.handleMessage(msg);
         });
 
         // Document messages
         this.bot.on(message('document'), async (ctx) => {
-            if (!this.messageHandler) return;
             const doc = ctx.message.document;
             const msg = this._normalizeMediaMessage(ctx, {
                 type: 'document',
@@ -194,19 +187,18 @@ export class TelegramAdapter implements PlatformAdapter {
                 fileSize: doc.file_size,
                 caption: ctx.message.caption || undefined,
             });
-            await this.messageHandler(msg);
+            await this.server.handleMessage(msg);
         });
 
         // Callback queries
         this.bot.on('callback_query', async (ctx) => {
-            if (!this.callbackHandler) return;
             const data = (ctx.callbackQuery as any)?.data;
             if (!data) return;
             const chatId = String(ctx.callbackQuery.message?.chat?.id ?? '');
             const messageId = String(ctx.callbackQuery.message?.message_id ?? '');
             const tenantKey = `telegram:${chatId}` as any;
 
-            await this.callbackHandler({
+            await this.server.handleCallbackQuery({
                 tenantKey,
                 platform: 'telegram',
                 chatId,
