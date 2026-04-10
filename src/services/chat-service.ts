@@ -49,9 +49,9 @@ export function sessionGetCurrent(userId: string): SessionRow | null {
 }
 
 /** Create a new session and mark it as current (deactivates previous ones). */
-export function sessionCreate(userId: string): SessionRow {
+export function sessionCreate(userId: string, id?: string): SessionRow {
     const db = getDb();
-    const id = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    id = id ?? `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
 
     // Deactivate existing current session

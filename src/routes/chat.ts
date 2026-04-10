@@ -1,9 +1,8 @@
 import { PassThrough } from 'stream';
 import type Router from '@koa/router';
-import { ChatSession, getGeminiHistory, messageAdd, sessionGet } from '../services/chat-service.js';
+import { messageList, messageAdd, sessionGet, sessionCreate } from '../services/chat-service.js';
 import { LLMClient, ToolContext } from '../llm/client.js';
 import { calcUser } from '../services/user-service.js';
-import { get } from 'http';
     
 const llm = new LLMClient();
 
@@ -48,10 +47,12 @@ export function chatRoute(router: Router): void {
             systemInstruction: userCtx.systemInstruction,
             skillRegistry: userCtx.skillRegistry,
         };
-        const session = sessionGet(sessionId, userId);
-        if (session) messageAdd(session.id, userId, 'user', message);
+        const historyRows = messageList(sessionId);
+        const history = historyRows.map(r => `${r.role === 'assistant' ? 'Assistant' : 'User'}: ${r.content}`).join('\n');
 
-        const history = getGeminiHistory(sessionId, userId);
+        let session = sessionGet(sessionId, userId);
+        if (!session) session = sessionCreate(userId, sessionId);
+        messageAdd(session.id, userId, 'user', message);
 
         let fullResponse = '';
         try {
