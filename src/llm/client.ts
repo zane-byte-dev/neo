@@ -267,10 +267,6 @@ export class LLMClient {
         return this.runAgent(prompt, context);
     }
 
-    isEnabled(): boolean {
-        return this.enabled;
-    }
-
     /** No-op: no subprocess to terminate. */
     close(): void {}
 

@@ -57,25 +57,11 @@ export interface FunctionDeclaration {
 // ── Tool context (fields available to tools at runtime) ──────────────────────
 
 export interface ToolContext {
-    /** Tenant key (platform:userId) for platform routing */
-    tenantKey: string;
-    /** Resolved internal user ID (from users.json) — shared across all tenants of the same user */
     userId: string;
-    /** Platform-specific chat/channel ID */
     chatId: string;
-    /** Per-tenant workspace root directory (absolute path) */
     workDir: string;
-    /** Per-tenant system instruction (for sub-agent calls) */
     systemInstruction: string;
-    /**
-     * Web-only: stream a generated image back via SSE instead of using the platform adapter.
-     * When present, generate_image will call this instead of adapter.sendPhoto().
-     */
     imageCallback?: (data: string, mimeType: string, caption?: string) => Promise<void>;
-    /**
-     * Per-user skill registry — populated from space/{userId}/skills/*.skill.md.
-     * Used by the run_skill tool to look up and execute Markdown-defined skills.
-     */
     skillRegistry?: import('../skills/skill-registry.js').SkillRegistry;
 }
 

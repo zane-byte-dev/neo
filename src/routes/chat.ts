@@ -2,6 +2,7 @@ import { PassThrough } from 'stream';
 import type Router from '@koa/router';
 import { ChatSession } from '../services/chat-service.js';
 import { LLMClient } from '../llm/client.js';
+import { calcUser } from '../services/user-service.js';
     
 const llm = new LLMClient();
 
@@ -18,6 +19,7 @@ export function chatRoute(router: Router): void {
         }
 
         const userId = ctx.state.userId;
+        const userCtx = await calcUser(userId);
         
         const stream = new PassThrough();
         ctx.status = 200;
@@ -35,15 +37,15 @@ export function chatRoute(router: Router): void {
         let toolContext = {
                 userId,
                 chatId,
-                workDir: tenantCtx.workDir,
-                systemInstruction: tenantCtx.systemInstruction,
-                skillRegistry: tenantCtx.skillRegistry,
+                workDir: userCtx.workDir,
+                systemInstruction: userCtx.systemInstruction,
+                skillRegistry: userCtx.skillRegistry,
                 imageCallback: async (data, mimeType, caption) => {
                     write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
                 },
             };
 
-        const cache = reqUserId ? new ChatSession(reqUserId) : undefined;
+        const cache = userId ? new ChatSession(userId) : undefined;
         if (cache) cache.addMessage('user', message);
         const history = cache?.getHistoryText() ?? '';
 
