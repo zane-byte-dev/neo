@@ -4,15 +4,10 @@
  * Used by skills (brief, generate-daily-log) that need the conversation
  * transcript but run in a fresh agentLoop without history context.
  */
-import { getDb } from '../../services/db.js';
+import { getChatHistory, type ChatMessageRow } from '../../services/chat-history-cache.js';
 import type { Tool, ToolContext } from '../_base.js';
 
-interface MessageRow {
-    role: string;
-    content: string;
-    user_name: string | null;
-    timestamp: string;
-}
+type MessageRow = ChatMessageRow;
 
 function todayStr(): string {
     return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
@@ -46,15 +41,7 @@ export const getChatHistoryTool: Tool = {
         const date = String(args.date ?? todayStr());
         const limit = Math.min(Number(args.limit ?? 100), 500);
 
-        const db = getDb();
-        const rows = db.prepare(
-            `SELECT m.role, m.content, m.user_name, m.timestamp
-             FROM chat_messages m
-             JOIN chat_sessions s ON m.session_id = s.id
-             WHERE m.tenant_key = ? AND m.timestamp LIKE ?
-             ORDER BY m.id ASC
-             LIMIT ?`
-        ).all(tenantKey, `${date}%`, limit) as MessageRow[];
+        const rows = getChatHistory(tenantKey, date, limit);
 
         if (rows.length === 0) {
             return `没有找到 ${date} 的对话记录。`;

@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { TenantKey } from '../types/platform.js';
+import { getDb } from './db.js';
 
 const CHAT_SESSION_TIMEOUT_HOURS = parseInt(
     process.env.CHAT_SESSION_TIMEOUT_HOURS || '1',
@@ -37,8 +38,8 @@ export class ChatHistoryCache {
     private maxHistoryMessages: number;
     private onSessionExpire?: (session: Session) => Promise<void>;
 
-    constructor(db: Database.Database, tenantKey: TenantKey) {
-        this.db = db;
+    constructor(tenantKey: TenantKey) {
+        this.db = getDb();
         this.tenantKey = tenantKey;
         this.sessionTimeoutMs = CHAT_SESSION_TIMEOUT_HOURS * 60 * 60 * 1000;
         this.maxHistoryMessages = CHAT_MAX_HISTORY_MESSAGES;
@@ -231,4 +232,24 @@ export class ChatHistoryCache {
             })),
         };
     }
+}
+
+// ── Standalone query (for tools that don't hold a ChatHistoryCache instance) ──
+
+export interface ChatMessageRow {
+    role: string;
+    content: string;
+    user_name: string | null;
+    timestamp: string;
+}
+
+export function getChatHistory(tenantKey: string, date: string, limit: number): ChatMessageRow[] {
+    return getDb().prepare(
+        `SELECT m.role, m.content, m.user_name, m.timestamp
+         FROM chat_messages m
+         JOIN chat_sessions s ON m.session_id = s.id
+         WHERE m.tenant_key = ? AND m.timestamp LIKE ?
+         ORDER BY m.id ASC
+         LIMIT ?`
+    ).all(tenantKey, `${date}%`, limit) as ChatMessageRow[];
 }

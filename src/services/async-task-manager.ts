@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { TenantKey } from '../types/platform.js';
+import { getDb } from './db.js';
 
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -20,8 +21,8 @@ export class AsyncTaskManager {
     private pollingInterval: NodeJS.Timeout | null = null;
     private isPolling = false;
 
-    constructor(db: Database.Database, tenantKey: TenantKey) {
-        this.db = db;
+    constructor(tenantKey: TenantKey) {
+        this.db = getDb();
         this.tenantKey = tenantKey;
     }
 

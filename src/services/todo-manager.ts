@@ -16,6 +16,7 @@
 
 import type Database from 'better-sqlite3';
 import cron, { ScheduledTask as CronJob } from 'node-cron';
+import { getDb } from './db.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,8 +76,8 @@ export class TodoManager {
     private onFire?: FireCallback;
     private onCron?: CronCallback;
 
-    constructor(db: Database.Database, scopeKey: string) {
-        this.db = db;
+    constructor(scopeKey: string) {
+        this.db = getDb();
         this.scopeKey = scopeKey;
     }
 

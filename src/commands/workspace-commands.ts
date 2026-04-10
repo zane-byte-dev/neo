@@ -3,7 +3,8 @@ import { promises as fs } from 'fs';
 import { SKIP_DIRS } from '../config.js';
 
 import type { Command } from './_base.js';
-import { getDb } from '../services/db.js';
+import { noteCreate, noteList } from '../services/note-service.js';
+import { taskCreate } from '../services/task-service.js';
 
 export const workspaceCommand: Command = {
     commands: ['/ls', '/read', '/note', '/today', '/task', '/search', '/weekly', '/save'],
@@ -125,9 +126,7 @@ export const workspaceCommand: Command = {
             try {
                 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
                 const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
-                getDb().prepare(
-                    `INSERT INTO notes (tenant_key, content, date, time, created_at) VALUES (?, ?, ?, ?, ?)`
-                ).run(deps.tenantKey, noteContent, today, timeStr, Date.now());
+                noteCreate(noteContent, null, deps.tenantKey);
                 await reply(`✅ 已记入 Inbox（${today} ${timeStr}）`);
             } catch (err: any) {
                 await reply(`❌ 写入失败: ${err.message}`);
@@ -139,9 +138,7 @@ export const workspaceCommand: Command = {
             const workDir = deps.workDir;
             const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
             // Inbox entries from SQLite
-            const noteRows = getDb().prepare(
-                `SELECT time, content FROM notes WHERE tenant_key = ? AND date = ? ORDER BY created_at ASC`
-            ).all(deps.tenantKey, today) as Array<{ time: string; content: string }>;
+            const noteRows = noteList({ tenantKey: deps.tenantKey, date: today });
 
             // Daily log from memory/1-Daily/
             let daily: string | null = null;
@@ -177,12 +174,7 @@ export const workspaceCommand: Command = {
                 return true;
             }
             try {
-                const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Shanghai' });
-                const timeStr = new Date().toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
-                const id = Math.random().toString(36).slice(2, 10);
-                getDb().prepare(
-                    `INSERT INTO tasks (id, tenant_key, content, status, date, time, created_at) VALUES (?, ?, ?, 'open', ?, ?, ?)`
-                ).run(id, deps.tenantKey, taskContent, today, timeStr, Date.now());
+                taskCreate(taskContent, deps.tenantKey);
                 await reply('✅ 任务已记录');
             } catch (err: any) {
                 await reply(`❌ 写入失败: ${err.message}`);

@@ -130,8 +130,6 @@ export class App {
     // ── User initialization (shared per person) ──────────────────────────
 
     private async initUsers(): Promise<void> {
-        const { getDb } = await import('./services/db.js');
-        const db = getDb();
         const baseWorkDir = resolve(WORK_DIR || '.');
         const templateDir = AGENT_CONFIG_DIR || undefined;
 
@@ -146,7 +144,7 @@ export class App {
 
             // Per-user managers: keyed by userId for cross-client sharing
             const userProfile = new UserProfileManager(workDir);
-            const todoManager = new TodoManager(db, userId);
+            const todoManager = new TodoManager(userId);
 
             // Load Markdown skill definitions from space/{userId}/skills/
             const projectRoot = resolve('.');
@@ -168,9 +166,6 @@ export class App {
     // ── Tenant initialization (per client) ───────────────────────────────
 
     private async initTenant(tenantKey: TenantKey, adapter: PlatformAdapter): Promise<void> {
-        const { getDb } = await import('./services/db.js');
-        const db = getDb();
-
         // Resolve owning user
         const userId = resolveUserId(tenantKey);
         if (!userId) {
@@ -180,7 +175,7 @@ export class App {
         const userCtx = getUserContext(userId);
 
         // Per-tenant managers: keyed by tenantKey for client isolation
-        const chatHistoryCache = new ChatHistoryCache(db, tenantKey);
+        const chatHistoryCache = new ChatHistoryCache(tenantKey);
         await chatHistoryCache.init();
 
         // Session-to-Log: dehydrate on idle timeout
@@ -210,10 +205,10 @@ export class App {
             }
         });
 
-        const asyncTaskManager = new AsyncTaskManager(db, tenantKey);
+        const asyncTaskManager = new AsyncTaskManager(tenantKey);
         await asyncTaskManager.init();
 
-        const messageQueue = new MessageQueue(db, tenantKey);
+        const messageQueue = new MessageQueue(tenantKey);
 
         const { userId: platformUserId } = parseTenantKey(tenantKey);
 

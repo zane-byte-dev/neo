@@ -23,7 +23,6 @@ import serve from 'koa-static';
 import { PassThrough } from 'stream';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { getDb } from '../../services/db.js';
 import { nbList, nbSearch, nbGet, nbCreate, nbUpdate, nbDelete } from '../../services/notebook-service.js';
 import { noteList, noteStats, noteTags, noteCreate, noteDelete } from '../../services/note-service.js';
 import { getTenantContext } from '../../services/tool-context.js';
@@ -408,7 +407,7 @@ function _installNotebookRoutes(router: Router): void {
 let _webTodoManager: TodoManager | null = null;
 function getWebTodoManager(): TodoManager {
     if (!_webTodoManager) {
-        _webTodoManager = new TodoManager(getDb(), 'web');
+        _webTodoManager = new TodoManager('web');
         // Web todos are plain items — no fire/cron callbacks needed, init with no-ops
         _webTodoManager.init(async () => {}, async () => {});
     }

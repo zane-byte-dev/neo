@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import type { TenantKey } from '../types/platform.js';
 import PQueue from 'p-queue';
+import { getDb } from './db.js';
 
 export interface QueuedTask {
     id: string;
@@ -22,8 +23,8 @@ export class MessageQueue {
     private db: Database.Database;
     private tenantKey: TenantKey;
 
-    constructor(db: Database.Database, tenantKey: TenantKey) {
-        this.db = db;
+    constructor(tenantKey: TenantKey) {
+        this.db = getDb();
         this.tenantKey = tenantKey;
     }
 
