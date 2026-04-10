@@ -253,9 +253,6 @@ export class App {
         const tenants = getTenantContextsForUser(userId);
         if (tenants.length === 0) return;
 
-        // Use the first tenant for message queue replay (it needs a single processing pipeline)
-        const primaryTenant = tenants[0];
-
         await userCtx.userProfile.init();
 
         // Reminders: broadcast to ALL connected clients

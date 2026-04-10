@@ -24,6 +24,9 @@ import { PassThrough } from 'stream';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { getDb } from '../../services/db.js';
+import { nbList, nbSearch, nbGet, nbCreate, nbUpdate, nbDelete } from '../../services/notebook-service.js';
+import { todoList, todoCreate, todoPatch, todoDelete } from '../../services/todo-service.js';
+import { noteList, noteStats, noteTags, noteCreate, noteDelete } from '../../services/note-service.js';
 import { getTenantContext } from '../../services/tool-context.js';
 import { getUserContext } from '../../services/user-context.js';
 import { geminiGenerate } from '../../llm/providers/gemini/index.js';
@@ -335,39 +338,21 @@ function _authMiddleware(): Koa.Middleware {
 
 function _installNotebookRoutes(router: Router): void {
     router.get('/api/notebook', async (ctx) => {
-        const db = getDb();
         const q = ctx.query as Record<string, string>;
         switch (q.action) {
             case 'list':
-                ctx.body = db.prepare(
-                    `SELECT id, title, author, date, source, summary, tags
-                     FROM notebook_entries ORDER BY date DESC, id DESC`
-                ).all();
+                ctx.body = nbList({ limit: 1000 });
                 break;
             case 'search': {
                 const term = q.q?.trim() ?? '';
                 if (!term) { ctx.body = []; return; }
-                try {
-                    ctx.body = db.prepare(
-                        `SELECT n.id, n.title, n.author, n.date, n.source, n.summary, n.tags
-                         FROM notebook_fts f
-                         JOIN notebook_entries n ON n.id = f.rowid
-                         WHERE notebook_fts MATCH ?
-                         ORDER BY rank LIMIT 50`
-                    ).all(term);
-                } catch {
-                    ctx.body = db.prepare(
-                        `SELECT id, title, author, date, source, summary, tags
-                         FROM notebook_entries WHERE title LIKE ? OR content LIKE ?
-                         LIMIT 50`
-                    ).all(`%${term}%`, `%${term}%`);
-                }
+                ctx.body = nbSearch(term, 50);
                 break;
             }
             case 'read': {
                 const id = Number(q.id);
                 if (!id) { ctx.status = 400; ctx.body = { error: 'id required' }; return; }
-                const row = db.prepare('SELECT * FROM notebook_entries WHERE id = ?').get(id);
+                const row = nbGet(id);
                 if (!row) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
                 ctx.body = row;
                 break;
@@ -379,51 +364,41 @@ function _installNotebookRoutes(router: Router): void {
     });
 
     router.post('/api/notebook', async (ctx) => {
-        const db = getDb();
         const body = ctx.request.body as Record<string, unknown>;
         const title = typeof body.title === 'string' ? body.title.trim() : '';
         if (!title) { ctx.status = 400; ctx.body = { error: 'title required' }; return; }
-        const author  = typeof body.author  === 'string' && body.author.trim()  ? body.author.trim()  : null;
-        const date    = typeof body.date    === 'string' && body.date.trim()    ? body.date.trim()    : null;
-        const source  = typeof body.source  === 'string' && body.source.trim()  ? body.source.trim()  : null;
-        const summary = typeof body.summary === 'string' && body.summary.trim() ? body.summary.trim() : null;
-        const tags    = typeof body.tags    === 'string' && body.tags.trim()    ? body.tags.trim()    : null;
-        const content = typeof body.content === 'string' ? body.content : null;
-        const now = new Date().toISOString();
-        const result = db.prepare(
-            `INSERT INTO notebook_entries (title, author, date, source, summary, tags, content, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(title, author, date, source, summary, tags, content, now, now);
-        ctx.body = { id: result.lastInsertRowid, title, author, date, source, summary, tags, content, created_at: now, updated_at: now };
+        ctx.body = nbCreate({
+            title,
+            author:  typeof body.author  === 'string' ? body.author  : null,
+            date:    typeof body.date    === 'string' ? body.date    : null,
+            source:  typeof body.source  === 'string' ? body.source  : null,
+            summary: typeof body.summary === 'string' ? body.summary : null,
+            tags:    typeof body.tags    === 'string' ? body.tags    : null,
+            content: typeof body.content === 'string' ? body.content : null,
+        });
     });
 
     router.patch('/api/notebook/:id', async (ctx) => {
-        const db = getDb();
         const id = Number(ctx.params.id);
         if (!id) { ctx.status = 400; ctx.body = { error: 'invalid id' }; return; }
-        const existing = db.prepare('SELECT * FROM notebook_entries WHERE id = ?').get(id) as Record<string, unknown> | undefined;
-        if (!existing) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
         const body = ctx.request.body as Record<string, unknown>;
-        const now = new Date().toISOString();
-        const title   = typeof body.title   === 'string' ? body.title.trim()   : existing.title;
-        const author  = body.author  !== undefined ? (typeof body.author  === 'string' && body.author.trim()  ? body.author.trim()  : null) : existing.author;
-        const date    = body.date    !== undefined ? (typeof body.date    === 'string' && body.date.trim()    ? body.date.trim()    : null) : existing.date;
-        const source  = body.source  !== undefined ? (typeof body.source  === 'string' && body.source.trim()  ? body.source.trim()  : null) : existing.source;
-        const summary = body.summary !== undefined ? (typeof body.summary === 'string' && body.summary.trim() ? body.summary.trim() : null) : existing.summary;
-        const tags    = body.tags    !== undefined ? (typeof body.tags    === 'string' && body.tags.trim()    ? body.tags.trim()    : null) : existing.tags;
-        const content = body.content !== undefined ? (typeof body.content === 'string' ? body.content : null) : existing.content;
-        db.prepare(
-            `UPDATE notebook_entries SET title=?, author=?, date=?, source=?, summary=?, tags=?, content=?, updated_at=? WHERE id=?`
-        ).run(title, author, date, source, summary, tags, content, now, id);
-        ctx.body = { id, title, author, date, source, summary, tags, content, updated_at: now };
+        const updated = nbUpdate(id, {
+            title:   body.title   !== undefined ? String(body.title)   : undefined,
+            author:  body.author  !== undefined ? (body.author  === null ? null : String(body.author))  : undefined,
+            date:    body.date    !== undefined ? (body.date    === null ? null : String(body.date))    : undefined,
+            source:  body.source  !== undefined ? (body.source  === null ? null : String(body.source))  : undefined,
+            summary: body.summary !== undefined ? (body.summary === null ? null : String(body.summary)) : undefined,
+            tags:    body.tags    !== undefined ? (body.tags    === null ? null : String(body.tags))    : undefined,
+            content: body.content !== undefined ? (body.content === null ? null : String(body.content)) : undefined,
+        });
+        if (!updated) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        ctx.body = updated;
     });
 
     router.delete('/api/notebook/:id', async (ctx) => {
-        const db = getDb();
         const id = Number(ctx.params.id);
         if (!id) { ctx.status = 400; ctx.body = { error: 'invalid id' }; return; }
-        const result = db.prepare('DELETE FROM notebook_entries WHERE id = ?').run(id);
-        if (result.changes === 0) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        if (!nbDelete(id)) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
         ctx.body = { ok: true };
     });
 }
@@ -522,65 +497,47 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
         }
     });
 
-    router.get('/api/todos', async (ctx) => {
-        const db = getDb();
-        ctx.body = db.prepare(
-            `SELECT id, content, status, priority, remind_at, created_at, updated_at
-             FROM todos
-             ORDER BY
-               CASE status WHEN 'not-started' THEN 0 ELSE 1 END,
-               remind_at ASC NULLS LAST,
-               created_at DESC`
-        ).all();
+    router.get('/api/todos', (ctx) => {
+        ctx.body = todoList('web');
     });
 
     router.post('/api/todos', async (ctx) => {
-        const db = getDb();
         const body = ctx.request.body as Record<string, unknown>;
         const content = typeof body.content === 'string' ? body.content.trim() : '';
+        if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
         const priority = typeof body.priority === 'string' && body.priority.trim() ? body.priority.trim() : null;
         const remindAt = typeof body.remind_at === 'string' && body.remind_at.trim() ? body.remind_at.trim() : null;
-        if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
-        const id = Math.random().toString(36).slice(2, 10);
-        const now = new Date().toISOString();
-        db.prepare(
-            `INSERT INTO todos (id, tenant_key, content, status, priority, remind_at, created_at, updated_at)
-             VALUES (?, 'web', ?, 'not-started', ?, ?, ?, ?)`
-        ).run(id, content, priority, remindAt, now, now);
-        ctx.body = { id, content, status: 'not-started', priority, remind_at: remindAt, created_at: now, updated_at: now };
+        ctx.body = todoCreate({ content, status: 'not-started', priority, remind_at: remindAt, tenantKey: 'web' });
     });
 
     router.patch('/api/todos/:id', async (ctx) => {
-        const db = getDb();
         const todoId = ctx.params.id;
         const body = ctx.request.body as Record<string, unknown>;
-        const now = new Date().toISOString();
         const validStatuses = ['not-started', 'completed'];
         if (body.status !== undefined) {
             const status = body.status as string;
             if (!validStatuses.includes(status)) { ctx.status = 400; ctx.body = { error: 'invalid status' }; return; }
-            const result = db.prepare('UPDATE todos SET status = ?, updated_at = ? WHERE id = ?').run(status, now, todoId);
-            if (result.changes === 0) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+            const ok = todoPatch(todoId, { status });
+            if (!ok) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
         }
         if (body.content !== undefined) {
             const content = typeof body.content === 'string' ? body.content.trim() : '';
             if (!content) { ctx.status = 400; ctx.body = { error: 'content cannot be empty' }; return; }
-            db.prepare('UPDATE todos SET content = ?, updated_at = ? WHERE id = ?').run(content, now, todoId);
+            todoPatch(todoId, { content });
         }
         if (body.remind_at !== undefined) {
             const remindAt = body.remind_at === null ? null : (typeof body.remind_at === 'string' ? body.remind_at.trim() || null : null);
-            db.prepare('UPDATE todos SET remind_at = ?, updated_at = ? WHERE id = ?').run(remindAt, now, todoId);
+            todoPatch(todoId, { remind_at: remindAt });
         }
         if (body.priority !== undefined) {
             const priority = body.priority === null ? null : (typeof body.priority === 'string' ? body.priority.trim() || null : null);
-            db.prepare('UPDATE todos SET priority = ?, updated_at = ? WHERE id = ?').run(priority, now, todoId);
+            todoPatch(todoId, { priority });
         }
         ctx.body = { ok: true };
     });
 
-    router.delete('/api/todos/:id', async (ctx) => {
-        const db = getDb();
-        db.prepare('DELETE FROM todos WHERE id = ?').run(ctx.params.id);
+    router.delete('/api/todos/:id', (ctx) => {
+        todoDelete(ctx.params.id);
         ctx.body = { ok: true };
     });
 }
@@ -588,73 +545,31 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
 // ── Note routes ──────────────────────────────────────────────────────────────
 
 function _installNoteRoutes(router: Router): void {
-    router.get('/api/notes', async (ctx) => {
-        const db = getDb();
+    router.get('/api/notes', (ctx) => {
         const q = ctx.query as Record<string, string>;
-        if (q.tag) {
-            const all = db.prepare(
-                `SELECT id, content, date, time, created_at, tags FROM notes ORDER BY created_at DESC LIMIT 500`
-            ).all() as Array<Record<string, unknown>>;
-            ctx.body = all.filter((n) => {
-                try { return (JSON.parse(n.tags as string) as string[]).includes(q.tag); } catch { return false; }
-            });
-        } else if (q.date) {
-            ctx.body = db.prepare(
-                `SELECT id, content, date, time, created_at, tags FROM notes WHERE date = ? ORDER BY created_at DESC`
-            ).all(q.date);
-        } else {
-            ctx.body = db.prepare(
-                `SELECT id, content, date, time, created_at, tags FROM notes ORDER BY created_at DESC LIMIT 200`
-            ).all();
-        }
+        ctx.body = noteList({ date: q.date, tag: q.tag });
     });
 
-    router.get('/api/notes/stats', async (ctx) => {
-        const db = getDb();
-        ctx.body = db.prepare(
-            `SELECT date, COUNT(*) as count FROM notes GROUP BY date ORDER BY date`
-        ).all();
+    router.get('/api/notes/stats', (ctx) => {
+        ctx.body = noteStats();
     });
 
-    router.get('/api/notes/tags', async (ctx) => {
-        const db = getDb();
-        const rows = db.prepare(
-            `SELECT tags FROM notes WHERE tags IS NOT NULL AND tags != '[]'`
-        ).all() as Array<{ tags: string }>;
-        const tagCount = new Map<string, number>();
-        for (const row of rows) {
-            try {
-                for (const t of JSON.parse(row.tags) as string[]) {
-                    tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
-                }
-            } catch { /* skip */ }
-        }
-        ctx.body = Array.from(tagCount.entries())
-            .map(([tag, count]) => ({ tag, count }))
-            .sort((a, b) => b.count - a.count);
+    router.get('/api/notes/tags', (ctx) => {
+        ctx.body = noteTags();
     });
 
     router.post('/api/notes', async (ctx) => {
-        const db = getDb();
         const body = ctx.request.body as Record<string, unknown>;
         const content = typeof body.content === 'string' ? body.content.trim() : '';
         if (!content) { ctx.status = 400; ctx.body = { error: 'content required' }; return; }
-        const tags = Array.isArray(body.tags) ? JSON.stringify(body.tags) : null;
-        const now = new Date();
-        const date = now.toISOString().split('T')[0];
-        const time = now.toTimeString().split(' ')[0].slice(0, 5);
-        const createdAt = now.getTime();
-        const result = db.prepare(
-            `INSERT INTO notes (tenant_key, content, date, time, created_at, tags) VALUES ('web', ?, ?, ?, ?, ?)`
-        ).run(content, date, time, createdAt, tags);
-        ctx.body = { id: result.lastInsertRowid, content, date, time, created_at: createdAt, tags };
+        const tags = Array.isArray(body.tags) ? (body.tags as string[]) : undefined;
+        ctx.body = noteCreate(content, tags);
     });
 
-    router.delete('/api/notes/:id', async (ctx) => {
-        const db = getDb();
+    router.delete('/api/notes/:id', (ctx) => {
         const noteId = Number(ctx.params.id);
         if (!noteId) { ctx.status = 400; ctx.body = { error: 'invalid id' }; return; }
-        db.prepare('DELETE FROM notes WHERE id = ?').run(noteId);
+        noteDelete(noteId);
         ctx.body = { ok: true };
     });
 }

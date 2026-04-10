@@ -7,24 +7,10 @@
  * Scoped per tenant_key via the active tenant context.
  */
 import type { Tool, ToolContext } from '../_base.js';
-import { getDb } from '../../services/db.js';
+import { todoListByStatus, todoCreate, todoPatch, todoDelete, todoDeleteDone } from '../../services/todo-service.js';
+import type { TodoRow } from '../../services/todo-service.js';
 
 type TodoStatus = 'pending' | 'in_progress' | 'done' | 'blocked';
-
-interface TodoRow {
-    id: string;
-    content: string;
-    status: string;
-    priority: string | null;
-    created_at: string;
-    updated_at: string;
-}
-
-// tenantKey is now passed via ToolContext
-
-function makeId(): string {
-    return Math.random().toString(36).slice(2, 8);
-}
 
 function formatList(rows: TodoRow[]): string {
     if (rows.length === 0) return '(empty)';
@@ -62,17 +48,13 @@ export const todoWriteTool: Tool = {
         },
     },
     handler: async (args, _workDir, context?: ToolContext) => {
-        const db = getDb();
         if (!context?.tenantKey) throw new Error('[todo-write] No tenant key in context');
         const tenantKey = context.tenantKey;
         const action = String(args.action ?? '');
 
         switch (action) {
             case 'list': {
-                const rows = db.prepare(
-                    `SELECT id, content, status, priority, created_at, updated_at FROM todos
-                     WHERE tenant_key = ? ORDER BY created_at ASC`
-                ).all(tenantKey) as TodoRow[];
+                const rows = todoListByStatus(tenantKey);
                 const byStatus = (s: string) => rows.filter(r => r.status === s);
                 const sections: string[] = [];
                 const inProgress = byStatus('in_progress');
@@ -92,13 +74,8 @@ export const todoWriteTool: Tool = {
                 const priority = args.priority as string | undefined;
                 const validPriorities = ['high', 'medium', 'low', undefined];
                 if (!validPriorities.includes(priority)) return '[Error] priority must be high, medium, or low';
-                const id = makeId();
-                const now = new Date().toISOString();
-                db.prepare(
-                    `INSERT INTO todos (id, tenant_key, content, status, priority, created_at, updated_at)
-                     VALUES (?, ?, ?, 'pending', ?, ?, ?)`
-                ).run(id, tenantKey, content, priority ?? null, now, now);
-                return `✅ 已添加任务 [${id}]: ${content}`;
+                const row = todoCreate({ content, status: 'pending', priority: priority ?? null, tenantKey });
+                return `✅ 已添加任务 [${row.id}]: ${content}`;
             }
 
             case 'update': {
@@ -107,28 +84,22 @@ export const todoWriteTool: Tool = {
                 if (!id) return '[Error] id is required for update action';
                 const validStatuses: TodoStatus[] = ['pending', 'in_progress', 'done', 'blocked'];
                 if (!validStatuses.includes(status)) return `[Error] status must be one of: ${validStatuses.join(', ')}`;
-                const result = db.prepare(
-                    `UPDATE todos SET status = ?, updated_at = ? WHERE id = ? AND tenant_key = ?`
-                ).run(status, new Date().toISOString(), id, tenantKey);
-                if (result.changes === 0) return `[Error] Todo [${id}] not found`;
+                const ok = todoPatch(id, { status }, tenantKey);
+                if (!ok) return `[Error] Todo [${id}] not found`;
                 return `✅ [${id}] → ${status}`;
             }
 
             case 'delete': {
                 const id = String(args.id ?? '');
                 if (!id) return '[Error] id is required for delete action';
-                const result = db.prepare(
-                    `DELETE FROM todos WHERE id = ? AND tenant_key = ?`
-                ).run(id, tenantKey);
-                if (result.changes === 0) return `[Error] Todo [${id}] not found`;
+                const ok = todoDelete(id, tenantKey);
+                if (!ok) return `[Error] Todo [${id}] not found`;
                 return `✅ 已删除任务 [${id}]`;
             }
 
             case 'clear_done': {
-                const result = db.prepare(
-                    `DELETE FROM todos WHERE tenant_key = ? AND status = 'done'`
-                ).run(tenantKey);
-                return `✅ 已清除 ${result.changes} 个已完成任务`;
+                const count = todoDeleteDone(tenantKey);
+                return `✅ 已清除 ${count} 个已完成任务`;
             }
 
             default:

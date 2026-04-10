@@ -2,7 +2,7 @@
  * notebook.ts — AI tool for reading and writing the notebook knowledge base.
  *
  * Backed by SQLite (notebook_entries table) with FTS5 full-text search.
- * Replaces the old find_in_km file-based tool.
+ * All DB operations are delegated to notebook-service.ts.
  *
  * Actions:
  *   list   — list all entries (title, id, date, source, tags, summary)
@@ -12,28 +12,16 @@
  *   update — update an existing entry by id
  *   delete — delete an entry by id
  */
-import { getDb } from '../../services/db.js';
 import type { Tool } from '../_base.js';
-
-interface NoteRow {
-    id: number;
-    title: string;
-    author: string | null;
-    date: string | null;
-    source: string | null;
-    summary: string | null;
-    tags: string | null;
-    content: string | null;
-    created_at: string;
-    updated_at: string;
-}
+import type { NotebookEntryPartial, NotebookEntry } from '../../services/notebook-service.js';
+import { nbList, nbSearch, nbGet, nbGetByTitle, nbCreate, nbUpdate, nbDelete } from '../../services/notebook-service.js';
 
 function formatTags(raw: string | null): string[] {
     if (!raw) return [];
     try { return JSON.parse(raw); } catch { return [raw]; }
 }
 
-function formatMeta(row: NoteRow): string {
+function formatMeta(row: NotebookEntryPartial): string {
     const parts: string[] = [];
     if (row.date)    parts.push(`📅 ${row.date}`);
     if (row.author)  parts.push(`✍️ ${row.author}`);
@@ -119,55 +107,30 @@ export const notebookTool: Tool = {
 
     handler: async (args, _workDir) => {
         const action = String(args.action ?? '').trim();
-        const db = getDb();
-        const now = new Date().toISOString();
 
         // ── LIST ────────────────────────────────────────────────────────────
         if (action === 'list') {
-            const limit = Math.min(Number(args.limit ?? 50), 200);
-            const rows = args.source_filter
-                ? db.prepare(
-                      'SELECT id, title, author, date, source, tags, summary FROM notebook_entries WHERE source = ? ORDER BY date DESC LIMIT ?'
-                  ).all(String(args.source_filter), limit) as NoteRow[]
-                : db.prepare(
-                      'SELECT id, title, author, date, source, tags, summary FROM notebook_entries ORDER BY date DESC LIMIT ?'
-                  ).all(limit) as NoteRow[];
-
+            const limit = Number(args.limit ?? 50);
+            const rows = nbList({
+                sourceFilter: args.source_filter ? String(args.source_filter) : undefined,
+                limit,
+            });
             if (rows.length === 0) return '笔记本暂无条目。可用 action=add 新增。';
-
             const lines = rows.map(r => {
                 const meta = formatMeta(r);
                 const summary = r.summary ? `\n  ${r.summary}` : '';
                 return `[${r.id}] **${r.title}**${meta ? `  ${meta}` : ''}${summary}`;
             });
-            return `笔记本共 ${rows.length} 条（最多显示 ${limit}）：\n\n` + lines.join('\n\n');
+            return `笔记本共 ${rows.length} 条（最多显示 ${Math.min(limit, 200)}）：\n\n` + lines.join('\n\n');
         }
 
         // ── SEARCH ──────────────────────────────────────────────────────────
         if (action === 'search') {
             const query = String(args.query ?? '').trim();
             if (!query) return '[Error] search 需要提供 query 参数';
-            const limit = Math.min(Number(args.limit ?? 20), 100);
-
-            let rows: NoteRow[];
-            try {
-                rows = db.prepare(`
-                    SELECT n.id, n.title, n.author, n.date, n.source, n.tags, n.summary,
-                           snippet(notebook_fts, 5, '**', '**', '…', 32) AS snippet
-                    FROM notebook_fts
-                    JOIN notebook_entries n ON n.id = notebook_fts.rowid
-                    WHERE notebook_fts MATCH ?
-                    ORDER BY rank
-                    LIMIT ?
-                `).all(query, limit) as (NoteRow & { snippet: string })[];
-            } catch (e: unknown) {
-                const msg = e instanceof Error ? e.message : String(e);
-                return `[Error] 搜索失败: ${msg}`;
-            }
-
+            const rows = nbSearch(query, Number(args.limit ?? 20));
             if (rows.length === 0) return `未找到包含「${query}」的条目。`;
-
-            const lines = rows.map((r: NoteRow & { snippet?: string }) => {
+            const lines = rows.map(r => {
                 const meta = formatMeta(r);
                 const snip = r.snippet ? `\n  > …${r.snippet}…` : '';
                 return `[${r.id}] **${r.title}**${meta ? `  ${meta}` : ''}${snip}`;
@@ -177,16 +140,14 @@ export const notebookTool: Tool = {
 
         // ── READ ────────────────────────────────────────────────────────────
         if (action === 'read') {
-            let row: NoteRow | undefined;
+            let row: NotebookEntry | undefined;
             if (args.id != null) {
-                row = db.prepare('SELECT * FROM notebook_entries WHERE id = ?').get(Number(args.id)) as NoteRow | undefined;
+                row = nbGet(Number(args.id));
             } else if (args.title_query) {
-                const q = `%${String(args.title_query)}%`;
-                row = db.prepare('SELECT * FROM notebook_entries WHERE title LIKE ? ORDER BY date DESC LIMIT 1').get(q) as NoteRow | undefined;
+                row = nbGetByTitle(String(args.title_query));
             } else {
                 return '[Error] read 需要提供 id 或 title_query';
             }
-
             if (!row) return '[Error] 未找到对应条目';
 
             const meta = formatMeta(row);
@@ -198,7 +159,6 @@ export const notebookTool: Tool = {
                 tags.length ? `**标签：** ${tags.join(', ')}` : '',
                 `\n---\n`,
             ].filter(Boolean).join('\n');
-
             return header + (row.content ?? '（无正文）');
         }
 
@@ -206,61 +166,36 @@ export const notebookTool: Tool = {
         if (action === 'add') {
             const title = String(args.title ?? '').trim();
             if (!title) return '[Error] add 需要提供 title';
-
             const tags = Array.isArray(args.tags) ? JSON.stringify(args.tags) : (args.tags ? String(args.tags) : null);
-
-            const result = db.prepare(`
-                INSERT INTO notebook_entries (title, author, date, source, summary, tags, content, created_at, updated_at)
-                VALUES (@title, @author, @date, @source, @summary, @tags, @content, @created_at, @updated_at)
-            `).run({
+            const entry = nbCreate({
                 title,
-                author:     args.author ? String(args.author) : null,
-                date:       args.date   ? String(args.date)   : null,
-                source:     args.source ? String(args.source) : null,
-                summary:    args.summary ? String(args.summary) : null,
+                author:  args.author  ? String(args.author)  : null,
+                date:    args.date    ? String(args.date)    : null,
+                source:  args.source  ? String(args.source)  : null,
+                summary: args.summary ? String(args.summary) : null,
                 tags,
-                content:    args.content ? String(args.content) : null,
-                created_at: now,
-                updated_at: now,
+                content: args.content ? String(args.content) : null,
             });
-
-            return `✅ 笔记已添加，ID: ${result.lastInsertRowid}\n标题: ${title}`;
+            return `✅ 笔记已添加，ID: ${entry.id}\n标题: ${entry.title}`;
         }
 
         // ── UPDATE ──────────────────────────────────────────────────────────
         if (action === 'update') {
             if (args.id == null) return '[Error] update 需要提供 id';
             const id = Number(args.id);
-            const existing = db.prepare('SELECT * FROM notebook_entries WHERE id = ?').get(id) as NoteRow | undefined;
-            if (!existing) return `[Error] 未找到 ID=${id} 的条目`;
-
             const tags = args.tags != null
                 ? (Array.isArray(args.tags) ? JSON.stringify(args.tags) : String(args.tags))
-                : existing.tags;
-
-            db.prepare(`
-                UPDATE notebook_entries SET
-                    title      = @title,
-                    author     = @author,
-                    date       = @date,
-                    source     = @source,
-                    summary    = @summary,
-                    tags       = @tags,
-                    content    = @content,
-                    updated_at = @updated_at
-                WHERE id = @id
-            `).run({
-                id,
-                title:      args.title   ? String(args.title)   : existing.title,
-                author:     args.author  ? String(args.author)  : existing.author,
-                date:       args.date    ? String(args.date)    : existing.date,
-                source:     args.source  ? String(args.source)  : existing.source,
-                summary:    args.summary ? String(args.summary) : existing.summary,
+                : undefined;
+            const updated = nbUpdate(id, {
+                title:   args.title   ? String(args.title)   : undefined,
+                author:  args.author  ? String(args.author)  : undefined,
+                date:    args.date    ? String(args.date)    : undefined,
+                source:  args.source  ? String(args.source)  : undefined,
+                summary: args.summary ? String(args.summary) : undefined,
                 tags,
-                content:    args.content ? String(args.content) : existing.content,
-                updated_at: now,
+                content: args.content ? String(args.content) : undefined,
             });
-
+            if (!updated) return `[Error] 未找到 ID=${id} 的条目`;
             return `✅ 笔记 ID=${id} 已更新`;
         }
 
@@ -268,10 +203,9 @@ export const notebookTool: Tool = {
         if (action === 'delete') {
             if (args.id == null) return '[Error] delete 需要提供 id';
             const id = Number(args.id);
-            const existing = db.prepare('SELECT title FROM notebook_entries WHERE id = ?').get(id) as { title: string } | undefined;
+            const existing = nbGet(id);
             if (!existing) return `[Error] 未找到 ID=${id} 的条目`;
-
-            db.prepare('DELETE FROM notebook_entries WHERE id = ?').run(id);
+            nbDelete(id);
             return `✅ 笔记「${existing.title}」(ID=${id}) 已删除`;
         }
 
