@@ -8,18 +8,11 @@
  */
 
 import { setupLogger } from './utils/logger.js';
-import { AUTHORIZED_USERS,  } from './config.js';
 import { CoreServer } from './server.js';
 
 // Initialize Logger
 setupLogger();
 
-// ── Validate environment ─────────────────────────────────────────────────────
-
-if (AUTHORIZED_USERS.size === 0) {
-    console.error('❌ No authorized users. Set AUTHORIZED_USERS or TELEGRAM_CHAT_ID.');
-    process.exit(1);
-}
 
 // ── Build server ─────────────────────────────────────────────────────────────
 

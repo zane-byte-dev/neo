@@ -5,11 +5,7 @@
 
 import { config as loadEnv } from 'dotenv';
 loadEnv();
-
 import { resolve } from 'path';
-import { readFileSync } from 'fs';
-import type { TenantKey, Platform, UserId } from './types/platform.js';
-import { makeTenantKey } from './types/platform.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,118 +13,6 @@ function envInt(key: string, fallback: number): number {
     const v = process.env[key];
     return v ? parseInt(v, 10) : fallback;
 }
-
-// ── User map (users.json) ────────────────────────────────────────────────────
-
-export interface UserEntry {
-    tenants: TenantKey[];
-    /** Per-user web Bearer token. Maps this user from WebUI requests. */
-    webToken?: string;
-}
-
-/** userId → UserEntry */
-const _userMap = new Map<UserId, UserEntry>();
-/** tenantKey → userId (reverse index) */
-const _tenantToUser = new Map<TenantKey, UserId>();
-/** webToken → userId (reverse index) */
-const _webTokenToUser = new Map<string, UserId>();
-
-function loadUserMap(): void {
-    // Try loading from the workspace directory, fall back to space/
-    const candidates = [
-        resolve(process.env.WORK_DIR || '.', 'users.json'),
-        resolve('space', 'users.json'),
-    ];
-    for (const path of candidates) {
-        try {
-            const raw = readFileSync(path, 'utf8');
-            const data = JSON.parse(raw) as Record<string, { tenants: string[]; webToken?: string }>;
-            for (const [userId, entry] of Object.entries(data)) {
-                const tenants = (entry.tenants ?? []) as TenantKey[];
-                _userMap.set(userId, { tenants, webToken: entry.webToken });
-                for (const tk of tenants) {
-                    _tenantToUser.set(tk, userId);
-                }
-                if (entry.webToken) {
-                    _webTokenToUser.set(entry.webToken, userId);
-                    // Auto-register a web tenant for this user
-                    const webTk = `web:${userId}` as TenantKey;
-                    if (!tenants.includes(webTk)) {
-                        tenants.push(webTk);
-                        _tenantToUser.set(webTk, userId);
-                    }
-                }
-            }
-            console.log(`[Config] 📋 Loaded ${_userMap.size} user(s) from ${path}`);
-            return;
-        } catch { /* try next */ }
-    }
-    console.warn('[Config] ⚠️  users.json not found; falling back to AUTHORIZED_USERS env.');
-}
-
-loadUserMap();
-
-/** Get all defined users */
-export function getAllUsers(): Map<UserId, UserEntry> {
-    return _userMap;
-}
-
-/** Resolve a tenantKey to its owning userId. Returns undefined if not mapped. */
-export function resolveUserId(tenantKey: TenantKey): UserId | undefined {
-    return _tenantToUser.get(tenantKey);
-}
-
-/** Get all tenantKeys belonging to a userId */
-export function getUserTenants(userId: UserId): TenantKey[] {
-    return _userMap.get(userId)?.tenants ?? [];
-}
-
-/** Resolve a webToken (from Authorization header) to its owning userId. Returns undefined if not mapped. */
-export function resolveUserIdByWebToken(token: string): UserId | undefined {
-    return _webTokenToUser.get(token);
-}
-
-// ── Multi-tenant authorization ───────────────────────────────────────────────
-
-/**
- * Authorized tenants: derived from users.json if available, otherwise from
- * AUTHORIZED_USERS env var (legacy).
- */
-function parseAuthorizedUsers(): Set<TenantKey> {
-    // Prefer users.json
-    if (_tenantToUser.size > 0) {
-        return new Set(_tenantToUser.keys());
-    }
-    // Legacy: AUTHORIZED_USERS env var
-    const raw = process.env.AUTHORIZED_USERS;
-    if (raw) {
-        const keys = raw.split(',').map(s => s.trim()).filter(Boolean) as TenantKey[];
-        return new Set(keys);
-    }
-    // Legacy fallback: single Telegram user
-    const legacyChatId = process.env.TELEGRAM_CHAT_ID;
-    if (legacyChatId) {
-        return new Set([makeTenantKey('telegram', legacyChatId)]);
-    }
-    return new Set();
-}
-
-export const AUTHORIZED_USERS: ReadonlySet<TenantKey> = parseAuthorizedUsers();
-
-/** Quick auth check */
-export function isAuthorized(tenantKey: TenantKey): boolean {
-    return AUTHORIZED_USERS.has(tenantKey);
-}
-
-/** Get all authorized tenants for a specific platform */
-export function getAuthorizedForPlatform(platform: Platform): TenantKey[] {
-    return [...AUTHORIZED_USERS].filter(k => k.startsWith(`${platform}:`));
-}
-
-// ── Bot ──────────────────────────────────────────────────────────────────────
-
-/** Keywords that trigger background async tasks */
-export const ASYNC_TRIGGER_PREFIXES = ['调研', '重构'];
 
 /** Bot command definitions for Telegram /setMyCommands */
 export const BOT_COMMANDS: Array<{ command: string; description: string }> = [

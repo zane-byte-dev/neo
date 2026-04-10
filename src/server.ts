@@ -13,7 +13,7 @@ import {
 } from './config.js';
 import { initDb } from './services/db.js';
 import { LLMClient } from './llm/client.js';
-import { calcUser } from './services/user-service.js';
+import { calcUser, userGetByWebToken } from './services/user-service.js';
 import {
     getTenantContext,
 } from './services/tool-context.js';
@@ -123,12 +123,13 @@ function _installAuthRoutes(router: Router): void {
     router.post('/api/auth/login', async (ctx) => {
         const body = ctx.request.body as Record<string, unknown>;
         const token = typeof body.token === 'string' ? body.token.trim() : '';
-        const userId = token ? resolveUserIdByWebToken(token) : undefined;
-        if (!userId) {
+        const userRaw = token ? userGetByWebToken(token) : undefined;
+        if (!userRaw) {
             ctx.status = 401;
             ctx.body = { error: 'Invalid token' };
             return;
         }
+        const userId = userRaw.id;
         ctx.cookies.set(SESSION_COOKIE, userId, COOKIE_OPTS);
         ctx.body = { ok: true, userId };
     });
