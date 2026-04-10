@@ -22,6 +22,7 @@ import { nbList, nbSearch, nbGet, nbCreate, nbUpdate, nbDelete } from './service
 import { noteList, noteStats, noteTags, noteCreate, noteDelete } from './services/note-service.js';
 import { todoList, todoAdd, todoPatch, todoDelete } from './services/todo-service.js';
 import { geminiGenerate } from './llm/providers/gemini/index.js';
+import { ChatSession } from './services/chat-service.js';
 import type {
     TenantKey,
     PlatformAdapter,
@@ -54,7 +55,7 @@ export class CoreServer {
         app.use(_authMiddleware());
         app.use(bodyParser());
 
-        _installChatRoute(router);
+        _installChatRoute(router, this.llm);
         _installSessionRoutes(router);
         _installMeRoute(router);
         _installNotebookRoutes(router);
@@ -117,7 +118,7 @@ function _authMiddleware(): Koa.Middleware {
 }
 // ── /api/chat (SSE streaming) ─────────────────────────────────────────
 
-function _installChatRoute(router: Router): void {
+function _installChatRoute(router: Router, llm: LLMClient): void {
     router.post('/api/chat', async (ctx) => {
         const body = ctx.request.body as Record<string, unknown>;
         const message = typeof body.message === 'string' ? body.message.trim() : '';
@@ -176,12 +177,13 @@ function _installChatRoute(router: Router): void {
             };
         }
 
-        if (cache) await cache.addMessage('user', message);
+        const cache = reqUserId ? new ChatSession(reqUserId) : undefined;
+        if (cache) cache.addMessage('user', message);
         const history = cache?.getContextForGemini() ?? [];
 
         let fullResponse = '';
         try {
-            await this.llm.chatWithContextStreaming(
+            await llm.chatWithContextStreaming(
                 message,
                 history,
                 (chunk) => {
@@ -212,13 +214,8 @@ function _installChatRoute(router: Router): void {
 function _installSessionRoutes(router: Router): void {
     const newSession = async (ctx: Koa.Context) => {
         const reqUserId: string | undefined = ctx.state.userId;
-        const tenantKey = reqUserId ? (`web:${reqUserId}` as TenantKey) : undefined;
-        const tenantCtx = tenantKey ? (() => {
-            try { return getTenantContext(tenantKey); } catch { return undefined; }
-        })() : undefined;
-
-        if (tenantCtx) {
-            await chatHistoryCache.createNewSession();
+        if (reqUserId) {
+            new ChatSession(reqUserId).createNewSession();
         }
         ctx.body = { ok: true };
     };

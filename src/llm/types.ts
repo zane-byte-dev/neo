@@ -72,8 +72,6 @@ export interface ToolContext {
         sendMessage(chatId: string, text: string, opts?: Record<string, unknown>): Promise<{ id: string; chatId: string }>;
         sendPhoto(chatId: string, photo: string | Buffer, caption?: string): Promise<{ id: string; chatId: string }>;
     };
-    /** Unified todo / reminder / schedule manager */
-    todoManager: any;
     /**
      * Web-only: stream a generated image back via SSE instead of using the platform adapter.
      * When present, generate_image will call this instead of adapter.sendPhoto().

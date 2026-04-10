@@ -28,7 +28,6 @@ interface ApiChunk {
     thought?: string;
     text?: string;
     functionCall?: { name: string; args: Record<string, unknown>; thoughtSignature?: string };
-    /** The unmodified part object from the API — preserved for history reconstruction. */
     rawPart?: Record<string, unknown>;
 }
 

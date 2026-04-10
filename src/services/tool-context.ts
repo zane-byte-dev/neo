@@ -4,7 +4,7 @@
  * Each tenant (platform:userId) gets their own isolated context with
  * independent chat history, message queue, and adapter reference.
  *
- * Workspace-level resources (workDir, userProfile, todoManager)
+ * Workspace-level resources (workDir, userProfile)
  * are shared via the UserContext — see user-context.ts.
  *
  * Context is threaded explicitly via TenantContext parameters — no global state.
