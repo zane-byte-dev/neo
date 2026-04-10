@@ -13,7 +13,7 @@ import { join, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { setupLogger } from '../utils/logger.js';
 import { GEMINI_API_KEY, GEMINI_MODEL_ENV, WORK_DIR } from '../config.js';
-import { loadOpenClawSkills, formatSkillsPrompt } from '../services/openclaw-skills.js';
+import { loadOpenClawSkills, formatSkillsPrompt } from '../skills/openclaw-skills.js';
 import { GeminiProvider, geminiGenerate, geminiUploadFile } from './providers/gemini/index.js';
 import type { LLMProvider } from './provider.js';
 import type {

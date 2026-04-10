@@ -11,3 +11,6 @@ export type { SkillDefinition, SkillFrontmatter } from './skill-parser.js';
 export { SkillRegistry, loadUserSkills } from './skill-registry.js';
 
 export { executeSkill, interpolate } from './skill-executor.js';
+
+export { loadOpenClawSkills, formatSkillsPrompt } from './openclaw-skills.js';
+export type { OpenClawSkill } from './openclaw-skills.js';

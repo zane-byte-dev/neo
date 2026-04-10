@@ -10,7 +10,7 @@
  */
 
 import { GEMINI_BASE_URL, GEMINI_FILES_UPLOAD_URL, GEMINI_API_TIMEOUT_MS, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../../../config.js';
-import { executeTool, TOOL_DECLARATIONS } from '../../../services/tool-executor.js';
+import { executeTool, TOOL_DECLARATIONS } from '../../../tools/executor.js';
 import { dbg } from '../../../utils/debug-logger.js';
 import type { LLMProvider, AgentLoopParams, GenerateParams } from '../../provider.js';
 import type {
