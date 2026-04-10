@@ -22,6 +22,7 @@ export async function processTask(deps: ProcessTaskDeps, task: Task) {
     const tenantCtx = getTenantContext(task.tenantKey);
     const toolContext: ToolContext = {
         tenantKey: task.tenantKey,
+        userId: tenantCtx.userId,
         chatId,
         workDir: tenantCtx.workDir,
         systemInstruction: tenantCtx.systemInstruction,

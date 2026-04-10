@@ -1,5 +1,4 @@
 import type Database from 'better-sqlite3';
-import type { TenantKey } from '../types/platform.js';
 import { getDb } from './db.js';
 
 const CHAT_SESSION_TIMEOUT_HOURS = parseInt(
@@ -32,15 +31,16 @@ export interface Session {
 
 export class ChatHistoryCache {
     private db: Database.Database;
-    private tenantKey: TenantKey;
+    /** Scope key — the resolved userId, shared across all tenants of the same user */
+    private userId: string;
     private currentSessionId: string | null = null;
     private sessionTimeoutMs: number;
     private maxHistoryMessages: number;
     private onSessionExpire?: (session: Session) => Promise<void>;
 
-    constructor(tenantKey: TenantKey) {
+    constructor(userId: string) {
         this.db = getDb();
-        this.tenantKey = tenantKey;
+        this.userId = userId;
         this.sessionTimeoutMs = CHAT_SESSION_TIMEOUT_HOURS * 60 * 60 * 1000;
         this.maxHistoryMessages = CHAT_MAX_HISTORY_MESSAGES;
         // no async state in constructor — all reads happen lazily via DB
@@ -50,14 +50,14 @@ export class ChatHistoryCache {
         // Restore current session pointer from DB
         const row = this.db.prepare(
             `SELECT id FROM chat_sessions WHERE tenant_key = ? AND is_current = 1`
-        ).get(this.tenantKey) as { id: string } | undefined;
+        ).get(this.userId) as { id: string } | undefined;
         this.currentSessionId = row?.id ?? null;
 
         const total = (this.db.prepare(
             `SELECT COUNT(*) as n FROM chat_sessions WHERE tenant_key = ?`
-        ).get(this.tenantKey) as { n: number }).n;
+        ).get(this.userId) as { n: number }).n;
 
-        const tag = `[ChatHistoryCache|${this.tenantKey}]`;
+        const tag = `[ChatHistoryCache|${this.userId}]`;
         console.log(`${tag} ✅ Initialized (SQLite)`);
         console.log(`${tag} ⏱️  Session timeout: ${CHAT_SESSION_TIMEOUT_HOURS}h`);
         console.log(`${tag} 📝 Total sessions: ${total}`);
@@ -86,7 +86,7 @@ export class ChatHistoryCache {
         this.db.prepare(
             `INSERT INTO chat_messages (session_id, tenant_key, role, content, user_name, timestamp)
              VALUES (?, ?, ?, ?, ?, ?)`
-        ).run(this.currentSessionId, this.tenantKey, role, content, userName ?? null, timestamp);
+        ).run(this.currentSessionId, this.userId, role, content, userName ?? null, timestamp);
 
         // Update session end_time
         this.db.prepare(
@@ -156,11 +156,11 @@ export class ChatHistoryCache {
         // Mark old current session as not current
         this.db.prepare(
             `UPDATE chat_sessions SET is_current = 0 WHERE tenant_key = ? AND is_current = 1`
-        ).run(this.tenantKey);
+        ).run(this.userId);
 
         this.db.prepare(
             `INSERT INTO chat_sessions (id, tenant_key, start_time, end_time, is_current) VALUES (?, ?, ?, ?, 1)`
-        ).run(sessionId, this.tenantKey, iso, iso);
+        ).run(sessionId, this.userId, iso, iso);
 
         this.currentSessionId = sessionId;
         console.log(`[ChatHistoryCache] 🆕 New session created: ${sessionId}`);
@@ -173,13 +173,13 @@ export class ChatHistoryCache {
         this.db.prepare(
             `INSERT INTO chat_messages (session_id, tenant_key, role, content, user_name, timestamp)
              VALUES (?, ?, 'assistant', ?, NULL, ?)`
-        ).run(this.currentSessionId, this.tenantKey, `[对话摘要]\n${summary}`, now);
+        ).run(this.currentSessionId, this.userId, `[对话摘要]\n${summary}`, now);
         this.db.prepare(`UPDATE chat_sessions SET end_time = ? WHERE id = ?`).run(now, this.currentSessionId);
         console.log('[ChatHistoryCache] 🗜️  Session compacted with summary');
     }
 
     async clearHistory(): Promise<void> {
-        this.db.prepare(`DELETE FROM chat_sessions WHERE tenant_key = ?`).run(this.tenantKey);
+        this.db.prepare(`DELETE FROM chat_sessions WHERE tenant_key = ?`).run(this.userId);
         this.currentSessionId = null;
         console.log('[ChatHistoryCache] 🗑️  History cleared');
     }
@@ -187,7 +187,7 @@ export class ChatHistoryCache {
     getStats(): { totalSessions: number; currentMessages: number; sessionId: string | null } {
         const total = (this.db.prepare(
             `SELECT COUNT(*) as n FROM chat_sessions WHERE tenant_key = ?`
-        ).get(this.tenantKey) as { n: number }).n;
+        ).get(this.userId) as { n: number }).n;
         const currentMessages = this.currentSessionId
             ? (this.db.prepare(
                 `SELECT COUNT(*) as n FROM chat_messages WHERE session_id = ?`
@@ -239,7 +239,7 @@ export interface ChatMessageRow {
     timestamp: string;
 }
 
-export function getChatHistory(tenantKey: string, date: string, limit: number): ChatMessageRow[] {
+export function getChatHistory(userId: string, date: string, limit: number): ChatMessageRow[] {
     return getDb().prepare(
         `SELECT m.role, m.content, m.user_name, m.timestamp
          FROM chat_messages m
@@ -247,5 +247,5 @@ export function getChatHistory(tenantKey: string, date: string, limit: number): 
          WHERE m.tenant_key = ? AND m.timestamp LIKE ?
          ORDER BY m.id ASC
          LIMIT ?`
-    ).all(tenantKey, `${date}%`, limit) as ChatMessageRow[];
+    ).all(userId, `${date}%`, limit) as ChatMessageRow[];
 }

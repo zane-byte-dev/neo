@@ -244,7 +244,7 @@ export class CoreServer {
         }
         const userCtx = getUserContext(userId);
 
-        const chatHistoryCache = new ChatHistoryCache(tenantKey);
+        const chatHistoryCache = new ChatHistoryCache(userId);
         await chatHistoryCache.init();
         const asyncTaskManager = new AsyncTaskManager(tenantKey);
         await asyncTaskManager.init();
@@ -604,6 +604,7 @@ export class CoreServer {
             if (tenantCtx) {
                 toolContext = {
                     tenantKey: tenantCtx.tenantKey,
+                    userId: tenantCtx.userId,
                     chatId: reqUserId!,
                     workDir: tenantCtx.workDir,
                     systemInstruction: tenantCtx.systemInstruction,

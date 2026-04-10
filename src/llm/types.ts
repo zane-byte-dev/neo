@@ -57,8 +57,10 @@ export interface FunctionDeclaration {
 // ── Tool context (fields available to tools at runtime) ──────────────────────
 
 export interface ToolContext {
-    /** Tenant key (platform:userId) for DB-scoped operations */
+    /** Tenant key (platform:userId) for platform routing */
     tenantKey: string;
+    /** Resolved internal user ID (from users.json) — shared across all tenants of the same user */
+    userId: string;
     /** Platform-specific chat/channel ID */
     chatId: string;
     /** Per-tenant workspace root directory (absolute path) */

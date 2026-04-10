@@ -35,13 +35,13 @@ export const getChatHistoryTool: Tool = {
         },
     },
     handler: async (args, _workDir, context?: ToolContext) => {
-        const tenantKey = context?.tenantKey ?? '';
-        if (!tenantKey) return '[get_chat_history] No tenant context available.';
+        const userId = context?.userId ?? '';
+        if (!userId) return '[get_chat_history] No tenant context available.';
 
         const date = String(args.date ?? todayStr());
         const limit = Math.min(Number(args.limit ?? 100), 500);
 
-        const rows = getChatHistory(tenantKey, date, limit);
+        const rows = getChatHistory(userId, date, limit);
 
         if (rows.length === 0) {
             return `没有找到 ${date} 的对话记录。`;
