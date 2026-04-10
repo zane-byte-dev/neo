@@ -25,9 +25,9 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { nbList, nbSearch, nbGet, nbCreate, nbUpdate, nbDelete } from '../../services/notebook-service.js';
 import { noteList, noteStats, noteTags, noteCreate, noteDelete } from '../../services/note-service.js';
+import { todoList, todoAdd, todoPatch, todoDelete } from '../../services/todo-service.js';
 import { getTenantContext } from '../../services/tool-context.js';
 import { getUserContext } from '../../services/user-context.js';
-import { TodoManager } from '../../services/todo-manager.js';
 import { geminiGenerate } from '../../llm/providers/gemini/index.js';
 import { GEMINI_API_KEY, resolveUserIdByWebToken, hasWebTokens } from '../../config.js';
 import type { LLMClient } from '../../llm/client.js';
@@ -403,17 +403,6 @@ function _installNotebookRoutes(router: Router): void {
 
 // ── Todo routes ──────────────────────────────────────────────────────────────
 
-/** Lazy-init a lightweight TodoManager for web-scoped todos (no cron/fire callbacks needed). */
-let _webTodoManager: TodoManager | null = null;
-function getWebTodoManager(): TodoManager {
-    if (!_webTodoManager) {
-        _webTodoManager = new TodoManager('web');
-        // Web todos are plain items — no fire/cron callbacks needed, init with no-ops
-        _webTodoManager.init(async () => {}, async () => {});
-    }
-    return _webTodoManager;
-}
-
 function _installTodoRoutes(router: Router): void {
     router.post('/api/todos/analyze', async (ctx) => {
         const body = ctx.request.body as Record<string, unknown>;
@@ -453,8 +442,7 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
     });
 
     router.get('/api/todos', (ctx) => {
-        const tm = getWebTodoManager();
-        const todos = tm.getTodos();
+        const todos = todoList('web');
         // Map to the shape the web frontend expects
         ctx.body = todos.map(t => ({
             id: t.id,
@@ -475,8 +463,7 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
         const remindAt = typeof body.remind_at === 'string' && body.remind_at.trim() ? body.remind_at.trim() : null;
         const fireAt = remindAt ? new Date(remindAt).getTime() : null;
 
-        const tm = getWebTodoManager();
-        const todo = tm.add({ content, status: 'pending', priority, fireAt });
+        const todo = todoAdd('web', { content, status: 'pending', priority, fireAt });
         ctx.body = {
             id: todo.id,
             content: todo.content,
@@ -491,7 +478,6 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
     router.patch('/api/todos/:id', async (ctx) => {
         const todoId = ctx.params.id;
         const body = ctx.request.body as Record<string, unknown>;
-        const tm = getWebTodoManager();
 
         const patch: Record<string, any> = {};
 
@@ -519,14 +505,13 @@ Example: {"content":"预约牙医","remind_at":"2026-04-09T09:00:00+08:00","prio
             patch.priority = body.priority === null ? null : (typeof body.priority === 'string' ? body.priority.trim() || null : null);
         }
 
-        const ok = tm.patch(todoId, patch);
+        const ok = todoPatch('web', todoId, patch);
         if (!ok) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
         ctx.body = { ok: true };
     });
 
     router.delete('/api/todos/:id', (ctx) => {
-        const tm = getWebTodoManager();
-        tm.delete(ctx.params.id);
+        todoDelete('web', ctx.params.id);
         ctx.body = { ok: true };
     });
 }

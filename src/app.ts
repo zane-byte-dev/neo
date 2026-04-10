@@ -15,6 +15,7 @@ import { ChatHistoryCache } from './services/chat-history-cache.js';
 import { AsyncTaskManager } from './services/async-task-manager.js';
 import { MessageQueue } from './services/message-queue.js';
 import { TodoManager } from './services/todo-manager.js';
+import { initTodoScope } from './services/todo-service.js';
 import { UserProfileManager } from './services/user-profile.js';
 import { registerUserContext, getUserContext, getAllUserIds } from './services/user-context.js';
 import { registerTenantContext, getTenantContext, getAllTenantKeys, getTenantContextsForUser } from './services/tool-context.js';
@@ -144,7 +145,7 @@ export class App {
 
             // Per-user managers: keyed by userId for cross-client sharing
             const userProfile = new UserProfileManager(workDir);
-            const todoManager = new TodoManager(userId);
+            const todoManager = initTodoScope(userId);
 
             // Load Markdown skill definitions from space/{userId}/skills/
             const projectRoot = resolve('.');
