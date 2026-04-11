@@ -1,27 +1,31 @@
 /**
- * notebook-service.ts — Business logic for the notebook knowledge base.
+ * notebook-service.ts — File-system based notebook knowledge base.
  *
- * Single source of truth for all notebook CRUD operations.
- * Used by both the AI tool (tools/workspace/notebook.ts) and the web API routes.
+ * Each user has a notebooks/ directory under their workspace:
+ *   {workDir}/notebooks/{notebookName}/{article}.md
+ *
+ * Files may contain optional YAML frontmatter (title, date, author, tags, summary).
+ * IDs are "{notebookName}/{filename}" strings — no SQLite dependency.
  */
-import { getDb } from './db.js';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface NotebookEntry {
-    id: number;
+    id: string;           // "{notebook}/{filename}"
+    notebook: string;
+    filename: string;
     title: string;
     author: string | null;
     date: string | null;
     source: string | null;
     summary: string | null;
-    tags: string | null;   // JSON-encoded string[]
-    content: string | null;
-    created_at: string;
-    updated_at: string;
+    tags: string | null;  // JSON-encoded string[]
+    content?: string;
 }
 
-export type NotebookEntryPartial = Omit<NotebookEntry, 'content' | 'created_at' | 'updated_at'>;
+export type NotebookEntryPartial = Omit<NotebookEntry, 'content'>;
 
 export interface NotebookSearchResult extends NotebookEntryPartial {
     snippet?: string;
@@ -37,103 +41,263 @@ export interface NotebookCreateInput {
     content?: string | null;
 }
 
-export type NotebookUpdateInput = Partial<Omit<NotebookCreateInput, 'title'>> & { title?: string };
+export type NotebookUpdateInput = Partial<NotebookCreateInput>;
 
-// ── Operations ───────────────────────────────────────────────────────────────
+// ── Frontmatter helpers ───────────────────────────────────────────────────────
 
-export function nbList(opts?: { sourceFilter?: string; limit?: number }): NotebookEntryPartial[] {
-    const db = getDb();
-    const limit = Math.min(opts?.limit ?? 50, 200);
-    if (opts?.sourceFilter) {
-        return db.prepare(
-            `SELECT id, title, author, date, source, tags, summary
-             FROM notebook_entries WHERE source = ? ORDER BY date DESC, id DESC LIMIT ?`
-        ).all(opts.sourceFilter, limit) as NotebookEntryPartial[];
+interface FrontmatterMeta {
+    title?: string;
+    date?: string;
+    author?: string;
+    source?: string;
+    summary?: string;
+    tags?: string[];
+}
+
+function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string } {
+    const meta: FrontmatterMeta = {};
+    let body = text;
+
+    if (text.startsWith('---')) {
+        const end = text.indexOf('\n---', 3);
+        if (end !== -1) {
+            const block = text.slice(4, end);
+            body = text.slice(end + 4).trimStart();
+            for (const line of block.split('\n')) {
+                const colon = line.indexOf(':');
+                if (colon === -1) continue;
+                const key = line.slice(0, colon).trim();
+                const val = line.slice(colon + 1).trim();
+                switch (key) {
+                    case 'title':   meta.title   = val.replace(/^["']|["']$/g, ''); break;
+                    case 'date':    meta.date    = val; break;
+                    case 'author':  meta.author  = val.replace(/^["']|["']$/g, ''); break;
+                    case 'source':  meta.source  = val.replace(/^["']|["']$/g, ''); break;
+                    case 'summary': meta.summary = val.replace(/^["']|["']$/g, ''); break;
+                    case 'tags': {
+                        const clean = val.replace(/^\[|\]$/g, '');
+                        meta.tags = clean.split(',').map(t => t.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+                        break;
+                    }
+                }
+            }
+        }
     }
-    return db.prepare(
-        `SELECT id, title, author, date, source, tags, summary
-         FROM notebook_entries ORDER BY date DESC, id DESC LIMIT ?`
-    ).all(limit) as NotebookEntryPartial[];
+
+    return { meta, body };
 }
 
-export function nbSearch(query: string, limit = 20): NotebookSearchResult[] {
-    const db = getDb();
-    const cap = Math.min(limit, 100);
-    try {
-        return db.prepare(`
-            SELECT n.id, n.title, n.author, n.date, n.source, n.tags, n.summary,
-                   snippet(notebook_fts, 5, '**', '**', '…', 32) AS snippet
-            FROM notebook_fts
-            JOIN notebook_entries n ON n.id = notebook_fts.rowid
-            WHERE notebook_fts MATCH ?
-            ORDER BY rank
-            LIMIT ?
-        `).all(query, cap) as NotebookSearchResult[];
-    } catch (err: unknown) {
-        // Only fallback to LIKE for FTS syntax errors, re-throw real errors
-        const msg = err instanceof Error ? err.message : '';
-        if (!msg.includes('fts5') && !msg.includes('MATCH') && !msg.includes('syntax')) throw err;
-        return db.prepare(
-            `SELECT id, title, author, date, source, tags, summary
-             FROM notebook_entries WHERE title LIKE ? OR content LIKE ?
-             LIMIT ?`
-        ).all(`%${query}%`, `%${query}%`, cap) as NotebookSearchResult[];
+function serializeFrontmatter(meta: FrontmatterMeta, body: string): string {
+    const lines: string[] = ['---'];
+    if (meta.title)   lines.push(`title: ${meta.title}`);
+    if (meta.date)    lines.push(`date: ${meta.date}`);
+    if (meta.author)  lines.push(`author: ${meta.author}`);
+    if (meta.source)  lines.push(`source: ${meta.source}`);
+    if (meta.summary) lines.push(`summary: ${meta.summary}`);
+    if (meta.tags?.length) lines.push(`tags: [${meta.tags.join(', ')}]`);
+    lines.push('---\n');
+    lines.push(body);
+    return lines.join('\n');
+}
+
+function titleFromFilename(filename: string): string {
+    return filename
+        .replace(/\.md$/, '')
+        .replace(/^\d+_/, '')
+        .replace(/_/g, ' ')
+        .trim();
+}
+
+function notebooksDir(workDir: string): string {
+    return join(workDir, 'notebooks');
+}
+
+function parseEntry(workDir: string, notebook: string, filename: string, includeContent: boolean): NotebookEntry {
+    const filePath = join(notebooksDir(workDir), notebook, filename);
+    const raw = readFileSync(filePath, 'utf8');
+    const { meta, body } = parseFrontmatter(raw);
+
+    const title = meta.title || titleFromFilename(filename);
+    const tags  = meta.tags?.length ? JSON.stringify(meta.tags) : null;
+
+    return {
+        id: `${notebook}/${filename}`,
+        notebook,
+        filename,
+        title,
+        author:  meta.author  || null,
+        date:    meta.date    || null,
+        source:  meta.source  || null,
+        summary: meta.summary || null,
+        tags,
+        ...(includeContent ? { content: body } : {}),
+    };
+}
+
+// ── Operations ────────────────────────────────────────────────────────────────
+
+export function nbListNotebooks(workDir: string): string[] {
+    const dir = notebooksDir(workDir);
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name)
+        .sort();
+}
+
+export function nbList(workDir: string, opts?: { notebook?: string; limit?: number }): NotebookEntryPartial[] {
+    const dir = notebooksDir(workDir);
+    if (!existsSync(dir)) return [];
+
+    const notebooks = opts?.notebook ? [opts.notebook] : nbListNotebooks(workDir);
+    const limit = Math.min(opts?.limit ?? 300, 500);
+    const entries: NotebookEntryPartial[] = [];
+
+    for (const nb of notebooks) {
+        const nbDir = join(dir, nb);
+        if (!existsSync(nbDir)) continue;
+        const files = readdirSync(nbDir).filter(f => f.endsWith('.md')).sort();
+        for (const file of files) {
+            try { entries.push(parseEntry(workDir, nb, file, false)); } catch { /* skip */ }
+            if (entries.length >= limit) break;
+        }
+        if (entries.length >= limit) break;
     }
+
+    return entries;
 }
 
-export function nbGet(id: number): NotebookEntry | undefined {
-    return getDb().prepare(
-        'SELECT * FROM notebook_entries WHERE id = ?'
-    ).get(id) as NotebookEntry | undefined;
+export function nbSearch(workDir: string, query: string, opts?: { notebook?: string; limit?: number }): NotebookSearchResult[] {
+    const all = nbList(workDir, { notebook: opts?.notebook, limit: 500 });
+    const q = query.toLowerCase();
+    const limit = Math.min(opts?.limit ?? 20, 100);
+    const results: NotebookSearchResult[] = [];
+
+    for (const entry of all) {
+        const inTitle   = entry.title.toLowerCase().includes(q);
+        const inSummary = entry.summary?.toLowerCase().includes(q) ?? false;
+
+        if (inTitle || inSummary) {
+            results.push({ ...entry });
+        } else {
+            try {
+                const full = parseEntry(workDir, entry.notebook, entry.filename, true);
+                const body = (full.content ?? '').toLowerCase();
+                const idx  = body.indexOf(q);
+                if (idx === -1) continue;
+                const snippet = '…' + full.content!.slice(Math.max(0, idx - 60), idx + 120).trim() + '…';
+                results.push({ ...entry, snippet });
+            } catch { continue; }
+        }
+
+        if (results.length >= limit) break;
+    }
+
+    return results;
 }
 
-export function nbGetByTitle(titleQuery: string): NotebookEntry | undefined {
-    return getDb().prepare(
-        'SELECT * FROM notebook_entries WHERE title LIKE ? ORDER BY date DESC LIMIT 1'
-    ).get(`%${titleQuery}%`) as NotebookEntry | undefined;
+export function nbGet(workDir: string, id: string): NotebookEntry | undefined {
+    const slash = id.indexOf('/');
+    if (slash === -1) return undefined;
+    const notebook = id.slice(0, slash);
+    const filename = id.slice(slash + 1);
+    const filePath = join(notebooksDir(workDir), notebook, filename);
+    if (!existsSync(filePath)) return undefined;
+    try { return parseEntry(workDir, notebook, filename, true); } catch { return undefined; }
 }
 
-export function nbCreate(data: NotebookCreateInput): NotebookEntry {
-    const db = getDb();
-    const now = new Date().toISOString();
-    const title   = data.title.trim();
-    const author  = data.author?.trim()  || null;
-    const date    = data.date?.trim()    || null;
-    const source  = data.source?.trim()  || null;
-    const summary = data.summary?.trim() || null;
-    const tags    = data.tags?.trim()    || null;
-    const content = data.content ?? null;
-
-    const result = db.prepare(
-        `INSERT INTO notebook_entries (title, author, date, source, summary, tags, content, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(title, author, date, source, summary, tags, content, now, now);
-
-    return { id: result.lastInsertRowid as number, title, author, date, source, summary, tags, content, created_at: now, updated_at: now };
+export function nbGetByTitle(workDir: string, titleQuery: string, notebook?: string): NotebookEntry | undefined {
+    const entries = nbList(workDir, { notebook });
+    const q = titleQuery.toLowerCase();
+    const match = entries.find(e => e.title.toLowerCase().includes(q));
+    if (!match) return undefined;
+    return nbGet(workDir, match.id);
 }
 
-export function nbUpdate(id: number, data: NotebookUpdateInput): NotebookEntry | undefined {
-    const db = getDb();
-    const existing = nbGet(id);
+export function nbCreate(workDir: string, notebook: string, data: NotebookCreateInput): NotebookEntry {
+    const dir = join(notebooksDir(workDir), notebook);
+    mkdirSync(dir, { recursive: true });
+
+    const slug = data.title.trim()
+        .replace(/[<>:"/\\|?*\n]/g, '')
+        .replace(/\s+/g, '_')
+        .slice(0, 60);
+    const dateStr = (data.date ?? new Date().toISOString().split('T')[0]).replace(/-/g, '');
+    const filename = `${slug}_${dateStr}.md`;
+    const filePath = join(dir, filename);
+
+    const tagsArr: string[] = data.tags ? (JSON.parse(data.tags) as string[]) : [];
+    const meta: FrontmatterMeta = {
+        title:   data.title.trim(),
+        date:    data.date || new Date().toISOString().split('T')[0],
+        author:  data.author  || undefined,
+        source:  data.source  || undefined,
+        summary: data.summary || undefined,
+        tags:    tagsArr.length ? tagsArr : undefined,
+    };
+
+    writeFileSync(filePath, serializeFrontmatter(meta, data.content ?? ''), 'utf8');
+
+    return {
+        id: `${notebook}/${filename}`,
+        notebook,
+        filename,
+        title:   meta.title!,
+        author:  meta.author  || null,
+        date:    meta.date    || null,
+        source:  meta.source  || null,
+        summary: meta.summary || null,
+        tags:    tagsArr.length ? JSON.stringify(tagsArr) : null,
+        content: data.content ?? '',
+    };
+}
+
+export function nbUpdate(workDir: string, id: string, data: NotebookUpdateInput): NotebookEntry | undefined {
+    const existing = nbGet(workDir, id);
     if (!existing) return undefined;
 
-    const now     = new Date().toISOString();
-    const title   = data.title   !== undefined ? (data.title.trim()   || existing.title)   : existing.title;
-    const author  = data.author  !== undefined ? (data.author?.trim() || null)              : existing.author;
-    const date    = data.date    !== undefined ? (data.date?.trim()   || null)              : existing.date;
-    const source  = data.source  !== undefined ? (data.source?.trim() || null)              : existing.source;
-    const summary = data.summary !== undefined ? (data.summary?.trim()|| null)              : existing.summary;
-    const tags    = data.tags    !== undefined ? (data.tags?.trim()   || null)              : existing.tags;
-    const content = data.content !== undefined ? data.content                               : existing.content;
+    const slash    = id.indexOf('/');
+    const notebook = id.slice(0, slash);
+    const filename = id.slice(slash + 1);
+    const filePath = join(notebooksDir(workDir), notebook, filename);
 
-    db.prepare(
-        `UPDATE notebook_entries SET title=?, author=?, date=?, source=?, summary=?, tags=?, content=?, updated_at=? WHERE id=?`
-    ).run(title, author, date, source, summary, tags, content, now, id);
+    const existTags: string[] = existing.tags ? (JSON.parse(existing.tags) as string[]) : [];
+    const newTagsRaw = data.tags !== undefined ? data.tags : existing.tags;
+    const newTags: string[] = newTagsRaw ? (JSON.parse(newTagsRaw) as string[]) : existTags;
 
-    return { ...existing, title, author, date, source, summary, tags, content, updated_at: now };
+    const meta: FrontmatterMeta = {
+        title:   data.title   !== undefined ? data.title   : existing.title,
+        date:    data.date    !== undefined ? (data.date    || undefined) : (existing.date    || undefined),
+        author:  data.author  !== undefined ? (data.author  || undefined) : (existing.author  || undefined),
+        source:  data.source  !== undefined ? (data.source  || undefined) : (existing.source  || undefined),
+        summary: data.summary !== undefined ? (data.summary || undefined) : (existing.summary || undefined),
+        tags:    newTags.length ? newTags : undefined,
+    };
+
+    const body = data.content !== undefined ? (data.content ?? '') : (existing.content ?? '');
+    writeFileSync(filePath, serializeFrontmatter(meta, body), 'utf8');
+
+    return {
+        ...existing,
+        title:   meta.title!,
+        author:  meta.author  || null,
+        date:    meta.date    || null,
+        source:  meta.source  || null,
+        summary: meta.summary || null,
+        tags:    newTags.length ? JSON.stringify(newTags) : null,
+        content: body,
+    };
 }
 
-export function nbDelete(id: number): boolean {
-    const result = getDb().prepare('DELETE FROM notebook_entries WHERE id = ?').run(id);
-    return result.changes > 0;
+export function nbDelete(workDir: string, id: string): boolean {
+    const slash    = id.indexOf('/');
+    if (slash === -1) return false;
+    const notebook = id.slice(0, slash);
+    const filename = id.slice(slash + 1);
+    const filePath = join(notebooksDir(workDir), notebook, filename);
+    if (!existsSync(filePath)) return false;
+    unlinkSync(filePath);
+    return true;
 }
+
+

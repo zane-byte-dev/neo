@@ -7,12 +7,13 @@ import type { NoteEntry } from '../types'
 
 interface NoteEditorProps {
     note: NoteEntry | null             // null = create new
+    notebook?: string                  // target notebook when creating new
     onBack: () => void
     onSaved: (entry: NoteEntry) => void
-    onDeleted?: (id: number) => void
+    onDeleted?: (id: string) => void
 }
 
-export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onBack, onSaved, onDeleted }) => {
+export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'personal', onBack, onSaved, onDeleted }) => {
     const [title, setTitle] = React.useState(note?.title ?? '')
     const [author, setAuthor] = React.useState(note?.author ?? '')
     const [date, setDate] = React.useState(note?.date ?? new Date().toISOString().split('T')[0])
@@ -54,7 +55,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, onBack, onSaved, o
             }
             const result = note
                 ? await notebookUpdate(note.id, payload)
-                : await notebookCreate(payload)
+                : await notebookCreate(notebook, payload)
             onSaved(result)
         } finally {
             setSaving(false)

@@ -17,7 +17,8 @@ export interface Message {
 }
 
 export interface NoteEntry {
-    id: number
+    id: string
+    notebook?: string
     title: string
     author: string | null
     date: string | null

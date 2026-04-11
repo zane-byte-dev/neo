@@ -79,19 +79,25 @@ export async function* streamChat(
 
 // ── Notebook API ──────────────────────────────────────────────────────────────
 
-export function notebookList() {
-    return apiGet('/api/notebook?action=list')
+export function notebookListNotebooks(): Promise<string[]> {
+    return apiGet('/api/notebook?action=notebooks')
 }
 
-export function notebookSearch(q: string) {
-    return apiGet(`/api/notebook?action=search&q=${encodeURIComponent(q)}`)
+export function notebookList(notebook?: string) {
+    const nb = notebook ? `&notebook=${encodeURIComponent(notebook)}` : ''
+    return apiGet(`/api/notebook?action=list${nb}`)
 }
 
-export function notebookRead(id: number) {
-    return apiGet(`/api/notebook?action=read&id=${id}`)
+export function notebookSearch(q: string, notebook?: string) {
+    const nb = notebook ? `&notebook=${encodeURIComponent(notebook)}` : ''
+    return apiGet(`/api/notebook?action=search&q=${encodeURIComponent(q)}${nb}`)
 }
 
-export function notebookCreate(data: {
+export function notebookRead(id: string) {
+    return apiGet(`/api/notebook?action=read&id=${encodeURIComponent(id)}`)
+}
+
+export function notebookCreate(notebook: string, data: {
     title: string
     author?: string | null
     date?: string | null
@@ -100,13 +106,13 @@ export function notebookCreate(data: {
     tags?: string | null
     content?: string | null
 }) {
-    return _post('/api/notebook', data).then((r) => {
+    return _post('/api/notebook', { ...data, notebook }).then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json() as Promise<import('./types').NoteEntry>
     })
 }
 
-export function notebookUpdate(id: number, data: {
+export function notebookUpdate(id: string, data: {
     title?: string
     author?: string | null
     date?: string | null
@@ -115,7 +121,7 @@ export function notebookUpdate(id: number, data: {
     tags?: string | null
     content?: string | null
 }) {
-    return fetch(`/api/notebook/${id}`, {
+    return fetch(`/api/notebook?id=${encodeURIComponent(id)}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -126,8 +132,8 @@ export function notebookUpdate(id: number, data: {
     })
 }
 
-export function notebookDelete(id: number) {
-    return fetch(`/api/notebook/${id}`, {
+export function notebookDelete(id: string) {
+    return fetch(`/api/notebook?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
         credentials: 'include',
     }).then((r) => {

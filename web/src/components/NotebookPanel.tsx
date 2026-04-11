@@ -2,7 +2,7 @@ import React from 'react'
 import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X, Plus, Pencil } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { notebookList, notebookSearch, notebookRead } from '../api'
+import { notebookList, notebookSearch, notebookRead, notebookListNotebooks } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { NoteEditor } from './NoteEditor'
@@ -85,23 +85,30 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
 
 export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) => {
     const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries } = useAppStore()
+    const [notebooks, setNotebooks] = React.useState<string[]>([])
+    const [selectedNotebook, setSelectedNotebook] = React.useState<string | undefined>(undefined)
     const [searchQuery, setSearchQuery] = React.useState('')
     const [results, setResults] = React.useState<NoteEntry[]>([])
     const [loading, setLoading] = React.useState(false)
     const [error, setError] = React.useState('')
     const [inSearch, setInSearch] = React.useState(false)
     const searchTimeoutRef = React.useRef<number | null>(null)
-    const [editing, setEditing] = React.useState<NoteEntry | null | 'new'>(null) // null=off, 'new'=create, NoteEntry=edit
+    const [editing, setEditing] = React.useState<NoteEntry | null | 'new'>(null)
 
-    // Load all entries on mount (once)
+    // Load available notebooks once
     React.useEffect(() => {
-        if (notebookEntries.length > 0) return
+        notebookListNotebooks().then(setNotebooks).catch(() => {})
+    }, [])
+
+    // Reload entries when selected notebook changes
+    React.useEffect(() => {
         setLoading(true)
-        notebookList()
+        setError('')
+        notebookList(selectedNotebook)
             .then((data) => setNotebookEntries(data as NoteEntry[]))
             .catch((e) => setError(String(e)))
             .finally(() => setLoading(false))
-    }, [])
+    }, [selectedNotebook])
 
     // Debounced search
     React.useEffect(() => {
@@ -114,11 +121,11 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
         }
         setInSearch(true)
         searchTimeoutRef.current = window.setTimeout(() => {
-            notebookSearch(q)
+            notebookSearch(q, selectedNotebook)
                 .then((data) => setResults(data as NoteEntry[]))
                 .catch(() => setResults([]))
         }, 300)
-    }, [searchQuery])
+    }, [searchQuery, selectedNotebook])
 
     const displayList = inSearch ? results : notebookEntries
 
@@ -132,7 +139,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
         setSelectedNote(entry)
     }
 
-    const handleEditorDeleted = (id: number) => {
+    const handleEditorDeleted = (id: string) => {
         setNotebookEntries(notebookEntries.filter((e) => e.id !== id))
         setEditing(null)
         setSelectedNote(null)
@@ -142,6 +149,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
     const editorView = editing !== null && (
         <NoteEditor
             note={editing === 'new' ? null : editing}
+            notebook={editing === 'new' ? (selectedNotebook ?? 'personal') : editing?.notebook}
             onBack={() => setEditing(null)}
             onSaved={handleEditorSaved}
             onDeleted={handleEditorDeleted}
@@ -160,6 +168,9 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
             <div className="flex h-full bg-bg-container overflow-hidden">
                 <div className="w-80 shrink-0 border-r border-border flex flex-col">
                     <NotebookList
+                        notebooks={notebooks}
+                        selectedNotebook={selectedNotebook}
+                        onNotebookChange={setSelectedNotebook}
                         entries={displayList}
                         loading={loading}
                         error={error}
@@ -189,6 +200,9 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
     return (
         <div className="flex flex-col h-full bg-bg-container overflow-hidden">
             <NotebookList
+                notebooks={notebooks}
+                selectedNotebook={selectedNotebook}
+                onNotebookChange={setSelectedNotebook}
                 entries={displayList}
                 loading={loading}
                 error={error}
@@ -207,6 +221,9 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
 // ── Shared list UI ────────────────────────────────────────────────────────────
 
 const NotebookList: React.FC<{
+    notebooks: string[]
+    selectedNotebook: string | undefined
+    onNotebookChange: (nb: string | undefined) => void
     entries: NoteEntry[]
     loading: boolean
     error: string
@@ -215,9 +232,9 @@ const NotebookList: React.FC<{
     setSearchQuery: (q: string) => void
     totalCount: number
     onSelect: (note: NoteEntry) => void
-    selectedId: number | null
+    selectedId: string | null
     onNew?: () => void
-}> = ({ entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew }) => (
+}> = ({ notebooks, selectedNotebook, onNotebookChange, entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew }) => (
     <>
         {/* Header */}
         <div className="h-12 border-b border-border flex items-center gap-2 px-4 shrink-0">
@@ -234,6 +251,37 @@ const NotebookList: React.FC<{
                 </button>
             )}
         </div>
+
+        {/* Notebook selector */}
+        {notebooks.length > 0 && (
+            <div className="px-3 py-1.5 border-b border-border shrink-0 flex gap-1 overflow-x-auto">
+                <button
+                    onClick={() => onNotebookChange(undefined)}
+                    className={cn(
+                        'px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors',
+                        selectedNotebook === undefined
+                            ? 'bg-primary-mint/15 text-primary-mint'
+                            : 'text-text-secondary hover:bg-fill-secondary'
+                    )}
+                >
+                    全部
+                </button>
+                {notebooks.map((nb) => (
+                    <button
+                        key={nb}
+                        onClick={() => onNotebookChange(nb)}
+                        className={cn(
+                            'px-2.5 py-1 text-xs rounded-full whitespace-nowrap transition-colors',
+                            selectedNotebook === nb
+                                ? 'bg-primary-mint/15 text-primary-mint'
+                                : 'text-text-secondary hover:bg-fill-secondary'
+                        )}
+                    >
+                        {nb}
+                    </button>
+                ))}
+            </div>
+        )}
 
         {/* Search */}
         <div className="px-3 py-2.5 border-b border-border shrink-0">
