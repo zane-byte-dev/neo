@@ -125,12 +125,7 @@ export const useAppStore = create<AppState>()(
             partialize: (state) => ({
                 theme: state.theme,
                 chats: state.chats,
-                messages: Object.fromEntries(
-                    Object.entries(state.messages).map(([sid, msgs]) => [
-                        sid,
-                        msgs.map(({ images: _images, ...rest }) => rest),
-                    ])
-                ),
+                messages: state.messages,
                 selectedModel: state.selectedModel,
             }),
         }

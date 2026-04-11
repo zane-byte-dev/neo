@@ -1,4 +1,6 @@
 import { PassThrough } from 'stream';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import type Router from '@koa/router';
 import { messageList, messageAdd, sessionGet, sessionCreate } from '../services/chat-service.js';
 import { LLMClient, ToolContext } from '../llm/client.js';
@@ -53,7 +55,13 @@ export function chatRoute(router: Router): void {
             systemInstruction: userCtx.systemInstruction,
             skillRegistry: userCtx.skillRegistry,
             imageCallback: async (data: string, mimeType: string, caption?: string) => {
-                write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
+                const ext = mimeType.includes('png') ? 'png' : 'jpg';
+                const filename = `gen_${Date.now()}.${ext}`;
+                const dir = join(userCtx.workDir, '.tmp', sessionId);
+                await fs.mkdir(dir, { recursive: true });
+                await fs.writeFile(join(dir, filename), Buffer.from(data, 'base64'));
+                const url = `/api/assets/${sessionId}/${filename}`;
+                write({ type: 'image', url, ...(caption ? { caption } : {}) });
             },
         };
         const historyRows = messageList(sessionId);

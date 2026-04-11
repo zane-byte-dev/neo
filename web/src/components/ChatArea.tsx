@@ -68,10 +68,9 @@ const ChatInput: React.FC = () => {
                     if (!accumulated) setThinkingStatus('')
                     accumulated += chunk.text
                     updateLastAssistantMessage(activeChatId, accumulated)
-                } else if (chunk.type === 'image' && chunk.data && chunk.mimeType) {
+                } else if (chunk.type === 'image' && chunk.url) {
                     setThinkingStatus('')
-                    const dataUrl = `data:${chunk.mimeType};base64,${chunk.data}`
-                    addImageToLastAssistantMessage(activeChatId, dataUrl)
+                    addImageToLastAssistantMessage(activeChatId, chunk.url)
                 }
             }
         } catch (err: unknown) {
