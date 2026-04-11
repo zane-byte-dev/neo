@@ -52,6 +52,9 @@ export function chatRoute(router: Router): void {
             workDir: userCtx.workDir,
             systemInstruction: userCtx.systemInstruction,
             skillRegistry: userCtx.skillRegistry,
+            imageCallback: async (data: string, mimeType: string, caption?: string) => {
+                write({ type: 'image', data, mimeType, ...(caption ? { caption } : {}) });
+            },
         };
         const historyRows = messageList(sessionId);
         const history = historyRows.map(r => `${r.role === 'assistant' ? 'Assistant' : 'User'}: ${r.content}`).join('\n');
