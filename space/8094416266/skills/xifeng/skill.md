@@ -11,6 +11,8 @@ description: '西风审计模式。触发词：西风、审计一下、帮我看
 
 ## 执行步骤
 
+西风文章存放于 `notebooks/xifeng/`，通过以下步骤获取：
+
 1. 调用 `notebook(action: "list")`  → 返回**所有条目**（标题、日期、标签、摘要），用于浏览
 2. 根据用户处境，从列表中选出 2-4 篇最相关的条目
    - 可用 `notebook(action: "search", query: "关键词")` 做全文搜索辅助定位
