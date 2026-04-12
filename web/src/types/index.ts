@@ -100,6 +100,7 @@ export interface AppState {
     // Chat
     chats: Chat[]
     activeChatId: string | null
+    setChats: (chats: Chat[]) => void
     createChat: () => void
     selectChat: (id: string) => void
     selectOrCreateChat: (id: string, title?: string) => void
@@ -109,6 +110,7 @@ export interface AppState {
     // Messages
     messages: Record<string, Message[]>
     addMessage: (sessionId: string, message: Message) => void
+    setMessages: (sessionId: string, messages: Message[]) => void
     updateLastAssistantMessage: (sessionId: string, content: string) => void
     addImageToLastAssistantMessage: (sessionId: string, dataUrl: string) => void
     updateLastAssistantThinking: (sessionId: string, thinking: string) => void

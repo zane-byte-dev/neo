@@ -64,12 +64,12 @@ export function chatRoute(router: Router): void {
                 write({ type: 'image', url, ...(caption ? { caption } : {}) });
             },
         };
-        const historyRows = messageList(sessionId);
+        const historyRows = await messageList(sessionId, userId);
         const history = historyRows.map(r => `${r.role === 'assistant' ? 'Assistant' : 'User'}: ${r.content}`).join('\n');
 
-        let session = sessionGet(sessionId, userId);
-        if (!session) session = sessionCreate(userId, sessionId);
-        messageAdd(session.id, userId, 'user', message);
+        let session = await sessionGet(sessionId, userId);
+        if (!session) session = await sessionCreate(userId, sessionId);
+        await messageAdd(session.id, userId, 'user', message);
 
         let fullResponse = '';
         try {
@@ -94,7 +94,7 @@ export function chatRoute(router: Router): void {
         } finally {
             stream.end();
             if (fullResponse) {
-                messageAdd(sessionId, userId, 'assistant', fullResponse);
+                await messageAdd(sessionId, userId, 'assistant', fullResponse);
             }
         }
     });

@@ -156,6 +156,32 @@ export function sessionList() {
     return apiGet<Array<{ sessionId: string; title: string; updatedAt: string }>>('/api/session/list')
 }
 
+export function fetchSessions() {
+    return apiGet<Array<{ id: string; title: string; isPinned: boolean; createdAt: number }>>('/api/sessions')
+}
+
+export function patchSession(id: string, patch: { title?: string; isPinned?: boolean }) {
+    return fetch(`/api/sessions/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+    })
+}
+
+export function deleteSessionApi(id: string) {
+    return fetch(`/api/sessions/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    })
+}
+
+export function fetchMessages(sessionId: string) {
+    return apiGet<Array<{ id: string; role: string; content: string; timestamp: number }>>(
+        `/api/messages?sessionId=${encodeURIComponent(sessionId)}`
+    )
+}
+
 // ── Todo API ──────────────────────────────────────────────────────────────────
 import type { TodoItem, TodoAnalysis, InboxNote, NoteHeatmapDay, NoteTag } from './types'
 

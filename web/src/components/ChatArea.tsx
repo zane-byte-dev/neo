@@ -3,7 +3,7 @@ import { Send, Square } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
-import { streamChat } from '../api'
+import { streamChat, fetchMessages } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -169,10 +169,29 @@ const ChatInput: React.FC = () => {
 // ── Chat area ─────────────────────────────────────────────────────────────────
 
 export const ChatArea: React.FC = () => {
-    const { chats, activeChatId, messages, isGenerating, thinkingStatus } = useAppStore()
+    const { chats, activeChatId, messages, isGenerating, thinkingStatus, setMessages } = useAppStore()
     const activeChat = chats.find((c) => c.id === activeChatId)
     const chatMessages = messages[activeChatId ?? ''] ?? []
     const scrollRef = React.useRef<HTMLDivElement>(null)
+
+    // Load message history from server when session changes
+    React.useEffect(() => {
+        if (!activeChatId) return
+        // Only load from server if we have no messages in memory yet
+        if (messages[activeChatId]?.length) return
+        fetchMessages(activeChatId)
+            .then((rows) => {
+                if (rows.length > 0) {
+                    setMessages(activeChatId, rows.map((r) => ({
+                        id: r.id,
+                        role: r.role as 'user' | 'assistant',
+                        content: r.content,
+                        timestamp: r.timestamp,
+                    })))
+                }
+            })
+            .catch(() => { /* session may not exist yet */ })
+    }, [activeChatId])
 
     React.useEffect(() => {
         if (scrollRef.current) {

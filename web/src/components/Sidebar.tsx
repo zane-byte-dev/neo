@@ -3,7 +3,7 @@ import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut } from 'lucide-react
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { logout, fetchMe, type MeInfo } from '../api'
+import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, type MeInfo } from '../api'
 import type { Theme } from '../types'
 
 const THEMES: { value: Theme; label: string }[] = [
@@ -13,7 +13,7 @@ const THEMES: { value: Theme; label: string }[] = [
 ]
 
 export const Sidebar: React.FC = () => {
-    const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme } = useAppStore()
+    const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme, setChats } = useAppStore()
     const [menuOpen, setMenuOpen] = React.useState(false)
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
     const [me, setMe] = React.useState<MeInfo | null>(null)
@@ -21,6 +21,29 @@ export const Sidebar: React.FC = () => {
     React.useEffect(() => {
         fetchMe().then(setMe).catch(() => {})
     }, [])
+
+    // Load session list from server on mount
+    React.useEffect(() => {
+        fetchSessions()
+            .then((rows) => setChats(rows.map((r) => ({
+                id: r.id,
+                title: r.title,
+                isPinned: r.isPinned,
+                createdAt: r.createdAt,
+            }))))
+            .catch(() => {})
+    }, [])
+
+    const handleDelete = (id: string) => {
+        deleteSessionApi(id).catch(() => {})
+        deleteChat(id)
+    }
+
+    const handlePin = (id: string) => {
+        const chat = chats.find((c) => c.id === id)
+        if (chat) patchSession(id, { isPinned: !chat.isPinned }).catch(() => {})
+        pinChat(id)
+    }
 
     const handleLogout = () => {
         logout().finally(() => window.location.reload())
@@ -70,7 +93,7 @@ export const Sidebar: React.FC = () => {
                         <span className="flex-1 truncate">{chat.title}</span>
                         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
                             <button
-                                onClick={(e) => { e.stopPropagation(); pinChat(chat.id) }}
+                                onClick={(e) => { e.stopPropagation(); handlePin(chat.id) }}
                                 className="p-1 hover:bg-fill rounded"
                             >
                                 <Pin size={12} fill={chat.isPinned ? 'currentColor' : 'none'} />
@@ -157,13 +180,13 @@ export const Sidebar: React.FC = () => {
                     onClick={(e) => e.stopPropagation()}
                 >
                     <button
-                        onClick={() => { pinChat(contextMenu.id); setContextMenu(null) }}
+                        onClick={() => { handlePin(contextMenu.id); setContextMenu(null) }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-fill-secondary transition-colors"
                     >
                         <Pin size={13} /> Pin / Unpin
                     </button>
                     <button
-                        onClick={() => { deleteChat(contextMenu.id); setContextMenu(null) }}
+                        onClick={() => { handleDelete(contextMenu.id); setContextMenu(null) }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-fill-secondary transition-colors"
                     >
                         <Trash2 size={13} /> Delete

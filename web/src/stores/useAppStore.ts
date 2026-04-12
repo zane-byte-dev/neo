@@ -15,6 +15,7 @@ export const useAppStore = create<AppState>()(
             // Chat
             chats: [],
             activeChatId: null,
+            setChats: (chats: Chat[]) => set({ chats }),
             createChat: () => {
                 const newChat: Chat = {
                     id: Math.random().toString(36).substring(7),
@@ -58,6 +59,9 @@ export const useAppStore = create<AppState>()(
 
             // Messages
             messages: {},
+            setMessages: (sessionId: string, msgs: Message[]) => set((state) => ({
+                messages: { ...state.messages, [sessionId]: msgs },
+            })),
             addMessage: (sessionId: string, message: Message) => set((state) => ({
                 messages: {
                     ...state.messages,
@@ -124,8 +128,6 @@ export const useAppStore = create<AppState>()(
             // Persist chats + messages + theme, not UI state
             partialize: (state) => ({
                 theme: state.theme,
-                chats: state.chats,
-                messages: state.messages,
                 selectedModel: state.selectedModel,
             }),
         }
