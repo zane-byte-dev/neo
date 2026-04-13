@@ -1,7 +1,7 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { MessageSquare, BookOpen, CheckSquare, FileText, Timer } from 'lucide-react'
+import { MessageSquare, BookOpen } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NotebookPanel } from './components/NotebookPanel'

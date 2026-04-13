@@ -93,7 +93,52 @@
       "user_id": "8094416266",
       "title": "研究一下 vercel ai sdk",
       "start_time": "2026-04-13T08:25:38.256Z",
-      "end_time": "2026-04-13T08:25:38.256Z",
+      "end_time": "2026-04-13T08:26:51.615Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "test-debug-x1": {
+      "id": "test-debug-x1",
+      "user_id": "8094416266",
+      "title": "hello just say hi",
+      "start_time": "2026-04-13T08:31:02.456Z",
+      "end_time": "2026-04-13T08:31:06.659Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "test-tool-x2": {
+      "id": "test-tool-x2",
+      "user_id": "8094416266",
+      "title": "用search_web搜索一下今天是星期几",
+      "start_time": "2026-04-13T08:31:16.873Z",
+      "end_time": "2026-04-13T08:31:37.220Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "zzr5xk": {
+      "id": "zzr5xk",
+      "user_id": "8094416266",
+      "title": "研究一下 vercel ai sdk",
+      "start_time": "2026-04-13T08:52:14.235Z",
+      "end_time": "2026-04-13T08:53:12.089Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "mjhcj": {
+      "id": "mjhcj",
+      "user_id": "8094416266",
+      "title": "研究一下 vercel ai sdk",
+      "start_time": "2026-04-13T08:53:50.096Z",
+      "end_time": "2026-04-13T08:53:50.097Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "tu0tan": {
+      "id": "tu0tan",
+      "user_id": "8094416266",
+      "title": "研究一下 vercel ai sdk",
+      "start_time": "2026-04-13T08:55:34.708Z",
+      "end_time": "2026-04-13T08:56:30.162Z",
       "is_current": 1,
       "is_pinned": 0
     }
