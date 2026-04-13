@@ -104,6 +104,5 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
 
     const ctx: UserContext = { userId, workDir, systemInstruction, userProfile, skillRegistry, userTools };
     _contextCache.set(userId, ctx);
-    console.log(`[UserService] calcUser: ${userId} → ${workDir}`);
     return ctx;
 }

@@ -25,7 +25,6 @@ export class UserProfileManager {
         } catch {
             await fs.writeFile(this.filePath, '# 用户档案\n\n- 姓名: \n- 城市: \n- 时区: Asia/Shanghai\n- 语言偏好: 中文\n', 'utf8');
         }
-        console.log('[UserProfile] Ready (file-based).');
     }
 
     /** Read the raw USER.md content */

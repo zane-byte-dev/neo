@@ -1,0 +1,13 @@
+name: update_now
+description: |
+  更新短期记忆文件 (memory/NOW.md)。该文件定义了当前的核心任务、今日焦点和优先级。
+  当核心目标发生变化、任务完成或进入新阶段时，应立即调用此工具。
+  内容建议包含 Mission、Today、Priorities、Status 等区块。
+
+parameters:
+  content:
+    type: string
+    description: 完整的 NOW.md Markdown 内容。建议包含 # Mission、# Today、# Priorities、# Status 等区块。
+    required: true
+
+timeout: 10000
