@@ -138,7 +138,16 @@
       "user_id": "8094416266",
       "title": "研究一下 vercel ai sdk",
       "start_time": "2026-04-13T08:55:34.708Z",
-      "end_time": "2026-04-13T08:56:30.162Z",
+      "end_time": "2026-04-13T14:05:38.625Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "43gd04": {
+      "id": "43gd04",
+      "user_id": "8094416266",
+      "title": "研究一下 vercel ai sdk",
+      "start_time": "2026-04-13T14:06:11.974Z",
+      "end_time": "2026-04-13T14:06:48.442Z",
       "is_current": 1,
       "is_pinned": 0
     }
