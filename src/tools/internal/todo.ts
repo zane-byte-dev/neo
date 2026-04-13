@@ -6,7 +6,7 @@
  */
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import type { Tool } from '../_base.js';
+import type { Tool, ToolContext } from '../_base.js';
 
 interface TodoItem {
     id: number;
@@ -27,10 +27,12 @@ async function loadTodos(workDir: string, sessionId: string): Promise<TodoItem[]
     }
 }
 
-async function saveTodos(workDir: string, sessionId: string, todos: TodoItem[]): Promise<void> {
+async function saveTodos(workDir: string, sessionId: string, todos: TodoItem[], context?: ToolContext): Promise<void> {
     const p = todosPath(workDir, sessionId);
     await fs.mkdir(join(workDir, '.tmp', sessionId), { recursive: true });
     await fs.writeFile(p, JSON.stringify(todos, null, 2), 'utf-8');
+    // Push real-time update to the client via SSE
+    context?.todoCallback?.(todos);
 }
 
 function formatTodos(todos: TodoItem[]): string {
@@ -108,7 +110,7 @@ export const todoTool: Tool = {
             } catch {
                 return '[Error] items 必须是有效的 JSON 数组';
             }
-            await saveTodos(workDir, sessionId, items);
+            await saveTodos(workDir, sessionId, items, context);
             return `✅ Todo 列表已更新（${items.length} 项）\n\n${formatTodos(items)}`;
         }
 
@@ -120,7 +122,7 @@ export const todoTool: Tool = {
             const item = todos.find(t => t.id === Number(args.id));
             if (!item) return `[Error] 未找到 id=${args.id} 的任务`;
             item.status = String(args.status) as TodoItem['status'];
-            await saveTodos(workDir, sessionId, todos);
+            await saveTodos(workDir, sessionId, todos, context);
             return `✅ 任务 [${item.id}] "${item.title}" → ${item.status}\n\n${formatTodos(todos)}`;
         }
 
@@ -132,7 +134,7 @@ export const todoTool: Tool = {
             const maxId = todos.reduce((m, t) => Math.max(m, t.id), 0);
             const newItem: TodoItem = { id: maxId + 1, title, status: 'not-started' };
             todos.push(newItem);
-            await saveTodos(workDir, sessionId, todos);
+            await saveTodos(workDir, sessionId, todos, context);
             return `✅ 已添加: [${newItem.id}] ${title}\n\n${formatTodos(todos)}`;
         }
 

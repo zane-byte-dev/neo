@@ -1,11 +1,6 @@
 # Mission
 完成从基础架构工程师（CDN/高并发）向 AI Agent 架构师的职业身份转型。
 
-# Today
-- [x] 解决 SSH 进程持久化问题 (PM2 部署 neo)
-- [x] 制定 M4 与 MacAir 分工方案及工具链治理逻辑
-- [ ] **算力节点工程化**：在 M4 上实现模型网关、向量库及自动化运维
-
 # Priorities
 1. **算力节点落地**：在 M4 上完成本地 Agent 基础设施搭建（MLX/LiteLLM/向量库）。
 2. **工具链收敛**：通过 LiteLLM 统一管理 CLI 工具，明确 Air/M4 使用场景。
@@ -16,6 +11,7 @@
 - 硬件：Mac Mini M4 (16G/256G) 已作为 Worker Node 投入使用。
 - 进程守护：PM2 已接管核心 Bot。
 - 架构方向：端云分离，M4 负责算力与持久化，Air 负责交互。
+- neo 进展：Subagent、Plan 模式、Web UI todo 追踪已实现。
 
 ---
-*Updated: 2026/04/11 14:10:00*
+*Updated: 2026/04/13*

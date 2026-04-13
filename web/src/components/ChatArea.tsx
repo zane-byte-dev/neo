@@ -1,11 +1,12 @@
 import React from 'react'
-import { Send, Square } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2 } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
 import { streamChat, fetchMessages } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import type { AgentTodoItem } from '../types'
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
@@ -15,6 +16,56 @@ const MD: React.FC<{ content: string }> = ({ content }) => (
     </div>
 )
 
+// ── Todo panel (inline progress tracker) ──────────────────────────────────────
+
+const TodoIcon: React.FC<{ status: string }> = ({ status }) => {
+    switch (status) {
+        case 'completed':
+            return <CheckCircle2 size={14} className="text-green-500 shrink-0" />
+        case 'in-progress':
+            return <Loader2 size={14} className="text-primary-mint shrink-0 animate-spin" />
+        default:
+            return <Circle size={14} className="text-text-tertiary shrink-0" />
+    }
+}
+
+const TodoPanel: React.FC<{ todos: AgentTodoItem[] }> = ({ todos }) => {
+    const completed = todos.filter(t => t.status === 'completed').length
+    const total = todos.length
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+
+    return (
+        <div className="my-3 rounded-xl border border-border bg-fill-secondary/50 overflow-hidden">
+            {/* Header with progress bar */}
+            <div className="px-3 py-2 flex items-center gap-2 text-xs text-text-secondary">
+                <span className="font-medium">Tasks</span>
+                <span className="text-text-tertiary">{completed}/{total}</span>
+                <div className="flex-1 h-1 bg-border rounded-full overflow-hidden">
+                    <div
+                        className="h-full bg-primary-mint rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%` }}
+                    />
+                </div>
+            </div>
+            {/* Task list */}
+            <div className="px-3 pb-2 space-y-0.5">
+                {todos.map((t) => (
+                    <div
+                        key={t.id}
+                        className={cn(
+                            'flex items-center gap-2 py-1 text-xs',
+                            t.status === 'completed' ? 'text-text-tertiary line-through' : 'text-text'
+                        )}
+                    >
+                        <TodoIcon status={t.status} />
+                        <span>{t.title}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
+
 // ── Chat input ────────────────────────────────────────────────────────────────
 
 const ChatInput: React.FC = () => {
@@ -22,7 +73,7 @@ const ChatInput: React.FC = () => {
         inputValue, setInputValue,
         isGenerating, setIsGenerating,
         activeChatId, addMessage, updateLastAssistantMessage, addImageToLastAssistantMessage,
-        updateLastAssistantThinking,
+        updateLastAssistantThinking, updateLastAssistantTodos,
         setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
     } = useAppStore()
@@ -71,6 +122,8 @@ const ChatInput: React.FC = () => {
                 } else if (chunk.type === 'image' && chunk.url) {
                     setThinkingStatus('')
                     addImageToLastAssistantMessage(activeChatId, chunk.url)
+                } else if (chunk.type === 'todo_update' && chunk.todos) {
+                    updateLastAssistantTodos(activeChatId, chunk.todos as AgentTodoItem[])
                 }
             }
         } catch (err: unknown) {
@@ -240,6 +293,9 @@ export const ChatArea: React.FC = () => {
                                                 {msg.thinking}
                                             </div>
                                         </details>
+                                    )}
+                                    {msg.todos && msg.todos.length > 0 && (
+                                        <TodoPanel todos={msg.todos} />
                                     )}
                                     {msg.content ? (
                                         <MD content={msg.content} />

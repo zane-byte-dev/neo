@@ -30,7 +30,16 @@
       "user_id": "8094416266",
       "title": "hi",
       "start_time": "2026-04-13T04:03:35.611Z",
-      "end_time": "2026-04-13T04:03:40.297Z",
+      "end_time": "2026-04-13T07:58:54.155Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "l7h3m2": {
+      "id": "l7h3m2",
+      "user_id": "8094416266",
+      "title": "研究一下 vercel ai sdk",
+      "start_time": "2026-04-13T08:08:56.155Z",
+      "end_time": "2026-04-13T08:10:44.656Z",
       "is_current": 1,
       "is_pinned": 0
     }

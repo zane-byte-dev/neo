@@ -31,6 +31,8 @@ export interface ToolContext {
     workDir: string;
     systemInstruction: string;
     imageCallback?: (data: string, mimeType: string, caption?: string) => Promise<void>;
+    /** Callback to push real-time todo updates to the client */
+    todoCallback?: (todos: { id: number; title: string; status: string }[]) => void;
     skillRegistry?: import('../skills/skill-registry.js').SkillRegistry;
     /** Per-user tools loaded from .tools/ directory */
     userTools?: Map<string, Tool>;

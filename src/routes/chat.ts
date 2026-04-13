@@ -55,6 +55,9 @@ export function chatRoute(router: Router): void {
             systemInstruction: userCtx.systemInstruction,
             skillRegistry: userCtx.skillRegistry,
             userTools: userCtx.userTools,
+            todoCallback: (todos) => {
+                write({ type: 'todo_update', todos });
+            },
             imageCallback: async (data: string, mimeType: string, caption?: string) => {
                 const ext = mimeType.includes('png') ? 'png' : 'jpg';
                 const filename = `gen_${Date.now()}.${ext}`;

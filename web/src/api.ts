@@ -27,11 +27,12 @@ function _post(path: string, body?: unknown): Promise<Response> {
 // ── Chat SSE stream ───────────────────────────────────────────────────────────
 
 export interface StreamChunk {
-    type: 'text' | 'thought' | 'tool_call' | 'done' | 'error' | 'image'
+    type: 'text' | 'thought' | 'tool_call' | 'done' | 'error' | 'image' | 'todo_update'
     text?: string
     toolName?: string
     url?: string       // image URL path (for 'image' type)
     caption?: string   // optional caption (for 'image' type)
+    todos?: { id: number; title: string; status: string }[]  // todo list snapshot
 }
 
 export async function* streamChat(

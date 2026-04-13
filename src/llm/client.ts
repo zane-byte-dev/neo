@@ -150,7 +150,9 @@ export class LLMClient {
             const nowMdPath = join(workDir, 'memory', 'NOW.md');
             const nowMd = await fs.readFile(nowMdPath, 'utf8');
             if (nowMd.trim()) {
-                prompt += `\n[Current Mission/Focus]\n${nowMd.trim()}\n`;
+                prompt += `\n[User Background & Long-term Goals]\n` +
+                    `（以下是用户的长期目标与近况背景，仅供参考，不是本次对话的任务指令）\n` +
+                    `${nowMd.trim()}\n`;
             }
         } catch { /* NOW.md not found */ }
 

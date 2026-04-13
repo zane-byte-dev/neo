@@ -13,7 +13,14 @@ export interface Message {
     content: string
     thinking?: string   // model's internal reasoning (thinking tokens)
     images?: string[]   // data URLs for AI-generated images
+    todos?: AgentTodoItem[]  // agent task tracker
     timestamp: number
+}
+
+export interface AgentTodoItem {
+    id: number
+    title: string
+    status: 'not-started' | 'in-progress' | 'completed'
 }
 
 export interface NoteEntry {
@@ -114,6 +121,7 @@ export interface AppState {
     updateLastAssistantMessage: (sessionId: string, content: string) => void
     addImageToLastAssistantMessage: (sessionId: string, dataUrl: string) => void
     updateLastAssistantThinking: (sessionId: string, thinking: string) => void
+    updateLastAssistantTodos: (sessionId: string, todos: AgentTodoItem[]) => void
 
     // Input
     inputValue: string

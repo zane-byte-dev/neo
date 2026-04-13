@@ -20,6 +20,17 @@ module.exports = {
             error_file: './logs/bot-error.log',
             out_file: './logs/bot-out.log',
             log_date_format: 'YYYY-MM-DD HH:mm:ss'
+        },
+        {
+            name: 'refresh-now',
+            script: 'npx',
+            args: 'tsx scripts/refresh-now.ts',
+            cron_restart: '0 8 * * *',   // 每天早上 8:00 (Asia/Shanghai)
+            autorestart: false,           // cron 任务执行完后不自动重启
+            watch: false,
+            error_file: './logs/refresh-now-error.log',
+            out_file: './logs/refresh-now-out.log',
+            log_date_format: 'YYYY-MM-DD HH:mm:ss'
         }
     ]
 };
