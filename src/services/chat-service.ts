@@ -114,22 +114,6 @@ export async function sessionCreate(userId: string, id?: string): Promise<Sessio
     return session;
 }
 
-/** Get the current session, or create one if none exists. */
-export async function sessionGetOrCreate(userId: string): Promise<SessionRow> {
-    return (await sessionGetCurrent(userId)) ?? sessionCreate(userId);
-}
-
-/** Mark a session as closed (is_current=0) and update end_time. */
-export async function sessionClose(sessionId: string, userId: string): Promise<void> {
-    const store = await readSessionsStore(userId);
-    const session = store.sessions[sessionId];
-    if (session) {
-        session.is_current = 0;
-        session.end_time = new Date().toISOString();
-        await writeSessionsStore(userId, store);
-    }
-}
-
 /** List recent sessions for a user. */
 export async function sessionList(userId: string, limit = 20): Promise<SessionRow[]> {
     const store = await readSessionsStore(userId);
@@ -206,18 +190,3 @@ export async function messageList(sessionId: string, userId: string, limit = 200
     const msgs = await readMessages(userId, sessionId);
     return msgs.slice(-limit);
 }
-
-/** Delete a single message by rewriting the JSONL without it. */
-export async function messageDelete(id: number, userId: string, sessionId: string): Promise<boolean> {
-    const msgs = await readMessages(userId, sessionId);
-    const filtered = msgs.filter(m => m.id !== id);
-    if (filtered.length === msgs.length) return false;
-    await fs.mkdir(tmpDir(userId), { recursive: true });
-    await fs.writeFile(
-        messagesFile(userId, sessionId),
-        filtered.map(m => JSON.stringify(m)).join('\n') + (filtered.length ? '\n' : ''),
-        'utf8',
-    );
-    return true;
-}
-

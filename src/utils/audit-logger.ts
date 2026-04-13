@@ -18,24 +18,3 @@ export function logDangerousCommand(
     return Promise.resolve();
 }
 
-export function logToolExecution(
-    toolName: string,
-    args: Record<string, unknown>,
-    resultSummary?: string,
-): Promise<void> {
-    return Promise.resolve();
-}
-
-export function logSuspiciousInput(
-    source: string,
-    content: string,
-    reason: string,
-): Promise<void> {
-    log.warn('input-validation', 'SUSPICIOUS_INPUT_DETECTED', {
-        source,
-        contentPreview: content.slice(0, 200),
-        reason,
-    });
-    return Promise.resolve();
-}
-

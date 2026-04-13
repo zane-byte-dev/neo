@@ -21,7 +21,6 @@ export { buildAiTools } from './ai-tools.js';
 // Client
 export {
     LLMClient,
-    createLLMClient,
     resolveModel,
     registerTool,
     getToolRegistry,

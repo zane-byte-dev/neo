@@ -45,5 +45,3 @@ export function assetsRoute(router: Router): void {
         ctx.body = createReadStream(filePath);
     });
 }
-
-export const register = assetsRoute;

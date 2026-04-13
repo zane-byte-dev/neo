@@ -245,7 +245,3 @@ export class LLMClient {
     /** No-op: no subprocess to terminate. */
     close(): void {}
 }
-
-export function createLLMClient(): LLMClient {
-    return new LLMClient();
-}
