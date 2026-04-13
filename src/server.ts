@@ -6,7 +6,6 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 import { SESSION_SECRET } from './config.js';
-import { initDb } from './services/db.js';
 import { setupTools } from './tools/index.js';
 import { setupRoutes } from './routes/index.js';
 import { SESSION_COOKIE } from './const/cookie.js';
@@ -21,7 +20,6 @@ export class CoreServer {
     private httpServer?: ReturnType<Koa['listen']>;
 
     async start(): Promise<void> {
-        initDb();
         await setupTools();
 
         const app = new Koa();

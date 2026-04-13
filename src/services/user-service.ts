@@ -6,7 +6,7 @@
  */
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getDb } from './db.js';
+import { readFileSync } from 'node:fs';
 import { UserProfileManager } from './user-profile.js';
 import { loadUserSkills } from '../skills/skill-registry.js';
 import { buildTenantSystemInstruction } from '../llm/client.js';
@@ -18,41 +18,49 @@ export interface UserRow {
     id: string;
     name: string;
     workspace: string;
-    tenants: string[];   // parsed from JSON column
+    tenants: string[];
     web_token: string | null;
-    created_at: number;
-    updated_at: number;
 }
-
-
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-function _parseRow(raw: Record<string, unknown>): UserRow {
-    return {
-        id:         raw.id as string,
-        name:       raw.name as string,
-        workspace:  raw.workspace as string,
-        tenants:    JSON.parse(raw.tenants as string ?? '[]') as string[],
-        web_token:  (raw.web_token as string | null) ?? null,
-        created_at: raw.created_at as number,
-        updated_at: raw.updated_at as number,
-    };
+const _projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const _spaceDir    = resolve(_projectRoot, 'space');
+const _configPath  = resolve(_spaceDir, 'config.json');
+
+interface ConfigUser {
+    id: string;
+    name: string;
+    workspace: string;
+    tenants?: string[];
+    webToken?: string | null;
+}
+
+function _readConfigUsers(): ConfigUser[] {
+    try {
+        const raw = readFileSync(_configPath, 'utf8');
+        const data = JSON.parse(raw) as { users?: ConfigUser[] };
+        return data.users ?? [];
+    } catch {
+        return [];
+    }
 }
 
 /** Get a user by web token. */
 export function userGetByWebToken(token: string): UserRow | null {
-    const row = getDb().prepare(
-        `SELECT id, name, workspace, tenants, web_token, created_at, updated_at
-         FROM users WHERE web_token = ?`
-    ).get(token);
-    return row ? _parseRow(row as Record<string, unknown>) : null;
+    const users = _readConfigUsers();
+    const u = users.find(u => u.webToken === token);
+    if (!u) return null;
+    return {
+        id:        u.id,
+        name:      u.name,
+        workspace: u.workspace,
+        tenants:   u.tenants ?? [],
+        web_token: u.webToken ?? null,
+    };
 }
 
 // ── Per-user runtime context ──────────────────────────────────────────────────
-
-const _projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const _spaceDir    = resolve(_projectRoot, 'space');
 
 export interface UserContext {
     userId: UserId;

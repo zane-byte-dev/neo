@@ -20,6 +20,10 @@
             "approve": true,
             "matchCommandLine": true
         },
-        "mkdir": true
+        "mkdir": true,
+        "/^cd /Users/zhengchao/mox/neo && node -e \"\nconst Database = require\\('better-sqlite3'\\);\nconst db = new Database\\('\\./data/neo\\.db'\\);\nconst users = db\\.prepare\\('SELECT id, name, workspace, tenants, web_token FROM users'\\)\\.all\\(\\);\nconsole\\.log\\(JSON\\.stringify\\(users, null, 2\\)\\);\ndb\\.close\\(\\);\n\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

@@ -17,12 +17,9 @@
 import { config as loadEnv } from 'dotenv';
 loadEnv();
 
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Database from 'better-sqlite3';
-
-const DB_PATH = process.env.DB_PATH || './data/neo.db';
 
 // ── CLI 参数解析 ──────────────────────────────────────────────────────────────
 
@@ -143,34 +140,27 @@ function createWorkspace() {
 }
 
 function insertUser() {
-    const dbPath = resolve(_root, DB_PATH);
-    mkdirSync(dirname(dbPath), { recursive: true });
-    const db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+    const configPath = resolve(_root, 'space', 'config.json');
+    let data: { users?: Array<Record<string, unknown>> } = {};
+    if (existsSync(configPath)) {
+        data = JSON.parse(readFileSync(configPath, 'utf8'));
+    }
+    const users: Array<Record<string, unknown>> = data.users ?? [];
 
-    const now = Date.now();
+    const existing = users.findIndex(u => u.id === userId);
+    const entry = { id: userId, name, workspace, tenants, webToken: webToken ?? undefined };
 
-    const existing = db.prepare('SELECT id FROM users WHERE id = ?').get(userId);
-    if (existing) {
-        console.log(`\n⚠️  用户 ${userId} 已存在于数据库，将更新信息。`);
-        if (!dryRun) {
-            db.prepare(`
-                UPDATE users SET name = ?, workspace = ?, tenants = ?, web_token = ?, updated_at = ?
-                WHERE id = ?
-            `).run(name, workspace, JSON.stringify(tenants), webToken, now, userId);
-        }
+    if (existing >= 0) {
+        console.log(`\n⚠️  用户 ${userId} 已存在，将更新信息。`);
+        if (!dryRun) users[existing] = entry;
     } else {
-        if (!dryRun) {
-            db.prepare(`
-                INSERT INTO users (id, name, workspace, tenants, web_token, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `).run(userId, name, workspace, JSON.stringify(tenants), webToken, now, now);
-        }
-        console.log(`  [db] 已插入用户记录`);
+        if (!dryRun) users.push(entry);
+        console.log(`  [config] 已插入用户记录`);
     }
 
-    db.close();
+    if (!dryRun) {
+        writeFileSync(configPath, JSON.stringify({ ...data, users }, null, 2), 'utf8');
+    }
 }
 
 // ── 主流程 ────────────────────────────────────────────────────────────────────
