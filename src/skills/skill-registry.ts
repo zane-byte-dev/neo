@@ -3,9 +3,8 @@
  *
  * Scans {baseDir}/space/{userId}/skills/*.skill.md,
  * parses each file, and exposes:
- *   - get(name)                → SkillDefinition | undefined
- *   - list()                   → SkillDefinition[]
- *   - toFunctionDeclarations() → FunctionDeclaration[] (for Gemini tool schema)
+ *   - get(name)   → SkillDefinition | undefined
+ *   - list()      → SkillDefinition[]
  */
 
 import { readdir, stat } from 'node:fs/promises';
@@ -13,7 +12,6 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseSkillFile } from './skill-parser.js';
 import type { SkillDefinition } from './skill-parser.js';
-import type { FunctionDeclaration } from '../llm/types.js';
 
 export type { SkillDefinition };
 
@@ -35,18 +33,6 @@ export class SkillRegistry {
     /** All registered skills. */
     list(): SkillDefinition[] {
         return [...this._skills.values()];
-    }
-
-    /** Build Gemini FunctionDeclaration array from all registered skills. */
-    toFunctionDeclarations(): FunctionDeclaration[] {
-        return this.list().map(s => ({
-            name: s.frontmatter.name,
-            description: s.frontmatter.description,
-            parameters: s.frontmatter.parameters ?? {
-                type: 'object',
-                properties: {},
-            },
-        }));
     }
 
     /** Total number of registered skills. */

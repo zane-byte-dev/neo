@@ -8,13 +8,11 @@
  * Provides:
  *  - Session lifecycle: create, get current, close
  *  - Message persistence: add, list
- *  - LLM integration: getGeminiHistory() returns GeminiContent[] for context
  */
 import { promises as fs } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generateId } from '../utils/id-generator.js';
-import type { GeminiContent } from '../llm/types.js';
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
@@ -221,29 +219,5 @@ export async function messageDelete(id: number, userId: string, sessionId: strin
         'utf8',
     );
     return true;
-}
-
-// ── LLM integration ───────────────────────────────────────────────────────────
-
-/**
- * Return messages for a session formatted as GeminiContent[].
- * Gemini expects alternating user/model turns; consecutive same-role messages
- * are merged into one turn.
- */
-export async function getGeminiHistory(sessionId: string, userId: string, limit = 100): Promise<GeminiContent[]> {
-    const rows = await messageList(sessionId, userId, limit);
-    const contents: GeminiContent[] = [];
-
-    for (const row of rows) {
-        const role = row.role === 'assistant' ? 'model' : 'user';
-        const last = contents[contents.length - 1];
-        if (last && last.role === role) {
-            last.parts.push({ text: row.content });
-        } else {
-            contents.push({ role, parts: [{ text: row.content }] });
-        }
-    }
-
-    return contents;
 }
 

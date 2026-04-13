@@ -23,10 +23,6 @@ import type {
 export type {
     StreamChunk,
     StreamCallback,
-    ImageInput,
-    FileInput,
-    GeminiPart,
-    GeminiContent,
     FunctionDeclaration,
     ToolMeta,
     Tool,
