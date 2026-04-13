@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { execa } from 'execa';
 import { generateText, stepCountIs } from 'ai';
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { GEMINI_API_KEY, GEMINI_MODEL_ENV, DANGEROUS_PATTERNS, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../config.js';
 import { buildAiTools } from '../llm/ai-tools.js';
 import type { SkillDefinition } from './skill-parser.js';
@@ -162,6 +162,7 @@ export async function executeSkill(
     const { getToolRegistry } = await import('../llm/client.js');
     const tools = buildAiTools(getToolRegistry(), context.workDir, context);
 
+    const google = createGoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
     const { text } = await generateText({
         model: google(modelId),
         system: systemInstruction,

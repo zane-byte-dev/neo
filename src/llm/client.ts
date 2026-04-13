@@ -9,7 +9,7 @@
 import { join } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { streamText, generateText, stepCountIs, type LanguageModel } from 'ai';
-import { google } from '@ai-sdk/google';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { setupLogger } from '../utils/logger.js';
 import { GEMINI_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../config.js';
 import { loadOpenClawSkills, formatSkillsPrompt } from '../skills/openclaw-skills.js';
@@ -57,6 +57,7 @@ export function resolveModel(alias: string): string {
 
 /** Create an AI SDK LanguageModel for a given model id. */
 function createModel(modelId: string): LanguageModel {
+    const google = createGoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
     return google(modelId);
 }
 
