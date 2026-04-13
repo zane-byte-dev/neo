@@ -1,7 +1,7 @@
-import { PassThrough } from 'stream';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import type Router from '@koa/router';
+import type { ServerResponse } from 'node:http';
 import { messageList, messageAdd, sessionGet, sessionCreate } from '../services/chat-service.js';
 import { LLMClient, ToolContext } from '../llm/client.js';
 import { calcUser } from '../services/user-service.js';
@@ -34,18 +34,22 @@ export function chatRoute(router: Router): void {
 
         const userId = ctx.state.userId;
         const userCtx = await calcUser(userId);
-        
-        const stream = new PassThrough();
-        ctx.status = 200;
-        ctx.set('Content-Type', 'text/event-stream');
-        ctx.set('Cache-Control', 'no-cache');
-        ctx.set('Connection', 'keep-alive');
-        ctx.set('X-Accel-Buffering', 'no');
-        ctx.body = stream;
+
+        // Bypass Koa's response handling — write directly to the raw Node.js
+        // ServerResponse so SSE events are flushed immediately instead of being
+        // buffered until the handler finishes.
+        const res: ServerResponse = ctx.res;
+        ctx.respond = false;
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        });
 
         const abortController = new AbortController();
         const write = (obj: Record<string, unknown>) => {
-            if (!stream.destroyed) stream.write(`data: ${JSON.stringify(obj)}\n\n`);
+            if (!res.destroyed) res.write(`data: ${JSON.stringify(obj)}\n\n`);
         };
 
         let toolContext:ToolContext = {
@@ -96,7 +100,7 @@ export function chatRoute(router: Router): void {
                 write({ type: 'error', text: err instanceof Error ? err.message : String(err) });
             }
         } finally {
-            stream.end();
+            res.end();
             if (fullResponse) {
                 await messageAdd(sessionId, userId, 'assistant', fullResponse);
             }

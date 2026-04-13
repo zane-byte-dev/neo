@@ -38,7 +38,7 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
             )}
         >
             {items.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-1.5 min-w-0">
+                <div key={idx} className="flex items-start gap-1.5 min-w-0 animate-activity-in">
                     {item.type === 'tool_call' ? (
                         <>
                             <Wrench size={11} className="text-primary-mint shrink-0 mt-0.5" />

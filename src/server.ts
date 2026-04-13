@@ -2,6 +2,7 @@ import Koa from 'koa';
 import Router from '@koa/router';
 import { bodyParser } from '@koa/bodyparser';
 import serve from 'koa-static';
+import { timingSafeEqual } from 'crypto';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -14,6 +15,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const WEB_PORT = parseInt(process.env.WEB_PORT ?? '3000', 10);
+const BASIC_AUTH_USER = process.env.EXTERNAL_BASIC_AUTH_USER ?? '';
+const BASIC_AUTH_PASS = process.env.EXTERNAL_BASIC_AUTH_PASS ?? '';
 
 export class CoreServer {
     /** Registered platform clients (telegram, feishu, …) */
@@ -26,6 +29,7 @@ export class CoreServer {
         app.keys = [SESSION_SECRET!];
         const router = new Router();
 
+        app.use(_optionalBasicAuthMiddleware());
         app.use(_authMiddleware());
         app.use(bodyParser());
 
@@ -52,6 +56,63 @@ export class CoreServer {
 }
 
 // ── Auth middleware ───────────────────────────────────────────────────────────
+
+function _optionalBasicAuthMiddleware(): Koa.Middleware {
+    const enabled = Boolean(BASIC_AUTH_USER && BASIC_AUTH_PASS);
+
+    return async (ctx, next) => {
+        if (!enabled) return next();
+
+        const auth = ctx.get('authorization');
+        if (!auth.startsWith('Basic ')) {
+            ctx.set('WWW-Authenticate', 'Basic realm="neo", charset="UTF-8"');
+            ctx.status = 401;
+            ctx.body = { error: 'Unauthorized' };
+            return;
+        }
+
+        const encoded = auth.slice('Basic '.length).trim();
+        let decoded = '';
+        try {
+            decoded = Buffer.from(encoded, 'base64').toString('utf8');
+        } catch {
+            ctx.set('WWW-Authenticate', 'Basic realm="neo", charset="UTF-8"');
+            ctx.status = 401;
+            ctx.body = { error: 'Unauthorized' };
+            return;
+        }
+
+        const idx = decoded.indexOf(':');
+        if (idx < 0) {
+            ctx.set('WWW-Authenticate', 'Basic realm="neo", charset="UTF-8"');
+            ctx.status = 401;
+            ctx.body = { error: 'Unauthorized' };
+            return;
+        }
+
+        const user = decoded.slice(0, idx);
+        const pass = decoded.slice(idx + 1);
+
+        const userOk = _safeEqual(user, BASIC_AUTH_USER);
+        const passOk = _safeEqual(pass, BASIC_AUTH_PASS);
+
+        if (!userOk || !passOk) {
+            ctx.set('WWW-Authenticate', 'Basic realm="neo", charset="UTF-8"');
+            ctx.status = 401;
+            ctx.body = { error: 'Unauthorized' };
+            return;
+        }
+
+        return next();
+    };
+}
+
+function _safeEqual(a: string, b: string): boolean {
+    const ab = Buffer.from(a, 'utf8');
+    const bb = Buffer.from(b, 'utf8');
+    if (ab.length !== bb.length) return false;
+    return timingSafeEqual(ab, bb);
+}
 
 function _authMiddleware(): Koa.Middleware {
     return async (ctx, next) => {
