@@ -2,7 +2,7 @@
  * src/llm/index.ts — Public API of the LLM module.
  *
  * Import from here in new code:
- *   import { LLMClient, LLMProvider, GeminiProvider } from '../llm/index.js';
+ *   import { LLMClient, resolveModel } from '../llm/index.js';
  */
 
 // Core types
@@ -19,17 +19,15 @@ export type {
     ToolContext,
 } from './types.js';
 
-// Provider interface + param types
-export type { LLMProvider, AgentLoopParams, GenerateParams } from './provider.js';
-
-// Gemini provider + standalone functions
+// Gemini standalone utilities (file upload, simple generation)
 export {
-    GeminiProvider,
     resolveModel,
-    agentLoop,
     geminiGenerate,
     geminiUploadFile,
 } from './providers/gemini/index.js';
+
+// AI SDK tool bridge
+export { buildAiTools } from './ai-tools.js';
 
 // Client
 export {

@@ -28,9 +28,11 @@
     "author": "Zhengchao",
     "license": "MIT",
     "dependencies": {
+        "@ai-sdk/google": "^3.0.62",
         "@koa/bodyparser": "^6.1.0",
         "@koa/router": "^15.4.0",
         "@larksuiteoapi/node-sdk": "^1.60.0",
+        "ai": "^6.0.158",
         "better-sqlite3": "^12.8.0",
         "dotenv": "^16.4.5",
         "execa": "^9.0.0",

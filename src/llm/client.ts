@@ -1,26 +1,21 @@
 /**
- * src/llm/client.ts — Provider-agnostic LLM client.
+ * src/llm/client.ts — LLM client powered by Vercel AI SDK.
  *
- * LLMClient wraps any LLMProvider and exposes the same high-level chat
- * methods used throughout the application.  The tool registry, system
- * instruction loading, and prompt construction live here so they are
- * shared across all providers.
- *
- * Backwards-compat alias: GeminiClient = LLMClient (Gemini provider default).
+ * Wraps AI SDK's streamText / generateText and exposes the same high-level
+ * chat methods used throughout the application.  The tool registry, system
+ * instruction loading, and prompt construction live here.
  */
 
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { promises as fs } from 'node:fs';
+import { streamText, generateText, stepCountIs, type LanguageModel } from 'ai';
+import { google } from '@ai-sdk/google';
 import { setupLogger } from '../utils/logger.js';
-import { GEMINI_API_KEY, GEMINI_MODEL_ENV, WORK_DIR } from '../config.js';
+import { GEMINI_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../config.js';
 import { loadOpenClawSkills, formatSkillsPrompt } from '../skills/openclaw-skills.js';
-import { GeminiProvider, geminiGenerate, geminiUploadFile } from './providers/gemini/index.js';
-import type { LLMProvider } from './provider.js';
+import { buildAiTools } from './ai-tools.js';
 import type {
     StreamCallback,
-    ImageInput,
-    FileInput,
-    GeminiContent,
     Tool,
     ToolContext,
 } from './types.js';
@@ -28,18 +23,15 @@ import type {
 export type {
     StreamChunk,
     StreamCallback,
-    GeminiPart,
     ImageInput,
     FileInput,
+    GeminiPart,
     GeminiContent,
     FunctionDeclaration,
     ToolMeta,
     Tool,
     ToolContext,
 } from './types.js';
-
-// Re-export standalone helpers for direct callers.
-export { geminiGenerate, geminiUploadFile } from './providers/gemini/index.js';
 
 setupLogger();
 
@@ -54,6 +46,18 @@ export function registerTool(tool: Tool): void {
 
 export function getToolRegistry(): Map<string, Tool> {
     return toolRegistry;
+}
+
+// ── Model helpers ─────────────────────────────────────────────────────────────
+
+/** Resolve a short alias (e.g. "flash") to the canonical model ID. */
+export function resolveModel(alias: string): string {
+    return MODEL_ALIASES[alias] ?? alias;
+}
+
+/** Create an AI SDK LanguageModel for a given model id. */
+function createModel(modelId: string): LanguageModel {
+    return google(modelId);
 }
 
 // ── System instruction helpers ────────────────────────────────────────────────
@@ -128,22 +132,17 @@ export async function buildTenantSystemInstruction(workDir: string): Promise<str
 
 export class LLMClient {
     private enabled = false;
-    private apiKey = '';
-    private model = '';
-    private provider: LLMProvider;
+    private modelId = '';
 
-    constructor(provider?: LLMProvider) {
-        this.provider = provider ?? new GeminiProvider();
-        this.apiKey = GEMINI_API_KEY;
-        this.model = this.provider.resolveModel(GEMINI_MODEL_ENV ?? 'flash');
-
-        if (!this.apiKey) {
+    constructor() {
+        if (!GEMINI_API_KEY) {
             console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
             return;
         }
 
+        this.modelId = resolveModel(GEMINI_MODEL_ENV ?? 'flash');
         this.enabled = true;
-        console.log(`[AgentRuntime] ✅ Initialized. Provider: ${this.provider.name}, Model: ${this.model}`);
+        console.log(`[AgentRuntime] ✅ Initialized (AI SDK). Model: ${this.modelId}`);
     }
 
     private async buildPrompt(message: string, workDir: string, history?: string): Promise<string> {
@@ -156,59 +155,13 @@ export class LLMClient {
             if (nowMd.trim()) {
                 prompt += `\n[Current Mission/Focus]\n${nowMd.trim()}\n`;
             }
-        } catch {
-            // NOW.md not found or unreadable, skip
-        }
+        } catch { /* NOW.md not found */ }
 
         if (history?.trim()) {
             prompt += `\n[Previous Conversation History]\n${history}\n`;
         }
         prompt += `\n[New Message]\n${message}`;
         return prompt;
-    }
-
-    private async runAgent(
-        message: string,
-        context: ToolContext,
-        history?: string,
-        onChunk?: StreamCallback,
-        imageInput?: ImageInput,
-        signal?: AbortSignal,
-        modelOverride?: string,
-    ): Promise<string | null> {
-        if (!this.enabled) {
-            console.warn(`[AgentRuntime] Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
-            return null;
-        }
-
-        const workDir = context?.workDir;
-        const systemInstruction = context?.systemInstruction || '';
-
-        const prompt = await this.buildPrompt(message, workDir, history);
-        const contents: GeminiContent[] = [{ role: 'user', parts: [{ text: prompt }] }];
-
-        try {
-            const start = Date.now();
-            const effectiveModel = modelOverride ? this.provider.resolveModel(modelOverride) : this.model;
-
-            const result = await this.provider.agentLoop({
-                apiKey: this.apiKey,
-                model: effectiveModel,
-                systemInstruction,
-                contents,
-                workDir,
-                toolRegistry,
-                onChunk,
-                imageInput,
-                signal,
-                context,
-            });
-
-            return result || null;
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return `🔥 Agent error: ${msg}`;
-        }
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -219,20 +172,83 @@ export class LLMClient {
         context: ToolContext,
         onChunk: StreamCallback,
         signal?: AbortSignal,
-        model?: string,
+        modelOverride?: string,
     ): Promise<string | null> {
-        return this.runAgent(message, context, conversationHistory, onChunk, undefined, signal,model);
+        if (!this.enabled) {
+            console.warn(`[AgentRuntime] Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
+            return null;
+        }
+
+        const workDir = context.workDir;
+        const systemInstruction = context.systemInstruction || '';
+        const prompt = await this.buildPrompt(message, workDir, conversationHistory);
+        const effectiveModel = modelOverride ? resolveModel(modelOverride) : this.modelId;
+        const model = createModel(effectiveModel);
+        const tools = buildAiTools(toolRegistry, workDir, context);
+
+        try {
+            const result = streamText({
+                model,
+                system: systemInstruction,
+                prompt,
+                tools,
+                stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
+                abortSignal: signal,
+                temperature: 0.7,
+            });
+
+            let fullText = '';
+
+            for await (const part of result.fullStream) {
+                switch (part.type) {
+                    case 'reasoning-delta':
+                        onChunk({ type: 'thought', text: part.text });
+                        break;
+                    case 'tool-call':
+                        onChunk({ type: 'tool_call', toolName: part.toolName, args: part.input as Record<string, unknown> });
+                        break;
+                    case 'text-delta':
+                        onChunk({ type: 'text', text: part.text });
+                        fullText += part.text;
+                        break;
+                    case 'error':
+                        console.error('[AgentRuntime] Stream error:', part.error);
+                        break;
+                }
+            }
+
+            return fullText || null;
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') throw err;
+            const msg = err instanceof Error ? err.message : String(err);
+            return `🔥 Agent error: ${msg}`;
+        }
+    }
+
+    /** Simple text generation without streaming or tools. */
+    async generate(
+        prompt: string,
+        options?: { model?: string; system?: string; temperature?: number },
+    ): Promise<string | null> {
+        if (!this.enabled) return null;
+        const modelId = options?.model ? resolveModel(options.model) : this.modelId;
+        try {
+            const { text } = await generateText({
+                model: createModel(modelId),
+                prompt,
+                system: options?.system,
+                temperature: options?.temperature,
+            });
+            return text || null;
+        } catch {
+            return null;
+        }
     }
 
     /** No-op: no subprocess to terminate. */
     close(): void {}
-
-    /** Expose the underlying provider for advanced use. */
-    getProvider(): LLMProvider {
-        return this.provider;
-    }
 }
 
-export function createLLMClient(provider?: LLMProvider): LLMClient {
-    return new LLMClient(provider);
+export function createLLMClient(): LLMClient {
+    return new LLMClient();
 }

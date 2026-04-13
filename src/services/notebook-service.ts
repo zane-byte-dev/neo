@@ -8,7 +8,7 @@
  * IDs are "{notebookName}/{filename}" strings — no SQLite dependency.
  */
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -112,16 +112,36 @@ function notebooksDir(workDir: string): string {
     return join(workDir, 'notebooks');
 }
 
-function parseEntry(workDir: string, notebook: string, filename: string, includeContent: boolean): NotebookEntry {
-    const filePath = join(notebooksDir(workDir), notebook, filename);
+/** Recursively collect relative paths of all .md files under dir, excluding .tmp paths. */
+function listMdFilesRecursive(dir: string, relBase: string): string[] {
+    if (!existsSync(dir)) return [];
+    const results: string[] = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === '.tmp' || entry.name.endsWith('.tmp')) continue;
+        const relPath = relBase ? `${relBase}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+            results.push(...listMdFilesRecursive(join(dir, entry.name), relPath));
+        } else if (entry.name.endsWith('.md')) {
+            results.push(relPath);
+        }
+    }
+    return results.sort();
+}
+
+/** Parse a notebook entry given a relative path from workDir. */
+function parseEntry(workDir: string, relPath: string, includeContent: boolean): NotebookEntry {
+    const filePath = join(workDir, relPath);
     const raw = readFileSync(filePath, 'utf8');
     const { meta, body } = parseFrontmatter(raw);
 
-    const title = meta.title || titleFromFilename(filename);
-    const tags  = meta.tags?.length ? JSON.stringify(meta.tags) : null;
+    const parts    = relPath.split('/');
+    const filename = parts[parts.length - 1];
+    const notebook = parts.length > 1 ? parts[0] : '.';
+    const title    = meta.title || titleFromFilename(filename);
+    const tags     = meta.tags?.length ? JSON.stringify(meta.tags) : null;
 
     return {
-        id: `${notebook}/${filename}`,
+        id: relPath,
         notebook,
         filename,
         title,
@@ -137,31 +157,25 @@ function parseEntry(workDir: string, notebook: string, filename: string, include
 // ── Operations ────────────────────────────────────────────────────────────────
 
 export function nbListNotebooks(workDir: string): string[] {
-    const dir = notebooksDir(workDir);
-    if (!existsSync(dir)) return [];
-    return readdirSync(dir, { withFileTypes: true })
-        .filter(d => d.isDirectory())
+    if (!existsSync(workDir)) return [];
+    return readdirSync(workDir, { withFileTypes: true })
+        .filter(d => d.isDirectory() && d.name !== '.tmp' && !d.name.endsWith('.tmp') && !d.name.startsWith('.'))
         .map(d => d.name)
         .sort();
 }
 
 export function nbList(workDir: string, opts?: { notebook?: string; limit?: number }): NotebookEntryPartial[] {
-    const dir = notebooksDir(workDir);
-    if (!existsSync(dir)) return [];
+    if (!existsSync(workDir)) return [];
 
-    const notebooks = opts?.notebook ? [opts.notebook] : nbListNotebooks(workDir);
-    const limit = Math.min(opts?.limit ?? 300, 500);
+    const baseDir = opts?.notebook ? join(workDir, opts.notebook) : workDir;
+    const baseRel = opts?.notebook ?? '';
+    const relPaths = listMdFilesRecursive(baseDir, baseRel);
+    const limit    = Math.min(opts?.limit ?? 300, 500);
     const entries: NotebookEntryPartial[] = [];
 
-    for (const nb of notebooks) {
-        const nbDir = join(dir, nb);
-        if (!existsSync(nbDir)) continue;
-        const files = readdirSync(nbDir).filter(f => f.endsWith('.md')).sort();
-        for (const file of files) {
-            try { entries.push(parseEntry(workDir, nb, file, false)); } catch { /* skip */ }
-            if (entries.length >= limit) break;
-        }
+    for (const relPath of relPaths) {
         if (entries.length >= limit) break;
+        try { entries.push(parseEntry(workDir, relPath, false)); } catch { /* skip */ }
     }
 
     return entries;
@@ -181,7 +195,7 @@ export function nbSearch(workDir: string, query: string, opts?: { notebook?: str
             results.push({ ...entry });
         } else {
             try {
-                const full = parseEntry(workDir, entry.notebook, entry.filename, true);
+                const full = parseEntry(workDir, entry.id, true);
                 const body = (full.content ?? '').toLowerCase();
                 const idx  = body.indexOf(q);
                 if (idx === -1) continue;
@@ -197,13 +211,11 @@ export function nbSearch(workDir: string, query: string, opts?: { notebook?: str
 }
 
 export function nbGet(workDir: string, id: string): NotebookEntry | undefined {
-    const slash = id.indexOf('/');
-    if (slash === -1) return undefined;
-    const notebook = id.slice(0, slash);
-    const filename = id.slice(slash + 1);
-    const filePath = join(notebooksDir(workDir), notebook, filename);
+    const filePath = join(workDir, id);
+    // Security: ensure path stays within workDir
+    if (!resolve(filePath).startsWith(resolve(workDir) + '/')) return undefined;
     if (!existsSync(filePath)) return undefined;
-    try { return parseEntry(workDir, notebook, filename, true); } catch { return undefined; }
+    try { return parseEntry(workDir, id, true); } catch { return undefined; }
 }
 
 export function nbGetByTitle(workDir: string, titleQuery: string, notebook?: string): NotebookEntry | undefined {
@@ -239,7 +251,7 @@ export function nbCreate(workDir: string, notebook: string, data: NotebookCreate
     writeFileSync(filePath, serializeFrontmatter(meta, data.content ?? ''), 'utf8');
 
     return {
-        id: `${notebook}/${filename}`,
+        id: `notebooks/${notebook}/${filename}`,
         notebook,
         filename,
         title:   meta.title!,
@@ -256,10 +268,7 @@ export function nbUpdate(workDir: string, id: string, data: NotebookUpdateInput)
     const existing = nbGet(workDir, id);
     if (!existing) return undefined;
 
-    const slash    = id.indexOf('/');
-    const notebook = id.slice(0, slash);
-    const filename = id.slice(slash + 1);
-    const filePath = join(notebooksDir(workDir), notebook, filename);
+    const filePath = join(workDir, id);
 
     const existTags: string[] = existing.tags ? (JSON.parse(existing.tags) as string[]) : [];
     const newTagsRaw = data.tags !== undefined ? data.tags : existing.tags;
@@ -290,11 +299,8 @@ export function nbUpdate(workDir: string, id: string, data: NotebookUpdateInput)
 }
 
 export function nbDelete(workDir: string, id: string): boolean {
-    const slash    = id.indexOf('/');
-    if (slash === -1) return false;
-    const notebook = id.slice(0, slash);
-    const filename = id.slice(slash + 1);
-    const filePath = join(notebooksDir(workDir), notebook, filename);
+    const filePath = join(workDir, id);
+    if (!resolve(filePath).startsWith(resolve(workDir) + '/')) return false;
     if (!existsSync(filePath)) return false;
     unlinkSync(filePath);
     return true;

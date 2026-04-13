@@ -19,10 +19,12 @@ import { writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { execa } from 'execa';
-import { agentLoop, resolveModel } from '../llm/providers/gemini/index.js';
-import { GEMINI_API_KEY, GEMINI_MODEL_ENV, DANGEROUS_PATTERNS } from '../config.js';
+import { generateText, stepCountIs } from 'ai';
+import { google } from '@ai-sdk/google';
+import { GEMINI_API_KEY, GEMINI_MODEL_ENV, DANGEROUS_PATTERNS, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../config.js';
+import { buildAiTools } from '../llm/ai-tools.js';
 import type { SkillDefinition } from './skill-parser.js';
-import type { ToolContext, GeminiContent } from '../llm/types.js';
+import type { ToolContext } from '../llm/types.js';
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -147,35 +149,29 @@ export async function executeSkill(
         }
     }
 
-    // 3. Prompt mode — interpolate body and run agentLoop
+    // 3. Prompt mode — interpolate body and run AI SDK generateText with tools
     const systemInstruction = interpolate(skill.body, args);
-
-    // The user-visible "task" message tells the agent what to do.
-    // We pass the interpolated body as system instruction and a minimal
-    // trigger message so the agent can begin responding immediately.
     const triggerMessage = buildTriggerMessage(args);
-    const contents: GeminiContent[] = [
-        { role: 'user', parts: [{ text: triggerMessage }] },
-    ];
 
-    const apiKey = GEMINI_API_KEY;
-    const model = resolveModel(GEMINI_MODEL_ENV ?? 'flash');
+    if (!GEMINI_API_KEY) return '[SkillExecutor] GEMINI_API_KEY not set';
+
+    const modelAlias = GEMINI_MODEL_ENV ?? 'flash';
+    const modelId = MODEL_ALIASES[modelAlias] ?? modelAlias;
 
     // Import toolRegistry lazily to avoid circular dependency
     const { getToolRegistry } = await import('../llm/client.js');
+    const tools = buildAiTools(getToolRegistry(), context.workDir, context);
 
-    return agentLoop(
-        apiKey,
-        model,
-        systemInstruction,
-        contents,
-        context.workDir,
-        getToolRegistry(),
-        undefined, // onChunk — caller can wire this if needed
-        undefined, // imageInput
-        undefined, // signal
-        context,
-    );
+    const { text } = await generateText({
+        model: google(modelId),
+        system: systemInstruction,
+        prompt: triggerMessage,
+        tools,
+        stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
+        temperature: 0.7,
+    });
+
+    return text;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
