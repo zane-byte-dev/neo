@@ -206,6 +206,12 @@ export class LLMClient {
                     case 'tool-call':
                         onChunk({ type: 'tool_call', toolName: part.toolName, args: part.input as Record<string, unknown> });
                         break;
+                    case 'tool-result': {
+                        const r = part.output;
+                        const s = typeof r === 'string' ? r : JSON.stringify(r);
+                        onChunk({ type: 'tool_result', toolName: part.toolName, result: s.slice(0, 500) });
+                        break;
+                    }
                     case 'text-delta':
                         onChunk({ type: 'text', text: part.text });
                         fullText += part.text;

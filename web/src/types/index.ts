@@ -11,9 +11,10 @@ export interface Message {
     id: string
     role: 'user' | 'assistant'
     content: string
-    thinking?: string   // model's internal reasoning (thinking tokens)
-    images?: string[]   // data URLs for AI-generated images
+    thinking?: string        // model's internal reasoning (thinking tokens)
+    images?: string[]        // data URLs for AI-generated images
     todos?: AgentTodoItem[]  // agent task tracker
+    activityLog?: ActivityItem[]  // real-time tool call log
     timestamp: number
 }
 
@@ -21,6 +22,14 @@ export interface AgentTodoItem {
     id: number
     title: string
     status: 'not-started' | 'in-progress' | 'completed'
+}
+
+export interface ActivityItem {
+    type: 'tool_call' | 'tool_result'
+    toolName: string
+    args?: Record<string, unknown>
+    result?: string
+    timestamp: number
 }
 
 export interface NoteEntry {
@@ -122,6 +131,7 @@ export interface AppState {
     addImageToLastAssistantMessage: (sessionId: string, dataUrl: string) => void
     updateLastAssistantThinking: (sessionId: string, thinking: string) => void
     updateLastAssistantTodos: (sessionId: string, todos: AgentTodoItem[]) => void
+    appendToLastAssistantActivity: (sessionId: string, item: ActivityItem) => void
 
     // Input
     inputValue: string

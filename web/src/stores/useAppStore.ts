@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { AgentTodoItem, AppState, Chat, Message, NoteEntry, Theme } from '../types'
+import type { ActivityItem, AgentTodoItem, AppState, Chat, Message, NoteEntry, Theme } from '../types'
 
 export const useAppStore = create<AppState>()(
     persist(
@@ -109,6 +109,16 @@ export const useAppStore = create<AppState>()(
                 for (let i = msgs.length - 1; i >= 0; i--) {
                     if (msgs[i].role === 'assistant') {
                         msgs[i] = { ...msgs[i], todos }
+                        break
+                    }
+                }
+                return { messages: { ...state.messages, [sessionId]: msgs } }
+            }),
+            appendToLastAssistantActivity: (sessionId: string, item: ActivityItem) => set((state) => {
+                const msgs = [...(state.messages[sessionId] ?? [])]
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    if (msgs[i].role === 'assistant') {
+                        msgs[i] = { ...msgs[i], activityLog: [...(msgs[i].activityLog ?? []), item] }
                         break
                     }
                 }

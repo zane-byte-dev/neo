@@ -1,12 +1,12 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2 } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, Wrench } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
 import { streamChat, fetchMessages } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { AgentTodoItem } from '../types'
+import type { ActivityItem, AgentTodoItem } from '../types'
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
@@ -15,6 +15,88 @@ const MD: React.FC<{ content: string }> = ({ content }) => (
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </div>
 )
+
+// ── Activity panel (live tool call log) ───────────────────────────────────────
+
+const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ items, isLive }) => {
+    const scrollRef = React.useRef<HTMLDivElement>(null)
+    React.useEffect(() => {
+        if (isLive && scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+    }, [items.length, isLive])
+
+    const callCount = items.filter(i => i.type === 'tool_call').length
+    const summary = callCount === 1 ? '1 tool call' : `${callCount} tool calls`
+
+    const content = (
+        <div
+            ref={scrollRef}
+            className={cn(
+                'space-y-0.5 font-mono text-xs leading-relaxed overflow-y-auto',
+                isLive ? 'max-h-40' : 'max-h-52 mt-1.5'
+            )}
+        >
+            {items.map((item, idx) => (
+                <div key={idx} className="flex items-start gap-1.5 min-w-0">
+                    {item.type === 'tool_call' ? (
+                        <>
+                            <Wrench size={11} className="text-primary-mint shrink-0 mt-0.5" />
+                            <span className="text-text-secondary shrink-0">{item.toolName}</span>
+                            {item.args && (
+                                <span className="text-text-tertiary truncate">
+                                    {JSON.stringify(item.args)}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <>
+                            <span className="text-green-500 shrink-0 mt-0.5">✓</span>
+                            <span className="text-text-tertiary shrink-0">{item.toolName}</span>
+                            {item.result && (
+                                <span className="text-text-tertiary/70 truncate">
+                                    → {item.result}
+                                </span>
+                            )}
+                        </>
+                    )}
+                </div>
+            ))}
+            {isLive && (
+                <div className="flex items-center gap-1 text-text-tertiary animate-pulse">
+                    <span className="w-1 h-1 rounded-full bg-primary-mint inline-block" />
+                    <span className="w-1 h-1 rounded-full bg-primary-mint inline-block" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1 h-1 rounded-full bg-primary-mint inline-block" style={{ animationDelay: '300ms' }} />
+                </div>
+            )}
+        </div>
+    )
+
+    if (isLive) {
+        return (
+            <div className="mb-3 rounded-xl border border-border bg-fill-secondary/50 p-3">
+                <div className="flex items-center gap-1.5 text-xs text-text-tertiary mb-1.5">
+                    <Loader2 size={11} className="animate-spin text-primary-mint" />
+                    <span>Working…</span>
+                </div>
+                {content}
+            </div>
+        )
+    }
+
+    return (
+        <details className="mb-3 group">
+            <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5">
+                <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+                <Wrench size={11} className="text-text-tertiary" />
+                {summary}
+            </summary>
+            <div className="mt-1.5 pl-4 border-l-2 border-border">
+                {content}
+            </div>
+        </details>
+    )
+}
 
 // ── Todo panel (inline progress tracker) ──────────────────────────────────────
 
@@ -73,7 +155,7 @@ const ChatInput: React.FC = () => {
         inputValue, setInputValue,
         isGenerating, setIsGenerating,
         activeChatId, addMessage, updateLastAssistantMessage, addImageToLastAssistantMessage,
-        updateLastAssistantThinking, updateLastAssistantTodos,
+        updateLastAssistantThinking, updateLastAssistantTodos, appendToLastAssistantActivity,
         setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
     } = useAppStore()
@@ -112,9 +194,20 @@ const ChatInput: React.FC = () => {
                 if (chunk.type === 'error') throw new Error(chunk.text ?? 'Unknown error')
                 if (chunk.type === 'thought') {
                     thinkingAccum += chunk.text ?? ''
-                    setThinkingStatus('Thinking…')
                 } else if (chunk.type === 'tool_call') {
-                    setThinkingStatus(`Calling ${chunk.toolName ?? 'tool'}…`)
+                    appendToLastAssistantActivity(activeChatId, {
+                        type: 'tool_call',
+                        toolName: chunk.toolName ?? 'tool',
+                        args: chunk.args,
+                        timestamp: Date.now(),
+                    })
+                } else if (chunk.type === 'tool_result') {
+                    appendToLastAssistantActivity(activeChatId, {
+                        type: 'tool_result',
+                        toolName: chunk.toolName ?? 'tool',
+                        result: chunk.result,
+                        timestamp: Date.now(),
+                    })
                 } else if (chunk.type === 'text' && chunk.text) {
                     if (!accumulated) setThinkingStatus('')
                     accumulated += chunk.text
@@ -294,17 +387,26 @@ export const ChatArea: React.FC = () => {
                                             </div>
                                         </details>
                                     )}
+                                    {msg.activityLog && msg.activityLog.length > 0 && (
+                                        <ActivityPanel
+                                            items={msg.activityLog}
+                                            isLive={isGenerating && !msg.content}
+                                        />
+                                    )}
+                                    {!msg.content && isGenerating && (!msg.activityLog || msg.activityLog.length === 0) && (
+                                        <div className="mb-3 rounded-xl border border-border bg-fill-secondary/50 p-3">
+                                            <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
+                                                <Loader2 size={11} className="animate-spin text-primary-mint" />
+                                                <span>Thinking…</span>
+                                            </div>
+                                        </div>
+                                    )}
                                     {msg.todos && msg.todos.length > 0 && (
                                         <TodoPanel todos={msg.todos} />
                                     )}
                                     {msg.content ? (
                                         <MD content={msg.content} />
-                                    ) : isGenerating && thinkingStatus ? (
-                                        <span className="inline-flex items-center gap-1.5 text-text-tertiary text-xs animate-pulse">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-primary-mint inline-block" />
-                                            {thinkingStatus}
-                                        </span>
-                                    ) : (
+                                    ) : isGenerating ? null : (
                                         <span className="text-text-tertiary italic text-xs">
                                             ● ● ●
                                         </span>
