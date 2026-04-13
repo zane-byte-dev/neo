@@ -21,6 +21,9 @@ export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta
 /** Maximum agentic tool-call iterations before forcing stop */
 export const MAX_TOOL_ITERATIONS = 15;
 
+/** Maximum tool-call iterations for subagent tasks */
+export const MAX_SUBAGENT_STEPS = 10;
+
 /** Timeout for each individual Gemini API streaming request (ms) */
 export const GEMINI_API_TIMEOUT_MS = 90_000;
 

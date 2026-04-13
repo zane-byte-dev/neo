@@ -9,6 +9,9 @@ import { tool, jsonSchema, type ToolSet } from 'ai';
 import { executeTool, TOOL_DECLARATIONS } from '../tools/executor.js';
 import type { Tool, ToolContext } from './types.js';
 
+/** Tools that modify state — restricted in plan mode */
+const WRITE_TOOLS = new Set(['bash', 'write_file', 'edit_file', 'exit_plan_mode']);
+
 /**
  * Build an AI SDK tools record from our built-in declarations + custom tool registry.
  * All tool execution flows through the existing `executeTool()` which retains
@@ -20,9 +23,11 @@ export function buildAiTools(
     context?: ToolContext,
 ): ToolSet {
     const tools: ToolSet = {};
+    const isPlanMode = context?.mode === 'plan';
 
     // Built-in tools (bash, read_file, write_file, list_dir)
     for (const decl of TOOL_DECLARATIONS) {
+        if (isPlanMode && WRITE_TOOLS.has(decl.name)) continue;
         tools[decl.name] = tool({
             description: decl.description,
             inputSchema: jsonSchema(decl.parameters),
@@ -33,6 +38,7 @@ export function buildAiTools(
 
     // Custom tools from the registry
     for (const [name, t] of toolRegistry) {
+        if (isPlanMode && WRITE_TOOLS.has(name)) continue;
         tools[name] = tool({
             description: t.declaration.description,
             inputSchema: jsonSchema(t.declaration.parameters),
@@ -57,4 +63,25 @@ export function buildAiTools(
     }
 
     return tools;
+}
+
+/**
+ * Build a ToolSet restricted to a specific set of tool names.
+ * Used by the subagent tool to give child agents a limited toolbox.
+ * Falls back to all tools if `names` is empty.
+ */
+export function buildAiToolSubset(
+    names: string[],
+    toolRegistry: Map<string, Tool>,
+    workDir: string,
+    context?: ToolContext,
+): ToolSet {
+    const all = buildAiTools(toolRegistry, workDir, context);
+    if (!names.length) return all;
+
+    const subset: ToolSet = {};
+    for (const name of names) {
+        if (all[name]) subset[name] = all[name];
+    }
+    return subset;
 }

@@ -34,6 +34,8 @@ export interface ToolContext {
     skillRegistry?: import('../skills/skill-registry.js').SkillRegistry;
     /** Per-user tools loaded from .tools/ directory */
     userTools?: Map<string, Tool>;
+    /** Agent operating mode: 'plan' restricts write tools */
+    mode?: 'normal' | 'plan';
 }
 
 // ── Tool registration types ───────────────────────────────────────────────────

@@ -11,9 +11,9 @@ import { promises as fs } from 'node:fs';
 import { streamText, generateText, stepCountIs, type LanguageModel } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { setupLogger } from '../utils/logger.js';
-import { GEMINI_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../config.js';
+import { GEMINI_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
 import { loadOpenClawSkills, formatSkillsPrompt } from '../skills/openclaw-skills.js';
-import { buildAiTools } from './ai-tools.js';
+import { buildAiTools, buildAiToolSubset } from './ai-tools.js';
 import type {
     StreamCallback,
     Tool,
@@ -219,6 +219,31 @@ export class LLMClient {
             if (err instanceof Error && err.name === 'AbortError') throw err;
             const msg = err instanceof Error ? err.message : String(err);
             return `🔥 Agent error: ${msg}`;
+        }
+    }
+
+    /** Non-streaming generation with tool support, used by subagent. */
+    async generateWithTools(
+        prompt: string,
+        toolSet: import('ai').ToolSet,
+        options?: { model?: string; system?: string; temperature?: number; maxSteps?: number },
+    ): Promise<string | null> {
+        if (!this.enabled) return null;
+        const modelId = options?.model ? resolveModel(options.model) : this.modelId;
+        const steps = options?.maxSteps ?? MAX_SUBAGENT_STEPS;
+        try {
+            const { text } = await generateText({
+                model: createModel(modelId),
+                prompt,
+                system: options?.system,
+                temperature: options?.temperature ?? 0.7,
+                tools: toolSet,
+                stopWhen: stepCountIs(steps),
+            });
+            return text || null;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return `🔥 Subagent error: ${msg}`;
         }
     }
 
