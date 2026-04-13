@@ -5,7 +5,7 @@
  * leaving the rest of the file untouched. Essential for large files.
  */
 import { promises as fs } from 'fs';
-import { join, dirname, isAbsolute, resolve } from 'path';
+import { dirname, isAbsolute, resolve } from 'path';
 import type { Tool } from '../_base.js';
 
 function safePath(filePath: string, workDir: string): string {
