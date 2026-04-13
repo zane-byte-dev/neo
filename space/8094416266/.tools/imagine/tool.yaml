@@ -1,0 +1,17 @@
+name: generate_image
+description: "使用 AI 生成图片并发送给用户。支持任意文字描述，可指定宽高比。适用于：创意插画、产品概念图、风格化照片、图标设计等。"
+parameters:
+  type: object
+  properties:
+    prompt:
+      type: string
+      description: "图片描述（英文效果更好），尽量详细描述想要的内容、风格、色调等"
+    aspect_ratio:
+      type: string
+      description: '宽高比: "1:1"（默认）, "16:9", "9:16", "4:3", "3:4"'
+  required:
+    - prompt
+
+timeout: 60000
+env:
+  - GEMINI_API_KEY

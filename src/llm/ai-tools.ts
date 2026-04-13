@@ -41,5 +41,20 @@ export function buildAiTools(
         });
     }
 
+    // Per-user tools from .tools/ directory
+    const userTools = context?.userTools;
+    if (userTools) {
+        for (const [name, t] of userTools) {
+            tools[name] = tool({
+                description: t.declaration.description,
+                inputSchema: jsonSchema(t.declaration.parameters),
+                execute: async (args) => {
+                    const result = await t.handler(args as Record<string, unknown>, workDir, context);
+                    return result;
+                },
+            });
+        }
+    }
+
     return tools;
 }

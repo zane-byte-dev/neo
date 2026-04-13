@@ -9,10 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { UserProfileManager } from './user-profile.js';
 import { loadUserSkills } from '../skills/skill-registry.js';
+import { loadUserTools } from '../tools/user-tools/loader.js';
 import { buildTenantSystemInstruction } from '../llm/client.js';
 import { resolveUserWorkspaceDir } from '../utils/workspace.js';
 import type { UserId } from '../types/platform.js';
 import type { SkillRegistry } from '../skills/skill-registry.js';
+import type { Tool } from '../llm/types.js';
 
 export interface UserRow {
     id: string;
@@ -72,6 +74,8 @@ export interface UserContext {
     userProfile: UserProfileManager;
     /** Per-user skill registry, populated from space/{userId}/skills/ */
     skillRegistry: SkillRegistry;
+    /** Per-user tools loaded from space/{userId}/.tools/ */
+    userTools: Map<string, Tool>;
 }
 
 const _contextCache = new Map<UserId, UserContext>();
@@ -89,15 +93,16 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
 
     const workDir = resolveUserWorkspaceDir(_spaceDir, userId);
 
-    const [systemInstruction, skillRegistry] = await Promise.all([
+    const [systemInstruction, skillRegistry, userTools] = await Promise.all([
         buildTenantSystemInstruction(workDir),
         loadUserSkills(userId, _projectRoot),
+        loadUserTools(workDir),
     ]);
 
     const userProfile = new UserProfileManager(workDir);
     await userProfile.init();
 
-    const ctx: UserContext = { userId, workDir, systemInstruction, userProfile, skillRegistry };
+    const ctx: UserContext = { userId, workDir, systemInstruction, userProfile, skillRegistry, userTools };
     _contextCache.set(userId, ctx);
     console.log(`[UserService] calcUser: ${userId} → ${workDir}`);
     return ctx;
