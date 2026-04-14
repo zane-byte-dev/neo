@@ -193,18 +193,15 @@ export class LLMClient {
         const model = createModel(effectiveModel);
         const tools = buildAiTools(toolRegistry, workDir, context);
 
-        // Build structured messages array for better multi-turn context
-        const historyStr = typeof conversationHistory === 'string'
-            ? conversationHistory
-            : conversationHistory.map(m => `${m.role === 'assistant' ? 'Assistant' : 'User'}: ${m.content}`).join('\n');
-        const prompt = await this.buildPrompt(message, workDir, historyStr || undefined);
-
         // Build AI SDK messages array when structured history is available
         const useMessages = Array.isArray(conversationHistory) && conversationHistory.length > 0;
-        const runtimePrompt = await this.buildPrompt(message, workDir); // without history embedded
 
+        let prompt: string | undefined;
         const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
         if (useMessages) {
+            // Use structured messages — build prompt without embedded history
+            const runtimePrompt = await this.buildPrompt(message, workDir);
             for (const msg of conversationHistory as Array<{ role: string; content: string }>) {
                 messages.push({
                     role: msg.role === 'assistant' ? 'assistant' : 'user',
@@ -212,29 +209,25 @@ export class LLMClient {
                 });
             }
             messages.push({ role: 'user', content: runtimePrompt });
+        } else {
+            // Fallback: embed history as a string in the prompt
+            const historyStr = typeof conversationHistory === 'string' ? conversationHistory : '';
+            prompt = await this.buildPrompt(message, workDir, historyStr || undefined);
         }
 
         try {
-            const streamOpts = useMessages
-                ? {
-                    model,
-                    system: systemInstruction,
-                    messages,
-                    tools,
-                    stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
-                    abortSignal: signal,
-                    temperature: 0.7,
-                }
-                : {
-                    model,
-                    system: systemInstruction,
-                    prompt,
-                    tools,
-                    stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
-                    abortSignal: signal,
-                    temperature: 0.7,
-                };
-            const result = streamText(streamOpts);
+            const baseOpts = {
+                model,
+                system: systemInstruction,
+                tools,
+                stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
+                abortSignal: signal,
+                temperature: 0.7,
+            };
+
+            const result = useMessages
+                ? streamText({ ...baseOpts, messages })
+                : streamText({ ...baseOpts, prompt: prompt! });
 
             let fullText = '';
 

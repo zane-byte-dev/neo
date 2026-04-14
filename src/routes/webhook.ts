@@ -40,10 +40,13 @@ function getWebhookSecret(userId: string): string | null {
 }
 
 function safeEqual(a: string, b: string): boolean {
-    const ab = Buffer.from(a, 'utf8');
-    const bb = Buffer.from(b, 'utf8');
-    if (ab.length !== bb.length) return false;
-    return timingSafeEqual(ab, bb);
+    // Pad to same length to prevent timing side-channel leaking secret length
+    const maxLen = Math.max(a.length, b.length, 1);
+    const ab = Buffer.alloc(maxLen);
+    const bb = Buffer.alloc(maxLen);
+    Buffer.from(a, 'utf8').copy(ab);
+    Buffer.from(b, 'utf8').copy(bb);
+    return a.length === b.length && timingSafeEqual(ab, bb);
 }
 
 export function webhookRoute(router: Router): void {

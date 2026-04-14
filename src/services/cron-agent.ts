@@ -11,7 +11,7 @@
  *     "cron": "0 8 * * *",
  *     "message": "给我今天的天气和日程摘要",
  *     "enabled": true,
- *     "telegramChatId": "8094416266"
+ *     "telegramChatId": "123456789"
  *   }
  * ]
  */
@@ -35,6 +35,8 @@ interface ScheduledTask {
     cron: string;
     message: string;
     enabled?: boolean;
+    /** IANA timezone (default: user's or 'Asia/Shanghai') */
+    timezone?: string;
     /** If set, send result to this Telegram chat */
     telegramChatId?: string;
 }
@@ -122,7 +124,7 @@ export async function startCronAgent(telegram?: TelegramRuntime | null): Promise
                     log.error(MODULE, 'Scheduled task failed', { userId, taskId: task.id, error: msg });
                 }
             }, {
-                timezone: 'Asia/Shanghai',
+                timezone: task.timezone ?? 'Asia/Shanghai',
             });
 
             activeJobs.set(jobKey, job);
