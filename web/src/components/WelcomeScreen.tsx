@@ -15,7 +15,7 @@ export const WelcomeScreen: React.FC = () => {
                 </div>
             </div>
 
-            <h1 className="text-3xl font-bold mb-3 tracking-tight bg-gradient-to-b from-text to-text-secondary bg-clip-text">Neo</h1>
+            <h1 className="text-3xl font-bold mb-3 tracking-tight text-text">Neo</h1>
             <p className="text-text-secondary max-w-md mb-12 text-[15px] leading-relaxed">
                 Your local AI assistant with access to tools, files, and your knowledge base.
             </p>
