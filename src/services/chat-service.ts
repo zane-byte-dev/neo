@@ -28,7 +28,7 @@ function sessionsFile(userId: string): string {
 }
 
 function messagesFile(userId: string, sessionId: string): string {
-    return join(tmpDir(userId), `chat-${sessionId}.jsonl`);
+    return join(tmpDir(userId), sessionId, `chat-${sessionId}.jsonl`);
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -170,6 +170,7 @@ export async function messageAdd(
     };
 
     await fs.mkdir(tmpDir(userId), { recursive: true });
+    await fs.mkdir(join(tmpDir(userId), sessionId), { recursive: true });
     await fs.appendFile(messagesFile(userId, sessionId), JSON.stringify(msg) + '\n', 'utf8');
 
     const store = await readSessionsStore(userId);
