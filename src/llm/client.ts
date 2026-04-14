@@ -107,8 +107,17 @@ export async function buildTenantSystemInstruction(workDir: string): Promise<str
     const configDir = join(workDir, 'config');
     const parts: string[] = [];
 
-    const si = await loadSystemInstruction(configDir);
+    // Try config/ first, fall back to workspace root (where AGENTS.md etc. often live)
+    const si = await loadSystemInstruction(configDir, workDir);
     if (si) parts.push(si);
+
+    // Inject USER.md into system prompt so the agent knows the user
+    try {
+        const userMd = await fs.readFile(join(workDir, 'USER.md'), 'utf8');
+        if (userMd.trim()) {
+            parts.push(`[用户档案]\n${userMd.trim()}`);
+        }
+    } catch { /* USER.md not found — skip */ }
 
     const workspaceSkills = await loadOpenClawSkills(join(configDir, 'skills'));
     if (workspaceSkills.length > 0) {
@@ -167,7 +176,7 @@ export class LLMClient {
 
     async chatWithContextStreaming(
         message: string,
-        conversationHistory: string,
+        conversationHistory: string | Array<{ role: string; content: string }>,
         context: ToolContext,
         onChunk: StreamCallback,
         signal?: AbortSignal,
@@ -180,21 +189,52 @@ export class LLMClient {
 
         const workDir = context.workDir;
         const systemInstruction = context.systemInstruction || '';
-        const prompt = await this.buildPrompt(message, workDir, conversationHistory);
         const effectiveModel = modelOverride ? resolveModel(modelOverride) : this.modelId;
         const model = createModel(effectiveModel);
         const tools = buildAiTools(toolRegistry, workDir, context);
 
+        // Build structured messages array for better multi-turn context
+        const historyStr = typeof conversationHistory === 'string'
+            ? conversationHistory
+            : conversationHistory.map(m => `${m.role === 'assistant' ? 'Assistant' : 'User'}: ${m.content}`).join('\n');
+        const prompt = await this.buildPrompt(message, workDir, historyStr || undefined);
+
+        // Build AI SDK messages array when structured history is available
+        const useMessages = Array.isArray(conversationHistory) && conversationHistory.length > 0;
+        const runtimePrompt = await this.buildPrompt(message, workDir); // without history embedded
+
+        const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+        if (useMessages) {
+            for (const msg of conversationHistory as Array<{ role: string; content: string }>) {
+                messages.push({
+                    role: msg.role === 'assistant' ? 'assistant' : 'user',
+                    content: msg.content,
+                });
+            }
+            messages.push({ role: 'user', content: runtimePrompt });
+        }
+
         try {
-            const result = streamText({
-                model,
-                system: systemInstruction,
-                prompt,
-                tools,
-                stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
-                abortSignal: signal,
-                temperature: 0.7,
-            });
+            const streamOpts = useMessages
+                ? {
+                    model,
+                    system: systemInstruction,
+                    messages,
+                    tools,
+                    stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
+                    abortSignal: signal,
+                    temperature: 0.7,
+                }
+                : {
+                    model,
+                    system: systemInstruction,
+                    prompt,
+                    tools,
+                    stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
+                    abortSignal: signal,
+                    temperature: 0.7,
+                };
+            const result = streamText(streamOpts);
 
             let fullText = '';
 

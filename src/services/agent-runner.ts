@@ -54,9 +54,10 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
     if (!session) session = await sessionCreate(userId, sessionId);
 
     const historyRows = await messageList(sessionId, userId);
-    const history = historyRows
-        .map((r) => `${r.role === 'assistant' ? 'Assistant' : 'User'}: ${r.content}`)
-        .join('\n');
+    const history = historyRows.map((r) => ({
+        role: r.role === 'assistant' || r.role === 'model' ? 'assistant' : 'user',
+        content: r.content,
+    }));
 
     await messageAdd(session.id, userId, 'user', message);
 
