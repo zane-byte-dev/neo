@@ -101,7 +101,7 @@ DB_PATH=./data/neo.db
 
 # ── Telegram（可选）──────────────────────────────────────────────────
 # TELEGRAM_BOT_TOKEN=your_bot_token
-# TELEGRAM_CHAT_ID=your_chat_id
+# TELEGRAM_CHAT_ID=your_chat_id # 兼容兜底，建议改为 users[].tenants
 
 # ── 飞书（可选）──────────────────────────────────────────────────────
 # FEISHU_APP_ID=your_app_id
@@ -217,6 +217,22 @@ space/<userId>/
 │   └── daily/   # 日记
 ├── skills/      # 用户自定义 Skill
 └── archives/    # 归档文件
+```
+
+Telegram 绑定建议在 `space/config.json` 里声明 tenant：
+
+```json
+{
+  "users": [
+    {
+      "id": "8094416266",
+      "name": "zc",
+      "workspace": "zhengchao",
+      "tenants": ["telegram:8094416266"],
+      "webToken": "8094416266"
+    }
+  ]
+}
 ```
 
 ---

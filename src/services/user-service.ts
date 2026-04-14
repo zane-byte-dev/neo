@@ -24,6 +24,29 @@ export interface UserRow {
     web_token: string | null;
 }
 
+export function userList(): UserRow[] {
+    return _readConfigUsers().map((u) => ({
+        id: u.id,
+        name: u.name,
+        workspace: u.workspace,
+        tenants: u.tenants ?? [],
+        web_token: u.webToken ?? null,
+    }));
+}
+
+export function userGetByTenant(tenantKey: string): UserRow | null {
+    const users = _readConfigUsers();
+    const user = users.find((u) => (u.tenants ?? []).includes(tenantKey));
+    if (!user) return null;
+    return {
+        id: user.id,
+        name: user.name,
+        workspace: user.workspace,
+        tenants: user.tenants ?? [],
+        web_token: user.webToken ?? null,
+    };
+}
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 const _projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');

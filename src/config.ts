@@ -59,6 +59,8 @@ export const DANGEROUS_PATTERNS = [
 export const GEMINI_API_KEY   = process.env.GEMINI_API_KEY ?? '';
 /** Raw GEMINI_MODEL env value; consumers apply their own default/alias. */
 export const GEMINI_MODEL_ENV: string | undefined = process.env.GEMINI_MODEL;
+export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
+export const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID ?? '';
 
 /** Maximum character length for user text inputs (notes, todos, messages). */
 export const MAX_INPUT_LENGTH = 50_000;

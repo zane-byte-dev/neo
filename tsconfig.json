@@ -2,7 +2,7 @@
     "compilerOptions": {
         "target": "ES2022",
         "module": "ESNext",
-        "moduleResolution": "node",
+        "moduleResolution": "Bundler",
         "outDir": "./dist",
         "rootDir": "./src",
         "strict": true,
@@ -18,7 +18,10 @@
         ],
         "types": [
             "node"
-        ]
+        ],
+        "paths": {
+            "telegraf": ["./src/types/telegraf.d.ts"]
+        }
     },
     "include": [
         "src/**/*"
