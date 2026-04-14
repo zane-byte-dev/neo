@@ -142,6 +142,9 @@ export async function loadUserTools(workDir: string): Promise<Map<string, Tool>>
                                 ? `[Image sent] ${scriptResult.caption}`
                                 : '[Image sent] 图片已生成并发送。';
                         }
+                        if (scriptResult.data && !context.imageCallback) {
+                            return '[Error] Image generated but no image handler is configured for this channel.';
+                        }
                         return scriptResult.content ?? '[Error] Image data missing from script output.';
 
                     case 'error':

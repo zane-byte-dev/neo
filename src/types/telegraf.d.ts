@@ -15,10 +15,15 @@ declare module 'telegraf' {
         handlerTimeout?: number;
     }
 
+    interface InputFile {
+        source: Buffer;
+    }
+
     interface Context {
         chat: { id: number; type: string };
         message: { text: string; message_id: number; chat: { id: number } };
         reply(text: string, extra?: Record<string, unknown>): Promise<void>;
+        replyWithPhoto(photo: InputFile, extra?: { caption?: string }): Promise<unknown>;
         sendChatAction(action: string): Promise<void>;
     }
 

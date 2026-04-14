@@ -16,6 +16,9 @@ import { LLMClient } from '../llm/client.js';
 import type { StreamChunk, ToolContext } from '../llm/types.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
+import { log } from '../utils/logger.js';
+
+const MODULE = 'AgentRunner';
 
 const llm = new LLMClient();
 
@@ -42,6 +45,9 @@ export interface AgentRunOptions {
 export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
     const { userId, sessionId, message, model, signal, onChunk, onImage, onTodo } = opts;
 
+    const t0 = Date.now();
+    log.info(MODULE, 'Turn start', { userId, sessionId, model, messageLen: message.length, preview: message.slice(0, 100) });
+
     const userCtx = await calcUser(userId);
 
     let session = await sessionGet(sessionId, userId);
@@ -67,22 +73,33 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
 
     let fullResponse = '';
 
-    await llm.chatWithContextStreaming(
-        message,
-        history,
-        toolContext,
-        (chunk) => {
-            onChunk?.(chunk);
-            if (chunk.type === 'text') fullResponse += chunk.text;
-        },
-        signal,
-        model,
-    );
+    try {
+        await llm.chatWithContextStreaming(
+            message,
+            history,
+            toolContext,
+            (chunk) => {
+                onChunk?.(chunk);
+                if (chunk.type === 'text') fullResponse += chunk.text;
+            },
+            signal,
+            model,
+        );
+    } catch (err: unknown) {
+        const elapsed = Date.now() - t0;
+        log.error(MODULE, 'Turn error', {
+            userId, sessionId, elapsed,
+            error: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        throw err;
+    }
 
     const output = fullResponse.trim();
     if (output) {
         await messageAdd(session.id, userId, 'assistant', output);
     }
 
+    log.info(MODULE, 'Turn done', { userId, sessionId, elapsed: Date.now() - t0, responseLen: output.length });
     return output;
 }
