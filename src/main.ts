@@ -10,6 +10,7 @@
 import { setupLogger } from './utils/logger.js';
 import { CoreServer } from './server.js';
 import { startTelegramBot, type TelegramRuntime } from './platforms/telegram-bot.js';
+import { startCronAgent, stopCronAgent } from './services/cron-agent.js';
 
 // Initialize Logger
 setupLogger();
@@ -20,10 +21,12 @@ setupLogger();
 const server = new CoreServer();
 await server.start();
 const telegram: TelegramRuntime | null = await startTelegramBot();
+await startCronAgent(telegram);
 
 // ── Graceful shutdown ────────────────────────────────────────────────────────
 
 const shutdown = async () => {
+    stopCronAgent();
     telegram?.stop();
     await server.shutdown();
 };

@@ -104,6 +104,20 @@ export interface UserContext {
 const _contextCache = new Map<UserId, UserContext>();
 
 /**
+ * Force-refresh the cached context for a user.
+ * Call after editing workspace config files (AGENTS.md, SOUL.md, skills/, .tools/).
+ */
+export function invalidateUserCache(userId?: UserId): void {
+    if (userId) {
+        _contextCache.delete(userId);
+        console.log(`[UserService] 🔄 Cache invalidated for user: ${userId}`);
+    } else {
+        _contextCache.clear();
+        console.log(`[UserService] 🔄 Cache invalidated for all users`);
+    }
+}
+
+/**
  * Build the full runtime context for a user and cache it.
  *
  * Returns the cached instance on subsequent calls unless `force = true`.

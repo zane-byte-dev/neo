@@ -1,11 +1,13 @@
 /**
- * todo.ts — In-session task tracker for the AI agent.
+ * todo.ts — Task tracker for the AI agent with session and persistent scope.
  *
- * Lets the agent plan, track, and update a lightweight todo list within a
- * session. Stored in memory as a JSON file: {workDir}/.tmp/{sessionId}/todos.json
+ * Lets the agent plan, track, and update a lightweight todo list.
+ * Two scopes:
+ *   - session (default): stored in {workDir}/.tmp/{sessionId}/todos.json
+ *   - persistent: stored in {workDir}/memory/tasks.json — survives across sessions
  */
 import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import type { Tool, ToolContext } from '../_base.js';
 
 interface TodoItem {
@@ -14,45 +16,67 @@ interface TodoItem {
     status: 'not-started' | 'in-progress' | 'completed';
 }
 
-function todosPath(workDir: string, sessionId: string): string {
+function sessionTodosPath(workDir: string, sessionId: string): string {
     return join(workDir, '.tmp', sessionId, 'todos.json');
 }
 
-async function loadTodos(workDir: string, sessionId: string): Promise<TodoItem[]> {
+function persistentTodosPath(workDir: string): string {
+    return join(workDir, 'memory', 'tasks.json');
+}
+
+function todosPath(workDir: string, sessionId: string, scope: string): string {
+    return scope === 'persistent'
+        ? persistentTodosPath(workDir)
+        : sessionTodosPath(workDir, sessionId);
+}
+
+async function loadTodos(workDir: string, sessionId: string, scope = 'session'): Promise<TodoItem[]> {
     try {
-        const raw = await fs.readFile(todosPath(workDir, sessionId), 'utf-8');
+        const raw = await fs.readFile(todosPath(workDir, sessionId, scope), 'utf-8');
         return JSON.parse(raw);
     } catch {
         return [];
     }
 }
 
-async function saveTodos(workDir: string, sessionId: string, todos: TodoItem[], context?: ToolContext): Promise<void> {
-    const p = todosPath(workDir, sessionId);
-    await fs.mkdir(join(workDir, '.tmp', sessionId), { recursive: true });
+async function saveTodos(
+    workDir: string,
+    sessionId: string,
+    todos: TodoItem[],
+    scope = 'session',
+    context?: ToolContext,
+): Promise<void> {
+    const p = todosPath(workDir, sessionId, scope);
+    await fs.mkdir(dirname(p), { recursive: true });
     await fs.writeFile(p, JSON.stringify(todos, null, 2), 'utf-8');
-    // Push real-time update to the client via SSE
-    context?.todoCallback?.(todos);
+    // Push real-time update to the client via SSE (session scope only)
+    if (scope === 'session') {
+        context?.todoCallback?.(todos);
+    }
 }
 
-function formatTodos(todos: TodoItem[]): string {
+function formatTodos(todos: TodoItem[], scope = 'session'): string {
     if (todos.length === 0) return '（当前没有待办事项）';
     const icons: Record<string, string> = {
         'not-started': '⬜',
         'in-progress': '🔄',
         'completed': '✅',
     };
-    return todos
+    const header = scope === 'persistent' ? '📌 持久任务列表' : '📋 会话任务列表';
+    const lines = todos
         .map(t => `${icons[t.status] ?? '⬜'} [${t.id}] ${t.title} (${t.status})`)
         .join('\n');
+    return `${header}\n\n${lines}`;
 }
 
 export const todoTool: Tool = {
-    meta: { category: 'utility', version: '1.0.0' },
+    meta: { category: 'utility', version: '2.0.0' },
     declaration: {
         name: 'todo',
         description:
-            '管理当前会话的任务追踪列表。用于规划多步骤任务、追踪进度。\n' +
+            '管理任务追踪列表，支持会话级和持久级两种作用域。\n' +
+            '• scope=session（默认）— 当前会话内的任务，会话结束后消失\n' +
+            '• scope=persistent — 跨会话的持久任务，适合长期项目和 GTD\n\n' +
             '• action=list   — 查看所有任务\n' +
             '• action=write  — 覆盖整个列表（传入 items JSON 数组）\n' +
             '• action=update — 更新单个任务的状态（传入 id + status）\n' +
@@ -64,6 +88,11 @@ export const todoTool: Tool = {
                     type: 'string',
                     enum: ['list', 'write', 'update', 'add'],
                     description: '操作类型',
+                },
+                scope: {
+                    type: 'string',
+                    enum: ['session', 'persistent'],
+                    description: '作用域：session（默认，当前会话）或 persistent（跨会话持久化）',
                 },
                 items: {
                     type: 'string',
@@ -93,11 +122,12 @@ export const todoTool: Tool = {
         if (!sessionId) return '[Error] sessionId is required';
 
         const action = String(args.action ?? '').trim();
+        const scope = String(args.scope ?? 'session').trim();
 
         // ── LIST
         if (action === 'list') {
-            const todos = await loadTodos(workDir, sessionId);
-            return `# 📋 Todo List\n\n${formatTodos(todos)}`;
+            const todos = await loadTodos(workDir, sessionId, scope);
+            return formatTodos(todos, scope);
         }
 
         // ── WRITE (replace entire list)
@@ -110,32 +140,32 @@ export const todoTool: Tool = {
             } catch {
                 return '[Error] items 必须是有效的 JSON 数组';
             }
-            await saveTodos(workDir, sessionId, items, context);
-            return `✅ Todo 列表已更新（${items.length} 项）\n\n${formatTodos(items)}`;
+            await saveTodos(workDir, sessionId, items, scope, context);
+            return `✅ Todo 列表已更新（${items.length} 项）\n\n${formatTodos(items, scope)}`;
         }
 
         // ── UPDATE (single item status)
         if (action === 'update') {
             if (args.id == null) return '[Error] update 需要 id';
             if (!args.status) return '[Error] update 需要 status';
-            const todos = await loadTodos(workDir, sessionId);
+            const todos = await loadTodos(workDir, sessionId, scope);
             const item = todos.find(t => t.id === Number(args.id));
             if (!item) return `[Error] 未找到 id=${args.id} 的任务`;
             item.status = String(args.status) as TodoItem['status'];
-            await saveTodos(workDir, sessionId, todos, context);
-            return `✅ 任务 [${item.id}] "${item.title}" → ${item.status}\n\n${formatTodos(todos)}`;
+            await saveTodos(workDir, sessionId, todos, scope, context);
+            return `✅ 任务 [${item.id}] "${item.title}" → ${item.status}\n\n${formatTodos(todos, scope)}`;
         }
 
         // ── ADD
         if (action === 'add') {
             const title = String(args.title ?? '').trim();
             if (!title) return '[Error] add 需要 title';
-            const todos = await loadTodos(workDir, sessionId);
+            const todos = await loadTodos(workDir, sessionId, scope);
             const maxId = todos.reduce((m, t) => Math.max(m, t.id), 0);
             const newItem: TodoItem = { id: maxId + 1, title, status: 'not-started' };
             todos.push(newItem);
-            await saveTodos(workDir, sessionId, todos, context);
-            return `✅ 已添加: [${newItem.id}] ${title}\n\n${formatTodos(todos)}`;
+            await saveTodos(workDir, sessionId, todos, scope, context);
+            return `✅ 已添加: [${newItem.id}] ${title}\n\n${formatTodos(todos, scope)}`;
         }
 
         return `[Error] 未知 action: "${action}"`;

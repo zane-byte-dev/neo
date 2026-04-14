@@ -107,8 +107,17 @@ export async function buildTenantSystemInstruction(workDir: string): Promise<str
     const configDir = join(workDir, 'config');
     const parts: string[] = [];
 
-    const si = await loadSystemInstruction(configDir);
+    // Try config/ first, fall back to workspace root (where AGENTS.md etc. often live)
+    const si = await loadSystemInstruction(configDir, workDir);
     if (si) parts.push(si);
+
+    // Inject USER.md into system prompt so the agent knows the user
+    try {
+        const userMd = await fs.readFile(join(workDir, 'USER.md'), 'utf8');
+        if (userMd.trim()) {
+            parts.push(`[用户档案]\n${userMd.trim()}`);
+        }
+    } catch { /* USER.md not found — skip */ }
 
     const workspaceSkills = await loadOpenClawSkills(join(configDir, 'skills'));
     if (workspaceSkills.length > 0) {
@@ -167,7 +176,7 @@ export class LLMClient {
 
     async chatWithContextStreaming(
         message: string,
-        conversationHistory: string,
+        conversationHistory: string | Array<{ role: string; content: string }>,
         context: ToolContext,
         onChunk: StreamCallback,
         signal?: AbortSignal,
@@ -180,21 +189,45 @@ export class LLMClient {
 
         const workDir = context.workDir;
         const systemInstruction = context.systemInstruction || '';
-        const prompt = await this.buildPrompt(message, workDir, conversationHistory);
         const effectiveModel = modelOverride ? resolveModel(modelOverride) : this.modelId;
         const model = createModel(effectiveModel);
         const tools = buildAiTools(toolRegistry, workDir, context);
 
+        // Build AI SDK messages array when structured history is available
+        const useMessages = Array.isArray(conversationHistory) && conversationHistory.length > 0;
+
+        let prompt: string | undefined;
+        const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
+        if (useMessages) {
+            // Use structured messages — build prompt without embedded history
+            const runtimePrompt = await this.buildPrompt(message, workDir);
+            for (const msg of conversationHistory as Array<{ role: string; content: string }>) {
+                messages.push({
+                    role: msg.role === 'assistant' ? 'assistant' : 'user',
+                    content: msg.content,
+                });
+            }
+            messages.push({ role: 'user', content: runtimePrompt });
+        } else {
+            // Fallback: embed history as a string in the prompt
+            const historyStr = typeof conversationHistory === 'string' ? conversationHistory : '';
+            prompt = await this.buildPrompt(message, workDir, historyStr || undefined);
+        }
+
         try {
-            const result = streamText({
+            const baseOpts = {
                 model,
                 system: systemInstruction,
-                prompt,
                 tools,
                 stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
                 abortSignal: signal,
                 temperature: 0.7,
-            });
+            };
+
+            const result = useMessages
+                ? streamText({ ...baseOpts, messages })
+                : streamText({ ...baseOpts, prompt: prompt! });
 
             let fullText = '';
 

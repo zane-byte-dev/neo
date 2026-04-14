@@ -73,34 +73,102 @@ export const searchWebTool: Tool = {
         const query = String(args.query ?? '');
         const maxResults = Math.min(Number(args.max_results ?? 5), 10);
 
-        try {
-            const searxngRes = await fetch(
-                `${SEARXNG_BASE_URL}/search?q=${encodeURIComponent(query)}&format=json&categories=general`,
-                {
-                    headers: {
-                        'Accept': 'application/json',
-                    },
-                    signal: AbortSignal.timeout(12_000),
-                },
-            );
-            if (!searxngRes.ok) {
-                return `[Error] SearXNG 搜索失败: HTTP ${searxngRes.status} (${SEARXNG_BASE_URL})`;
-            }
+        // Try SearXNG first
+        const searxngResult = await searchViaSearxng(query, maxResults);
+        if (searxngResult) return searxngResult;
 
-            const data = (await searxngRes.json()) as SearxngResponse;
-            const results = normalizeSearxngResults(data, maxResults);
+        // Fallback to DuckDuckGo Lite
+        const ddgResult = await searchViaDuckDuckGo(query, maxResults);
+        if (ddgResult) return ddgResult;
 
-            if (results.length === 0) {
-                return `[Info] "${query}" 暂无搜索结果（SearXNG: ${SEARXNG_BASE_URL}），请换个关键词或使用 fetch_url 直接访问目标网址。`;
-            }
-
-            const lines = results.map((r, i) => {
-                const snippetLine = r.snippet ? `\n   ${r.snippet}` : '';
-                return `${i + 1}. **${r.title}**${snippetLine}\n   ${r.url}`;
-            });
-            return `🔍 "${query}" 搜索结果:\n\n${lines.join('\n\n')}`;
-        } catch (err: unknown) {
-            return `[Error] search_web (SearXNG ${SEARXNG_BASE_URL}): ${err instanceof Error ? err.message : String(err)}`;
-        }
+        return `[Error] 所有搜索引擎均不可用。SearXNG (${SEARXNG_BASE_URL}) 和 DuckDuckGo Lite 均失败。`;
     },
 };
+
+async function searchViaSearxng(query: string, maxResults: number): Promise<string | null> {
+    try {
+        const searxngRes = await fetch(
+            `${SEARXNG_BASE_URL}/search?q=${encodeURIComponent(query)}&format=json&categories=general`,
+            {
+                headers: { 'Accept': 'application/json' },
+                signal: AbortSignal.timeout(12_000),
+            },
+        );
+        if (!searxngRes.ok) return null;
+
+        const data = (await searxngRes.json()) as SearxngResponse;
+        const results = normalizeSearxngResults(data, maxResults);
+
+        if (results.length === 0) {
+            return `[Info] "${query}" 暂无搜索结果（SearXNG: ${SEARXNG_BASE_URL}），请换个关键词或使用 fetch_url 直接访问目标网址。`;
+        }
+
+        return formatSearchResults(query, results);
+    } catch {
+        return null; // fall through to next engine
+    }
+}
+
+async function searchViaDuckDuckGo(query: string, maxResults: number): Promise<string | null> {
+    try {
+        const res = await fetch(
+            `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`,
+            {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (compatible; Neo/2.0)',
+                    'Accept': 'text/html',
+                },
+                signal: AbortSignal.timeout(15_000),
+            },
+        );
+        if (!res.ok) return null;
+
+        const html = await res.text();
+        const results: SearchResult[] = [];
+
+        // Parse DuckDuckGo Lite HTML results
+        // Each result has a link and a snippet in the table structure
+        const linkRegex = /<a[^>]+rel="nofollow"[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g;
+        const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/g;
+
+        const links: { url: string; title: string }[] = [];
+        let match: RegExpExecArray | null;
+        while ((match = linkRegex.exec(html)) !== null) {
+            const url = match[1].trim();
+            const title = decodeHtmlEntities(stripHtml(match[2].trim()));
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                links.push({ url, title });
+            }
+        }
+
+        const snippets: string[] = [];
+        while ((match = snippetRegex.exec(html)) !== null) {
+            snippets.push(decodeHtmlEntities(stripHtml(match[1].trim())));
+        }
+
+        for (let i = 0; i < Math.min(links.length, maxResults); i++) {
+            results.push({
+                title: links[i].title || links[i].url,
+                url: links[i].url,
+                snippet: snippets[i] ?? '',
+            });
+        }
+
+        if (results.length === 0) {
+            return `[Info] "${query}" 暂无搜索结果（DuckDuckGo），请换个关键词或使用 fetch_url 直接访问目标网址。`;
+        }
+
+        return formatSearchResults(query, results, 'DuckDuckGo');
+    } catch {
+        return null;
+    }
+}
+
+function formatSearchResults(query: string, results: SearchResult[], engine?: string): string {
+    const lines = results.map((r, i) => {
+        const snippetLine = r.snippet ? `\n   ${r.snippet}` : '';
+        return `${i + 1}. **${r.title}**${snippetLine}\n   ${r.url}`;
+    });
+    const suffix = engine ? ` (via ${engine})` : '';
+    return `🔍 "${query}" 搜索结果${suffix}:\n\n${lines.join('\n\n')}`;
+}
