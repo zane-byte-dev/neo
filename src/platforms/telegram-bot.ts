@@ -1,4 +1,5 @@
 import { Telegraf } from 'telegraf';
+import { message } from 'telegraf/filters';
 import { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } from '../config.js';
 import { runAgentTurn } from '../services/agent-runner.js';
 import { userGetByTenant, userList } from '../services/user-service.js';
@@ -151,8 +152,11 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
     bot.start((ctx) => ctx.reply('Neo Telegram 已连接。发送 /new 可重置当前会话。'));
 
     // ── Shared agent turn handler ─────────────────────────────────────────────
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async function handleAgentTurn(ctx: any, userId: string, chatId: string, sessionId: string, message: string): Promise<void> {
+    // Shared agent turn handler — accepts any Telegraf context-like object
+    async function handleAgentTurn(
+        ctx: { reply: (text: string, extra?: Record<string, unknown>) => Promise<void>; replyWithPhoto: (photo: { source: Buffer }, extra?: { caption?: string }) => Promise<unknown>; sendChatAction: (action: string) => Promise<void> },
+        userId: string, chatId: string, sessionId: string, userMessage: string,
+    ): Promise<void> {
         await ctx.sendChatAction('typing').catch(() => {});
 
         void (async () => {
@@ -161,8 +165,8 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
                 const output = await runAgentTurn({
                     userId,
                     sessionId,
-                    message,
-                    onImage: async (data: string, mimeType: string, caption?: string) => {
+                    message: userMessage,
+                    onImage: async (data: string, _mimeType: string, caption?: string) => {
                         const buffer = Buffer.from(data, 'base64');
                         await ctx.replyWithPhoto({ source: buffer }, caption ? { caption } : undefined);
                     },
@@ -218,7 +222,7 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
     });
 
     // ── Photo handler ─────────────────────────────────────────────────────────
-    bot.on('photo', async (ctx) => {
+    bot.on(message('photo'), async (ctx) => {
         const chatId = String(ctx.chat.id);
         const userId = resolveTelegramUserId(chatId);
         if (!userId) {
@@ -227,26 +231,27 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
         }
 
         const sessionId = `tg-${chatId}`;
-        const photo = ctx.message.photo;
-        const largest = photo[photo.length - 1]; // highest resolution
-        const caption = ctx.message.caption ?? '';
+        // ctx.message is narrowed by the filter at runtime
+        const msg = ctx.message as unknown as { photo: Array<{ file_id: string }>; caption?: string };
+        const largest = msg.photo[msg.photo.length - 1];
+        const caption = msg.caption ?? '';
 
         try {
-            const fileLink = await ctx.telegram.getFileLink(largest.file_id);
-            const message = caption
+            const fileLink = await bot.telegram.getFileLink(largest.file_id);
+            const userMsg = caption
                 ? `[用户发送了图片: ${fileLink.href}]\n\n${caption}`
                 : `[用户发送了图片: ${fileLink.href}]`;
 
             log.info(MODULE, 'Received photo', { chatId, userId, sessionId, fileId: largest.file_id });
-            await handleAgentTurn(ctx, userId, chatId, sessionId, message);
+            await handleAgentTurn(ctx, userId, chatId, sessionId, userMsg);
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            await ctx.reply(`处理图片失败：${msg}`).catch(() => {});
+            const errMsg = err instanceof Error ? err.message : String(err);
+            await ctx.reply(`处理图片失败：${errMsg}`).catch(() => {});
         }
     });
 
     // ── Document handler ──────────────────────────────────────────────────────
-    bot.on('document', async (ctx) => {
+    bot.on(message('document'), async (ctx) => {
         const chatId = String(ctx.chat.id);
         const userId = resolveTelegramUserId(chatId);
         if (!userId) {
@@ -255,25 +260,27 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
         }
 
         const sessionId = `tg-${chatId}`;
-        const doc = ctx.message.document;
-        const caption = ctx.message.caption ?? '';
+        const msg = ctx.message as unknown as { document: { file_id: string; file_name?: string }; caption?: string };
+        const doc = msg.document;
+        const caption = msg.caption ?? '';
 
         try {
-            const fileLink = await ctx.telegram.getFileLink(doc.file_id);
-            const message = caption
-                ? `[用户发送了文件: ${doc.file_name ?? 'unknown'} (${fileLink.href})]\n\n${caption}`
-                : `[用户发送了文件: ${doc.file_name ?? 'unknown'} (${fileLink.href})]`;
+            const fileLink = await bot.telegram.getFileLink(doc.file_id);
+            const fileName = doc.file_name ?? 'unknown';
+            const userMsg = caption
+                ? `[用户发送了文件: ${fileName} (${fileLink.href})]\n\n${caption}`
+                : `[用户发送了文件: ${fileName} (${fileLink.href})]`;
 
-            log.info(MODULE, 'Received document', { chatId, userId, sessionId, fileName: doc.file_name });
-            await handleAgentTurn(ctx, userId, chatId, sessionId, message);
+            log.info(MODULE, 'Received document', { chatId, userId, sessionId, fileName });
+            await handleAgentTurn(ctx, userId, chatId, sessionId, userMsg);
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            await ctx.reply(`处理文件失败：${msg}`).catch(() => {});
+            const errMsg = err instanceof Error ? err.message : String(err);
+            await ctx.reply(`处理文件失败：${errMsg}`).catch(() => {});
         }
     });
 
     // ── Voice handler ─────────────────────────────────────────────────────────
-    bot.on('voice', async (ctx) => {
+    bot.on(message('voice'), async (ctx) => {
         const chatId = String(ctx.chat.id);
         const userId = resolveTelegramUserId(chatId);
         if (!userId) {
@@ -282,16 +289,17 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
         }
 
         const sessionId = `tg-${chatId}`;
+        const msg = ctx.message as unknown as { voice: { file_id: string; duration: number } };
         try {
-            const fileLink = await ctx.telegram.getFileLink(ctx.message.voice.file_id);
-            const duration = ctx.message.voice.duration;
-            const message = `[用户发送了语音消息: ${duration}秒, ${fileLink.href}]`;
+            const fileLink = await bot.telegram.getFileLink(msg.voice.file_id);
+            const duration = msg.voice.duration;
+            const userMsg = `[用户发送了语音消息: ${duration}秒, ${fileLink.href}]`;
 
             log.info(MODULE, 'Received voice', { chatId, userId, sessionId, duration });
-            await handleAgentTurn(ctx, userId, chatId, sessionId, message);
+            await handleAgentTurn(ctx, userId, chatId, sessionId, userMsg);
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            await ctx.reply(`处理语音失败：${msg}`).catch(() => {});
+            const errMsg = err instanceof Error ? err.message : String(err);
+            await ctx.reply(`处理语音失败：${errMsg}`).catch(() => {});
         }
     });
 

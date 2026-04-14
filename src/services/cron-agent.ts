@@ -15,7 +15,7 @@
  *   }
  * ]
  */
-import cron from 'node-cron';
+import { schedule as cronSchedule, validate as cronValidate, type ScheduledTask as CronTask } from 'node-cron';
 import { promises as fs } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +66,7 @@ async function readSchedule(userId: string): Promise<ScheduledTask[]> {
 }
 
 /** Active cron jobs, keyed by `${userId}:${taskId}` */
-const activeJobs = new Map<string, cron.ScheduledTask>();
+const activeJobs = new Map<string, CronTask>();
 
 /**
  * Start the cron agent. Reads schedule files for all users and sets up
@@ -81,7 +81,7 @@ export async function startCronAgent(telegram?: TelegramRuntime | null): Promise
         const enabledTasks = tasks.filter(t => t.enabled !== false);
 
         for (const task of enabledTasks) {
-            if (!cron.validate(task.cron)) {
+            if (!cronValidate(task.cron)) {
                 log.warn(MODULE, `Invalid cron expression for ${userId}:${task.id}: ${task.cron}`);
                 continue;
             }
@@ -93,7 +93,7 @@ export async function startCronAgent(telegram?: TelegramRuntime | null): Promise
                 activeJobs.get(jobKey)!.stop();
             }
 
-            const job = cron.schedule(task.cron, async () => {
+            const job = cronSchedule(task.cron, async () => {
                 const sessionId = `cron-${task.id}-${generateId()}`;
                 log.info(MODULE, 'Executing scheduled task', { userId, taskId: task.id, sessionId });
 
