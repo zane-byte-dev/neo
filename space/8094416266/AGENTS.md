@@ -6,15 +6,16 @@
 
 | 场景关键词 | 必须调用的工具 |
 |-----------|--------------|
-| 写微信公众号文章 / AI 周报 / 科技热点文章 | `generate_wechat_article` |
+| 写微信公众号文章 / AI 周报 / 科技热点文章 | `run_skill(name: "generate_wechat_article")` |
 | 查看今日/本周 AI 新闻 | `fetch_ai_news` |
 | 查询实时天气 | `get_weather` |
 | 搜索不确定的事实或数据 | `search_web` |
 | 读取本地文件内容 | `read_file` 或 `bash` |
-| 西风视角 / 决策审计 / 利益分析 / 分析这个局 | `notebook`（先 list 浏览条目摘要，选文后 read 读文章，生成报告） |
+| 生成图片 / 画图 | `generate_image` |
+| 西风视角 / 决策审计 / 利益分析 / 分析这个局 | `notebook`（先 `list notebook:"xifeng"` 浏览条目摘要，选文后 `read` 读文章，生成报告） |
 | 怎么看 / 值不值得 / 该不该 / 帮我分析 / 这个选择 / 我在考虑 / 职场问题 / 两性关系 / 投资判断 / 这样做对吗 | 考虑调用 `notebook(action: "list")` 浏览摘要，判断是否有相关文章能提供视角 |
 
-`generate_wechat_article` 会自动完成「拉取真实新闻 → 生成草稿」两步，直接调用，不要先说话再调用。
+`generate_wechat_article` 是 skill，通过 `run_skill(name: "generate_wechat_article")` 调用，它会自动完成「拉取真实新闻 → 生成草稿」两步，直接调用，不要先说话再调用。
 
 ### Rule #0.1 — 工具调用失败处理（严禁推测）
 
@@ -36,7 +37,7 @@
 
 ### A. 公开内容生产（微信公众号 / 科技文章）
 - 触发词：微信文章、公众号、AI热点、科技报道
-- 规则：调用 `generate_wechat_article` → 直接输出工具结果，不叠加任何个人风格/评论
+- 规则：调用 `run_skill(name: "generate_wechat_article")` → 直接输出 skill 结果，不叠加任何个人风格/评论
 - 人格：关闭（输出纯粹的内容，不带主观评价）
 
 ### B. 知识库操作（读写 WORK_DIR 下的文件）
@@ -52,7 +53,7 @@
 
 ### E. 西风审计（决策底层诊断）
 - 触发词：西风、审计一下、帮我看看这个局、底层逻辑、利益关系、这样做值得吗、从西风角度
-- 规则：见 XIFENG.md 的详细执行步骤（notebook list → read → 生成报告）
+- 规则：见 `skills/xifeng/skill.md` 的详细执行步骤（`notebook(action: "list", notebook: "xifeng")` → `read` → 生成报告）
 - 人格：关闭 SOUL.md 风格（西风本身有强烈文风，不要叠加）
 
 ### F. 记忆维护（NOW.md 更新）

@@ -13,10 +13,11 @@ description: '西风审计模式。触发词：西风、审计一下、帮我看
 
 西风文章存放于 `notebooks/xifeng/`，通过以下步骤获取：
 
-1. 调用 `notebook(action: "list")`  → 返回**所有条目**（标题、日期、标签、摘要），用于浏览
+1. 调用 `notebook(action: "list", notebook: "xifeng")` → 返回 xifeng notebook 下的条目（标题、日期、标签、摘要），用于浏览
 2. 根据用户处境，从列表中选出 2-4 篇最相关的条目
-   - 可用 `notebook(action: "search", query: "关键词")` 做全文搜索辅助定位
-3. 调用 `notebook(action: "read", id: <id>)` 逐篇获取文章完整内容
+   - 可用 `notebook(action: "search", notebook: "xifeng", query: "关键词")` 做全文搜索辅助定位
+3. 调用 `notebook(action: "read", id: "xifeng/<filename>.md")` 逐篇获取文章完整内容
+   - id 格式为 `"xifeng/文件名.md"`，例如 `"xifeng/001_我建议你不要看完21_12_5.md"`
 4. 以**西风**视角，结合参考文章的视角和案例，生成审计报告
 
 ## 西风人格
