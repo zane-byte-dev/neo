@@ -73,12 +73,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     return (
         <div className="flex flex-col h-full">
             {/* Toolbar */}
-            <div className="h-12 border-b border-border flex items-center gap-2 px-4 shrink-0">
+            <div className="h-14 border-b border-border flex items-center gap-2 px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+                 style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <button
                     onClick={onBack}
-                    className="p-1.5 hover:bg-fill-secondary rounded-lg transition-colors text-text-secondary"
+                    className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-text"
                 >
-                    <ArrowLeft size={15} />
+                    <ArrowLeft size={16} />
                 </button>
 
                 <input
@@ -86,22 +87,22 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="文章标题…"
-                    className="flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-text-quaternary"
+                    className="flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-text-quaternary tracking-tight"
                 />
 
                 <div className="flex items-center gap-1.5">
                     <button
                         onClick={() => setShowMeta((v) => !v)}
                         className={cn(
-                            'px-2 py-1 text-xs rounded-md transition-colors',
-                            showMeta ? 'bg-primary-mint/15 text-primary-mint' : 'text-text-tertiary hover:bg-fill-secondary'
+                            'px-2.5 py-1.5 text-xs rounded-lg transition-all duration-200 font-medium',
+                            showMeta ? 'bg-primary-mint/12 text-primary-mint' : 'text-text-tertiary hover:bg-fill-secondary hover:text-text-secondary'
                         )}
                     >
                         Meta
                     </button>
                     <button
                         onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}
-                        className="p-1.5 hover:bg-fill-secondary rounded-lg transition-colors text-text-secondary"
+                        className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-text"
                         title={mode === 'edit' ? '预览' : '编辑'}
                     >
                         {mode === 'edit' ? <Eye size={14} /> : <Pencil size={14} />}
@@ -111,13 +112,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                             <div className="flex items-center gap-1">
                                 <button
                                     onClick={handleDelete}
-                                    className="px-2 py-1 text-xs bg-destructive text-white rounded-md"
+                                    className="px-2.5 py-1.5 text-xs bg-destructive text-white rounded-lg font-medium transition-all duration-200 hover:bg-destructive/90"
                                 >
                                     确认删除
                                 </button>
                                 <button
                                     onClick={() => setConfirmDelete(false)}
-                                    className="px-2 py-1 text-xs text-text-tertiary hover:bg-fill-secondary rounded-md"
+                                    className="px-2.5 py-1.5 text-xs text-text-tertiary hover:bg-fill-secondary rounded-lg transition-colors"
                                 >
                                     取消
                                 </button>
@@ -125,7 +126,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         ) : (
                             <button
                                 onClick={() => setConfirmDelete(true)}
-                                className="p-1.5 hover:bg-fill-secondary rounded-lg transition-colors text-text-tertiary hover:text-destructive"
+                                className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-tertiary hover:text-destructive"
                                 title="删除"
                             >
                                 <Trash2 size={14} />
@@ -136,11 +137,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         onClick={handleSave}
                         disabled={saving || !title.trim()}
                         className={cn(
-                            'flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors font-medium',
+                            'flex items-center gap-1.5 px-3.5 py-1.5 text-xs rounded-xl transition-all duration-200 font-medium',
                             saving || !title.trim()
                                 ? 'bg-fill-secondary text-text-quaternary cursor-not-allowed'
-                                : 'bg-primary-mint text-white hover:bg-primary-mint/90'
+                                : 'bg-gradient-to-b from-primary-mint to-emerald-600 text-white hover:opacity-90'
                         )}
+                        style={!saving && title.trim() ? { boxShadow: '0 2px 8px rgba(52, 211, 153, 0.25)' } : undefined}
                     >
                         <Save size={12} />
                         {saving ? '保存中…' : '保存'}
@@ -150,7 +152,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
 
             {/* Meta fields (collapsible) */}
             {showMeta && (
-                <div className="border-b border-border px-4 py-3 grid grid-cols-2 gap-2 shrink-0">
+                <div className="border-b border-border px-5 py-4 grid grid-cols-2 gap-3 shrink-0 bg-fill-secondary/30">
                     <MetaField label="作者" value={author} onChange={setAuthor} />
                     <MetaField label="日期" value={date} onChange={setDate} type="date" />
                     <MetaField label="来源" value={source} onChange={setSource} />
@@ -164,7 +166,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             {/* Editor / Preview */}
             <div className="flex-1 overflow-hidden" data-color-mode="light">
                 {loading ? (
-                    <div className="flex items-center justify-center h-full text-sm text-text-tertiary italic">Loading…</div>
+                    <div className="flex items-center justify-center h-full">
+                        <div className="flex items-center gap-2 text-sm text-text-tertiary">
+                            <span className="typing-dot" style={{ width: 5, height: 5 }} />
+                            <span className="typing-dot" style={{ width: 5, height: 5 }} />
+                            <span className="typing-dot" style={{ width: 5, height: 5 }} />
+                        </div>
+                    </div>
                 ) : mode === 'edit' ? (
                     <MDEditor
                         value={content}
@@ -175,7 +183,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         className="note-md-editor"
                     />
                 ) : (
-                    <div className="h-full overflow-y-auto custom-scrollbar p-5">
+                    <div className="h-full overflow-y-auto custom-scrollbar p-6">
                         <MDEditor.Markdown source={content} className="markdown-content text-sm leading-relaxed" />
                     </div>
                 )}
@@ -191,14 +199,14 @@ const MetaField: React.FC<{
     type?: string
     placeholder?: string
 }> = ({ label, value, onChange, type = 'text', placeholder }) => (
-    <label className="flex items-center gap-2 text-xs">
-        <span className="text-text-tertiary w-8 shrink-0">{label}</span>
+    <label className="flex items-center gap-2.5 text-xs">
+        <span className="text-text-tertiary w-8 shrink-0 font-medium">{label}</span>
         <input
             type={type}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="flex-1 bg-fill-secondary border border-border rounded-md px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary-mint"
+            className="flex-1 bg-fill-secondary border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all duration-200 placeholder:text-text-quaternary"
         />
     </label>
 )

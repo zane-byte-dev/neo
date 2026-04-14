@@ -11,14 +11,24 @@ import { checkAuth, type AuthResult } from './api'
 import { cn } from './lib/utils'
 
 const ResizeHandle: React.FC = () => (
-    <PanelResizeHandle className="w-1.5 bg-border hover:bg-primary-mint/40 transition-colors cursor-col-resize" />
+    <PanelResizeHandle className="w-1 bg-transparent hover:bg-primary-mint/30 transition-all duration-200 cursor-col-resize group">
+        <div className="w-full h-full flex items-center justify-center">
+            <div className="w-px h-8 bg-border group-hover:bg-primary-mint/60 transition-colors rounded-full" />
+        </div>
+    </PanelResizeHandle>
 )
 
 // ── Top nav bar shared by all pages ───────────────────────────────────────
 
 const TopNav: React.FC = () => (
-    <div className="h-10 border-b border-border bg-bg-container flex items-center px-4 gap-1 shrink-0">
-        <span className="text-sm font-bold text-text mr-3">Neo</span>
+    <div className="h-12 border-b border-border bg-bg-container/80 backdrop-blur-xl flex items-center px-5 gap-1.5 shrink-0"
+         style={{ boxShadow: 'var(--shadow-soft)' }}>
+        <div className="flex items-center gap-1.5 mr-4">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-mint to-emerald-600 flex items-center justify-center">
+                <span className="text-white text-[10px] font-bold leading-none">N</span>
+            </div>
+            <span className="text-sm font-bold tracking-tight text-text">Neo</span>
+        </div>
         {([
             { to: '/chat',     icon: <MessageSquare size={14} />, label: 'Chat' },
             { to: '/notebook', icon: <BookOpen size={14} />,      label: 'Notebook' },
@@ -27,10 +37,10 @@ const TopNav: React.FC = () => (
                 key={to}
                 to={to}
                 className={({ isActive }) => cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                    'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
                     isActive
-                        ? 'bg-primary-mint/15 text-text'
-                        : 'text-text-secondary hover:bg-fill-secondary hover:text-text'
+                        ? 'bg-primary-mint/12 text-text shadow-sm'
+                        : 'text-text-secondary hover:bg-fill hover:text-text'
                 )}
             >
                 {icon}{label}
@@ -96,7 +106,7 @@ const MainLayout: React.FC = () => {
     }, [theme])
 
     return (
-        <div className="h-screen w-screen bg-bg-layout overflow-hidden text-text flex flex-col font-sans">
+        <div className="h-screen w-screen bg-bg-layout overflow-hidden text-text flex flex-col">
             <TopNav />
             <Routes>
                 <Route path="/chat"     element={<ChatPage />} />
@@ -109,18 +119,23 @@ const MainLayout: React.FC = () => {
 
 const ServerUnreachable: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
     <div className="h-screen w-screen flex items-center justify-center bg-bg-layout">
-        <div className="text-center p-8">
-            <p className="text-text-secondary text-sm mb-4">
-                Cannot reach the backend server on <code className="bg-fill px-1.5 py-0.5 rounded text-xs">localhost:3000</code>.
+        <div className="text-center p-10 bg-bg-container border border-border rounded-2xl animate-fade-in"
+             style={{ boxShadow: 'var(--shadow-elevated)' }}>
+            <div className="w-12 h-12 mx-auto mb-5 rounded-2xl bg-warning/10 flex items-center justify-center">
+                <span className="text-2xl">⚠️</span>
+            </div>
+            <p className="text-text-secondary text-sm mb-3 font-medium">
+                Cannot reach the backend server
             </p>
-            <p className="text-text-tertiary text-xs mb-6">
-                Start Neo with <code className="bg-fill px-1.5 py-0.5 rounded">WEB_PORT=3000 npm run dev:bot</code>&nbsp; then retry.
+            <p className="text-text-tertiary text-xs mb-6 leading-relaxed">
+                Start Neo with <code className="bg-fill px-1.5 py-0.5 rounded-md text-xs border border-border-secondary">WEB_PORT=3000 npm run dev:bot</code>&nbsp; then retry.
             </p>
             <button
                 onClick={onRetry}
-                className="px-4 py-2 bg-primary-mint/20 border border-primary-mint/40 text-text rounded-lg text-sm hover:bg-primary-mint/30 transition-colors"
+                className="px-5 py-2.5 bg-gradient-to-b from-primary-mint to-emerald-600 text-white rounded-xl text-sm font-medium hover:opacity-90 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                style={{ boxShadow: '0 2px 8px rgba(52, 211, 153, 0.3)' }}
             >
-                Retry
+                Retry Connection
             </button>
         </div>
     </div>
@@ -144,7 +159,17 @@ const App: React.FC = () => {
     if (authState === 'loading') {
         return (
             <div className="h-screen w-screen flex items-center justify-center bg-bg-layout">
-                <span className="text-text-tertiary text-sm">Loading…</span>
+                <div className="flex flex-col items-center gap-4 animate-fade-in">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-mint to-emerald-600 flex items-center justify-center"
+                         style={{ animation: 'glow-pulse 2s ease-in-out infinite' }}>
+                        <span className="text-white text-sm font-bold">N</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                        <span className="typing-dot" />
+                        <span className="typing-dot" />
+                        <span className="typing-dot" />
+                    </div>
+                </div>
             </div>
         )
     }
