@@ -2,12 +2,9 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import type Router from '@koa/router';
 import type { ServerResponse } from 'node:http';
-import { messageList, messageAdd, sessionGet, sessionCreate } from '../services/chat-service.js';
-import { LLMClient, ToolContext } from '../llm/client.js';
+import { runAgentTurn } from '../services/agent-runner.js';
 import { calcUser } from '../services/user-service.js';
 import { MAX_INPUT_LENGTH } from '../config.js';
-    
-const llm = new LLMClient();
 
 export function chatRoute(router: Router): void {
     router.post('/api/chat', async (ctx) => {
@@ -25,8 +22,7 @@ export function chatRoute(router: Router): void {
             ctx.body = { error: `message too long (max ${MAX_INPUT_LENGTH} chars)` };
             return;
         }
-
-        if (!sessionId){
+        if (!sessionId) {
             ctx.status = 400;
             ctx.body = { error: 'sessionId is required' };
             return;
@@ -52,48 +48,25 @@ export function chatRoute(router: Router): void {
             if (!res.destroyed) res.write(`data: ${JSON.stringify(obj)}\n\n`);
         };
 
-        let toolContext:ToolContext = {
-            userId,
-            sessionId,
-            workDir: userCtx.workDir,
-            systemInstruction: userCtx.systemInstruction,
-            skillRegistry: userCtx.skillRegistry,
-            userTools: userCtx.userTools,
-            todoCallback: (todos) => {
-                write({ type: 'todo_update', todos });
-            },
-            imageCallback: async (data: string, mimeType: string, caption?: string) => {
-                const ext = mimeType.includes('png') ? 'png' : 'jpg';
-                const filename = `gen_${Date.now()}.${ext}`;
-                const dir = join(userCtx.workDir, '.tmp', sessionId);
-                await fs.mkdir(dir, { recursive: true });
-                await fs.writeFile(join(dir, filename), Buffer.from(data, 'base64'));
-                const url = `/api/assets/${sessionId}/${filename}`;
-                write({ type: 'image', url, ...(caption ? { caption } : {}) });
-            },
-        };
-        const historyRows = await messageList(sessionId, userId);
-        const history = historyRows.map(r => `${r.role === 'assistant' ? 'Assistant' : 'User'}: ${r.content}`).join('\n');
-
-        let session = await sessionGet(sessionId, userId);
-        if (!session) session = await sessionCreate(userId, sessionId);
-        await messageAdd(session.id, userId, 'user', message);
-
-        let fullResponse = '';
         try {
-            await llm.chatWithContextStreaming(
+            await runAgentTurn({
+                userId,
+                sessionId,
                 message,
-                history,
-                toolContext,
-                (chunk) => {
-                    write(chunk as Record<string, unknown>);
-                    if ((chunk as { type: string; text?: string }).type === 'text') {
-                        fullResponse += (chunk as { text?: string }).text ?? '';
-                    }
-                },
-                abortController.signal,
                 model,
-            );
+                signal: abortController.signal,
+                onChunk: (chunk) => write(chunk as Record<string, unknown>),
+                onTodo: (todos) => write({ type: 'todo_update', todos }),
+                onImage: async (data, mimeType, caption) => {
+                    const ext = mimeType.includes('png') ? 'png' : 'jpg';
+                    const filename = `gen_${Date.now()}.${ext}`;
+                    const dir = join(userCtx.workDir, '.tmp', sessionId);
+                    await fs.mkdir(dir, { recursive: true });
+                    await fs.writeFile(join(dir, filename), Buffer.from(data, 'base64'));
+                    const url = `/api/assets/${sessionId}/${filename}`;
+                    write({ type: 'image', url, ...(caption ? { caption } : {}) });
+                },
+            });
             write({ type: 'done' });
         } catch (err: unknown) {
             if (!(err instanceof Error && err.name === 'AbortError')) {
@@ -101,9 +74,6 @@ export function chatRoute(router: Router): void {
             }
         } finally {
             res.end();
-            if (fullResponse) {
-                await messageAdd(sessionId, userId, 'assistant', fullResponse);
-            }
         }
     });
 }

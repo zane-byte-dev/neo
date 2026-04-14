@@ -7,7 +7,7 @@
     "scripts": {
         "build": "tsc",
         "clean": "rm -rf dist",
-        "dev:bot": "tsx src/main.ts",
+        "dev:bot": "tsc && node --enable-source-maps dist/main.js",
         "start:bot": "node dist/main.js",
         "pm2:start": "npm run build && pm2 start ecosystem.config.cjs",
         "pm2:stop": "pm2 stop all",

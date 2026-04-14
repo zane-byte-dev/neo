@@ -1,10 +1,9 @@
 import { Telegraf } from 'telegraf';
 import { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } from '../config.js';
-import { LLMClient, type ToolContext } from '../llm/client.js';
-import { calcUser, userGetByTenant, userList } from '../services/user-service.js';
-import { messageAdd, messageList, sessionCreate, sessionDelete, sessionGet } from '../services/chat-service.js';
+import { runAgentTurn } from '../services/agent-runner.js';
+import { userGetByTenant, userList } from '../services/user-service.js';
+import { sessionCreate, sessionDelete, sessionGet } from '../services/chat-service.js';
 
-const llm = new LLMClient();
 const TELEGRAM_MAX_MESSAGE = 3800;
 
 export interface TelegramRuntime {
@@ -42,12 +41,6 @@ function resolveTelegramUserId(chatId: string): string | null {
     return null;
 }
 
-function formatHistory(rows: Awaited<ReturnType<typeof messageList>>): string {
-    return rows
-        .map((r) => `${r.role === 'assistant' ? 'Assistant' : 'User'}: ${r.content}`)
-        .join('\n');
-}
-
 export async function startTelegramBot(): Promise<TelegramRuntime | null> {
     if (!TELEGRAM_BOT_TOKEN) {
         console.log('[Telegram] TELEGRAM_BOT_TOKEN not set, skip startup');
@@ -83,41 +76,13 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
         if (!cleanText) return;
 
         const sessionId = `tg-${chatId}`;
-        let session = await sessionGet(sessionId, userId);
-        if (!session) session = await sessionCreate(userId, sessionId);
-
         await ctx.sendChatAction('typing');
 
-        const userCtx = await calcUser(userId);
-        const historyRows = await messageList(sessionId, userId);
-        const history = formatHistory(historyRows);
-        await messageAdd(session.id, userId, 'user', cleanText);
-
-        let fullResponse = '';
-        const toolContext: ToolContext = {
-            userId,
-            sessionId,
-            workDir: userCtx.workDir,
-            systemInstruction: userCtx.systemInstruction,
-            skillRegistry: userCtx.skillRegistry,
-            userTools: userCtx.userTools,
-        };
-
         try {
-            await llm.chatWithContextStreaming(
-                cleanText,
-                history,
-                toolContext,
-                (chunk) => {
-                    if (chunk.type === 'text') fullResponse += chunk.text;
-                },
-            );
-
-            const output = fullResponse.trim() || '模型没有返回可显示内容。';
-            for (const part of splitTelegramText(output)) {
+            const output = await runAgentTurn({ userId, sessionId, message: cleanText });
+            for (const part of splitTelegramText(output || '模型没有返回可显示内容。')) {
                 await ctx.reply(part);
             }
-            await messageAdd(session.id, userId, 'assistant', output);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             await ctx.reply(`处理失败：${msg}`);
