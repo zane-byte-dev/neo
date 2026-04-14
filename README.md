@@ -8,23 +8,22 @@
 
 | 模块 | 说明 |
 |------|------|
-| **AI 对话** | 基于 Gemini 的多轮对话，支持上下文管理、会话压缩、异步长任务 |
-| **笔记 Inbox** | 轻量碎片记录，支持标签、日期筛选、热力图统计 |
+| **AI 对话** | 基于 Gemini 的多轮对话，支持流式输出、函数调用、子 agent 派生 |
 | **Notebook** | 文章/知识条目管理，含全文搜索 |
-| **Todo** | 待办事项，支持到期提醒与 Cron 定时触发 |
 | **Skills** | Markdown 定义的可复用 AI 技能，支持参数插值与代码块执行 |
-| **Tools** | 自动发现的工具插件：网页搜索、天气、AI 新闻、图片生成、文件编辑等 |
+| **Tools** | 内置工具 + 用户自定义工具（`.tools/` 目录自动发现） |
+| **Telegram Bot** | Telegraf 长轮询接入，支持 Markdown 渲染、图片发送 |
 | **浏览器扩展** | Chrome 划词保存，支持 X.com 推文、Gemini 对话、飞书 Wiki |
-| **Web UI** | React 前端，提供 Chat / Notebook / Todo / Notes / Crons 五个面板 |
+| **Web UI** | React 前端，提供 Chat / Notebook 面板 |
 
 ---
 
 ## 技术栈
 
-- **运行时**：Node.js (ESM) + TypeScript
+- **运行时**：Node.js ≥ 20 (ESM) + TypeScript
 - **后端框架**：Koa 3
-- **数据库**：SQLite（better-sqlite3，WAL 模式）
-- **LLM**：Google Gemini API（流式输出、函数调用）
+- **LLM**：Google Gemini API（AI SDK，流式输出 + 函数调用）
+- **Telegram**：Telegraf 4
 - **前端**：React 18 + Vite + Tailwind CSS
 - **进程管理**：PM2
 
@@ -35,24 +34,26 @@
 ```
 neo/
 ├── src/                    # 后端 TypeScript 源码
-│   ├── main.ts             # 应用入口
+│   ├── main.ts             # 应用入口（启动 HTTP 服务 + Telegram Bot）
 │   ├── server.ts           # Koa HTTP 服务器
 │   ├── config.ts           # 集中配置（环境变量）
-│   ├── llm/                # LLM 客户端（Gemini Provider）
-│   ├── routes/             # HTTP 路由（自动发现）
-│   ├── services/           # 业务逻辑层（DB、Chat、Notes、Todo…）
+│   ├── platforms/          # 平台接入（telegram-bot.ts）
+│   ├── llm/                # LLM 客户端（AI SDK + Gemini Provider）
+│   ├── routes/             # HTTP 路由
+│   ├── services/           # 业务逻辑层（agent-runner、chat、notebook、user…）
 │   ├── skills/             # Skill 定义、解析与执行
-│   ├── tools/              # Tool 插件（自动发现）
-│   └── utils/              # 公共工具（logger、audit、workspace…）
+│   ├── tools/              # 内置工具（internal/）+ 用户工具加载（user-tools/）
+│   ├── types/              # TypeScript 类型声明
+│   └── utils/              # 公共工具（logger、workspace…）
 ├── web/                    # React 前端
 │   └── src/
-│       ├── components/     # Chat / Notebook / Todo / Notes / Crons 面板
+│       ├── components/     # Chat / Notebook 面板
 │       ├── stores/         # Zustand 状态管理
 │       └── api.ts          # 后端 API 客户端
 ├── extension/              # Chrome 浏览器扩展
-├── space/                  # 用户工作区（AGENTS.md / SOUL.md / TOOLS.md / memory）
-├── data/                   # SQLite 数据库目录
-├── logs/                   # 运行日志
+├── space/                  # 用户工作区 + config.json 用户注册
+│   └── <userId>/           # AGENTS.md / SOUL.md / TOOLS.md / memory / skills / .tools
+├── logs/                   # 运行日志（JSONL 格式，按日切分）
 └── ecosystem.config.cjs    # PM2 配置
 ```
 
@@ -84,16 +85,9 @@ npm run web:install
 # ── 必填 ──────────────────────────────────────────────────────────
 GEMINI_API_KEY=your_gemini_api_key
 
-# ── AI 工作区 ──────────────────────────────────────────────────────
-WORK_DIR=/path/to/your/workspace        # AI 可操作的文件目录
-AGENT_CONFIG_DIR=/path/to/agent/config  # 存放 AGENTS.md / SOUL.md 的目录
-
 # ── Web 服务 ───────────────────────────────────────────────────────
 WEB_PORT=3000
 SESSION_SECRET=change-me-in-production  # 用于签名 Cookie，生产环境务必修改
-
-# ── 数据库 ─────────────────────────────────────────────────────────
-DB_PATH=./data/neo.db
 
 # ── Gemini 模型 ────────────────────────────────────────────────────
 # 可选，支持别名：flash → gemini-3-flash-preview，pro → gemini-3-pro-preview
@@ -101,21 +95,17 @@ DB_PATH=./data/neo.db
 
 # ── Telegram（可选）──────────────────────────────────────────────────
 # TELEGRAM_BOT_TOKEN=your_bot_token
-# TELEGRAM_CHAT_ID=your_chat_id # 兼容兜底，建议改为 users[].tenants
+# TELEGRAM_CHAT_ID=your_chat_id       # 兼容兜底，建议用 config.json tenants
 
-# ── 飞书（可选）──────────────────────────────────────────────────────
-# FEISHU_APP_ID=your_app_id
-# FEISHU_APP_SECRET=your_app_secret
-
-# ── 浏览器（用于网页抓取 Skill，可选）────────────────────────────────
-# CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
-# BROWSER_CDP_PORT=9222
+# ── 日志 ───────────────────────────────────────────────────────────
+# LOG_LEVEL=info                       # debug | info | warn | error
+# DEBUG_LLM=1                          # 等价于 LOG_LEVEL=debug
 ```
 
 ### 开发模式
 
 ```bash
-# 启动后端（带热重载）
+# 编译并启动后端（包含 HTTP 服务 + Telegram Bot）
 npm run dev:bot
 
 # 启动前端开发服务器（另开终端）
@@ -147,36 +137,46 @@ npm run pm2:logs
 
 | 路由文件 | 路径前缀 | 说明 |
 |----------|----------|------|
-| `routes/chat.ts` | `/api/chat` | 会话与消息管理 |
-| `routes/note.ts` | `/api/notes` | Inbox 笔记 CRUD |
+| `routes/chat.ts` | `/api/chat` | SSE 流式对话 |
 | `routes/notebook.ts` | `/api/notebook` | 知识条目 CRUD |
-| `routes/todo.ts` | `/api/todos` | 待办事项 CRUD |
-| `routes/session.ts` | `/api/session` | 会话控制 |
+| `routes/session.ts` | `/api/session` | 会话管理 |
 | `routes/user.ts` | `/api/auth` | 登录/用户信息 |
 | `routes/me.ts` | `/api/me` | 个人资料 |
+| `routes/assets.ts` | `/api/assets` | 会话生成的静态资源 |
 
 ---
 
-## Tools（工具插件）
+## Tools（工具系统）
 
-工具文件放置于 `src/tools/` 下任意子目录，导出 `Tool` 对象后**自动注册**，无需手动引入。
+### 内置工具（`src/tools/internal/`）
 
-内置工具：
+| 工具 | 说明 |
+|------|------|
+| `bash` / `read_file` / `write_file` / `list_dir` | 基础文件系统 + Shell 操作（`src/tools/executor.ts`） |
+| `edit_file` | 精确局部文件编辑 |
+| `glob` | 按模式查找文件 |
+| `grep` | 正则搜索文件内容 |
+| `fetch_url` | 抓取网页内容 |
+| `search_web` | 网络搜索 |
+| `get_datetime` | 获取当前日期时间 |
+| `get_weather` | 查询天气 |
+| `save_memory` | 保存长期记忆 |
+| `todo` | 会话内任务跟踪 |
+| `run_skill` / `list_skills` | 执行/列出已注册 Skill |
+| `subagent` | 派生子 agent 执行独立子任务 |
+| `ask_user` | 向用户提问确认 |
+| `enter_plan_mode` / `exit_plan_mode` | 计划模式（限制写操作） |
 
-| 工具 | 路径 | 说明 |
-|------|------|------|
-| `get-datetime` | `utility/get-datetime.ts` | 获取当前时间 |
-| `get-weather` | `utility/get-weather.ts` | 查询天气 |
-| `search-web` | `web/search-web.ts` | 网页搜索 |
-| `fetch-url` | `web/fetch-url.ts` | 抓取 URL 内容 |
-| `fetch-ai-news` | `web/fetch-ai-news.ts` | 聚合 AI 新闻 |
-| `generate-image` | `content/generate-image.ts` | 图片生成 |
-| `run-skill` | `skills/run-skill.ts` | 调用命名 Skill |
-| `edit-file` | `workspace/edit-file.ts` | 文件编辑 |
-| `glob` | `workspace/glob.ts` | 文件查找 |
-| `grep` | `workspace/grep.ts` | 全文搜索 |
-| `notebook` | `workspace/notebook.ts` | 操作知识库 |
-| `update-now` | `workspace/update-now.ts` | 更新 NOW.md |
+### 用户工具（`space/<userId>/.tools/`）
+
+每个子目录包含 `tool.yaml`（声明）+ `run.py`/`run.sh`（执行脚本），自动发现并注册。
+
+| 工具 | 说明 |
+|------|------|
+| `generate_image` | AI 图片生成（Gemini） |
+| `fetch_ai_news` | 聚合 Reddit/HN AI 新闻 |
+| `notebook` | 文件系统知识库操作 |
+| `update_now` | 更新短期记忆（NOW.md） |
 
 ---
 
@@ -184,42 +184,30 @@ npm run pm2:logs
 
 技能以 Markdown 文件形式定义，存放于 `space/<userId>/skills/` 目录。支持 YAML frontmatter 声明参数，正文作为 AI 系统指令，可通过 `{{param_name}}` 语法注入参数。
 
-示例 frontmatter：
-
-```yaml
----
-name: summarize
-description: 对输入内容进行摘要
-parameters:
-  properties:
-    content:
-      type: string
-      description: 需要摘要的文本
-  required:
-    - content
----
-```
+内置 Skills：`brief`、`summarize_text`、`generate_daily_log`、`generate_weekly_report`、`generate_wechat_article`、`js_snippet_runner`、`xifeng`（决策审计）
 
 ---
 
 ## 用户工作区
 
-每位用户在 `space/<userId>/` 下拥有独立工作区：
+用户注册在 `space/config.json`，每位用户在 `space/<userId>/` 下拥有独立工作区：
 
 ```
+space/config.json            # 用户列表、tenant 绑定、webToken
 space/<userId>/
-├── AGENTS.md    # AI 主提示词（身份、行为准则）
-├── SOUL.md      # 个性/价值观补充（可选）
-├── TOOLS.md     # 工具使用说明（可选）
+├── AGENTS.md    # 任务路由与工具调用规则
+├── SOUL.md      # 身份与沟通风格
+├── TOOLS.md     # 工具使用指引
 ├── USER.md      # 用户基本信息
 ├── memory/
-│   ├── NOW.md   # 当前状态/上下文
-│   └── daily/   # 日记
+│   ├── NOW.md   # 当前关注点/近况
+│   └── daily/   # 每日日记
 ├── skills/      # 用户自定义 Skill
-└── archives/    # 归档文件
+├── .tools/      # 用户自定义工具（tool.yaml + run.py）
+└── notebooks/   # 知识库文件
 ```
 
-Telegram 绑定建议在 `space/config.json` 里声明 tenant：
+Telegram 绑定在 `space/config.json` 里通过 tenants 声明：
 
 ```json
 {
@@ -227,13 +215,33 @@ Telegram 绑定建议在 `space/config.json` 里声明 tenant：
     {
       "id": "8094416266",
       "name": "zc",
-      "workspace": "zhengchao",
       "tenants": ["telegram:8094416266"],
       "webToken": "8094416266"
     }
   ]
 }
 ```
+
+---
+
+## 核心架构
+
+```
+用户消息 → [HTTP SSE / Telegram Bot]
+              ↓
+         agent-runner.ts（共享一轮对话逻辑）
+              ↓
+      calcUser → session → history → LLM streaming → save
+              ↓
+         LLM Client (AI SDK + Gemini)
+              ↓
+      Tool calls → executor.ts → internal tools / user tools
+                                → subagent（递归调用）
+```
+
+- `src/services/agent-runner.ts`：封装完整的「一次对话轮次」生命周期，HTTP 和 Telegram 共用
+- `src/platforms/telegram-bot.ts`：Telegraf 长轮询，fire-and-forget 模式避免 90 秒超时，Markdown→HTML 渲染
+- `src/routes/chat.ts`：SSE 流式推送，通过 `onChunk` / `onImage` / `onTodo` 回调接收输出
 
 ---
 
