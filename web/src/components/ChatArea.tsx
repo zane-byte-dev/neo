@@ -1,5 +1,5 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, Wrench } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -13,6 +13,36 @@ import type { ActivityItem, AgentTodoItem } from '../types'
 const MD: React.FC<{ content: string }> = ({ content }) => (
     <div className="markdown-content max-w-none">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    </div>
+)
+
+// ── Skeleton loading ──────────────────────────────────────────────────────────
+
+const MessageSkeleton: React.FC = () => (
+    <div className="space-y-3 animate-fade-in">
+        <div className="flex items-start gap-3">
+            <div className="flex-1 space-y-2.5">
+                <div className="skeleton h-4 w-3/4" />
+                <div className="skeleton h-4 w-1/2" />
+                <div className="skeleton h-4 w-5/6" />
+            </div>
+        </div>
+    </div>
+)
+
+// ── Typing indicator ──────────────────────────────────────────────────────────
+
+const TypingIndicator: React.FC = () => (
+    <div className="mb-3 rounded-2xl border border-border bg-fill-secondary/60 p-4 backdrop-blur-sm"
+         style={{ boxShadow: 'var(--shadow-soft)' }}>
+        <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+            </div>
+            <span className="text-xs text-text-tertiary ml-1">Thinking…</span>
+        </div>
     </div>
 )
 
@@ -33,16 +63,16 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
         <div
             ref={scrollRef}
             className={cn(
-                'space-y-0.5 font-mono text-xs leading-relaxed overflow-y-auto',
-                isLive ? 'max-h-40' : 'max-h-52 mt-1.5'
+                'space-y-1 font-mono text-xs leading-relaxed overflow-y-auto custom-scrollbar',
+                isLive ? 'max-h-44' : 'max-h-52 mt-2'
             )}
         >
             {items.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-1.5 min-w-0 animate-activity-in">
+                <div key={idx} className="flex items-start gap-2 min-w-0 animate-activity-in py-0.5">
                     {item.type === 'tool_call' ? (
                         <>
                             <Wrench size={11} className="text-primary-mint shrink-0 mt-0.5" />
-                            <span className="text-text-secondary shrink-0">{item.toolName}</span>
+                            <span className="text-text-secondary shrink-0 font-medium">{item.toolName}</span>
                             {item.args && (
                                 <span className="text-text-tertiary truncate">
                                     {JSON.stringify(item.args)}
@@ -51,10 +81,10 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
                         </>
                     ) : (
                         <>
-                            <span className="text-green-500 shrink-0 mt-0.5">✓</span>
+                            <span className="text-success shrink-0 mt-0.5 text-[10px]">✓</span>
                             <span className="text-text-tertiary shrink-0">{item.toolName}</span>
                             {item.result && (
-                                <span className="text-text-tertiary/70 truncate">
+                                <span className="text-text-tertiary/60 truncate">
                                     → {item.result}
                                 </span>
                             )}
@@ -63,10 +93,10 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
                 </div>
             ))}
             {isLive && (
-                <div className="flex items-center gap-1 text-text-tertiary animate-pulse">
-                    <span className="w-1 h-1 rounded-full bg-primary-mint inline-block" />
-                    <span className="w-1 h-1 rounded-full bg-primary-mint inline-block" style={{ animationDelay: '150ms' }} />
-                    <span className="w-1 h-1 rounded-full bg-primary-mint inline-block" style={{ animationDelay: '300ms' }} />
+                <div className="flex items-center gap-1.5 py-1">
+                    <span className="typing-dot" style={{ width: 4, height: 4 }} />
+                    <span className="typing-dot" style={{ width: 4, height: 4 }} />
+                    <span className="typing-dot" style={{ width: 4, height: 4 }} />
                 </div>
             )}
         </div>
@@ -74,10 +104,11 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
 
     if (isLive) {
         return (
-            <div className="mb-3 rounded-xl border border-border bg-fill-secondary/50 p-3">
-                <div className="flex items-center gap-1.5 text-xs text-text-tertiary mb-1.5">
-                    <Loader2 size={11} className="animate-spin text-primary-mint" />
-                    <span>Working…</span>
+            <div className="mb-3 rounded-2xl border border-border bg-fill-secondary/60 p-4 backdrop-blur-sm"
+                 style={{ boxShadow: 'var(--shadow-soft)' }}>
+                <div className="flex items-center gap-2 text-xs text-text-tertiary mb-2">
+                    <Loader2 size={12} className="animate-spin text-primary-mint" />
+                    <span className="font-medium">Working…</span>
                 </div>
                 {content}
             </div>
@@ -86,12 +117,12 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
 
     return (
         <details className="mb-3 group">
-            <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5">
-                <ChevronRight size={12} className="transition-transform group-open:rotate-90" />
+            <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5 py-1">
+                <ChevronRight size={12} className="transition-transform duration-200 group-open:rotate-90" />
                 <Wrench size={11} className="text-text-tertiary" />
-                {summary}
+                <span>{summary}</span>
             </summary>
-            <div className="mt-1.5 pl-4 border-l-2 border-border">
+            <div className="mt-1 pl-4 border-l-2 border-border/60">
                 {content}
             </div>
         </details>
@@ -103,11 +134,11 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
 const TodoIcon: React.FC<{ status: string }> = ({ status }) => {
     switch (status) {
         case 'completed':
-            return <CheckCircle2 size={14} className="text-green-500 shrink-0" />
+            return <CheckCircle2 size={14} className="text-success shrink-0" />
         case 'in-progress':
             return <Loader2 size={14} className="text-primary-mint shrink-0 animate-spin" />
         default:
-            return <Circle size={14} className="text-text-tertiary shrink-0" />
+            return <Circle size={14} className="text-text-quaternary shrink-0" />
     }
 }
 
@@ -117,26 +148,27 @@ const TodoPanel: React.FC<{ todos: AgentTodoItem[] }> = ({ todos }) => {
     const pct = total > 0 ? Math.round((completed / total) * 100) : 0
 
     return (
-        <div className="my-3 rounded-xl border border-border bg-fill-secondary/50 overflow-hidden">
+        <div className="my-3 rounded-2xl border border-border bg-fill-secondary/60 overflow-hidden backdrop-blur-sm"
+             style={{ boxShadow: 'var(--shadow-soft)' }}>
             {/* Header with progress bar */}
-            <div className="px-3 py-2 flex items-center gap-2 text-xs text-text-secondary">
-                <span className="font-medium">Tasks</span>
+            <div className="px-4 py-2.5 flex items-center gap-2.5 text-xs text-text-secondary">
+                <span className="font-semibold">Tasks</span>
                 <span className="text-text-tertiary">{completed}/{total}</span>
-                <div className="flex-1 h-1 bg-border rounded-full overflow-hidden">
+                <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
                     <div
-                        className="h-full bg-primary-mint rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-primary-mint to-emerald-500 rounded-full transition-all duration-700 ease-out"
                         style={{ width: `${pct}%` }}
                     />
                 </div>
             </div>
             {/* Task list */}
-            <div className="px-3 pb-2 space-y-0.5">
+            <div className="px-4 pb-3 space-y-1">
                 {todos.map((t) => (
                     <div
                         key={t.id}
                         className={cn(
-                            'flex items-center gap-2 py-1 text-xs',
-                            t.status === 'completed' ? 'text-text-tertiary line-through' : 'text-text'
+                            'flex items-center gap-2.5 py-1 text-xs transition-all duration-300',
+                            t.status === 'completed' ? 'text-text-tertiary line-through opacity-60' : 'text-text'
                         )}
                     >
                         <TodoIcon status={t.status} />
@@ -147,6 +179,21 @@ const TodoPanel: React.FC<{ todos: AgentTodoItem[] }> = ({ todos }) => {
         </div>
     )
 }
+
+// ── Scroll to bottom button ───────────────────────────────────────────────────
+
+const ScrollToBottom: React.FC<{ onClick: () => void; visible: boolean }> = ({ onClick, visible }) => (
+    <button
+        onClick={onClick}
+        className={cn(
+            'absolute bottom-28 right-6 z-10 w-9 h-9 rounded-full bg-bg-container border border-border flex items-center justify-center transition-all duration-300',
+            visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'
+        )}
+        style={{ boxShadow: 'var(--shadow-elevated)' }}
+    >
+        <ChevronDown size={16} className="text-text-secondary" />
+    </button>
+)
 
 // ── Chat input ────────────────────────────────────────────────────────────────
 
@@ -254,58 +301,61 @@ const ChatInput: React.FC = () => {
     }, [inputValue])
 
     return (
-        <div className="p-4 border-t border-border bg-bg-container shrink-0">
+        <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border">
             <div className="max-w-3xl mx-auto">
                 {/* Model selector */}
-                <div className="flex items-center gap-1.5 mb-2">
+                <div className="flex items-center gap-1.5 mb-2.5">
                     {(['flash', 'pro'] as const).map((m) => (
                         <button
                             key={m}
                             onClick={() => setSelectedModel(m)}
                             className={cn(
-                                'px-2.5 py-0.5 rounded-full text-xs font-medium transition-all',
+                                'px-3 py-1 rounded-full text-xs font-medium transition-all duration-200',
                                 selectedModel === m
-                                    ? 'bg-primary-mint text-bg-container'
-                                    : 'bg-fill-secondary text-text-tertiary hover:text-text'
+                                    ? 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm'
+                                    : 'bg-fill text-text-tertiary hover:text-text-secondary hover:bg-fill-secondary'
                             )}
                         >
-                            {m === 'flash' ? 'Flash' : 'Pro'}
+                            {m === 'flash' ? '⚡ Flash' : '✨ Pro'}
                         </button>
                     ))}
                 </div>
                 <div className="relative">
-                <textarea
-                    ref={textareaRef}
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Ask anything… (Shift+Enter for newline)"
-                    className="w-full bg-fill-secondary border border-border rounded-2xl px-4 py-3 pr-14 focus:outline-none focus:ring-1 focus:ring-primary-mint transition-all resize-none text-sm leading-relaxed"
-                    rows={1}
-                />
-                <div className="absolute bottom-2.5 right-2.5">
-                    {isGenerating ? (
-                        <button
-                            onClick={handleStop}
-                            className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-opacity"
-                            title="Stop"
-                        >
-                            <Square size={15} fill="currentColor" />
-                        </button>
-                    ) : (
-                        <button
-                            onClick={handleSend}
-                            disabled={!inputValue.trim()}
-                            className={cn(
-                                'p-2 bg-text text-bg-container rounded-xl transition-all',
-                                !inputValue.trim() ? 'opacity-30 cursor-not-allowed' : 'hover:opacity-80'
-                            )}
-                            title="Send"
-                        >
-                            <Send size={15} fill="currentColor" />
-                        </button>
-                    )}
-                </div>
+                    <textarea
+                        ref={textareaRef}
+                        value={inputValue}
+                        onChange={(e) => setInputValue(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        placeholder="Ask anything… (Shift+Enter for newline)"
+                        className="w-full bg-fill-secondary/80 border border-border rounded-2xl px-5 py-3.5 pr-14 focus:outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all duration-200 resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
+                        style={{ boxShadow: 'var(--shadow-soft)' }}
+                        rows={1}
+                    />
+                    <div className="absolute bottom-3 right-3">
+                        {isGenerating ? (
+                            <button
+                                onClick={handleStop}
+                                className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95"
+                                title="Stop"
+                            >
+                                <Square size={14} fill="currentColor" />
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleSend}
+                                disabled={!inputValue.trim()}
+                                className={cn(
+                                    'p-2 rounded-xl transition-all duration-200',
+                                    !inputValue.trim()
+                                        ? 'bg-fill text-text-quaternary cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
+                                )}
+                                title="Send"
+                            >
+                                <Send size={14} />
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
@@ -319,6 +369,7 @@ export const ChatArea: React.FC = () => {
     const activeChat = chats.find((c) => c.id === activeChatId)
     const chatMessages = messages[activeChatId ?? ''] ?? []
     const scrollRef = React.useRef<HTMLDivElement>(null)
+    const [showScrollBtn, setShowScrollBtn] = React.useState(false)
 
     // Load message history from server when session changes
     React.useEffect(() => {
@@ -339,50 +390,67 @@ export const ChatArea: React.FC = () => {
             .catch(() => { /* session may not exist yet */ })
     }, [activeChatId])
 
-    React.useEffect(() => {
+    // Auto-scroll and track scroll position
+    const scrollToBottom = React.useCallback(() => {
         if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+            scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
         }
-    }, [chatMessages])
+    }, [])
+
+    React.useEffect(() => {
+        scrollToBottom()
+    }, [chatMessages, scrollToBottom])
+
+    const handleScroll = React.useCallback(() => {
+        if (!scrollRef.current) return
+        const { scrollTop, scrollHeight, clientHeight } = scrollRef.current
+        setShowScrollBtn(scrollHeight - scrollTop - clientHeight > 120)
+    }, [])
 
     return (
-        <div className="flex flex-col h-full bg-bg-container overflow-hidden">
+        <div className="flex flex-col h-full bg-bg-container overflow-hidden relative">
             {/* Header */}
-            <div className="h-12 border-b border-border flex items-center px-5 shrink-0">
-                <span className="text-sm font-semibold truncate text-text">
+            <div className="h-14 border-b border-border flex items-center px-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+                 style={{ boxShadow: 'var(--shadow-soft)' }}>
+                <span className="text-sm font-semibold truncate text-text tracking-tight">
                     {activeChat?.title ?? 'Welcome'}
                 </span>
                 {isGenerating && thinkingStatus && (
-                    <span className="ml-3 text-xs text-text-tertiary animate-pulse">{thinkingStatus}</span>
+                    <span className="ml-3 text-xs text-text-tertiary flex items-center gap-1.5">
+                        <Loader2 size={11} className="animate-spin text-primary-mint" />
+                        {thinkingStatus}
+                    </span>
                 )}
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar px-4 py-6">
-                <div className="max-w-3xl mx-auto space-y-6">
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-4 py-8">
+                <div className="max-w-3xl mx-auto space-y-7">
                     {chatMessages.length === 0 && <WelcomeScreen />}
 
-                    {chatMessages.map((msg) => (
+                    {chatMessages.map((msg, msgIdx) => (
                         <div
                             key={msg.id}
                             className={cn(
                                 'flex flex-col gap-1 w-full animate-slide-up',
                                 msg.role === 'user' ? 'items-end' : 'items-start'
                             )}
+                            style={{ animationDelay: `${Math.min(msgIdx * 30, 150)}ms` }}
                         >
                             {msg.role === 'user' ? (
-                                <div className="max-w-[80%] px-4 py-2.5 bg-fill rounded-2xl text-sm leading-relaxed">
+                                <div className="max-w-[80%] px-5 py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
+                                     style={{ boxShadow: 'var(--shadow-soft)' }}>
                                     {msg.content}
                                 </div>
                             ) : (
                                 <div className="w-full px-1 py-1 text-sm leading-relaxed">
                                     {msg.thinking && (
                                         <details className="mb-3 group">
-                                            <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5">
-                                                <span className="transition-transform group-open:rotate-90">▶</span>
+                                            <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5 py-1">
+                                                <ChevronRight size={12} className="transition-transform duration-200 group-open:rotate-90" />
                                                 💭 Thinking
                                             </summary>
-                                            <div className="mt-2 pl-4 border-l-2 border-border text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">
+                                            <div className="mt-2 pl-4 border-l-2 border-border/60 text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">
                                                 {msg.thinking}
                                             </div>
                                         </details>
@@ -394,12 +462,7 @@ export const ChatArea: React.FC = () => {
                                         />
                                     )}
                                     {!msg.content && isGenerating && (!msg.activityLog || msg.activityLog.length === 0) && (
-                                        <div className="mb-3 rounded-xl border border-border bg-fill-secondary/50 p-3">
-                                            <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
-                                                <Loader2 size={11} className="animate-spin text-primary-mint" />
-                                                <span>Thinking…</span>
-                                            </div>
-                                        </div>
+                                        <TypingIndicator />
                                     )}
                                     {msg.todos && msg.todos.length > 0 && (
                                         <TodoPanel todos={msg.todos} />
@@ -407,18 +470,17 @@ export const ChatArea: React.FC = () => {
                                     {msg.content ? (
                                         <MD content={msg.content} />
                                     ) : isGenerating ? null : (
-                                        <span className="text-text-tertiary italic text-xs">
-                                            ● ● ●
-                                        </span>
+                                        <MessageSkeleton />
                                     )}
                                     {msg.images && msg.images.length > 0 && (
-                                        <div className="mt-2 flex flex-wrap gap-2">
+                                        <div className="mt-3 flex flex-wrap gap-3">
                                             {msg.images.map((src, i) => (
                                                 <img
                                                     key={i}
                                                     src={src}
                                                     alt="Generated image"
-                                                    className="max-w-sm rounded-xl border border-border"
+                                                    className="max-w-sm rounded-2xl border border-border"
+                                                    style={{ boxShadow: 'var(--shadow-soft)' }}
                                                 />
                                             ))}
                                         </div>
@@ -430,6 +492,7 @@ export const ChatArea: React.FC = () => {
                 </div>
             </div>
 
+            <ScrollToBottom onClick={scrollToBottom} visible={showScrollBtn} />
             <ChatInput />
         </div>
     )
