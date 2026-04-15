@@ -667,7 +667,7 @@ const ChatInput: React.FC = () => {
                             >
                                 <Paperclip size={16} />
                             </button>
-                            {(['flash', 'pro'] as const).map((m) => (
+                            {(['flash', 'pro', 'deepseek'] as const).map((m) => (
                                 <button
                                     key={m}
                                     onClick={() => setSelectedModel(m)}
@@ -678,7 +678,7 @@ const ChatInput: React.FC = () => {
                                             : 'text-text-quaternary hover:text-text-tertiary hover:bg-fill'
                                     )}
                                 >
-                                    {m === 'flash' ? '⚡ Flash' : '✨ Pro'}
+                                    {m === 'flash' ? '⚡ Flash' : m === 'pro' ? '✨ Pro' : '🐋 DeepSeek'}
                                 </button>
                             ))}
                         </div>

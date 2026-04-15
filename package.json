@@ -9,6 +9,8 @@
         "clean": "rm -rf dist",
         "dev:bot": "tsc && node --enable-source-maps dist/main.js",
         "start:bot": "node dist/main.js",
+        "deploy": "npm run build && npm run web:build && pm2 start ecosystem.config.cjs",
+        "deploy:restart": "npm run build && npm run web:build && pm2 restart inkClaw-bot",
         "pm2:start": "npm run build && pm2 start ecosystem.config.cjs",
         "pm2:stop": "pm2 stop all",
         "pm2:restart": "pm2 restart all",
@@ -29,6 +31,7 @@
     "license": "MIT",
     "dependencies": {
         "@ai-sdk/google": "^3.0.62",
+        "@ai-sdk/openai": "^3.0.53",
         "@google/genai": "^1.50.1",
         "@koa/bodyparser": "^6.1.0",
         "@koa/router": "^15.4.0",

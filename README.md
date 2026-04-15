@@ -114,19 +114,76 @@ npm run web:dev
 
 前端默认运行在 `http://localhost:5173`，后端默认运行在 `http://localhost:3000`。
 
-### 生产部署
+### 生产部署（Mac Mini / 长期运行）
+
+生产环境只需运行一个进程。Koa 后端在同一端口（默认 3000）同时提供 API 和前端静态文件（`web/dist/`），无需额外的静态服务器。
+
+#### 首次部署
 
 ```bash
-# 构建 TypeScript + 前端
-npm run build
-npm run web:build
+# 1. 安装全局工具（如果还没有）
+npm install -g pm2
 
-# 使用 PM2 启动
-npm run pm2:start
+# 2. 安装依赖
+npm install
+npm run web:install
 
-# 查看状态 / 日志
-npm run pm2:status
-npm run pm2:logs
+# 3. 一键构建并启动
+npm run deploy
+# 等价于: tsc + npm run web:build + pm2 start ecosystem.config.cjs
+
+# 4. 设置开机自启
+pm2 startup       # 按提示执行输出的 sudo 命令
+pm2 save          # 保存当前进程列表
+```
+
+#### 后续更新
+
+```bash
+git pull
+npm run deploy:restart
+# 等价于: tsc + npm run web:build + pm2 restart inkClaw-bot
+```
+
+#### 常用运维命令
+
+```bash
+npm run pm2:status   # 查看进程状态
+npm run pm2:logs     # 实时日志（Ctrl+C 退出）
+npm run pm2:restart  # 重启所有进程
+npm run pm2:stop     # 停止所有进程
+```
+
+#### 域名 + HTTPS（可选，推荐 Caddy）
+
+```bash
+brew install caddy
+```
+
+`/etc/caddy/Caddyfile`：
+
+```
+neo.moshuia.com {
+    reverse_proxy localhost:3000
+}
+```
+
+```bash
+brew services start caddy
+# Caddy 会自动申请并续期 Let's Encrypt 证书
+```
+
+#### 架构示意
+
+```
+[浏览器 / Telegram]
+        │
+  neo.moshuia.com
+        │  (Caddy HTTPS 反代，可选)
+        ▼
+  Koa Server :3000  ← PM2 守护
+  ├── /api/*        → 路由处理（AI 对话 / Notebook / 文件上传…）
+  └── /*            → web/dist/ 静态文件
 ```
 
 ---
@@ -138,11 +195,12 @@ npm run pm2:logs
 | 路由文件 | 路径前缀 | 说明 |
 |----------|----------|------|
 | `routes/chat.ts` | `/api/chat` | SSE 流式对话 |
+| `routes/upload.ts` | `/api/upload` | 文件上传（PDF / Word / Excel / 图片等） |
 | `routes/notebook.ts` | `/api/notebook` | 知识条目 CRUD |
 | `routes/session.ts` | `/api/session` | 会话管理 |
 | `routes/user.ts` | `/api/auth` | 登录/用户信息 |
 | `routes/me.ts` | `/api/me` | 个人资料 |
-| `routes/assets.ts` | `/api/assets` | 会话生成的静态资源 |
+| `routes/assets.ts` | `/api/assets` | 会话生成的静态资源（图片、视频） |
 
 ---
 

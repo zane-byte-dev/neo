@@ -10,8 +10,9 @@ import { join } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { streamText, generateText, stepCountIs, type LanguageModel, type ModelMessage } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createOpenAI } from '@ai-sdk/openai';
 import { setupLogger } from '../utils/logger.js';
-import { GEMINI_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
+import { GEMINI_API_KEY, DEEPSEEK_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
 import type {
     StreamCallback,
@@ -50,8 +51,20 @@ export function resolveModel(alias: string): string {
     return MODEL_ALIASES[alias] ?? alias;
 }
 
+/** Check if a model ID belongs to the DeepSeek provider. */
+function isDeepSeekModel(modelId: string): boolean {
+    return modelId.startsWith('deepseek');
+}
+
 /** Create an AI SDK LanguageModel for a given model id. */
 function createModel(modelId: string): LanguageModel {
+    if (isDeepSeekModel(modelId)) {
+        const deepseek = createOpenAI({
+            apiKey: DEEPSEEK_API_KEY,
+            baseURL: 'https://api.deepseek.com',
+        });
+        return deepseek(modelId);
+    }
     const google = createGoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
     return google(modelId);
 }
@@ -128,12 +141,14 @@ export class LLMClient {
     private modelId = '';
 
     constructor() {
-        if (!GEMINI_API_KEY) {
-            console.log('[AgentRuntime] ❌ Disabled: GEMINI_API_KEY not set');
+        if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY) {
+            console.log('[AgentRuntime] ❌ Disabled: No API key set (GEMINI_API_KEY or DEEPSEEK_API_KEY)');
             return;
         }
 
-        this.modelId = resolveModel(GEMINI_MODEL_ENV ?? 'flash');
+        // Default to deepseek-chat if only DeepSeek key is available
+        const defaultModel = GEMINI_API_KEY ? 'flash' : 'deepseek';
+        this.modelId = resolveModel(GEMINI_MODEL_ENV ?? defaultModel);
         this.enabled = true;
         console.log(`[AgentRuntime] ✅ Initialized (AI SDK). Model: ${this.modelId}`);
     }
@@ -250,6 +265,7 @@ export class LLMClient {
                         break;
                     case 'error':
                         console.error('[AgentRuntime] Stream error:', part.error);
+                        onChunk({ type: 'text', text: `\n\n🔥 Stream error: ${part.error instanceof Error ? part.error.message : String(part.error)}` });
                         break;
                 }
             }
@@ -257,8 +273,8 @@ export class LLMClient {
             return fullText || null;
         } catch (err: unknown) {
             if (err instanceof Error && err.name === 'AbortError') throw err;
-            const msg = err instanceof Error ? err.message : String(err);
-            return `🔥 Agent error: ${msg}`;
+            console.error('[AgentRuntime] LLM call error:', err);
+            throw err;
         }
     }
 

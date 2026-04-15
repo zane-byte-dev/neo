@@ -30,10 +30,13 @@ export const GEMINI_API_TIMEOUT_MS = 90_000;
 /** Read-file content cap to prevent context flooding (chars) */
 export const READ_FILE_CHAR_LIMIT = 50_000;
 
-/** Gemini model short-name aliases → real API IDs */
+/** Model short-name aliases → real API IDs */
 export const MODEL_ALIASES: Record<string, string> = {
     flash: 'gemini-3-flash-preview',
     pro:   'gemini-3-pro-preview',
+    deepseek: 'deepseek-chat',
+    'deepseek-chat': 'deepseek-chat',
+    'deepseek-reasoner': 'deepseek-reasoner',
 };
 
 // ── File system ──────────────────────────────────────────────────────────────
@@ -57,6 +60,7 @@ export const DANGEROUS_PATTERNS = [
 // ── Gemini / AI ───────────────────────────────────────────────────────────────
 
 export const GEMINI_API_KEY   = process.env.GEMINI_API_KEY ?? '';
+export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY ?? '';
 /** Raw GEMINI_MODEL env value; consumers apply their own default/alias. */
 export const GEMINI_MODEL_ENV: string | undefined = process.env.GEMINI_MODEL;
 export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
