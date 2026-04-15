@@ -63,7 +63,7 @@ function createModel(modelId: string): LanguageModel {
             apiKey: DEEPSEEK_API_KEY,
             baseURL: 'https://api.deepseek.com',
         });
-        return deepseek(modelId);
+        return deepseek.chat(modelId);
     }
     const google = createGoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
     return google(modelId);
