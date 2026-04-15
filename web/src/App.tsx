@@ -21,13 +21,13 @@ const ResizeHandle: React.FC = () => (
 // ── Top nav bar shared by all pages ───────────────────────────────────────
 
 const TopNav: React.FC = () => (
-    <div className="h-12 border-b border-border bg-bg-container/80 backdrop-blur-xl flex items-center px-5 gap-1.5 shrink-0"
+    <div className="h-11 md:h-12 border-b border-border bg-bg-container/80 backdrop-blur-xl flex items-center px-3 md:px-5 gap-1.5 shrink-0"
          style={{ boxShadow: 'var(--shadow-soft)' }}>
-        <div className="flex items-center gap-1.5 mr-4">
+        <div className="flex items-center gap-1.5 mr-2 md:mr-4">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-mint to-emerald-600 flex items-center justify-center">
                 <span className="text-white text-[10px] font-bold leading-none">N</span>
             </div>
-            <span className="text-sm font-bold tracking-tight text-text">Neo</span>
+            <span className="text-sm font-bold tracking-tight text-text hidden sm:inline">Neo</span>
         </div>
         {([
             { to: '/chat',     icon: <MessageSquare size={14} />, label: 'Chat' },
@@ -37,13 +37,13 @@ const TopNav: React.FC = () => (
                 key={to}
                 to={to}
                 className={({ isActive }) => cn(
-                    'flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
+                    'flex items-center gap-1.5 px-3 md:px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
                     isActive
                         ? 'bg-primary-mint/12 text-text shadow-sm'
                         : 'text-text-secondary hover:bg-fill hover:text-text'
                 )}
             >
-                {icon}{label}
+                {icon}<span className="hidden sm:inline">{label}</span>
             </NavLink>
         ))}
     </div>

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, Download } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -7,8 +7,26 @@ import { streamChat, fetchMessages } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import type { ActivityItem, AgentTodoItem } from '../types'
+import type { ActivityItem, AgentTodoItem, Message } from '../types'
 import { CodeBlock, InlineCode } from './CodeBlock'
+
+// ── Export chat as Markdown ───────────────────────────────────────────────────
+
+function exportChatAsMarkdown(title: string, messages: Message[]) {
+    const lines = [`# ${title}\n`]
+    for (const msg of messages) {
+        const role = msg.role === 'user' ? '**You**' : '**Neo**'
+        lines.push(`### ${role}\n`)
+        if (msg.content) lines.push(msg.content + '\n')
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, '_').slice(0, 50)}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+}
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
@@ -458,22 +476,31 @@ export const ChatArea: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-bg-container overflow-hidden relative">
             {/* Header */}
-            <div className="h-14 border-b border-border flex items-center px-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+            <div className="h-14 border-b border-border flex items-center px-6 pl-14 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
-                <span className="text-sm font-semibold truncate text-text tracking-tight">
+                <span className="text-sm font-semibold truncate text-text tracking-tight flex-1">
                     {activeChat?.title ?? 'Welcome'}
                 </span>
                 {isGenerating && thinkingStatus && (
-                    <span className="ml-3 text-xs text-text-tertiary flex items-center gap-1.5">
+                    <span className="ml-3 text-xs text-text-tertiary flex items-center gap-1.5 shrink-0">
                         <Loader2 size={11} className="animate-spin text-primary-mint" />
-                        {thinkingStatus}
+                        <span className="hidden sm:inline">{thinkingStatus}</span>
                     </span>
+                )}
+                {activeChat && chatMessages.length > 0 && !isGenerating && (
+                    <button
+                        onClick={() => exportChatAsMarkdown(activeChat.title, chatMessages)}
+                        className="ml-2 p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors shrink-0"
+                        title="Export as Markdown"
+                    >
+                        <Download size={14} />
+                    </button>
                 )}
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-4 py-8">
-                <div className="max-w-3xl mx-auto space-y-7">
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-3 sm:px-4 py-6 sm:py-8">
+                <div className="max-w-3xl mx-auto space-y-5 sm:space-y-7">
                     {chatMessages.length === 0 && <WelcomeScreen />}
 
                     {chatMessages.map((msg, msgIdx) => (
@@ -486,7 +513,7 @@ export const ChatArea: React.FC = () => {
                             style={{ animationDelay: `${Math.min(msgIdx * 30, 150)}ms` }}
                         >
                             {msg.role === 'user' ? (
-                                <div className="max-w-[80%] px-5 py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
+                                <div className="max-w-[90%] sm:max-w-[80%] px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
                                      style={{ boxShadow: 'var(--shadow-soft)' }}>
                                     {msg.content}
                                 </div>
