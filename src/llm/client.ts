@@ -12,8 +12,7 @@ import { streamText, generateText, stepCountIs, type LanguageModel, type ModelMe
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { setupLogger } from '../utils/logger.js';
 import { GEMINI_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
-import { loadOpenClawSkills, formatSkillsPrompt } from '../skills/openclaw-skills.js';
-import { buildAiTools, buildAiToolSubset } from './ai-tools.js';
+import { buildAiTools } from './ai-tools.js';
 import type {
     StreamCallback,
     Tool,
@@ -118,18 +117,6 @@ export async function buildTenantSystemInstruction(workDir: string): Promise<str
             parts.push(`[用户档案]\n${userMd.trim()}`);
         }
     } catch { /* USER.md not found — skip */ }
-
-    const workspaceSkills = await loadOpenClawSkills(join(configDir, 'skills'));
-    if (workspaceSkills.length > 0) {
-        parts.push(formatSkillsPrompt(workspaceSkills));
-        console.log(`[AgentRuntime] 🧩 Workspace skills: ${workspaceSkills.length} — ${workspaceSkills.map(s => s.name).join(', ')}`);
-    }
-
-    const globalSkills = await loadOpenClawSkills();
-    if (globalSkills.length > 0) {
-        parts.push(formatSkillsPrompt(globalSkills));
-        console.log(`[AgentRuntime] 🧩 OpenClaw skills: ${globalSkills.length} — ${globalSkills.map(s => s.name).join(', ')}`);
-    }
 
     return parts.join('\n\n---\n\n');
 }
