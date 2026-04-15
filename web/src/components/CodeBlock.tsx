@@ -7,6 +7,7 @@ interface CodeBlockProps {
     children: string
 }
 
+/** Threshold for collapsing long code blocks — keeps initial view compact while allowing expansion */
 const MAX_LINES_COLLAPSED = 30
 
 export const CodeBlock: React.FC<CodeBlockProps> = ({ language, children }) => {

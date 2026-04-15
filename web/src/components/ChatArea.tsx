@@ -12,6 +12,8 @@ import { CodeBlock, InlineCode } from './CodeBlock'
 
 // ── Export chat as Markdown ───────────────────────────────────────────────────
 
+const MAX_EXPORT_FILENAME_LENGTH = 50
+
 function exportChatAsMarkdown(title: string, messages: Message[]) {
     const lines = [`# ${title}\n`]
     for (const msg of messages) {
@@ -23,7 +25,7 @@ function exportChatAsMarkdown(title: string, messages: Message[]) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, '_').slice(0, 50)}.md`
+    a.download = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, '_').slice(0, MAX_EXPORT_FILENAME_LENGTH)}.md`
     a.click()
     URL.revokeObjectURL(url)
 }
