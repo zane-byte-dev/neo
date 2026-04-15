@@ -1,5 +1,5 @@
 import React from 'react'
-import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut } from 'lucide-react'
+import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
@@ -17,6 +17,8 @@ export const Sidebar: React.FC = () => {
     const [menuOpen, setMenuOpen] = React.useState(false)
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
     const [me, setMe] = React.useState<MeInfo | null>(null)
+    const [searchQuery, setSearchQuery] = React.useState('')
+    const searchRef = React.useRef<HTMLInputElement>(null)
 
     React.useEffect(() => {
         fetchMe().then(setMe).catch(() => {})
@@ -65,7 +67,7 @@ export const Sidebar: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-bg-container border-r border-border w-full overflow-hidden select-none">
             {/* Header */}
-            <div className="px-3 pt-4 pb-3">
+            <div className="px-3 pt-4 pb-3 space-y-2">
                 <button
                     onClick={createChat}
                     className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-b from-fill-secondary to-fill border border-border rounded-xl text-text transition-all duration-200 text-sm font-medium hover:border-primary-mint/30 hover:scale-[1.01] active:scale-[0.99]"
@@ -74,52 +76,90 @@ export const Sidebar: React.FC = () => {
                     <Plus size={15} strokeWidth={2.5} />
                     <span>New Chat</span>
                 </button>
+
+                {/* Search box */}
+                <div className="relative">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-quaternary" />
+                    <input
+                        ref={searchRef}
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search chats…"
+                        className="w-full bg-fill-secondary/80 border border-border rounded-lg pl-8 pr-8 py-2 text-xs placeholder:text-text-quaternary focus:outline-none focus:ring-1 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => { setSearchQuery(''); searchRef.current?.focus() }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-fill transition-colors"
+                        >
+                            <X size={12} className="text-text-tertiary" />
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Chat list */}
             <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-1 space-y-0.5">
-                {chats.map((chat) => (
-                    <div
-                        key={chat.id}
-                        onClick={() => selectChat(chat.id)}
-                        onContextMenu={(e) => handleChatRightClick(e, chat.id)}
-                        className={cn(
-                            'group relative flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 text-sm',
-                            activeChatId === chat.id
-                                ? 'bg-primary-mint/10 text-text font-medium border border-primary-mint/15'
-                                : 'text-text-secondary hover:bg-fill-secondary border border-transparent'
-                        )}
-                    >
-                        {chat.isPinned && <Pin size={11} className="shrink-0 text-primary-mint" fill="currentColor" />}
-                        <span className="flex-1 truncate">{chat.title}</span>
-                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity duration-150">
-                            <button
-                                onClick={(e) => { e.stopPropagation(); handlePin(chat.id) }}
-                                className="p-1 hover:bg-fill rounded-md transition-colors"
-                            >
-                                <Pin size={12} fill={chat.isPinned ? 'currentColor' : 'none'} />
-                            </button>
-                            <button
-                                onClick={(e) => { e.stopPropagation(); setContextMenu({ id: chat.id, x: e.clientX, y: e.clientY }) }}
-                                className="p-1 hover:bg-fill rounded-md transition-colors"
-                            >
-                                <MoreHorizontal size={12} />
-                            </button>
-                        </div>
-                    </div>
-                ))}
+                {(() => {
+                    const q = searchQuery.toLowerCase().trim()
+                    const filtered = q
+                        ? chats.filter((c) => c.title.toLowerCase().includes(q))
+                        : chats
 
-                {chats.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <div className="w-10 h-10 rounded-xl bg-fill flex items-center justify-center mb-3">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-quaternary">
-                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
+                    if (filtered.length === 0 && q) {
+                        return (
+                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                                <p className="text-xs text-text-quaternary">No matching chats</p>
+                            </div>
+                        )
+                    }
+
+                    if (filtered.length === 0) {
+                        return (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <div className="w-10 h-10 rounded-xl bg-fill flex items-center justify-center mb-3">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-quaternary">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                                    </svg>
+                                </div>
+                                <p className="text-xs text-text-quaternary">No chats yet</p>
+                                <p className="text-[11px] text-text-quaternary mt-0.5">Start a new conversation</p>
+                            </div>
+                        )
+                    }
+
+                    return filtered.map((chat) => (
+                        <div
+                            key={chat.id}
+                            onClick={() => selectChat(chat.id)}
+                            onContextMenu={(e) => handleChatRightClick(e, chat.id)}
+                            className={cn(
+                                'group relative flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 text-sm',
+                                activeChatId === chat.id
+                                    ? 'bg-primary-mint/10 text-text font-medium border border-primary-mint/15'
+                                    : 'text-text-secondary hover:bg-fill-secondary border border-transparent'
+                            )}
+                        >
+                            {chat.isPinned && <Pin size={11} className="shrink-0 text-primary-mint" fill="currentColor" />}
+                            <span className="flex-1 truncate">{chat.title}</span>
+                            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity duration-150">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); handlePin(chat.id) }}
+                                    className="p-1 hover:bg-fill rounded-md transition-colors"
+                                >
+                                    <Pin size={12} fill={chat.isPinned ? 'currentColor' : 'none'} />
+                                </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setContextMenu({ id: chat.id, x: e.clientX, y: e.clientY }) }}
+                                    className="p-1 hover:bg-fill rounded-md transition-colors"
+                                >
+                                    <MoreHorizontal size={12} />
+                                </button>
+                            </div>
                         </div>
-                        <p className="text-xs text-text-quaternary">No chats yet</p>
-                        <p className="text-[11px] text-text-quaternary mt-0.5">Start a new conversation</p>
-                    </div>
-                )}
+                    ))
+                })()}
             </div>
 
             {/* Footer */}

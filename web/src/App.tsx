@@ -1,7 +1,7 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { MessageSquare, BookOpen } from 'lucide-react'
+import { MessageSquare, BookOpen, Menu, X } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NotebookPanel } from './components/NotebookPanel'
@@ -53,7 +53,8 @@ const TopNav: React.FC = () => (
 
 const ChatPage: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams()
-    const { activeChatId, selectOrCreateChat } = useAppStore()
+    const { activeChatId, selectOrCreateChat, createChat } = useAppStore()
+    const [sidebarOpen, setSidebarOpen] = React.useState(false)
 
     // On mount: if ?sessionId is in the URL, activate that chat
     React.useEffect(() => {
@@ -73,9 +74,62 @@ const ChatPage: React.FC = () => {
         }
     }, [activeChatId, setSearchParams])
 
+    // Close mobile sidebar when a chat is selected
+    React.useEffect(() => {
+        setSidebarOpen(false)
+    }, [activeChatId])
+
+    // Global keyboard shortcuts
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const isMod = e.metaKey || e.ctrlKey
+
+            // Cmd/Ctrl+N: New chat
+            if (isMod && e.key === 'n') {
+                e.preventDefault()
+                createChat()
+            }
+
+            // Cmd/Ctrl+B: Toggle sidebar (mobile)
+            if (isMod && e.key === 'b') {
+                e.preventDefault()
+                setSidebarOpen((prev) => !prev)
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [createChat])
+
     return (
-        <div className="flex-1 overflow-hidden flex">
-            <PanelGroup direction="horizontal" className="w-full">
+        <div className="flex-1 overflow-hidden flex relative">
+            {/* Mobile sidebar overlay */}
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/40 z-40 md:hidden animate-fade-in"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
+            {/* Mobile sidebar toggle */}
+            <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="absolute top-3 left-3 z-50 md:hidden p-2 rounded-xl bg-bg-container border border-border hover:bg-fill transition-colors"
+                style={{ boxShadow: 'var(--shadow-soft)' }}
+            >
+                {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
+
+            {/* Mobile sidebar drawer */}
+            <div className={cn(
+                'fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-out md:hidden',
+                sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            )}>
+                <Sidebar />
+            </div>
+
+            {/* Desktop layout with resizable panels */}
+            <PanelGroup direction="horizontal" className="w-full hidden md:flex">
                 <Panel defaultSize={24} minSize={16} maxSize={38}>
                     <Sidebar />
                 </Panel>
@@ -84,6 +138,11 @@ const ChatPage: React.FC = () => {
                     <ChatArea />
                 </Panel>
             </PanelGroup>
+
+            {/* Mobile layout (no panels) */}
+            <div className="flex-1 md:hidden">
+                <ChatArea />
+            </div>
         </div>
     )
 }

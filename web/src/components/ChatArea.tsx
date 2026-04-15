@@ -6,13 +6,39 @@ import { WelcomeScreen } from './WelcomeScreen'
 import { streamChat, fetchMessages } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeHighlight from 'rehype-highlight'
 import type { ActivityItem, AgentTodoItem } from '../types'
+import { CodeBlock, InlineCode } from './CodeBlock'
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
+const markdownComponents: import('react-markdown').Components = {
+    pre({ children }) {
+        return <>{children}</>
+    },
+    code({ className, children, ...rest }) {
+        const match = /language-(\w+)/.exec(className || '')
+        const text = String(children).replace(/\n$/, '')
+
+        // Block code (inside pre) — detect by the presence of language class or multiline content
+        if (match || text.includes('\n')) {
+            return <CodeBlock language={match?.[1]}>{text}</CodeBlock>
+        }
+
+        // Inline code
+        return <InlineCode {...rest}>{children}</InlineCode>
+    },
+}
+
 const MD: React.FC<{ content: string }> = ({ content }) => (
     <div className="markdown-content max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={markdownComponents}
+        >
+            {content}
+        </ReactMarkdown>
     </div>
 )
 
@@ -290,6 +316,11 @@ const ChatInput: React.FC = () => {
             e.preventDefault()
             handleSend()
         }
+        // Escape stops generation
+        if (e.key === 'Escape' && isGenerating) {
+            e.preventDefault()
+            handleStop()
+        }
     }
 
     // Auto-resize textarea
@@ -300,63 +331,80 @@ const ChatInput: React.FC = () => {
         }
     }, [inputValue])
 
+    // Auto-focus when active chat changes
+    React.useEffect(() => {
+        if (activeChatId && textareaRef.current) {
+            textareaRef.current.focus()
+        }
+    }, [activeChatId])
+
     return (
         <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border">
             <div className="max-w-3xl mx-auto">
-                {/* Model selector */}
-                <div className="flex items-center gap-1.5 mb-2.5">
-                    {(['flash', 'pro'] as const).map((m) => (
-                        <button
-                            key={m}
-                            onClick={() => setSelectedModel(m)}
-                            className={cn(
-                                'px-3 py-1 rounded-full text-xs font-medium transition-all duration-200',
-                                selectedModel === m
-                                    ? 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm'
-                                    : 'bg-fill text-text-tertiary hover:text-text-secondary hover:bg-fill-secondary'
-                            )}
-                        >
-                            {m === 'flash' ? '⚡ Flash' : '✨ Pro'}
-                        </button>
-                    ))}
-                </div>
-                <div className="relative">
+                <div className="relative bg-fill-secondary/80 border border-border rounded-2xl focus-within:ring-2 focus-within:ring-primary-mint/30 focus-within:border-primary-mint/40 transition-all duration-200"
+                     style={{ boxShadow: 'var(--shadow-soft)' }}>
                     <textarea
                         ref={textareaRef}
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder="Ask anything… (Shift+Enter for newline)"
-                        className="w-full bg-fill-secondary/80 border border-border rounded-2xl px-5 py-3.5 pr-14 focus:outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all duration-200 resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
-                        style={{ boxShadow: 'var(--shadow-soft)' }}
+                        className="w-full bg-transparent px-5 pt-3.5 pb-2 pr-14 focus:outline-none resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
                         rows={1}
                     />
-                    <div className="absolute bottom-3 right-3">
-                        {isGenerating ? (
-                            <button
-                                onClick={handleStop}
-                                className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95"
-                                title="Stop"
-                            >
-                                <Square size={14} fill="currentColor" />
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleSend}
-                                disabled={!inputValue.trim()}
-                                className={cn(
-                                    'p-2 rounded-xl transition-all duration-200',
-                                    !inputValue.trim()
-                                        ? 'bg-fill text-text-quaternary cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
-                                )}
-                                title="Send"
-                            >
-                                <Send size={14} />
-                            </button>
-                        )}
+                    {/* Bottom bar: model selector + send */}
+                    <div className="flex items-center justify-between px-3 pb-2.5">
+                        <div className="flex items-center gap-1">
+                            {(['flash', 'pro'] as const).map((m) => (
+                                <button
+                                    key={m}
+                                    onClick={() => setSelectedModel(m)}
+                                    className={cn(
+                                        'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200',
+                                        selectedModel === m
+                                            ? 'bg-primary-mint/15 text-primary-mint'
+                                            : 'text-text-quaternary hover:text-text-tertiary hover:bg-fill'
+                                    )}
+                                >
+                                    {m === 'flash' ? '⚡ Flash' : '✨ Pro'}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {isGenerating && (
+                                <span className="text-[11px] text-text-tertiary hidden sm:inline">
+                                    Press Esc to stop
+                                </span>
+                            )}
+                            {isGenerating ? (
+                                <button
+                                    onClick={handleStop}
+                                    className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95"
+                                    title="Stop (Esc)"
+                                >
+                                    <Square size={14} fill="currentColor" />
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleSend}
+                                    disabled={!inputValue.trim()}
+                                    className={cn(
+                                        'p-2 rounded-xl transition-all duration-200',
+                                        !inputValue.trim()
+                                            ? 'bg-fill text-text-quaternary cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
+                                    )}
+                                    title="Send (Enter)"
+                                >
+                                    <Send size={14} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
+                <p className="text-[10px] text-text-quaternary text-center mt-2 hidden sm:block">
+                    <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Enter</kbd> to send · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Shift+Enter</kbd> newline · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+N</kbd> new chat
+                </p>
             </div>
         </div>
     )
