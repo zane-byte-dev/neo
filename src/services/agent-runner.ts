@@ -28,6 +28,8 @@ export interface AgentRunOptions {
     message: string;
     /** Override the default model (alias or full id) */
     model?: string;
+    /** Base64 data-URL images attached by the user */
+    images?: string[];
     /** Abort signal — caller can cancel mid-stream */
     signal?: AbortSignal;
     /** Called for every chunk from the LLM stream */
@@ -43,7 +45,7 @@ export interface AgentRunOptions {
  * Throws on unrecoverable error (AbortError is re-thrown as-is).
  */
 export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
-    const { userId, sessionId, message, model, signal, onChunk, onImage, onTodo } = opts;
+    const { userId, sessionId, message, model, images, signal, onChunk, onImage, onTodo } = opts;
 
     const t0 = Date.now();
     log.info(MODULE, 'Turn start', { userId, sessionId, model, messageLen: message.length, preview: message.slice(0, 100) });
@@ -85,6 +87,7 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
             },
             signal,
             model,
+            images,
         );
     } catch (err: unknown) {
         const elapsed = Date.now() - t0;

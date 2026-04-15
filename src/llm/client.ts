@@ -8,7 +8,7 @@
 
 import { join } from 'node:path';
 import { promises as fs } from 'node:fs';
-import { streamText, generateText, stepCountIs, type LanguageModel } from 'ai';
+import { streamText, generateText, stepCountIs, type LanguageModel, type ModelMessage } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { setupLogger } from '../utils/logger.js';
 import { GEMINI_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
@@ -181,6 +181,7 @@ export class LLMClient {
         onChunk: StreamCallback,
         signal?: AbortSignal,
         modelOverride?: string,
+        images?: string[],
     ): Promise<string | null> {
         if (!this.enabled) {
             console.warn(`[AgentRuntime] Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
@@ -193,11 +194,11 @@ export class LLMClient {
         const model = createModel(effectiveModel);
         const tools = buildAiTools(toolRegistry, workDir, context);
 
-        // Build AI SDK messages array when structured history is available
-        const useMessages = Array.isArray(conversationHistory) && conversationHistory.length > 0;
+        // Build AI SDK messages array when structured history is available or images are attached
+        const useMessages = (Array.isArray(conversationHistory) && conversationHistory.length > 0) || (images?.length ?? 0) > 0;
 
         let prompt: string | undefined;
-        const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+        const messages: ModelMessage[] = [];
 
         if (useMessages) {
             // Use structured messages — build prompt without embedded history
@@ -208,7 +209,18 @@ export class LLMClient {
                     content: msg.content,
                 });
             }
-            messages.push({ role: 'user', content: runtimePrompt });
+            // Build multimodal content when images are attached
+            if (images?.length) {
+                const parts: Array<{ type: 'text'; text: string } | { type: 'image'; image: URL }> = [
+                    { type: 'text', text: runtimePrompt },
+                ];
+                for (const dataUrl of images) {
+                    parts.push({ type: 'image', image: new URL(dataUrl) });
+                }
+                messages.push({ role: 'user', content: parts });
+            } else {
+                messages.push({ role: 'user', content: runtimePrompt });
+            }
         } else {
             // Fallback: embed history as a string in the prompt
             const historyStr = typeof conversationHistory === 'string' ? conversationHistory : '';

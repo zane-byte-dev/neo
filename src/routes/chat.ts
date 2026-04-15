@@ -12,9 +12,10 @@ export function chatRoute(router: Router): void {
         const message = typeof body.message === 'string' ? body.message.trim() : '';
         const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
         const sessionId = typeof body.sessionId === 'string' && body.sessionId.trim() ? body.sessionId.trim() : undefined;
-        if (!message) {
+        const images = Array.isArray(body.images) ? (body.images as unknown[]).filter((v): v is string => typeof v === 'string' && v.startsWith('data:image/')) : undefined;
+        if (!message && (!images || images.length === 0)) {
             ctx.status = 400;
-            ctx.body = { error: 'message is required' };
+            ctx.body = { error: 'message or images required' };
             return;
         }
         if (message.length > MAX_INPUT_LENGTH) {
@@ -54,6 +55,7 @@ export function chatRoute(router: Router): void {
                 sessionId,
                 message,
                 model,
+                images: images?.length ? images : undefined,
                 signal: abortController.signal,
                 onChunk: (chunk) => write(chunk as Record<string, unknown>),
                 onTodo: (todos) => write({ type: 'todo_update', todos }),

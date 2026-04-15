@@ -31,7 +31,7 @@ export class CoreServer {
 
         app.use(_optionalBasicAuthMiddleware());
         app.use(_authMiddleware());
-        app.use(bodyParser());
+        app.use(bodyParser({ jsonLimit: '20mb' }));
 
         await setupRoutes(router);
 

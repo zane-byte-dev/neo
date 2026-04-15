@@ -1,2 +1,4 @@
 {"id":1,"session_id":"tg-8094416266","user_id":"8094416266","role":"user","content":"你还在吗","user_name":null,"timestamp":"2026-04-14T16:40:33.605Z"}
 {"id":2,"session_id":"tg-8094416266","user_id":"8094416266","role":"assistant","content":"在。有什么任务？","user_name":null,"timestamp":"2026-04-14T16:40:36.577Z"}
+{"id":3,"session_id":"tg-8094416266","user_id":"8094416266","role":"user","content":"这是什么？","user_name":null,"timestamp":"2026-04-15T06:53:27.037Z"}
+{"id":4,"session_id":"tg-8094416266","user_id":"8094416266","role":"assistant","content":"这是一张由 **豆包AI** 生成的二次元风格插画。\n\n图中是一个黑发、浓眉、戴着黑框眼镜的男孩（眼镜左侧似乎有科技感发光元件），正在用勺子挖着吃一块西瓜。右下角带有明显的“豆包AI生成”水印。","user_name":null,"timestamp":"2026-04-15T06:54:23.093Z"}

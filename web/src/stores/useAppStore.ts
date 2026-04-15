@@ -70,7 +70,7 @@ export const useAppStore = create<AppState>()(
                 // Auto-title from first user message
                 chats: state.chats.map((c) =>
                     c.id === sessionId && c.title === 'New Chat' && message.role === 'user'
-                        ? { ...c, title: message.content.slice(0, 40) }
+                        ? { ...c, title: (message.content || (message.images?.length ? '📷 Image' : '')).slice(0, 40) }
                         : c
                 ),
             })),

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, Download } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download} from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -253,18 +253,44 @@ const ChatInput: React.FC = () => {
         selectedModel, setSelectedModel,
     } = useAppStore()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+    const fileInputRef = React.useRef<HTMLInputElement>(null)
+    const [pendingImages, setPendingImages] = React.useState<string[]>([])
+
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files
+        if (!files) return
+        for (const file of Array.from(files)) {
+            if (!file.type.startsWith('image/')) continue
+            if (file.size > 10 * 1024 * 1024) continue // 10MB limit per image
+            const reader = new FileReader()
+            reader.onload = () => {
+                if (typeof reader.result === 'string') {
+                    setPendingImages((prev) => [...prev, reader.result as string])
+                }
+            }
+            reader.readAsDataURL(file)
+        }
+        e.target.value = '' // reset so same file can be re-selected
+    }
+
+    const removeImage = (idx: number) => {
+        setPendingImages((prev) => prev.filter((_, i) => i !== idx))
+    }
 
     const handleSend = async () => {
-        if (!inputValue.trim() || !activeChatId || isGenerating) return
+        if ((!inputValue.trim() && !pendingImages.length) || !activeChatId || isGenerating) return
         const text = inputValue.trim()
+        const images = pendingImages.length ? [...pendingImages] : undefined
 
         addMessage(activeChatId, {
             id: Math.random().toString(36).substring(7),
             role: 'user',
             content: text,
+            images,
             timestamp: Date.now(),
         })
         setInputValue('')
+        setPendingImages([])
         setIsGenerating(true)
         setThinkingStatus('Thinking…')
 
@@ -282,7 +308,7 @@ const ChatInput: React.FC = () => {
         let thinkingAccum = ''
 
         try {
-            for await (const chunk of streamChat(text, activeChatId, controller.signal, selectedModel)) {
+            for await (const chunk of streamChat(text, activeChatId, controller.signal, selectedModel, images)) {
                 if (chunk.type === 'done') break
                 if (chunk.type === 'error') throw new Error(chunk.text ?? 'Unknown error')
                 if (chunk.type === 'thought') {
@@ -343,6 +369,23 @@ const ChatInput: React.FC = () => {
         }
     }
 
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData.items
+        for (const item of Array.from(items)) {
+            if (!item.type.startsWith('image/')) continue
+            e.preventDefault()
+            const file = item.getAsFile()
+            if (!file) continue
+            const reader = new FileReader()
+            reader.onload = () => {
+                if (typeof reader.result === 'string') {
+                    setPendingImages((prev) => [...prev, reader.result as string])
+                }
+            }
+            reader.readAsDataURL(file)
+        }
+    }
+
     // Auto-resize textarea
     React.useEffect(() => {
         if (textareaRef.current) {
@@ -361,6 +404,30 @@ const ChatInput: React.FC = () => {
     return (
         <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border">
             <div className="max-w-3xl mx-auto">
+                {/* Image preview */}
+                {pendingImages.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                        {pendingImages.map((src, i) => (
+                            <div key={i} className="relative group">
+                                <img src={src} alt="" className="h-16 w-16 object-cover rounded-xl border border-border" />
+                                <button
+                                    onClick={() => removeImage(i)}
+                                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-text text-bg-container flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <X size={10} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleImageSelect}
+                />
                 <div className="relative bg-fill-secondary/80 border border-border rounded-2xl focus-within:ring-2 focus-within:ring-primary-mint/30 focus-within:border-primary-mint/40 transition-all duration-200"
                      style={{ boxShadow: 'var(--shadow-soft)' }}>
                     <textarea
@@ -368,13 +435,22 @@ const ChatInput: React.FC = () => {
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
                         placeholder="Ask anything… (Shift+Enter for newline)"
                         className="w-full bg-transparent px-5 pt-3.5 pb-2 pr-14 focus:outline-none resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
                         rows={1}
                     />
-                    {/* Bottom bar: model selector + send */}
+                    {/* Bottom bar: image upload + model selector + send */}
                     <div className="flex items-center justify-between px-3 pb-2.5">
                         <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200"
+                                title="Upload image"
+                                type="button"
+                            >
+                                <ImagePlus size={16} />
+                            </button>
                             {(['flash', 'pro'] as const).map((m) => (
                                 <button
                                     key={m}
@@ -407,10 +483,10 @@ const ChatInput: React.FC = () => {
                             ) : (
                                 <button
                                     onClick={handleSend}
-                                    disabled={!inputValue.trim()}
+                                    disabled={!inputValue.trim() && !pendingImages.length}
                                     className={cn(
                                         'p-2 rounded-xl transition-all duration-200',
-                                        !inputValue.trim()
+                                        !inputValue.trim() && !pendingImages.length
                                             ? 'bg-fill text-text-quaternary cursor-not-allowed'
                                             : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
                                     )}
@@ -515,9 +591,20 @@ export const ChatArea: React.FC = () => {
                             style={{ animationDelay: `${Math.min(msgIdx * 30, 150)}ms` }}
                         >
                             {msg.role === 'user' ? (
-                                <div className="max-w-[90%] sm:max-w-[80%] px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
-                                     style={{ boxShadow: 'var(--shadow-soft)' }}>
-                                    {msg.content}
+                                <div className="max-w-[90%] sm:max-w-[80%]">
+                                    {msg.images && msg.images.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                                            {msg.images.map((src, i) => (
+                                                <img key={i} src={src} alt="" className="max-h-40 rounded-xl border border-border" style={{ boxShadow: 'var(--shadow-soft)' }} />
+                                            ))}
+                                        </div>
+                                    )}
+                                    {msg.content && (
+                                        <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
+                                             style={{ boxShadow: 'var(--shadow-soft)' }}>
+                                            {msg.content}
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="w-full px-1 py-1 text-sm leading-relaxed">
