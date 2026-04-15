@@ -1,0 +1,22 @@
+{
+  "sessions": {
+    "psz7wj": {
+      "id": "psz7wj",
+      "user_id": "8094416266",
+      "title": "tst",
+      "start_time": "2026-04-14T12:00:13.398Z",
+      "end_time": "2026-04-14T12:00:46.289Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "tg-8094416266": {
+      "id": "tg-8094416266",
+      "user_id": "8094416266",
+      "title": "你还在吗",
+      "start_time": "2026-04-14T16:40:33.603Z",
+      "end_time": "2026-04-14T16:40:36.577Z",
+      "is_current": 1,
+      "is_pinned": 0
+    }
+  }
+}

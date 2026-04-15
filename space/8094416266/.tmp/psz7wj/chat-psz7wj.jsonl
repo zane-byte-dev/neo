@@ -1,0 +1,4 @@
+{"id":1,"session_id":"psz7wj","user_id":"8094416266","role":"user","content":"tst","user_name":null,"timestamp":"2026-04-14T12:00:13.399Z"}
+{"id":2,"session_id":"psz7wj","user_id":"8094416266","role":"assistant","content":"在。请讲。","user_name":null,"timestamp":"2026-04-14T12:00:17.883Z"}
+{"id":3,"session_id":"psz7wj","user_id":"8094416266","role":"user","content":"生成一张猫猫图","user_name":null,"timestamp":"2026-04-14T12:00:31.712Z"}
+{"id":4,"session_id":"psz7wj","user_id":"8094416266","role":"assistant","content":"已为你生成一张温暖阳光下的橘猫图。","user_name":null,"timestamp":"2026-04-14T12:00:46.289Z"}
