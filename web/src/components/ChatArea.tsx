@@ -1,18 +1,64 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, Download } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
 import { streamChat, fetchMessages } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { ActivityItem, AgentTodoItem } from '../types'
+import rehypeHighlight from 'rehype-highlight'
+import type { ActivityItem, AgentTodoItem, Message } from '../types'
+import { CodeBlock, InlineCode } from './CodeBlock'
+
+// ── Export chat as Markdown ───────────────────────────────────────────────────
+
+const MAX_EXPORT_FILENAME_LENGTH = 50
+
+function exportChatAsMarkdown(title: string, messages: Message[]) {
+    const lines = [`# ${title}\n`]
+    for (const msg of messages) {
+        const role = msg.role === 'user' ? '**You**' : '**Neo**'
+        lines.push(`### ${role}\n`)
+        if (msg.content) lines.push(msg.content + '\n')
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, '_').slice(0, MAX_EXPORT_FILENAME_LENGTH)}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+}
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
+const markdownComponents: import('react-markdown').Components = {
+    pre({ children }) {
+        return <>{children}</>
+    },
+    code({ className, children, ...rest }) {
+        const match = /language-(\w+)/.exec(className || '')
+        const text = String(children).replace(/\n$/, '')
+
+        // Block code (inside pre) — detect by the presence of language class or multiline content
+        if (match || text.includes('\n')) {
+            return <CodeBlock language={match?.[1]}>{text}</CodeBlock>
+        }
+
+        // Inline code
+        return <InlineCode {...rest}>{children}</InlineCode>
+    },
+}
+
 const MD: React.FC<{ content: string }> = ({ content }) => (
     <div className="markdown-content max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+        <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeHighlight]}
+            components={markdownComponents}
+        >
+            {content}
+        </ReactMarkdown>
     </div>
 )
 
@@ -290,6 +336,11 @@ const ChatInput: React.FC = () => {
             e.preventDefault()
             handleSend()
         }
+        // Escape stops generation
+        if (e.key === 'Escape' && isGenerating) {
+            e.preventDefault()
+            handleStop()
+        }
     }
 
     // Auto-resize textarea
@@ -300,63 +351,80 @@ const ChatInput: React.FC = () => {
         }
     }, [inputValue])
 
+    // Auto-focus when active chat changes
+    React.useEffect(() => {
+        if (activeChatId && textareaRef.current) {
+            textareaRef.current.focus()
+        }
+    }, [activeChatId])
+
     return (
         <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border">
             <div className="max-w-3xl mx-auto">
-                {/* Model selector */}
-                <div className="flex items-center gap-1.5 mb-2.5">
-                    {(['flash', 'pro'] as const).map((m) => (
-                        <button
-                            key={m}
-                            onClick={() => setSelectedModel(m)}
-                            className={cn(
-                                'px-3 py-1 rounded-full text-xs font-medium transition-all duration-200',
-                                selectedModel === m
-                                    ? 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm'
-                                    : 'bg-fill text-text-tertiary hover:text-text-secondary hover:bg-fill-secondary'
-                            )}
-                        >
-                            {m === 'flash' ? '⚡ Flash' : '✨ Pro'}
-                        </button>
-                    ))}
-                </div>
-                <div className="relative">
+                <div className="relative bg-fill-secondary/80 border border-border rounded-2xl focus-within:ring-2 focus-within:ring-primary-mint/30 focus-within:border-primary-mint/40 transition-all duration-200"
+                     style={{ boxShadow: 'var(--shadow-soft)' }}>
                     <textarea
                         ref={textareaRef}
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder="Ask anything… (Shift+Enter for newline)"
-                        className="w-full bg-fill-secondary/80 border border-border rounded-2xl px-5 py-3.5 pr-14 focus:outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all duration-200 resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
-                        style={{ boxShadow: 'var(--shadow-soft)' }}
+                        className="w-full bg-transparent px-5 pt-3.5 pb-2 pr-14 focus:outline-none resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
                         rows={1}
                     />
-                    <div className="absolute bottom-3 right-3">
-                        {isGenerating ? (
-                            <button
-                                onClick={handleStop}
-                                className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95"
-                                title="Stop"
-                            >
-                                <Square size={14} fill="currentColor" />
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleSend}
-                                disabled={!inputValue.trim()}
-                                className={cn(
-                                    'p-2 rounded-xl transition-all duration-200',
-                                    !inputValue.trim()
-                                        ? 'bg-fill text-text-quaternary cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
-                                )}
-                                title="Send"
-                            >
-                                <Send size={14} />
-                            </button>
-                        )}
+                    {/* Bottom bar: model selector + send */}
+                    <div className="flex items-center justify-between px-3 pb-2.5">
+                        <div className="flex items-center gap-1">
+                            {(['flash', 'pro'] as const).map((m) => (
+                                <button
+                                    key={m}
+                                    onClick={() => setSelectedModel(m)}
+                                    className={cn(
+                                        'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200',
+                                        selectedModel === m
+                                            ? 'bg-primary-mint/15 text-primary-mint'
+                                            : 'text-text-quaternary hover:text-text-tertiary hover:bg-fill'
+                                    )}
+                                >
+                                    {m === 'flash' ? '⚡ Flash' : '✨ Pro'}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {isGenerating && (
+                                <span className="text-[11px] text-text-tertiary hidden sm:inline">
+                                    Press Esc to stop
+                                </span>
+                            )}
+                            {isGenerating ? (
+                                <button
+                                    onClick={handleStop}
+                                    className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95"
+                                    title="Stop (Esc)"
+                                >
+                                    <Square size={14} fill="currentColor" />
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleSend}
+                                    disabled={!inputValue.trim()}
+                                    className={cn(
+                                        'p-2 rounded-xl transition-all duration-200',
+                                        !inputValue.trim()
+                                            ? 'bg-fill text-text-quaternary cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
+                                    )}
+                                    title="Send (Enter)"
+                                >
+                                    <Send size={14} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
+                <p className="text-[10px] text-text-quaternary text-center mt-2 hidden sm:block">
+                    <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Enter</kbd> to send · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Shift+Enter</kbd> newline · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+N</kbd> new chat
+                </p>
             </div>
         </div>
     )
@@ -410,22 +478,31 @@ export const ChatArea: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-bg-container overflow-hidden relative">
             {/* Header */}
-            <div className="h-14 border-b border-border flex items-center px-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+            <div className="h-14 border-b border-border flex items-center px-6 pl-14 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
-                <span className="text-sm font-semibold truncate text-text tracking-tight">
+                <span className="text-sm font-semibold truncate text-text tracking-tight flex-1">
                     {activeChat?.title ?? 'Welcome'}
                 </span>
                 {isGenerating && thinkingStatus && (
-                    <span className="ml-3 text-xs text-text-tertiary flex items-center gap-1.5">
+                    <span className="ml-3 text-xs text-text-tertiary flex items-center gap-1.5 shrink-0">
                         <Loader2 size={11} className="animate-spin text-primary-mint" />
-                        {thinkingStatus}
+                        <span className="hidden sm:inline">{thinkingStatus}</span>
                     </span>
+                )}
+                {activeChat && chatMessages.length > 0 && !isGenerating && (
+                    <button
+                        onClick={() => exportChatAsMarkdown(activeChat.title, chatMessages)}
+                        className="ml-2 p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors shrink-0"
+                        title="Export as Markdown"
+                    >
+                        <Download size={14} />
+                    </button>
                 )}
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-4 py-8">
-                <div className="max-w-3xl mx-auto space-y-7">
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-3 sm:px-4 py-6 sm:py-8">
+                <div className="max-w-3xl mx-auto space-y-5 sm:space-y-7">
                     {chatMessages.length === 0 && <WelcomeScreen />}
 
                     {chatMessages.map((msg, msgIdx) => (
@@ -438,7 +515,7 @@ export const ChatArea: React.FC = () => {
                             style={{ animationDelay: `${Math.min(msgIdx * 30, 150)}ms` }}
                         >
                             {msg.role === 'user' ? (
-                                <div className="max-w-[80%] px-5 py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
+                                <div className="max-w-[90%] sm:max-w-[80%] px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
                                      style={{ boxShadow: 'var(--shadow-soft)' }}>
                                     {msg.content}
                                 </div>
