@@ -19,6 +19,13 @@ const MIME_MAP: Record<string, string> = {
     gif:  'image/gif',
     mp4:  'video/mp4',
     webm: 'video/webm',
+    pdf:  'application/pdf',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    txt:  'text/plain',
+    md:   'text/markdown',
+    csv:  'text/csv',
+    json: 'application/json',
 };
 
 export function assetsRoute(router: Router): void {

@@ -10,11 +10,11 @@
 
 当前状态：Telegram 端能接收图片/语音/文件，但仅以 URL 形式传给 LLM，未做真正的视觉/音频理解。
 
-- [ ] **图片理解**：将 Telegram / Web 上传的图片以 base64 或 inline_data 传入 Gemini Vision，实现 OCR、图表分析、截图问答
-- [ ] **语音转文字**：接入 Gemini 音频能力或 Whisper，将语音消息转写后再交给 LLM
-- [ ] **PDF / 文档解析**：上传 PDF、Word、Excel 时自动提取文本，作为上下文送入对话
-- [ ] **Web UI 文件上传**：前端支持拖拽/粘贴上传图片和文件，Chat 中直接引用
-- [ ] **图片生成增强**：支持在 Web UI 中渲染生成的图片，支持编辑/变体生成
+- [x] **图片理解**：将 Telegram / Web 上传的图片以 base64 或 inline_data 传入 Gemini Vision，实现 OCR、图表分析、截图问答
+<!-- - [ ] **语音转文字**：接入 Gemini 音频能力或 Whisper，将语音消息转写后再交给 LLM -->
+- [x] **PDF / 文档解析**：上传 PDF、Word、Excel 时自动提取文本，作为上下文送入对话
+- [x] **Web UI 文件上传**：前端支持拖拽/粘贴上传图片和文件，Chat 中直接引用
+- [x] **图片生成增强**：支持在 Web UI 中渲染生成的图片，支持下载/预览
 
 ### 2. 沙箱执行（Sandbox）
 

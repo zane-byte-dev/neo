@@ -37,18 +37,62 @@ export interface StreamChunk {
     todos?: { id: number; title: string; status: string }[]  // todo list snapshot
 }
 
+// ── File upload ───────────────────────────────────────────────────────────────
+
+export interface UploadedImage {
+    type: 'image'
+    dataUrl: string
+    filename: string
+}
+
+export interface UploadedDocument {
+    type: 'document'
+    filename: string
+    text: string
+    pageCount?: number
+    mimeType: string
+}
+
+export type UploadedFile = UploadedImage | UploadedDocument
+
+export async function uploadFiles(files: File[]): Promise<UploadedFile[]> {
+    const formData = new FormData()
+    for (const file of files) {
+        formData.append('files', file, file.name)
+    }
+    const res = await fetch('/api/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+    })
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error((body as Record<string, string>).error ?? `HTTP ${res.status}`)
+    }
+    const data = await res.json() as { files: UploadedFile[] }
+    return data.files
+}
+
 export async function* streamChat(
     message: string,
     sessionId: string,
     signal?: AbortSignal,
     model?: string,
     images?: string[],
+    documents?: { filename: string; text: string }[],
 ): AsyncGenerator<StreamChunk> {
     const res = await fetch('/api/chat', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, sessionId, ...(model ? { model } : {}), ...(images?.length ? { images } : {}) }),
+        body: JSON.stringify({
+            message,
+            sessionId,
+            ...(model ? { model } : {}),
+            ...(images?.length ? { images } : {}),
+            ...(documents?.length ? { documents } : {}),
+        }),
         signal,
     })
 

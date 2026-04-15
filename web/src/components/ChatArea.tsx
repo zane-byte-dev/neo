@@ -1,13 +1,13 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download} from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
-import { streamChat, fetchMessages } from '../api'
+import { streamChat, fetchMessages, uploadFiles } from '../api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import type { ActivityItem, AgentTodoItem, Message } from '../types'
+import type { ActivityItem, AgentTodoItem, FileAttachment, Message } from '../types'
 import { CodeBlock, InlineCode } from './CodeBlock'
 
 // ── Export chat as Markdown ───────────────────────────────────────────────────
@@ -241,7 +241,24 @@ const ScrollToBottom: React.FC<{ onClick: () => void; visible: boolean }> = ({ o
     </button>
 )
 
+// ── File attachment helper ────────────────────────────────────────────────────
+
+const FileAttachmentIcon: React.FC<{ filename: string; className?: string }> = ({ filename, className }) => {
+    const ext = filename.split('.').pop()?.toLowerCase() ?? ''
+    if (ext === 'pdf') return <FileText size={14} className={className ?? 'text-red-400'} />
+    if (ext === 'docx' || ext === 'doc') return <FileText size={14} className={className ?? 'text-blue-400'} />
+    if (ext === 'xlsx' || ext === 'xls') return <FileSpreadsheet size={14} className={className ?? 'text-green-400'} />
+    return <FileIcon size={14} className={className ?? 'text-text-tertiary'} />
+}
+
 // ── Chat input ────────────────────────────────────────────────────────────────
+
+interface PendingDocument {
+    filename: string
+    text: string
+    pageCount?: number
+    mimeType?: string
+}
 
 const ChatInput: React.FC = () => {
     const {
@@ -255,7 +272,10 @@ const ChatInput: React.FC = () => {
     } = useAppStore()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)
+    const docInputRef = React.useRef<HTMLInputElement>(null)
     const [pendingImages, setPendingImages] = React.useState<string[]>([])
+    const [pendingDocs, setPendingDocs] = React.useState<PendingDocument[]>([])
+    const [isUploading, setIsUploading] = React.useState(false)
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files
@@ -274,24 +294,71 @@ const ChatInput: React.FC = () => {
         e.target.value = '' // reset so same file can be re-selected
     }
 
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const fileList = e.target.files
+        if (!fileList) return
+        const files = Array.from(fileList).filter(f => f.size <= 20 * 1024 * 1024)
+        if (files.length === 0) return
+
+        setIsUploading(true)
+        try {
+            const results = await uploadFiles(files)
+            for (const r of results) {
+                if (r.type === 'image') {
+                    setPendingImages((prev) => [...prev, r.dataUrl])
+                } else if (r.type === 'document') {
+                    setPendingDocs((prev) => [...prev, {
+                        filename: r.filename,
+                        text: r.text,
+                        pageCount: r.pageCount,
+                        mimeType: r.mimeType,
+                    }])
+                }
+            }
+        } catch (err) {
+            console.error('File upload failed:', err)
+        } finally {
+            setIsUploading(false)
+            e.target.value = ''
+        }
+    }
+
     const removeImage = (idx: number) => {
         setPendingImages((prev) => prev.filter((_, i) => i !== idx))
     }
 
+    const removeDoc = (idx: number) => {
+        setPendingDocs((prev) => prev.filter((_, i) => i !== idx))
+    }
+
     const handleSend = async () => {
-        if ((!inputValue.trim() && !pendingImages.length) || !activeChatId || isGenerating) return
+        if ((!inputValue.trim() && !pendingImages.length && !pendingDocs.length) || !activeChatId || isGenerating) return
         const text = inputValue.trim()
         const images = pendingImages.length ? [...pendingImages] : undefined
+        const documents = pendingDocs.length ? [...pendingDocs] : undefined
+
+        // Build file attachments for the message record
+        const fileAttachments: FileAttachment[] = [
+            ...(documents?.map(d => ({
+                filename: d.filename,
+                type: 'document' as const,
+                preview: d.text.slice(0, 200),
+                pageCount: d.pageCount,
+                mimeType: d.mimeType,
+            })) ?? []),
+        ]
 
         addMessage(activeChatId, {
             id: Math.random().toString(36).substring(7),
             role: 'user',
             content: text,
             images,
+            files: fileAttachments.length > 0 ? fileAttachments : undefined,
             timestamp: Date.now(),
         })
         setInputValue('')
         setPendingImages([])
+        setPendingDocs([])
         setIsGenerating(true)
         setThinkingStatus('Thinking…')
 
@@ -309,7 +376,10 @@ const ChatInput: React.FC = () => {
         let thinkingAccum = ''
 
         try {
-            for await (const chunk of streamChat(text, activeChatId, controller.signal, selectedModel, images)) {
+            for await (const chunk of streamChat(
+                text, activeChatId, controller.signal, selectedModel, images,
+                documents?.map(d => ({ filename: d.filename, text: d.text })),
+            )) {
                 if (chunk.type === 'done') break
                 if (chunk.type === 'error') throw new Error(chunk.text ?? 'Unknown error')
                 if (chunk.type === 'thought') {
@@ -373,13 +443,27 @@ const ChatInput: React.FC = () => {
         }
     }
 
-    const handlePaste = (e: React.ClipboardEvent) => {
+    const handlePaste = async (e: React.ClipboardEvent) => {
         const items = e.clipboardData.items
+        const imageFiles: File[] = []
+        const docFiles: File[] = []
+
         for (const item of Array.from(items)) {
-            if (!item.type.startsWith('image/')) continue
-            e.preventDefault()
-            const file = item.getAsFile()
-            if (!file) continue
+            if (item.type.startsWith('image/')) {
+                e.preventDefault()
+                const file = item.getAsFile()
+                if (file) imageFiles.push(file)
+            } else if (item.kind === 'file') {
+                const file = item.getAsFile()
+                if (file && !file.type.startsWith('image/')) {
+                    e.preventDefault()
+                    docFiles.push(file)
+                }
+            }
+        }
+
+        // Handle images inline (as before)
+        for (const file of imageFiles) {
             const reader = new FileReader()
             reader.onload = () => {
                 if (typeof reader.result === 'string') {
@@ -387,6 +471,90 @@ const ChatInput: React.FC = () => {
                 }
             }
             reader.readAsDataURL(file)
+        }
+
+        // Handle document files via upload
+        if (docFiles.length > 0) {
+            setIsUploading(true)
+            try {
+                const results = await uploadFiles(docFiles)
+                for (const r of results) {
+                    if (r.type === 'image') {
+                        setPendingImages((prev) => [...prev, r.dataUrl])
+                    } else if (r.type === 'document') {
+                        setPendingDocs((prev) => [...prev, {
+                            filename: r.filename,
+                            text: r.text,
+                            pageCount: r.pageCount,
+                            mimeType: r.mimeType,
+                        }])
+                    }
+                }
+            } catch (err) {
+                console.error('Paste file upload failed:', err)
+            } finally {
+                setIsUploading(false)
+            }
+        }
+    }
+
+    // Drag-and-drop handler
+    const [isDragOver, setIsDragOver] = React.useState(false)
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragOver(true)
+    }
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragOver(false)
+    }
+
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragOver(false)
+
+        const files = Array.from(e.dataTransfer.files)
+        if (files.length === 0) return
+
+        const imageFiles = files.filter(f => f.type.startsWith('image/'))
+        const docFiles = files.filter(f => !f.type.startsWith('image/'))
+
+        // Handle images inline
+        for (const file of imageFiles) {
+            if (file.size > 10 * 1024 * 1024) continue
+            const reader = new FileReader()
+            reader.onload = () => {
+                if (typeof reader.result === 'string') {
+                    setPendingImages((prev) => [...prev, reader.result as string])
+                }
+            }
+            reader.readAsDataURL(file)
+        }
+
+        // Handle documents via upload
+        if (docFiles.length > 0) {
+            setIsUploading(true)
+            try {
+                const results = await uploadFiles(docFiles)
+                for (const r of results) {
+                    if (r.type === 'image') {
+                        setPendingImages((prev) => [...prev, r.dataUrl])
+                    } else if (r.type === 'document') {
+                        setPendingDocs((prev) => [...prev, {
+                            filename: r.filename,
+                            text: r.text,
+                            pageCount: r.pageCount,
+                            mimeType: r.mimeType,
+                        }])
+                    }
+                }
+            } catch (err) {
+                console.error('Drop file upload failed:', err)
+            } finally {
+                setIsUploading(false)
+            }
         }
     }
 
@@ -408,11 +576,11 @@ const ChatInput: React.FC = () => {
     return (
         <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border">
             <div className="max-w-3xl mx-auto">
-                {/* Image preview */}
-                {pendingImages.length > 0 && (
+                {/* Attachment previews */}
+                {(pendingImages.length > 0 || pendingDocs.length > 0) && (
                     <div className="flex flex-wrap gap-2 mb-2">
                         {pendingImages.map((src, i) => (
-                            <div key={i} className="relative group">
+                            <div key={`img-${i}`} className="relative group">
                                 <img src={src} alt="" className="h-16 w-16 object-cover rounded-xl border border-border" />
                                 <button
                                     onClick={() => removeImage(i)}
@@ -422,6 +590,25 @@ const ChatInput: React.FC = () => {
                                 </button>
                             </div>
                         ))}
+                        {pendingDocs.map((doc, i) => (
+                            <div key={`doc-${i}`} className="relative group flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-fill-secondary/60 text-xs">
+                                <FileAttachmentIcon filename={doc.filename} />
+                                <span className="text-text-secondary max-w-[120px] truncate">{doc.filename}</span>
+                                {doc.pageCount && <span className="text-text-quaternary">({doc.pageCount}p)</span>}
+                                <button
+                                    onClick={() => removeDoc(i)}
+                                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-text text-bg-container flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <X size={10} />
+                                </button>
+                            </div>
+                        ))}
+                        {isUploading && (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-fill-secondary/60 text-xs text-text-tertiary">
+                                <Loader2 size={14} className="animate-spin" />
+                                <span>Uploading…</span>
+                            </div>
+                        )}
                     </div>
                 )}
                 <input
@@ -432,8 +619,24 @@ const ChatInput: React.FC = () => {
                     className="hidden"
                     onChange={handleImageSelect}
                 />
-                <div className="relative bg-fill-secondary/80 border border-border rounded-2xl focus-within:ring-2 focus-within:ring-primary-mint/30 focus-within:border-primary-mint/40 transition-all duration-200"
-                     style={{ boxShadow: 'var(--shadow-soft)' }}>
+                <input
+                    ref={docInputRef}
+                    type="file"
+                    accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.json,.csv,.xml,.yaml,.yml,.log,.html,.htm,.js,.ts,.py,.sh,.css,.sql"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileSelect}
+                />
+                <div
+                     className={cn(
+                         "relative bg-fill-secondary/80 border rounded-2xl focus-within:ring-2 focus-within:ring-primary-mint/30 focus-within:border-primary-mint/40 transition-all duration-200",
+                         isDragOver ? 'border-primary-mint border-dashed bg-primary-mint/5' : 'border-border'
+                     )}
+                     style={{ boxShadow: 'var(--shadow-soft)' }}
+                     onDragOver={handleDragOver}
+                     onDragLeave={handleDragLeave}
+                     onDrop={handleDrop}
+                >
                     <textarea
                         ref={textareaRef}
                         value={inputValue}
@@ -454,6 +657,15 @@ const ChatInput: React.FC = () => {
                                 type="button"
                             >
                                 <ImagePlus size={16} />
+                            </button>
+                            <button
+                                onClick={() => docInputRef.current?.click()}
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200"
+                                title="Attach file (PDF, Word, Excel…)"
+                                type="button"
+                                disabled={isUploading}
+                            >
+                                <Paperclip size={16} />
                             </button>
                             {(['flash', 'pro'] as const).map((m) => (
                                 <button
@@ -487,10 +699,10 @@ const ChatInput: React.FC = () => {
                             ) : (
                                 <button
                                     onClick={handleSend}
-                                    disabled={!inputValue.trim() && !pendingImages.length}
+                                    disabled={!inputValue.trim() && !pendingImages.length && !pendingDocs.length}
                                     className={cn(
                                         'p-2 rounded-xl transition-all duration-200',
-                                        !inputValue.trim() && !pendingImages.length
+                                        !inputValue.trim() && !pendingImages.length && !pendingDocs.length
                                             ? 'bg-fill text-text-quaternary cursor-not-allowed'
                                             : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
                                     )}
@@ -603,6 +815,17 @@ export const ChatArea: React.FC = () => {
                                             ))}
                                         </div>
                                     )}
+                                    {msg.files && msg.files.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mb-2 justify-end">
+                                            {msg.files.map((f, i) => (
+                                                <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-fill-secondary/60 text-xs">
+                                                    <FileAttachmentIcon filename={f.filename} />
+                                                    <span className="text-text-secondary max-w-[150px] truncate">{f.filename}</span>
+                                                    {f.pageCount && <span className="text-text-quaternary">({f.pageCount}p)</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                     {msg.content && (
                                         <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
                                              style={{ boxShadow: 'var(--shadow-soft)' }}>
@@ -643,13 +866,26 @@ export const ChatArea: React.FC = () => {
                                     {msg.images && msg.images.length > 0 && (
                                         <div className="mt-3 flex flex-wrap gap-3">
                                             {msg.images.map((src, i) => (
-                                                <img
-                                                    key={i}
-                                                    src={src}
-                                                    alt="Generated image"
-                                                    className="max-w-sm rounded-2xl border border-border"
-                                                    style={{ boxShadow: 'var(--shadow-soft)' }}
-                                                />
+                                                <div key={i} className="relative group">
+                                                    <img
+                                                        src={src}
+                                                        alt="Generated image"
+                                                        className="max-w-sm rounded-2xl border border-border cursor-pointer hover:opacity-95 transition-opacity"
+                                                        style={{ boxShadow: 'var(--shadow-soft)' }}
+                                                        onClick={() => window.open(src, '_blank')}
+                                                    />
+                                                    <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <a
+                                                            href={src}
+                                                            download={`neo-image-${Date.now()}-${i}.png`}
+                                                            className="w-8 h-8 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
+                                                            title="Download"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <Download size={14} />
+                                                        </a>
+                                                    </div>
+                                                </div>
                                             ))}
                                         </div>
                                     )}

@@ -14,9 +14,21 @@ export interface Message {
     thinking?: string        // model's internal reasoning (thinking tokens)
     images?: string[]        // data URLs for AI-generated images
     videos?: string[]        // URLs for AI-generated videos
+    files?: FileAttachment[] // attached documents (user uploads)
     todos?: AgentTodoItem[]  // agent task tracker
     activityLog?: ActivityItem[]  // real-time tool call log
     timestamp: number
+}
+
+export interface FileAttachment {
+    filename: string
+    type: 'image' | 'document'
+    /** For documents: extracted text preview (first 200 chars) */
+    preview?: string
+    /** For documents: page/sheet count */
+    pageCount?: number
+    /** MIME type */
+    mimeType?: string
 }
 
 export interface AgentTodoItem {

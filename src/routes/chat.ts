@@ -13,9 +13,14 @@ export function chatRoute(router: Router): void {
         const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
         const sessionId = typeof body.sessionId === 'string' && body.sessionId.trim() ? body.sessionId.trim() : undefined;
         const images = Array.isArray(body.images) ? (body.images as unknown[]).filter((v): v is string => typeof v === 'string' && v.startsWith('data:image/')) : undefined;
-        if (!message && (!images || images.length === 0)) {
+        // Document attachments: array of { filename, text } extracted on the client via /api/upload
+        const documents = Array.isArray(body.documents)
+            ? (body.documents as unknown[]).filter((v): v is { filename: string; text: string } =>
+                typeof v === 'object' && v !== null && typeof (v as Record<string, unknown>).filename === 'string' && typeof (v as Record<string, unknown>).text === 'string')
+            : undefined;
+        if (!message && (!images || images.length === 0) && (!documents || documents.length === 0)) {
             ctx.status = 400;
-            ctx.body = { error: 'message or images required' };
+            ctx.body = { error: 'message, images, or documents required' };
             return;
         }
         if (message.length > MAX_INPUT_LENGTH) {
@@ -67,10 +72,21 @@ export function chatRoute(router: Router): void {
         }, 15_000);
 
         try {
+            // Build message with document context if present
+            let effectiveMessage = message;
+            if (documents?.length) {
+                const docContext = documents.map((d) =>
+                    `[Attached File: ${d.filename}]\n${d.text}`
+                ).join('\n\n---\n\n');
+                effectiveMessage = effectiveMessage
+                    ? `${effectiveMessage}\n\n---\n\n${docContext}`
+                    : docContext;
+            }
+
             await runAgentTurn({
                 userId,
                 sessionId,
-                message,
+                message: effectiveMessage,
                 model,
                 images: images?.length ? images : undefined,
                 signal: abortController.signal,
