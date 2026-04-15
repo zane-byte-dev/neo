@@ -13,6 +13,7 @@ export interface Message {
     content: string
     thinking?: string        // model's internal reasoning (thinking tokens)
     images?: string[]        // data URLs for AI-generated images
+    videos?: string[]        // URLs for AI-generated videos
     todos?: AgentTodoItem[]  // agent task tracker
     activityLog?: ActivityItem[]  // real-time tool call log
     timestamp: number
@@ -129,6 +130,7 @@ export interface AppState {
     setMessages: (sessionId: string, messages: Message[]) => void
     updateLastAssistantMessage: (sessionId: string, content: string) => void
     addImageToLastAssistantMessage: (sessionId: string, dataUrl: string) => void
+    addVideoToLastAssistantMessage: (sessionId: string, url: string) => void
     updateLastAssistantThinking: (sessionId: string, thinking: string) => void
     updateLastAssistantTodos: (sessionId: string, todos: AgentTodoItem[]) => void
     appendToLastAssistantActivity: (sessionId: string, item: ActivityItem) => void

@@ -29,6 +29,7 @@
     "license": "MIT",
     "dependencies": {
         "@ai-sdk/google": "^3.0.62",
+        "@google/genai": "^1.50.1",
         "@koa/bodyparser": "^6.1.0",
         "@koa/router": "^15.4.0",
         "@larksuiteoapi/node-sdk": "^1.7.0",

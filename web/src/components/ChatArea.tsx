@@ -248,6 +248,7 @@ const ChatInput: React.FC = () => {
         inputValue, setInputValue,
         isGenerating, setIsGenerating,
         activeChatId, addMessage, updateLastAssistantMessage, addImageToLastAssistantMessage,
+        addVideoToLastAssistantMessage,
         updateLastAssistantThinking, updateLastAssistantTodos, appendToLastAssistantActivity,
         setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
@@ -334,6 +335,9 @@ const ChatInput: React.FC = () => {
                 } else if (chunk.type === 'image' && chunk.url) {
                     setThinkingStatus('')
                     addImageToLastAssistantMessage(activeChatId, chunk.url)
+                } else if (chunk.type === 'video' && chunk.url) {
+                    setThinkingStatus('')
+                    addVideoToLastAssistantMessage(activeChatId, chunk.url)
                 } else if (chunk.type === 'todo_update' && chunk.todos) {
                     updateLastAssistantTodos(activeChatId, chunk.todos as AgentTodoItem[])
                 }
@@ -644,6 +648,19 @@ export const ChatArea: React.FC = () => {
                                                     src={src}
                                                     alt="Generated image"
                                                     className="max-w-sm rounded-2xl border border-border"
+                                                    style={{ boxShadow: 'var(--shadow-soft)' }}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                    {msg.videos && msg.videos.length > 0 && (
+                                        <div className="mt-3 flex flex-wrap gap-3">
+                                            {msg.videos.map((src, i) => (
+                                                <video
+                                                    key={i}
+                                                    src={src}
+                                                    controls
+                                                    className="max-w-lg rounded-2xl border border-border"
                                                     style={{ boxShadow: 'var(--shadow-soft)' }}
                                                 />
                                             ))}

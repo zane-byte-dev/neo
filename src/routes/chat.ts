@@ -45,9 +45,26 @@ export function chatRoute(router: Router): void {
         });
 
         const abortController = new AbortController();
+
+        // Abort when the client disconnects so long-running tools can stop early.
+        res.on('close', () => abortController.abort());
+
         const write = (obj: Record<string, unknown>) => {
-            if (!res.destroyed) res.write(`data: ${JSON.stringify(obj)}\n\n`);
+            if (res.destroyed || res.writableEnded) return;
+            try {
+                res.write(`data: ${JSON.stringify(obj)}\n\n`);
+            } catch { /* connection already gone */ }
         };
+
+        // SSE keep-alive: send a comment every 15 s to prevent proxies /
+        // browsers from dropping the idle connection during long operations.
+        const heartbeat = setInterval(() => {
+            if (res.destroyed || res.writableEnded) {
+                clearInterval(heartbeat);
+                return;
+            }
+            try { res.write(': heartbeat\n\n'); } catch { clearInterval(heartbeat); }
+        }, 15_000);
 
         try {
             await runAgentTurn({
@@ -68,6 +85,9 @@ export function chatRoute(router: Router): void {
                     const url = `/api/assets/${sessionId}/${filename}`;
                     write({ type: 'image', url, ...(caption ? { caption } : {}) });
                 },
+                onVideo: async (url) => {
+                    write({ type: 'video', url });
+                },
             });
             write({ type: 'done' });
         } catch (err: unknown) {
@@ -75,7 +95,8 @@ export function chatRoute(router: Router): void {
                 write({ type: 'error', text: err instanceof Error ? err.message : String(err) });
             }
         } finally {
-            res.end();
+            clearInterval(heartbeat);
+            if (!res.writableEnded) res.end();
         }
     });
 }

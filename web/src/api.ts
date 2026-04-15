@@ -27,7 +27,7 @@ function _post(path: string, body?: unknown): Promise<Response> {
 // ── Chat SSE stream ───────────────────────────────────────────────────────────
 
 export interface StreamChunk {
-    type: 'text' | 'thought' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'image' | 'todo_update'
+    type: 'text' | 'thought' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'image' | 'video' | 'todo_update'
     text?: string
     toolName?: string
     args?: Record<string, unknown>  // tool call arguments

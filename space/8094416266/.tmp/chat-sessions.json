@@ -15,6 +15,15 @@
       "title": "你还在吗",
       "start_time": "2026-04-14T16:40:33.603Z",
       "end_time": "2026-04-15T07:05:46.529Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "9n92k6": {
+      "id": "9n92k6",
+      "user_id": "8094416266",
+      "title": "我想要生成一个小视频，剧本大致是： 一台macmini",
+      "start_time": "2026-04-15T07:21:58.518Z",
+      "end_time": "2026-04-15T07:28:46.294Z",
       "is_current": 1,
       "is_pinned": 0
     }

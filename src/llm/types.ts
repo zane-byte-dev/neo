@@ -31,7 +31,11 @@ export interface ToolContext {
     sessionId: string;
     workDir: string;
     systemInstruction: string;
+    /** Abort signal — fires when the client disconnects */
+    signal?: AbortSignal;
     imageCallback?: (data: string, mimeType: string, caption?: string) => Promise<void>;
+    /** Callback to push a video URL to the client */
+    videoCallback?: (url: string) => Promise<void>;
     /** Callback to push real-time todo updates to the client */
     todoCallback?: (todos: { id: number; title: string; status: string }[]) => void;
     skillRegistry?: import('../skills/skill-registry.js').SkillRegistry;

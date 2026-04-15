@@ -36,6 +36,8 @@ export interface AgentRunOptions {
     onChunk?: (chunk: StreamChunk) => void;
     /** Called when the LLM produces an image */
     onImage?: (data: string, mimeType: string, caption?: string) => Promise<void>;
+    /** Called when a video is generated */
+    onVideo?: (url: string) => Promise<void>;
     /** Called when the todo list is updated */
     onTodo?: (todos: { id: number; title: string; status: string }[]) => void;
 }
@@ -45,7 +47,7 @@ export interface AgentRunOptions {
  * Throws on unrecoverable error (AbortError is re-thrown as-is).
  */
 export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
-    const { userId, sessionId, message, model, images, signal, onChunk, onImage, onTodo } = opts;
+    const { userId, sessionId, message, model, images, signal, onChunk, onImage, onVideo, onTodo } = opts;
 
     const t0 = Date.now();
     log.info(MODULE, 'Turn start', { userId, sessionId, model, messageLen: message.length, preview: message.slice(0, 100) });
@@ -68,9 +70,11 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
         sessionId,
         workDir: userCtx.workDir,
         systemInstruction: userCtx.systemInstruction,
+        signal,
         skillRegistry: userCtx.skillRegistry,
         userTools: userCtx.userTools,
         imageCallback: onImage,
+        videoCallback: onVideo,
         todoCallback: onTodo,
     };
 

@@ -94,6 +94,16 @@ export const useAppStore = create<AppState>()(
                 }
                 return { messages: { ...state.messages, [sessionId]: msgs } }
             }),
+            addVideoToLastAssistantMessage: (sessionId: string, url: string) => set((state) => {
+                const msgs = [...(state.messages[sessionId] ?? [])]
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    if (msgs[i].role === 'assistant') {
+                        msgs[i] = { ...msgs[i], videos: [...(msgs[i].videos ?? []), url] }
+                        break
+                    }
+                }
+                return { messages: { ...state.messages, [sessionId]: msgs } }
+            }),
             updateLastAssistantThinking: (sessionId: string, thinking: string) => set((state) => {
                 const msgs = [...(state.messages[sessionId] ?? [])]
                 for (let i = msgs.length - 1; i >= 0; i--) {

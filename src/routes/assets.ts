@@ -17,6 +17,8 @@ const MIME_MAP: Record<string, string> = {
     jpeg: 'image/jpeg',
     webp: 'image/webp',
     gif:  'image/gif',
+    mp4:  'video/mp4',
+    webm: 'video/webm',
 };
 
 export function assetsRoute(router: Router): void {
