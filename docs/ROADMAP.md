@@ -65,7 +65,7 @@
 
 当前状态：React 前端有 Chat 和 Notebook 面板，功能较基础。
 
-- [ ] **Artifact 渲染**：代码块支持语法高亮 + 一键复制；支持 Mermaid 图表、数学公式（KaTeX）渲染
+- [x] **Artifact 渲染**：代码块支持语法高亮 + 一键复制；支持 Mermaid 图表、数学公式（KaTeX）渲染
 - [ ] **思维过程展示**：展示 AI 的思考过程（thinking/reasoning chunks）和工具调用过程，可折叠
 - [ ] **会话管理增强**：会话搜索、批量删除、导出为 Markdown/JSON
 - [ ] **移动端适配**：响应式布局，适配手机和平板
