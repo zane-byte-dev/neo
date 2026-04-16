@@ -51,7 +51,7 @@ export const researchTool: Tool = {
 
     async handler(args, workDir, ctx) {
         const topic = String(args.topic ?? '').trim();
-        if (!topic) return '[research] Missing required parameter: topic';
+        if (!topic) return '[research] 缺少必填参数: topic（调研主题）';
 
         const depth = String(args.depth ?? 'quick').trim().toLowerCase();
         const language = String(args.language ?? '中文').trim();
