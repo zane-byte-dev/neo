@@ -29,6 +29,8 @@
     "exclude": [
         "node_modules",
         "dist",
-        "python-legacy"
+        "python-legacy",
+        "src/**/__tests__",
+        "src/**/*.test.ts"
     ]
 }
