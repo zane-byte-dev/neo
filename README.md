@@ -216,6 +216,7 @@ brew services start caddy
 | `grep` | 正则搜索文件内容 |
 | `fetch_url` | 抓取网页内容 |
 | `search_web` | 网络搜索 |
+| `research` | 深度网络调研（自动搜索+阅读+综合报告） |
 | `get_datetime` | 获取当前日期时间 |
 | `get_weather` | 查询天气 |
 | `save_memory` | 保存长期记忆 |
