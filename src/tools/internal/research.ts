@@ -80,9 +80,9 @@ export const researchTool: Tool = {
     },
 };
 
-// ── Prompt builders ───────────────────────────────────────────────────────────
+// ── Prompt builders (exported for testing) ────────────────────────────────────
 
-function buildResearchSystemPrompt(language: string, isDeep: boolean): string {
+export function buildResearchSystemPrompt(language: string, isDeep: boolean): string {
     const depthInstructions = isDeep
         ? `你需要进行深入调研：
 - 进行多轮搜索，从不同角度和关键词搜索（至少 3-4 次搜索）
@@ -140,7 +140,7 @@ ${depthInstructions}
 - 如果信息不足或矛盾，明确指出`;
 }
 
-function buildResearchPrompt(topic: string, language: string, isDeep: boolean): string {
+export function buildResearchPrompt(topic: string, language: string, isDeep: boolean): string {
     const depthLabel = isDeep ? '深入' : '快速';
     return `请对以下主题进行${depthLabel}调研，并用${language}生成研究报告：
 
