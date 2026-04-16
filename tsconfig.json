@@ -30,6 +30,7 @@
         "node_modules",
         "dist",
         "python-legacy",
+        "src/**/__tests__",
         "src/**/*.test.ts"
     ]
 }
