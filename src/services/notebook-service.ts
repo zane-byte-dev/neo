@@ -45,7 +45,7 @@ export type NotebookUpdateInput = Partial<NotebookCreateInput>;
 
 // ── Frontmatter helpers ───────────────────────────────────────────────────────
 
-interface FrontmatterMeta {
+export interface FrontmatterMeta {
     title?: string;
     date?: string;
     author?: string;
@@ -54,7 +54,7 @@ interface FrontmatterMeta {
     tags?: string[];
 }
 
-function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string } {
+export function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string } {
     const meta: FrontmatterMeta = {};
     let body = text;
 
@@ -87,7 +87,7 @@ function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string }
     return { meta, body };
 }
 
-function serializeFrontmatter(meta: FrontmatterMeta, body: string): string {
+export function serializeFrontmatter(meta: FrontmatterMeta, body: string): string {
     const lines: string[] = ['---'];
     if (meta.title)   lines.push(`title: ${meta.title}`);
     if (meta.date)    lines.push(`date: ${meta.date}`);
@@ -100,7 +100,7 @@ function serializeFrontmatter(meta: FrontmatterMeta, body: string): string {
     return lines.join('\n');
 }
 
-function titleFromFilename(filename: string): string {
+export function titleFromFilename(filename: string): string {
     return filename
         .replace(/\.md$/, '')
         .replace(/^\d+_/, '')

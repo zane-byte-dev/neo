@@ -15,3 +15,5 @@
 {"id":15,"session_id":"tg-8094416266","user_id":"8094416266","role":"user","content":"这个手的位置跟头对不上啊，不符合吧","user_name":null,"timestamp":"2026-04-15T07:05:20.635Z"}
 {"id":16,"session_id":"tg-8094416266","user_id":"8094416266","role":"assistant","content":"AI 画手确实经常在这个细节上翻车。\n\n为了彻底避开结构错位的问题，我调整了策略：**直接把手移出画面**，让他直接咬着西瓜。这样不仅规避了人体结构的风险，而且作为头像，面部占比更大、视觉更聚焦。\n\n新图片已经发送了，你看看这张的比例和构图作为头像感觉如何？","user_name":null,"timestamp":"2026-04-15T07:05:46.529Z"}
 {"id":17,"session_id":"tg-8094416266","user_id":"8094416266","role":"user","content":"hello","user_name":null,"timestamp":"2026-04-15T09:27:37.811Z"}
+{"id":18,"session_id":"tg-8094416266","user_id":"8094416266","role":"user","content":"hello","user_name":null,"timestamp":"2026-04-17T00:56:06.169Z"}
+{"id":19,"session_id":"tg-8094416266","user_id":"8094416266","role":"assistant","content":"🔥 Stream error: Failed after 3 attempts. Last error: Your project has exceeded its monthly spending cap. Please go to AI Studio at https://ai.studio/spend to manage your project spend cap.","user_name":null,"timestamp":"2026-04-17T00:56:13.505Z"}
