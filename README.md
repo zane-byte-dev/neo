@@ -20,11 +20,11 @@
 
 ## 技术栈
 
-- **运行时**：Node.js ≥ 20 (ESM) + TypeScript
+- **运行时**：Node.js ≥ 18 (ESM) + TypeScript
 - **后端框架**：Koa 3
-- **LLM**：Google Gemini API（AI SDK，流式输出 + 函数调用）
+- **LLM**：Google Gemini API / DeepSeek API / Ollama 本地模型（AI SDK，流式输出 + 函数调用）
 - **Telegram**：Telegraf 4
-- **前端**：React 18 + Vite + Tailwind CSS
+- **前端**：React 19 + Vite + Tailwind CSS 4
 - **进程管理**：PM2
 
 ---
@@ -63,9 +63,9 @@ neo/
 
 ### 前置条件
 
-- Node.js ≥ 20
+- Node.js ≥ 18
 - npm ≥ 10
-- Google Gemini API Key
+- Google Gemini API Key（或 DeepSeek API Key / 本地 Ollama）
 
 ### 安装依赖
 
@@ -82,7 +82,7 @@ npm run web:install
 在项目根目录创建 `.env` 文件：
 
 ```dotenv
-# ── 必填 ──────────────────────────────────────────────────────────
+# ── 必填（至少配置一个 LLM 提供商）────────────────────────────────────
 GEMINI_API_KEY=your_gemini_api_key
 
 # ── Web 服务 ───────────────────────────────────────────────────────
@@ -92,6 +92,19 @@ SESSION_SECRET=change-me-in-production  # 用于签名 Cookie，生产环境务�
 # ── Gemini 模型 ────────────────────────────────────────────────────
 # 可选，支持别名：flash → gemini-3-flash-preview，pro → gemini-3-pro-preview
 # GEMINI_MODEL=flash
+
+# ── Gemini CLI ACP（可选）─────────────────────────────────────────────
+# 通过 Gemini CLI 的 OAuth 配额（Google One AI Premium）使用 Gemini，无需 API Key
+# 需先安装并登录 gemini CLI：https://github.com/google-gemini/gemini-cli
+# GEMINI_CLI_PATH=gemini             # gemini CLI 可执行路径，默认 "gemini"
+
+# ── DeepSeek（可选）───────────────────────────────────────────────────
+# 接入 DeepSeek API，支持 deepseek-chat / deepseek-reasoner 模型
+# DEEPSEEK_API_KEY=your_deepseek_key
+
+# ── Ollama 本地模型（可选）────────────────────────────────────────────
+# 通过本地 Ollama 运行 Gemma 等开源模型，适合隐私敏感场景
+# OLLAMA_BASE_URL=http://localhost:11434/v1   # 默认值
 
 # ── Telegram（可选）──────────────────────────────────────────────────
 # TELEGRAM_BOT_TOKEN=your_bot_token
@@ -201,6 +214,8 @@ brew services start caddy
 | `routes/user.ts` | `/api/auth` | 登录/用户信息 |
 | `routes/me.ts` | `/api/me` | 个人资料 |
 | `routes/assets.ts` | `/api/assets` | 会话生成的静态资源（图片、视频） |
+| `routes/reload.ts` | `/api/reload` | 热重载用户缓存（编辑 AGENTS.md 等后调用） |
+| `routes/webhook.ts` | `/api/webhook/:userId` | 外部系统触发 Agent（需 webhookSecret） |
 
 ---
 
@@ -225,6 +240,8 @@ brew services start caddy
 | `subagent` | 派生子 agent 执行独立子任务 |
 | `ask_user` | 向用户提问确认 |
 | `enter_plan_mode` / `exit_plan_mode` | 计划模式（限制写操作） |
+| `generate_video` | 视频生成（Google Veo 3.1，4-8 秒短视频，需 GEMINI_API_KEY） |
+| `update_user_profile` | 读取/更新用户档案 USER.md（记录长期偏好与背景信息） |
 
 ### 用户工具（`space/<userId>/.tools/`）
 
@@ -236,6 +253,27 @@ brew services start caddy
 | `fetch_ai_news` | 聚合 Reddit/HN AI 新闻 |
 | `notebook` | 文件系统知识库操作 |
 | `update_now` | 更新短期记忆（NOW.md） |
+
+---
+
+## 多模型支持
+
+Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
+
+| 别名 | 实际模型 | 提供商 | 说明 |
+|------|---------|--------|------|
+| `flash` | gemini-3-flash-preview | Google Gemini API | 快速响应，适合日常任务 |
+| `pro` | gemini-3-pro-preview | Google Gemini API | 高质量推理 |
+| `gemini-acp` | Gemini (via CLI) | Gemini CLI OAuth | 使用 Google One AI Premium 配额，无需 API Key |
+| `deepseek` | deepseek-chat | DeepSeek API | 成本低，工具调用可靠 |
+| `deepseek-reasoner` | deepseek-reasoner | DeepSeek API | 深度推理 |
+| `gemma` | ollama/gemma4:e4b | 本地 Ollama | 离线/隐私场景 |
+
+**智能路由（auto 模式）**：当用户选择 `auto` 时，`model-router.ts` 会根据任务特性自动选择最优模型：
+- 需要工具调用 → DeepSeek（工具调用可靠且成本低）
+- 纯对话/分析 → Gemini ACP（质量最高，OAuth 配额）
+- ACP 不可用 → Gemini flash
+- 无云服务 Key → 本地 Gemma
 
 ---
 

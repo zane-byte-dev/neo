@@ -8,13 +8,14 @@
 
 ### 1. 多模态（Multimodal）
 
-当前状态：Telegram 端能接收图片/语音/文件，但仅以 URL 形式传给 LLM，未做真正的视觉/音频理解。
+当前状态：已支持图片理解、文档解析、文件上传，图片/视频生成。
 
 - [x] **图片理解**：将 Telegram / Web 上传的图片以 base64 或 inline_data 传入 Gemini Vision，实现 OCR、图表分析、截图问答
 <!-- - [ ] **语音转文字**：接入 Gemini 音频能力或 Whisper，将语音消息转写后再交给 LLM -->
 - [x] **PDF / 文档解析**：上传 PDF、Word、Excel 时自动提取文本，作为上下文送入对话
 - [x] **Web UI 文件上传**：前端支持拖拽/粘贴上传图片和文件，Chat 中直接引用
 - [x] **图片生成增强**：支持在 Web UI 中渲染生成的图片，支持下载/预览
+- [x] **视频生成**：通过 Google Veo 3.1 生成短视频（4-8 秒含音效），在 Web UI 中直接播放
 
 ### 2. 沙箱执行（Sandbox）
 
@@ -53,26 +54,28 @@
 
 ### 5. 多模型支持
 
-当前状态：仅支持 Google Gemini（通过 AI SDK），硬编码了 flash / pro 两个别名。
+当前状态：已支持 Google Gemini（API Key + CLI OAuth）、DeepSeek、Ollama 本地模型，内置智能路由。
 
-- [ ] **OpenAI / Claude 接入**：通过 AI SDK 的 provider 机制接入 OpenAI GPT、Anthropic Claude 等模型
-- [ ] **本地模型**：支持 Ollama / vLLM 等本地推理引擎，适配隐私敏感场景
-- [ ] **模型路由策略**：根据任务类型自动选择模型（简单问答 → flash，复杂推理 → pro，代码 → codex）
+- [x] **DeepSeek 接入**：通过 AI SDK 接入 DeepSeek API（deepseek-chat / deepseek-reasoner）
+- [x] **本地模型**：支持 Ollama / 本地 Gemma，适配隐私敏感场景
+- [x] **模型路由策略**：根据任务特性自动选择模型（有工具 → DeepSeek，纯对话 → Gemini ACP / flash）
+- [x] **Gemini ACP**：通过 Gemini CLI OAuth 接入，利用 Google One AI Premium 配额
+- [ ] **OpenAI / Claude 接入**：通过 AI SDK 的 provider 机制接入 OpenAI GPT、Anthropic Claude
 - [ ] **模型 fallback**：主模型失败时自动切换到备用模型
 - [ ] **用户可配置**：每个用户可在工作区配置默认模型和可用模型列表
 
 ### 6. Web UI 增强
 
-当前状态：React 前端有 Chat 和 Notebook 面板，功能较基础。
+当前状态：React 前端有 Chat 和 Notebook 面板，功能完善。
 
-- [ ] **Artifact 渲染**：代码块支持语法高亮 + 一键复制；支持 Mermaid 图表、数学公式（KaTeX）渲染
-- [ ] **思维过程展示**：展示 AI 的思考过程（thinking/reasoning chunks）和工具调用过程，可折叠
-- [ ] **会话管理增强**：会话搜索、批量删除、导出为 Markdown/JSON
-- [ ] **移动端适配**：响应式布局，适配手机和平板
-- [ ] **深色/浅色主题**：跟随系统或手动切换
+- [x] **Artifact 渲染**：代码块支持语法高亮 + 一键复制；支持折叠超长代码块
+- [x] **思维过程展示**：展示 AI 的思考过程（thinking/reasoning chunks）和工具调用过程，可折叠
+- [x] **会话管理增强**：会话搜索、批量删除、导出为 Markdown
+- [x] **移动端适配**：响应式布局，适配手机和平板（侧边栏抽屉、安全区域、长按菜单）
+- [x] **深色/浅色主题**：三主题（Light / Dark / Classic Dark）手动切换
+- [x] **键盘快捷键**：Cmd+N 新建会话、Cmd+B 切换侧边栏
 - [ ] **语音输入**：Web 端支持录音并转文字（可复用语音转文字能力）
-- [ ] **键盘快捷键**：Cmd+K 快速命令、Cmd+N 新建会话等
-- [ ] **Markdown 实时预览**：输入区支持 Markdown 预览
+- [ ] **Mermaid / KaTeX 渲染**：消息中的图表和数学公式富文本渲染
 
 ### 7. 工作流与自动化
 

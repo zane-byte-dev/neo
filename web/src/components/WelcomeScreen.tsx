@@ -1,9 +1,11 @@
 import React from 'react'
 import { Sparkles, BookOpen, MessageSquare } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 
 export const WelcomeScreen: React.FC = () => {
     const createChat = useAppStore((s) => s.createChat)
+    const navigate = useNavigate()
     return (
         <div className="h-full flex flex-col items-center justify-center text-center p-6 sm:p-8 animate-fade-in">
             {/* Glow icon */}
@@ -34,9 +36,7 @@ export const WelcomeScreen: React.FC = () => {
                     <span className="text-xs text-text-tertiary mt-1">Start a conversation</span>
                 </button>
                 <button
-                    onClick={() => {
-                        document.dispatchEvent(new CustomEvent('open-notebook'))
-                    }}
+                    onClick={() => navigate('/notebook')}
                     className="group flex flex-col items-start p-4 sm:p-5 bg-bg-container border border-border rounded-2xl hover:border-accent-indigo/40 transition-all duration-200 text-left hover:scale-[1.02] active:scale-[0.98]"
                     style={{ boxShadow: 'var(--shadow-soft)' }}
                 >
