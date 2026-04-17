@@ -73,11 +73,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     return (
         <div className="flex flex-col h-full">
             {/* Toolbar */}
-            <div className="h-14 border-b border-border flex items-center gap-2 px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+            <div className="min-h-[3.5rem] border-b border-border flex items-center gap-2 px-3 md:px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl flex-wrap py-2"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <button
                     onClick={onBack}
-                    className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-text"
+                    className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-text shrink-0"
                 >
                     <ArrowLeft size={16} />
                 </button>
@@ -152,12 +152,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
 
             {/* Meta fields (collapsible) */}
             {showMeta && (
-                <div className="border-b border-border px-5 py-4 grid grid-cols-2 gap-3 shrink-0 bg-fill-secondary/30">
+                <div className="border-b border-border px-4 md:px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0 bg-fill-secondary/30">
                     <MetaField label="作者" value={author} onChange={setAuthor} />
                     <MetaField label="日期" value={date} onChange={setDate} type="date" />
                     <MetaField label="来源" value={source} onChange={setSource} />
                     <MetaField label="标签" value={tags} onChange={setTags} placeholder='JSON 如 ["标签1","标签2"]' />
-                    <div className="col-span-2">
+                    <div className="md:col-span-2">
                         <MetaField label="摘要" value={summary} onChange={setSummary} />
                     </div>
                 </div>

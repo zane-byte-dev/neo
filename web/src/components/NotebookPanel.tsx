@@ -24,7 +24,7 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
 
     return (
         <div className="flex flex-col h-full">
-            <div className="h-14 border-b border-border flex items-center gap-2 px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+            <div className="h-14 border-b border-border flex items-center gap-2 px-3 md:px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <button
                     onClick={onBack}
@@ -42,7 +42,7 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
                 {/* Meta */}
                 <div className="flex flex-wrap gap-3 mb-6 text-xs text-text-tertiary">
                     {note.date && (
@@ -102,10 +102,18 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
     const [inSearch, setInSearch] = React.useState(false)
     const searchTimeoutRef = React.useRef<number | null>(null)
     const [editing, setEditing] = React.useState<NoteEntry | null | 'new'>(null)
+    const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768)
 
     // Load available notebooks once
     React.useEffect(() => {
         notebookListNotebooks().then(setNotebooks).catch(() => {})
+    }, [])
+
+    // Track screen size for responsive layout
+    React.useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768)
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
     }, [])
 
     // Reload entries when selected notebook changes
@@ -179,6 +187,40 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
             )
 
     if (fullPage) {
+        // Mobile: show list or detail, not both
+        if (isMobile) {
+            if (editing !== null) {
+                return <div className="flex flex-col h-full bg-bg-container overflow-hidden">{editorView}</div>
+            }
+            if (selectedNote) {
+                return (
+                    <div className="flex h-full bg-bg-container overflow-hidden">
+                        <NoteDetail note={selectedNote} onBack={() => setSelectedNote(null)} onEdit={() => setEditing(selectedNote)} />
+                    </div>
+                )
+            }
+            return (
+                <div className="flex flex-col h-full bg-bg-container overflow-hidden">
+                    <NotebookList
+                        notebooks={notebooks}
+                        selectedNotebook={selectedNotebook}
+                        onNotebookChange={setSelectedNotebook}
+                        entries={displayList}
+                        loading={loading}
+                        error={error}
+                        inSearch={inSearch}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        totalCount={notebookEntries.length}
+                        onSelect={setSelectedNote}
+                        selectedId={null}
+                        onNew={() => setEditing('new')}
+                    />
+                </div>
+            )
+        }
+
+        // Desktop: side-by-side
         return (
             <div className="flex h-full bg-bg-container overflow-hidden">
                 <div className="w-80 shrink-0 border-r border-border flex flex-col">

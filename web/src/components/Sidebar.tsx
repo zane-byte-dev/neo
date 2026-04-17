@@ -19,6 +19,7 @@ export const Sidebar: React.FC = () => {
     const [me, setMe] = React.useState<MeInfo | null>(null)
     const [searchQuery, setSearchQuery] = React.useState('')
     const searchRef = React.useRef<HTMLInputElement>(null)
+    const longPressTimerRef = React.useRef<number | null>(null)
 
     React.useEffect(() => {
         fetchMe().then(setMe).catch(() => {})
@@ -54,6 +55,30 @@ export const Sidebar: React.FC = () => {
     const handleChatRightClick = (e: React.MouseEvent, id: string) => {
         e.preventDefault()
         setContextMenu({ id, x: e.clientX, y: e.clientY })
+    }
+
+    // Long-press support for mobile context menu
+    const handleTouchStart = (e: React.TouchEvent, id: string) => {
+        const touch = e.touches[0]
+        const x = touch.clientX
+        const y = touch.clientY
+        longPressTimerRef.current = window.setTimeout(() => {
+            setContextMenu({ id, x, y })
+        }, 500)
+    }
+
+    const handleTouchEnd = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current)
+            longPressTimerRef.current = null
+        }
+    }
+
+    const handleTouchMove = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current)
+            longPressTimerRef.current = null
+        }
     }
 
     // Close context menu on click outside
@@ -134,6 +159,9 @@ export const Sidebar: React.FC = () => {
                             key={chat.id}
                             onClick={() => selectChat(chat.id)}
                             onContextMenu={(e) => handleChatRightClick(e, chat.id)}
+                            onTouchStart={(e) => handleTouchStart(e, chat.id)}
+                            onTouchEnd={handleTouchEnd}
+                            onTouchMove={handleTouchMove}
                             className={cn(
                                 'group relative flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 text-sm',
                                 activeChatId === chat.id
@@ -222,11 +250,15 @@ export const Sidebar: React.FC = () => {
                 )}
             </div>
 
-            {/* Right-click context menu */}
+            {/* Right-click / long-press context menu */}
             {contextMenu && (
                 <div
                     className="fixed glass border border-border rounded-xl py-1.5 z-50 min-w-[150px] animate-slide-up"
-                    style={{ top: contextMenu.y, left: contextMenu.x, boxShadow: 'var(--shadow-float)' }}
+                    style={{
+                        top: Math.min(contextMenu.y, window.innerHeight - 120),
+                        left: Math.min(contextMenu.x, window.innerWidth - 170),
+                        boxShadow: 'var(--shadow-float)',
+                    }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <button
