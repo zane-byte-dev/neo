@@ -102,7 +102,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
     const [inSearch, setInSearch] = React.useState(false)
     const searchTimeoutRef = React.useRef<number | null>(null)
     const [editing, setEditing] = React.useState<NoteEntry | null | 'new'>(null)
-    const [isMobile, setIsMobile] = React.useState(window.innerWidth < 768)
+    const [isMobile, setIsMobile] = React.useState(false)
 
     // Load available notebooks once
     React.useEffect(() => {
@@ -112,6 +112,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
     // Track screen size for responsive layout
     React.useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768)
+        handleResize() // set correct value on mount
         window.addEventListener('resize', handleResize)
         return () => window.removeEventListener('resize', handleResize)
     }, [])

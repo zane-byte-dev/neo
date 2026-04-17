@@ -58,10 +58,14 @@ export const Sidebar: React.FC = () => {
     }
 
     // Long-press support for mobile context menu
+    const touchStartPos = React.useRef<{ x: number; y: number } | null>(null)
+    const LONG_PRESS_MOVE_THRESHOLD = 10
+
     const handleTouchStart = (e: React.TouchEvent, id: string) => {
         const touch = e.touches[0]
         const x = touch.clientX
         const y = touch.clientY
+        touchStartPos.current = { x, y }
         longPressTimerRef.current = window.setTimeout(() => {
             setContextMenu({ id, x, y })
         }, 500)
@@ -72,12 +76,18 @@ export const Sidebar: React.FC = () => {
             clearTimeout(longPressTimerRef.current)
             longPressTimerRef.current = null
         }
+        touchStartPos.current = null
     }
 
-    const handleTouchMove = () => {
-        if (longPressTimerRef.current) {
-            clearTimeout(longPressTimerRef.current)
-            longPressTimerRef.current = null
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (longPressTimerRef.current && touchStartPos.current) {
+            const touch = e.touches[0]
+            const dx = Math.abs(touch.clientX - touchStartPos.current.x)
+            const dy = Math.abs(touch.clientY - touchStartPos.current.y)
+            if (dx > LONG_PRESS_MOVE_THRESHOLD || dy > LONG_PRESS_MOVE_THRESHOLD) {
+                clearTimeout(longPressTimerRef.current)
+                longPressTimerRef.current = null
+            }
         }
     }
 
