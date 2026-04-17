@@ -574,7 +574,7 @@ const ChatInput: React.FC = () => {
     }, [activeChatId])
 
     return (
-        <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border">
+        <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border safe-bottom">
             <div className="max-w-3xl mx-auto">
                 {/* Attachment previews */}
                 {(pendingImages.length > 0 || pendingDocs.length > 0) && (
@@ -648,11 +648,11 @@ const ChatInput: React.FC = () => {
                         rows={1}
                     />
                     {/* Bottom bar: image upload + model selector + send */}
-                    <div className="flex items-center justify-between px-3 pb-2.5">
-                        <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-between px-3 pb-2.5 gap-2">
+                        <div className="flex items-center gap-1 min-w-0 mobile-scroll-x">
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200"
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0"
                                 title="Upload image"
                                 type="button"
                             >
@@ -660,7 +660,7 @@ const ChatInput: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => docInputRef.current?.click()}
-                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200"
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0"
                                 title="Attach file (PDF, Word, Excel…)"
                                 type="button"
                                 disabled={isUploading}
@@ -672,7 +672,7 @@ const ChatInput: React.FC = () => {
                                     key={m}
                                     onClick={() => setSelectedModel(m)}
                                     className={cn(
-                                        'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200',
+                                        'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200 whitespace-nowrap shrink-0',
                                         selectedModel === m
                                             ? 'bg-primary-mint/15 text-primary-mint'
                                             : 'text-text-quaternary hover:text-text-tertiary hover:bg-fill'
@@ -682,7 +682,7 @@ const ChatInput: React.FC = () => {
                                 </button>
                             ))}
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                             {isGenerating && (
                                 <span className="text-[11px] text-text-tertiary hidden sm:inline">
                                     Press Esc to stop

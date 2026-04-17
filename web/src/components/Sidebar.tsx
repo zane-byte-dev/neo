@@ -12,6 +12,10 @@ const THEMES: { value: Theme; label: string }[] = [
     { value: 'classic-dark', label: 'Classic Dark' },
 ]
 
+const LONG_PRESS_MOVE_THRESHOLD = 10
+const CONTEXT_MENU_HEIGHT_BUFFER = 120
+const CONTEXT_MENU_WIDTH_BUFFER = 170
+
 export const Sidebar: React.FC = () => {
     const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme, setChats } = useAppStore()
     const [menuOpen, setMenuOpen] = React.useState(false)
@@ -19,6 +23,7 @@ export const Sidebar: React.FC = () => {
     const [me, setMe] = React.useState<MeInfo | null>(null)
     const [searchQuery, setSearchQuery] = React.useState('')
     const searchRef = React.useRef<HTMLInputElement>(null)
+    const longPressTimerRef = React.useRef<number | null>(null)
 
     React.useEffect(() => {
         fetchMe().then(setMe).catch(() => {})
@@ -54,6 +59,39 @@ export const Sidebar: React.FC = () => {
     const handleChatRightClick = (e: React.MouseEvent, id: string) => {
         e.preventDefault()
         setContextMenu({ id, x: e.clientX, y: e.clientY })
+    }
+
+    // Long-press support for mobile context menu
+    const touchStartPos = React.useRef<{ x: number; y: number } | null>(null)
+
+    const handleTouchStart = (e: React.TouchEvent, id: string) => {
+        const touch = e.touches[0]
+        const x = touch.clientX
+        const y = touch.clientY
+        touchStartPos.current = { x, y }
+        longPressTimerRef.current = window.setTimeout(() => {
+            setContextMenu({ id, x, y })
+        }, 500)
+    }
+
+    const handleTouchEnd = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current)
+            longPressTimerRef.current = null
+        }
+        touchStartPos.current = null
+    }
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (longPressTimerRef.current && touchStartPos.current) {
+            const touch = e.touches[0]
+            const dx = Math.abs(touch.clientX - touchStartPos.current.x)
+            const dy = Math.abs(touch.clientY - touchStartPos.current.y)
+            if (dx > LONG_PRESS_MOVE_THRESHOLD || dy > LONG_PRESS_MOVE_THRESHOLD) {
+                clearTimeout(longPressTimerRef.current)
+                longPressTimerRef.current = null
+            }
+        }
     }
 
     // Close context menu on click outside
@@ -134,6 +172,9 @@ export const Sidebar: React.FC = () => {
                             key={chat.id}
                             onClick={() => selectChat(chat.id)}
                             onContextMenu={(e) => handleChatRightClick(e, chat.id)}
+                            onTouchStart={(e) => handleTouchStart(e, chat.id)}
+                            onTouchEnd={handleTouchEnd}
+                            onTouchMove={handleTouchMove}
                             className={cn(
                                 'group relative flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 text-sm',
                                 activeChatId === chat.id
@@ -222,11 +263,15 @@ export const Sidebar: React.FC = () => {
                 )}
             </div>
 
-            {/* Right-click context menu */}
+            {/* Right-click / long-press context menu */}
             {contextMenu && (
                 <div
                     className="fixed glass border border-border rounded-xl py-1.5 z-50 min-w-[150px] animate-slide-up"
-                    style={{ top: contextMenu.y, left: contextMenu.x, boxShadow: 'var(--shadow-float)' }}
+                    style={{
+                        top: Math.min(contextMenu.y, window.innerHeight - CONTEXT_MENU_HEIGHT_BUFFER),
+                        left: Math.min(contextMenu.x, window.innerWidth - CONTEXT_MENU_WIDTH_BUFFER),
+                        boxShadow: 'var(--shadow-float)',
+                    }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <button

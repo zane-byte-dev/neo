@@ -303,6 +303,16 @@
 [data-theme='dark'] .hljs-literal,
 [data-theme='classic-dark'] .hljs-literal { color: #79c0ff; }
 
+/* ── Safe area insets (for iOS notch / home indicator) ────────────────────────── */
+@layer base {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
 /* ── Mobile responsive utilities ─────────────────────────────────────────────── */
 @media (max-width: 767px) {
   .markdown-content pre {
@@ -314,4 +324,29 @@
     font-size: 0.9375rem;
     line-height: 1.7;
   }
+}
+
+/* ── Touch-friendly improvements ─────────────────────────────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets for buttons without explicit size */
+  button { min-height: 36px; min-width: 36px; }
+
+  /* Show action buttons on mobile (no hover) */
+  .group .opacity-0 { opacity: 1; }
+
+  /* Disable hover-only effects */
+  .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+}
+
+/* ── Horizontal scroll for overflowing model selectors on mobile ─────────────── */
+.mobile-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mobile-scroll-x::-webkit-scrollbar { display: none; }
+
+/* ── Safe bottom padding for input area on iOS ───────────────────────────────── */
+.safe-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
