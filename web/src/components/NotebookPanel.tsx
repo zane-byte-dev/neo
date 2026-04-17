@@ -8,6 +8,9 @@ import remarkGfm from 'remark-gfm'
 import { NoteEditor } from './NoteEditor'
 import type { NoteEntry } from '../types'
 
+/** Matches Tailwind's `md` breakpoint */
+const MOBILE_BREAKPOINT = 768
+
 // ── Note detail view ──────────────────────────────────────────────────────────
 
 const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => void }> = ({ note, onBack, onEdit }) => {
@@ -111,7 +114,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
 
     // Track screen size for responsive layout
     React.useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 768)
+        const handleResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
         handleResize() // set correct value on mount
         window.addEventListener('resize', handleResize)
         return () => window.removeEventListener('resize', handleResize)

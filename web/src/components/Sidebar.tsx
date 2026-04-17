@@ -12,6 +12,10 @@ const THEMES: { value: Theme; label: string }[] = [
     { value: 'classic-dark', label: 'Classic Dark' },
 ]
 
+const LONG_PRESS_MOVE_THRESHOLD = 10
+const CONTEXT_MENU_HEIGHT_BUFFER = 120
+const CONTEXT_MENU_WIDTH_BUFFER = 170
+
 export const Sidebar: React.FC = () => {
     const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme, setChats } = useAppStore()
     const [menuOpen, setMenuOpen] = React.useState(false)
@@ -59,7 +63,6 @@ export const Sidebar: React.FC = () => {
 
     // Long-press support for mobile context menu
     const touchStartPos = React.useRef<{ x: number; y: number } | null>(null)
-    const LONG_PRESS_MOVE_THRESHOLD = 10
 
     const handleTouchStart = (e: React.TouchEvent, id: string) => {
         const touch = e.touches[0]
@@ -265,8 +268,8 @@ export const Sidebar: React.FC = () => {
                 <div
                     className="fixed glass border border-border rounded-xl py-1.5 z-50 min-w-[150px] animate-slide-up"
                     style={{
-                        top: Math.min(contextMenu.y, window.innerHeight - 120),
-                        left: Math.min(contextMenu.x, window.innerWidth - 170),
+                        top: Math.min(contextMenu.y, window.innerHeight - CONTEXT_MENU_HEIGHT_BUFFER),
+                        left: Math.min(contextMenu.x, window.innerWidth - CONTEXT_MENU_WIDTH_BUFFER),
                         boxShadow: 'var(--shadow-float)',
                     }}
                     onClick={(e) => e.stopPropagation()}
