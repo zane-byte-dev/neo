@@ -12,8 +12,9 @@ import { streamText, generateText, stepCountIs, type LanguageModel, type ModelMe
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { setupLogger } from '../utils/logger.js';
-import { GEMINI_API_KEY, DEEPSEEK_API_KEY, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
+import { GEMINI_API_KEY, DEEPSEEK_API_KEY, OLLAMA_BASE_URL, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
+import { isAcpAvailable, acpStream, acpGenerate, tryStartAcp } from './providers/gemini-acp.js';
 import type {
     StreamCallback,
     Tool,
@@ -56,6 +57,16 @@ function isDeepSeekModel(modelId: string): boolean {
     return modelId.startsWith('deepseek');
 }
 
+/** Check if a model ID belongs to a local Ollama instance. */
+function isOllamaModel(modelId: string): boolean {
+    return modelId.startsWith('ollama/');
+}
+
+/** Check if a model ID uses the Gemini CLI ACP provider. */
+function isAcpModel(modelId: string): boolean {
+    return modelId.startsWith('acp/');
+}
+
 /** Create an AI SDK LanguageModel for a given model id. */
 function createModel(modelId: string): LanguageModel {
     if (isDeepSeekModel(modelId)) {
@@ -65,6 +76,15 @@ function createModel(modelId: string): LanguageModel {
         });
         return deepseek.chat(modelId);
     }
+    if (isOllamaModel(modelId)) {
+        const ollama = createOpenAI({
+            apiKey: 'ollama',
+            baseURL: OLLAMA_BASE_URL,
+        });
+        return ollama.chat(modelId.replace('ollama/', ''));
+    }
+    // ACP models are handled directly in chatWithContextStreaming / generate
+    // and never reach createModel.
     const google = createGoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
     return google(modelId);
 }
@@ -142,12 +162,11 @@ export class LLMClient {
 
     constructor() {
         if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY) {
-            console.log('[AgentRuntime] ❌ Disabled: No API key set (GEMINI_API_KEY or DEEPSEEK_API_KEY)');
-            return;
+            console.log('[AgentRuntime] ⚠️ No cloud API key set (GEMINI_API_KEY or DEEPSEEK_API_KEY). Ollama/ACP may still work.');
         }
 
-        // Default to deepseek-chat if only DeepSeek key is available
-        const defaultModel = GEMINI_API_KEY ? 'flash' : 'deepseek';
+        // Default: prefer Gemini API key → DeepSeek → Ollama
+        const defaultModel = GEMINI_API_KEY ? 'flash' : DEEPSEEK_API_KEY ? 'deepseek' : 'gemma';
         this.modelId = resolveModel(GEMINI_MODEL_ENV ?? defaultModel);
         this.enabled = true;
         console.log(`[AgentRuntime] ✅ Initialized (AI SDK). Model: ${this.modelId}`);
@@ -193,6 +212,28 @@ export class LLMClient {
         const workDir = context.workDir;
         const systemInstruction = context.systemInstruction || '';
         const effectiveModel = modelOverride ? resolveModel(modelOverride) : this.modelId;
+
+        // ── ACP shortcut: bypass AI SDK, use Gemini CLI directly ──────────
+        if (isAcpModel(effectiveModel)) {
+            const runtimePrompt = await this.buildPrompt(message, workDir);
+            const fullPrompt = systemInstruction
+                ? `${systemInstruction}\n\n${runtimePrompt}`
+                : runtimePrompt;
+            try {
+                const text = await acpStream(
+                    fullPrompt,
+                    (chunk) => onChunk({ type: 'text', text: chunk }),
+                    (chunk) => onChunk({ type: 'thought', text: chunk }),
+                );
+                return text || null;
+            } catch (err: unknown) {
+                if (err instanceof Error && err.name === 'AbortError') throw err;
+                console.error('[AgentRuntime] ACP stream error:', err);
+                throw err;
+            }
+        }
+
+        // ── Standard AI SDK path ──────────────────────────────────────────
         const model = createModel(effectiveModel);
         const tools = buildAiTools(toolRegistry, workDir, context);
 
@@ -310,6 +351,10 @@ export class LLMClient {
     ): Promise<string | null> {
         if (!this.enabled) return null;
         const modelId = options?.model ? resolveModel(options.model) : this.modelId;
+        if (isAcpModel(modelId)) {
+            const fullPrompt = options?.system ? `${options.system}\n\n${prompt}` : prompt;
+            try { return await acpGenerate(fullPrompt); } catch { return null; }
+        }
         try {
             const { text } = await generateText({
                 model: createModel(modelId),

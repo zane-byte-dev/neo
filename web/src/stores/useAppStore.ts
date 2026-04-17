@@ -144,7 +144,7 @@ export const useAppStore = create<AppState>()(
             setAbortController: (c: AbortController | null) => set({ abortController: c }),
             thinkingStatus: '',
             setThinkingStatus: (s: string) => set({ thinkingStatus: s }),
-            selectedModel: 'flash',
+            selectedModel: 'auto',
             setSelectedModel: (model: string) => set({ selectedModel: model }),
 
             // Notebook
