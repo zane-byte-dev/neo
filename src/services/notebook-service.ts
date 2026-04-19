@@ -136,7 +136,9 @@ function parseEntry(workDir: string, relPath: string, includeContent: boolean): 
 
     const parts    = relPath.split('/');
     const filename = parts[parts.length - 1];
-    const notebook = parts.length > 1 ? parts[0] : '.';
+    // relPath = "notebooks/{nbName}/file.md" → notebook = parts[1]
+    // Fallback for legacy paths without "notebooks/" prefix: notebook = parts[0]
+    const notebook = parts[0] === 'notebooks' && parts.length >= 3 ? parts[1] : (parts.length > 1 ? parts[0] : '.');
     const title    = meta.title || titleFromFilename(filename);
     const tags     = meta.tags?.length ? JSON.stringify(meta.tags) : null;
 
@@ -157,18 +159,20 @@ function parseEntry(workDir: string, relPath: string, includeContent: boolean): 
 // ── Operations ────────────────────────────────────────────────────────────────
 
 export function nbListNotebooks(workDir: string): string[] {
-    if (!existsSync(workDir)) return [];
-    return readdirSync(workDir, { withFileTypes: true })
+    const dir = notebooksDir(workDir);
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir, { withFileTypes: true })
         .filter(d => d.isDirectory() && d.name !== '.tmp' && !d.name.endsWith('.tmp') && !d.name.startsWith('.'))
         .map(d => d.name)
         .sort();
 }
 
 export function nbList(workDir: string, opts?: { notebook?: string; limit?: number }): NotebookEntryPartial[] {
-    if (!existsSync(workDir)) return [];
+    const nbRoot = notebooksDir(workDir);
+    if (!existsSync(nbRoot)) return [];
 
-    const baseDir = opts?.notebook ? join(workDir, opts.notebook) : workDir;
-    const baseRel = opts?.notebook ?? '';
+    const baseDir = opts?.notebook ? join(nbRoot, opts.notebook) : nbRoot;
+    const baseRel = opts?.notebook ? `notebooks/${opts.notebook}` : 'notebooks';
     const relPaths = listMdFilesRecursive(baseDir, baseRel);
     const limit    = Math.min(opts?.limit ?? 300, 500);
     const entries: NotebookEntryPartial[] = [];

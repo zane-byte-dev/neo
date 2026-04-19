@@ -40,7 +40,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
             setSelectedSourceIds(data.map((s) => s.id))
             // Prefetch guides
             data.forEach((s) => {
-                notebookGetSourceGuide(notebook, s.sourceId)
+                notebookGetSourceGuide(notebook, s.id)
                     .then((g) => setSourceGuide(s.id, g))
                     .catch(() => { /* no guide yet */ })
             })

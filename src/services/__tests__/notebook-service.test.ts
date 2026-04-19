@@ -141,8 +141,8 @@ describe('nbList', () => {
         nbCreate(workDir, 'notes', { title: 'A', content: 'body a' });
         nbCreate(workDir, 'notes', { title: 'B', content: 'body b' });
 
-        // nbList scans from workDir root — entries are under notebooks/
-        const list = nbList(workDir, { notebook: 'notebooks/notes' });
+        // nbList now auto-scans workDir/notebooks/ with the notebook name
+        const list = nbList(workDir, { notebook: 'notes' });
         expect(list.length).toBe(2);
         // content should NOT be included
         for (const entry of list) {
@@ -154,7 +154,7 @@ describe('nbList', () => {
         for (let i = 0; i < 5; i++) {
             nbCreate(workDir, 'many', { title: `Item ${i}`, content: `body ${i}` });
         }
-        const list = nbList(workDir, { notebook: 'notebooks/many', limit: 3 });
+        const list = nbList(workDir, { notebook: 'many', limit: 3 });
         expect(list.length).toBe(3);
     });
 });
@@ -164,16 +164,16 @@ describe('nbListNotebooks', () => {
         nbCreate(workDir, 'alpha', { title: 'A', content: 'a' });
         nbCreate(workDir, 'beta', { title: 'B', content: 'b' });
 
-        const nbDir = join(workDir, 'notebooks');
-        const names = nbListNotebooks(nbDir);
+        const names = nbListNotebooks(workDir);
         expect(names).toContain('alpha');
         expect(names).toContain('beta');
     });
 
     it('excludes .tmp and hidden directories', async () => {
-        await fs.mkdir(join(workDir, '.tmp'), { recursive: true });
-        await fs.mkdir(join(workDir, '.hidden'), { recursive: true });
-        await fs.mkdir(join(workDir, 'visible'), { recursive: true });
+        const nbDir = join(workDir, 'notebooks');
+        await fs.mkdir(join(nbDir, '.tmp'), { recursive: true });
+        await fs.mkdir(join(nbDir, '.hidden'), { recursive: true });
+        await fs.mkdir(join(nbDir, 'visible'), { recursive: true });
 
         const names = nbListNotebooks(workDir);
         expect(names).toContain('visible');
@@ -191,7 +191,7 @@ describe('nbSearch', () => {
         nbCreate(workDir, 'search', { title: 'TypeScript Tutorial', content: 'Learn TS' });
         nbCreate(workDir, 'search', { title: 'Python Guide', content: 'Learn Python' });
 
-        const results = nbSearch(workDir, 'typescript', { notebook: 'notebooks/search' });
+        const results = nbSearch(workDir, 'typescript', { notebook: 'search' });
         expect(results.length).toBe(1);
         expect(results[0].title).toBe('TypeScript Tutorial');
     });
@@ -199,7 +199,7 @@ describe('nbSearch', () => {
     it('finds entries by body content match with snippet', () => {
         nbCreate(workDir, 'search', { title: 'Boring Title', content: 'The unique keyword zebra is here' });
 
-        const results = nbSearch(workDir, 'zebra', { notebook: 'notebooks/search' });
+        const results = nbSearch(workDir, 'zebra', { notebook: 'search' });
         expect(results.length).toBe(1);
         expect(results[0].snippet).toBeDefined();
         expect(results[0].snippet).toContain('zebra');
@@ -207,7 +207,7 @@ describe('nbSearch', () => {
 
     it('returns empty array when no match', () => {
         nbCreate(workDir, 'search', { title: 'No Match', content: 'Nothing' });
-        const results = nbSearch(workDir, 'xyznonexistent', { notebook: 'notebooks/search' });
+        const results = nbSearch(workDir, 'xyznonexistent', { notebook: 'search' });
         expect(results).toEqual([]);
     });
 });
@@ -216,7 +216,7 @@ describe('nbGetByTitle', () => {
     it('finds entry by fuzzy title match', () => {
         nbCreate(workDir, 'find', { title: 'Machine Learning Basics', content: 'ML content' });
 
-        const result = nbGetByTitle(workDir, 'machine learning', 'notebooks/find');
+        const result = nbGetByTitle(workDir, 'machine learning', 'find');
         expect(result).toBeDefined();
         expect(result!.title).toBe('Machine Learning Basics');
         expect(result!.content).toBeDefined();

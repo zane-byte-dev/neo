@@ -8,6 +8,7 @@ vi.mock('../../services/user-service.js', () => ({
 
 vi.mock('../../services/notebook-service.js', () => ({
     nbListNotebooks: vi.fn().mockReturnValue(['personal', 'work']),
+    nbListNotebooksProper: vi.fn().mockReturnValue(['personal', 'work']),
     nbList: vi.fn().mockReturnValue([
         { id: 'personal/note1.md', notebook: 'personal', filename: 'note1.md', title: 'Note 1', author: null, date: null, source: null, summary: null, tags: null },
     ]),
@@ -27,6 +28,44 @@ vi.mock('../../services/notebook-service.js', () => ({
         author: null, date: null, source: null, summary: null, tags: null,
     }),
     nbDelete: vi.fn().mockReturnValue(true),
+    // New NotebookLM primitives (mocked as no-ops / empty results; not directly tested here)
+    nbListSources: vi.fn().mockReturnValue([]),
+    nbImportSource: vi.fn(),
+    nbGetSourceEntry: vi.fn().mockReturnValue(null),
+    nbGetSourceGuide: vi.fn().mockReturnValue(null),
+    nbSaveSourceGuide: vi.fn(),
+    nbGetConfig: vi.fn().mockReturnValue({}),
+    nbSetConfig: vi.fn(),
+    nbListNotes: vi.fn().mockReturnValue([]),
+    nbSaveNote: vi.fn(),
+    nbDeleteNote: vi.fn().mockReturnValue(true),
+    nbConvertNoteToSource: vi.fn().mockReturnValue(null),
+    nbListArtifacts: vi.fn().mockReturnValue([]),
+    nbGetArtifact: vi.fn().mockReturnValue(null),
+    nbSaveArtifact: vi.fn(),
+    nbDeleteArtifact: vi.fn().mockReturnValue(true),
+    nbReadChatHistory: vi.fn().mockReturnValue([]),
+    nbAppendChatMessage: vi.fn(),
+    nbClearChatHistory: vi.fn(),
+    sourceIdFromEntryId: vi.fn((id: string) => id),
+}));
+
+// Mock AI/chat/parser modules so the route file imports succeed (they're not exercised here)
+vi.mock('../../services/notebook-ai.js', () => ({
+    generateAndSaveSourceGuide: vi.fn(),
+    generateNotebookOverview: vi.fn(),
+    generateMindMap: vi.fn(),
+    generateReport: vi.fn(),
+    generateAudioScript: vi.fn(),
+    runNoteQuickAction: vi.fn(),
+}));
+vi.mock('../../services/notebook-chat.js', () => ({
+    streamNotebookChat: vi.fn(),
+}));
+vi.mock('../../services/document-parser.js', () => ({
+    parseUrl: vi.fn(),
+    parseYouTube: vi.fn(),
+    isYouTubeUrl: vi.fn().mockReturnValue(false),
 }));
 
 import { notebookGet, notebookCreate, notebookUpdate, notebookDelete } from '../notebook.js';

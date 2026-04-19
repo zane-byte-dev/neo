@@ -519,7 +519,7 @@ export function notebookChat(router: Router): void {
         ctx.respond = false;
 
         const res = ctx.res;
-        const send = (evt: Record<string, unknown>) => {
+        const send = (evt: unknown) => {
             res.write(`data: ${JSON.stringify(evt)}\n\n`);
         };
 

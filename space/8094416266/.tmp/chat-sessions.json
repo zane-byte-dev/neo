@@ -14,7 +14,16 @@
       "user_id": "8094416266",
       "title": "测试一下rename的能力",
       "start_time": "2026-04-15T09:41:08.183Z",
-      "end_time": "2026-04-19T03:44:22.393Z",
+      "end_time": "2026-04-19T10:15:05.801Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "i8dpp": {
+      "id": "i8dpp",
+      "user_id": "8094416266",
+      "title": "我在做一个ai",
+      "start_time": "2026-04-19T10:15:50.733Z",
+      "end_time": "2026-04-19T10:16:12.309Z",
       "is_current": 1,
       "is_pinned": 0
     }

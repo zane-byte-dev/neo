@@ -80,15 +80,10 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
         const controller = new AbortController()
         abortRef.current = controller
 
-        // Extract source slug ids (NotebookService uses slug-only) — `source.id` = `notebook/slug`
-        const slugIds = selectedSourceIds
-            .map((fullId) => sources.find((s) => s.id === fullId)?.sourceId)
-            .filter((x): x is string => !!x)
-
         try {
             let full = ''
             let meta: { n: number; sourceId: string; title: string }[] = []
-            for await (const evt of streamNotebookChat(notebook, text, slugIds, controller.signal) as AsyncGenerator<NotebookChatEvent>) {
+            for await (const evt of streamNotebookChat(notebook, text, selectedSourceIds, controller.signal) as AsyncGenerator<NotebookChatEvent>) {
                 if (evt.type === 'meta' && evt.sources) {
                     meta = evt.sources
                     updateLastNotebookMessage({ citedSources: meta })

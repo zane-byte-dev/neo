@@ -74,8 +74,7 @@ const OverviewTab: React.FC<Props> = ({ notebook }) => {
     const regenerate = async () => {
         setGenerating(true)
         try {
-            const slugIds = selectedSourceIds.map((id) => sources.find((s) => s.id === id)?.sourceId).filter((x): x is string => !!x)
-            const { overview } = await notebookGenerateOverview(notebook, slugIds.length ? slugIds : undefined)
+            const { overview } = await notebookGenerateOverview(notebook, selectedSourceIds.length ? selectedSourceIds : undefined)
             setNotebookConfig({ ...notebookConfig, overview, overviewUpdatedAt: new Date().toISOString() })
         } catch (e) {
             alert(`生成失败：${(e as Error).message}`)
@@ -261,9 +260,7 @@ const ArtifactTab: React.FC<{ notebook: string; type: 'mindmap' | 'audio' | 'rep
 
     const load = React.useCallback(() => {
         setLoading(true)
-        import('../../api').then(({ notebookListArtifacts }) =>
-            notebookListArtifacts(notebook, type).then(setNotebookArtifacts).finally(() => setLoading(false)),
-        )
+        notebookListArtifacts(notebook, type).then(setNotebookArtifacts).finally(() => setLoading(false))
     }, [notebook, type, setNotebookArtifacts])
 
     React.useEffect(load, [load])
@@ -273,10 +270,9 @@ const ArtifactTab: React.FC<{ notebook: string; type: 'mindmap' | 'audio' | 'rep
     const generate = async () => {
         setGenerating(true)
         try {
-            const slugIds = selectedSourceIds.map((id) => sources.find((s) => s.id === id)?.sourceId).filter((x): x is string => !!x)
             const artifact = await notebookGenerateArtifact({
                 notebook, type,
-                sourceIds: slugIds.length ? slugIds : undefined,
+                sourceIds: selectedSourceIds.length ? selectedSourceIds : undefined,
                 ...(type === 'report' ? {
                     subtype: reportSubtype === 'custom' ? 'custom' : reportSubtype,
                     ...(reportSubtype === 'custom' ? { customPrompt: reportCustom } : {}),
@@ -397,5 +393,3 @@ const ArtifactViewer: React.FC<{ artifact: Artifact; onBack: () => void }> = ({ 
     )
 }
 
-// Silence unused var warnings
-void notebookListArtifacts

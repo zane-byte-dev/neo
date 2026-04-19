@@ -201,9 +201,9 @@ export interface AppState {
 export type SourceKind = 'text' | 'url' | 'youtube' | 'pdf' | 'audio' | 'image'
 
 export interface SourceMeta {
-    id: string          // `{notebook}/{slug}`
-    sourceId: string    // slug only
+    id: string          // sourceId slug (filename without .md)
     notebook: string
+    entryId: string     // full entry id "notebooks/{nb}/{filename}"
     title: string
     type: SourceKind
     source: string | null  // original URL / filename

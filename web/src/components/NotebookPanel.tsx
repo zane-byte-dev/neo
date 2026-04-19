@@ -1,5 +1,5 @@
 import React from 'react'
-import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X, Plus, Pencil } from 'lucide-react'
+import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X, Plus, Pencil, Sparkles } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { notebookList, notebookSearch, notebookRead, notebookListNotebooks } from '../api'
@@ -8,6 +8,7 @@ import remarkGfm from 'remark-gfm'
 import { NoteEditor } from './NoteEditor'
 import type { NoteEntry } from '../types'
 import { t } from '../i18n'
+import { NotebookWorkspace } from './notebook/NotebookWorkspace'
 
 /** Matches Tailwind's `md` breakpoint */
 const MOBILE_BREAKPOINT = 768
@@ -96,7 +97,7 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
 // ── Main notebook panel ───────────────────────────────────────────────────────
 
 export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) => {
-    const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries } = useAppStore()
+    const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries, activeNotebook, setActiveNotebook } = useAppStore()
     const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [selectedNotebook, setSelectedNotebook] = React.useState<string | undefined>(undefined)
     const [searchQuery, setSearchQuery] = React.useState('')
@@ -123,13 +124,14 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
 
     // Reload entries when selected notebook changes
     React.useEffect(() => {
+        if (activeNotebook) return // skip when in workspace mode
         setLoading(true)
         setError('')
         notebookList(selectedNotebook)
             .then((data) => setNotebookEntries(data as NoteEntry[]))
             .catch((e) => setError(String(e)))
             .finally(() => setLoading(false))
-    }, [selectedNotebook])
+    }, [selectedNotebook, activeNotebook])
 
     // Debounced search
     React.useEffect(() => {
@@ -147,6 +149,11 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                 .catch(() => setResults([]))
         }, 300)
     }, [searchQuery, selectedNotebook])
+
+    // ── Notebook workspace mode ──────────────────────────────────────────
+    if (activeNotebook) {
+        return <NotebookWorkspace notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
+    }
 
     const displayList = inSearch ? results : notebookEntries
 
@@ -220,6 +227,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                         onSelect={setSelectedNote}
                         selectedId={null}
                         onNew={() => setEditing('new')}
+                        onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
                     />
                 </div>
             )
@@ -243,6 +251,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                         onSelect={setSelectedNote}
                         selectedId={selectedNote?.id ?? null}
                         onNew={() => setEditing('new')}
+                        onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
                     />
                 </div>
                 <div className="flex-1 overflow-hidden">
@@ -275,6 +284,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                 onSelect={setSelectedNote}
                 selectedId={null}
                 onNew={() => setEditing('new')}
+                onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
             />
         </div>
     )
@@ -296,7 +306,8 @@ const NotebookList: React.FC<{
     onSelect: (note: NoteEntry) => void
     selectedId: string | null
     onNew?: () => void
-}> = ({ notebooks, selectedNotebook, onNotebookChange, entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew }) => (
+    onOpenWorkspace?: () => void
+}> = ({ notebooks, selectedNotebook, onNotebookChange, entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew, onOpenWorkspace }) => (
     <>
         {/* Header */}
         <div className="h-14 border-b border-border flex items-center gap-2 px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
@@ -304,6 +315,15 @@ const NotebookList: React.FC<{
             <BookOpen size={16} className="text-primary-mint shrink-0" />
             <span className="text-sm font-semibold tracking-tight">{t('notebook')}</span>
             <span className="ml-auto text-xs text-text-tertiary bg-fill px-2 py-0.5 rounded-full">{totalCount}</span>
+            {onOpenWorkspace && selectedNotebook && (
+                <button
+                    onClick={onOpenWorkspace}
+                    className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-primary-mint"
+                    title="打开工作室 (NotebookLM 模式)"
+                >
+                    <Sparkles size={16} />
+                </button>
+            )}
             {onNew && (
                 <button
                     onClick={onNew}

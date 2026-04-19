@@ -140,7 +140,7 @@ ${content}
 
     return {
         sourceId: sourceIdFromEntryId(entry.id),
-        summary: parsed?.summary ?? (entry.summary || '').slice(0, 400) || '暂无摘要。',
+        summary: parsed?.summary ?? ((entry.summary || '').slice(0, 400) || '暂无摘要。'),
         keyTopics: Array.isArray(parsed?.keyTopics) ? parsed.keyTopics.slice(0, 10) : [],
         suggestedQuestions: Array.isArray(parsed?.suggestedQuestions) ? parsed.suggestedQuestions.slice(0, 8) : [],
         generatedAt: Date.now(),
