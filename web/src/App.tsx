@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { MessageSquare, BookOpen, Menu, X, Droplets } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
@@ -151,11 +151,15 @@ const ChatPage: React.FC<{ sidebarOpen: boolean; setSidebarOpen: React.Dispatch<
 
 // ── /notebook page ───────────────────────────────────────────────────────────
 
-const NotebookPage: React.FC = () => (
-    <div className="flex-1 overflow-hidden">
-        <NotebookPanel fullPage />
-    </div>
-)
+const NotebookPage: React.FC = () => {
+    const { notebookName } = useParams<{ notebookName?: string }>()
+    const navigate = useNavigate()
+    return (
+        <div className="flex-1 overflow-hidden">
+            <NotebookPanel fullPage urlNotebook={notebookName} navigate={navigate} />
+        </div>
+    )
+}
 
 // ── Main shell (after auth) ──────────────────────────────────────────────────
 
@@ -173,6 +177,7 @@ const MainLayout: React.FC = () => {
             <Routes>
                 <Route path="/chat"     element={<ChatPage sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />} />
                 <Route path="/notebook" element={<NotebookPage />} />
+                <Route path="/notebook/:notebookName" element={<NotebookPage />} />
                 <Route path="/puzzle"   element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
                 <Route path="*"         element={<Navigate to="/chat" replace />} />
             </Routes>

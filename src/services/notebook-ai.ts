@@ -28,7 +28,7 @@ import {
 } from './notebook-service.js';
 
 // Preferred model for non-tool generation — cheap & good at structured output.
-const AI_MODEL = 'flash';
+const AI_MODEL = 'gemma';
 
 // Max characters fed into a single generation prompt (budgeted context window)
 const CTX_MAX = 60_000;

@@ -23,7 +23,7 @@ import {
     type SourceMeta,
 } from './notebook-service.js';
 
-const CHAT_MODEL = 'flash';
+const CHAT_MODEL = 'gemma';
 // Max chars of source context injected per turn
 const MAX_CTX_CHARS = 40_000;
 // Max per-passage length (one source chunk)

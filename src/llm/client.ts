@@ -363,7 +363,8 @@ export class LLMClient {
                 temperature: options?.temperature,
             });
             return text || null;
-        } catch {
+        } catch (err) {
+            console.error('[LLMClient.generate] error:', err instanceof Error ? err.message : err);
             return null;
         }
     }

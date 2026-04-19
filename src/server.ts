@@ -5,6 +5,7 @@ import serve from 'koa-static';
 import { timingSafeEqual } from 'crypto';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { readFile } from 'fs/promises';
 
 import { SESSION_SECRET } from './config.js';
 import { setupTools } from './tools/index.js';
@@ -41,6 +42,16 @@ export class CoreServer {
         // Serve built frontend static files (production)
         const distDir = join(__dirname, '../web/dist');
         app.use(serve(distDir));
+
+        // SPA fallback: serve index.html for non-API routes (client-side routing)
+        app.use(async (ctx) => {
+            if (ctx.status === 404 && !ctx.path.startsWith('/api/')) {
+                try {
+                    ctx.type = 'html';
+                    ctx.body = await readFile(join(distDir, 'index.html'));
+                } catch { /* index.html missing – dev mode, ignore */ }
+            }
+        });
 
         this.httpServer = app.listen(WEB_PORT, () => {
             console.log(`[CoreServer] 🌐 http://localhost:${WEB_PORT}`);

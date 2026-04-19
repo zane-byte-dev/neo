@@ -103,8 +103,7 @@ export function notebookGet(router: Router): void {
                 const sid = q.sourceId?.trim();
                 if (!nb || !sid) { ctx.status = 400; ctx.body = { error: 'notebook + sourceId required' }; return; }
                 const guide = nbGetSourceGuide(workDir, nb, sid);
-                if (!guide) { ctx.status = 404; ctx.body = { error: 'Guide not found' }; return; }
-                ctx.body = guide;
+                ctx.body = guide ?? null;
                 break;
             }
             // ── Config ────────────────────────────────────────────────────

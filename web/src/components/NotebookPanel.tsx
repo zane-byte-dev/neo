@@ -96,7 +96,11 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
 
 // ── Main notebook panel ───────────────────────────────────────────────────────
 
-export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) => {
+export const NotebookPanel: React.FC<{
+    fullPage?: boolean
+    urlNotebook?: string
+    navigate?: (path: string) => void
+}> = ({ fullPage, urlNotebook, navigate }) => {
     const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries, activeNotebook, setActiveNotebook } = useAppStore()
     const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [selectedNotebook, setSelectedNotebook] = React.useState<string | undefined>(undefined)
@@ -113,6 +117,27 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
     React.useEffect(() => {
         notebookListNotebooks().then(setNotebooks).catch(() => {})
     }, [])
+
+    // Sync URL → state: activate notebook from URL param on mount
+    React.useEffect(() => {
+        if (urlNotebook && urlNotebook !== activeNotebook) {
+            setSelectedNotebook(urlNotebook)
+            setActiveNotebook(urlNotebook)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [urlNotebook])
+
+    // Sync state → URL: update URL when activeNotebook changes
+    React.useEffect(() => {
+        if (!navigate) return
+        if (activeNotebook) {
+            navigate(`/notebook/${encodeURIComponent(activeNotebook)}`)
+        } else if (urlNotebook) {
+            // Exiting workspace mode → go back to /notebook
+            navigate('/notebook')
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeNotebook])
 
     // Track screen size for responsive layout
     React.useEffect(() => {
