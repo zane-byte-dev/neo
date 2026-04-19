@@ -9,28 +9,10 @@
       "is_current": 0,
       "is_pinned": 0
     },
-    "tg-8094416266": {
-      "id": "tg-8094416266",
-      "user_id": "8094416266",
-      "title": "你还在吗",
-      "start_time": "2026-04-14T16:40:33.603Z",
-      "end_time": "2026-04-17T05:42:06.783Z",
-      "is_current": 0,
-      "is_pinned": 0
-    },
-    "9n92k6": {
-      "id": "9n92k6",
-      "user_id": "8094416266",
-      "title": "我想要生成一个小视频，剧本大致是： 一台macmini",
-      "start_time": "2026-04-15T07:21:58.518Z",
-      "end_time": "2026-04-15T09:26:02.203Z",
-      "is_current": 0,
-      "is_pinned": 0
-    },
     "j84ate": {
       "id": "j84ate",
       "user_id": "8094416266",
-      "title": "hello",
+      "title": "测试一下rename的能力",
       "start_time": "2026-04-15T09:41:08.183Z",
       "end_time": "2026-04-19T03:44:22.393Z",
       "is_current": 1,

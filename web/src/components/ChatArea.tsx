@@ -4,6 +4,7 @@ import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
 import { streamChat, fetchMessages, uploadFiles } from '../api'
+import { t } from '../i18n'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -17,7 +18,7 @@ const MAX_EXPORT_FILENAME_LENGTH = 50
 function exportChatAsMarkdown(title: string, messages: Message[]) {
     const lines = [`# ${title}\n`]
     for (const msg of messages) {
-        const role = msg.role === 'user' ? '**You**' : '**Neo**'
+        const role = msg.role === 'user' ? t('you') : t('neo')
         lines.push(`### ${role}\n`)
         if (msg.content) lines.push(msg.content + '\n')
     }
@@ -108,7 +109,7 @@ const TypingIndicator: React.FC = () => (
                 <span className="typing-dot" />
                 <span className="typing-dot" />
             </div>
-            <span className="text-xs text-text-tertiary ml-1">Thinking…</span>
+            <span className="text-xs text-text-tertiary ml-1">{t('thinking')}</span>
         </div>
     </div>
 )
@@ -124,7 +125,7 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
     }, [items.length, isLive])
 
     const callCount = items.filter(i => i.type === 'tool_call').length
-    const summary = callCount === 1 ? '1 tool call' : `${callCount} tool calls`
+    const summary = callCount === 1 ? t('toolCall', { n: 1 }) : t('toolCalls', { n: callCount })
 
     const content = (
         <div
@@ -175,7 +176,7 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <div className="flex items-center gap-2 text-xs text-text-tertiary mb-2">
                     <Loader2 size={12} className="animate-spin text-primary-mint" />
-                    <span className="font-medium">Working…</span>
+                    <span className="font-medium">{t('working')}</span>
                 </div>
                 {content}
             </div>
@@ -219,7 +220,7 @@ const TodoPanel: React.FC<{ todos: AgentTodoItem[] }> = ({ todos }) => {
              style={{ boxShadow: 'var(--shadow-soft)' }}>
             {/* Header with progress bar */}
             <div className="px-4 py-2.5 flex items-center gap-2.5 text-xs text-text-secondary">
-                <span className="font-semibold">Tasks</span>
+                <span className="font-semibold">{t('tasks')}</span>
                 <span className="text-text-tertiary">{completed}/{total}</span>
                 <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
                     <div
@@ -384,7 +385,7 @@ const ChatInput: React.FC = () => {
         setPendingImages([])
         setPendingDocs([])
         setIsGenerating(true)
-        setThinkingStatus('Thinking…')
+        setThinkingStatus(t('thinking'))
 
         // Placeholder for assistant
         addMessage(activeChatId, {
@@ -439,7 +440,7 @@ const ChatInput: React.FC = () => {
         } catch (err: unknown) {
             const name = err instanceof Error ? err.name : ''
             if (name !== 'AbortError' && !accumulated) {
-                updateLastAssistantMessage(activeChatId, `⚠️ ${err instanceof Error ? err.message : 'Request failed'}`)
+                updateLastAssistantMessage(activeChatId, `⚠️ ${err instanceof Error ? err.message : t('requestFailed')}`)
             }
         } finally {
             if (thinkingAccum) {
@@ -633,7 +634,7 @@ const ChatInput: React.FC = () => {
                         {isUploading && (
                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-fill-secondary/60 text-xs text-text-tertiary">
                                 <Loader2 size={14} className="animate-spin" />
-                                <span>Uploading…</span>
+                                <span>{t('uploading')}</span>
                             </div>
                         )}
                     </div>
@@ -670,7 +671,7 @@ const ChatInput: React.FC = () => {
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
                         onPaste={handlePaste}
-                        placeholder="Ask anything… (Shift+Enter for newline)"
+                        placeholder={t('askAnything')}
                         className="w-full bg-transparent px-5 pt-3.5 pb-2 pr-14 focus:outline-none resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
                         rows={1}
                     />
@@ -679,16 +680,16 @@ const ChatInput: React.FC = () => {
                         <div className="flex items-center gap-1 min-w-0 flex-1 mobile-scroll-x">
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0"
-                                title="Upload image"
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0 cursor-pointer"
+                                title={t('uploadImage')}
                                 type="button"
                             >
                                 <ImagePlus size={16} />
                             </button>
                             <button
                                 onClick={() => docInputRef.current?.click()}
-                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0"
-                                title="Attach file (PDF, Word, Excel…)"
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0 cursor-pointer"
+                                title={t('attachFile')}
                                 type="button"
                                 disabled={isUploading}
                             >
@@ -701,12 +702,12 @@ const ChatInput: React.FC = () => {
                                     if (!next) window.speechSynthesis?.cancel()
                                 }}
                                 className={cn(
-                                    'p-1.5 rounded-lg transition-all duration-200 shrink-0',
+                                    'p-1.5 rounded-lg transition-all duration-200 shrink-0 cursor-pointer',
                                     autoSpeak
                                         ? 'text-primary-mint bg-primary-mint/10 hover:bg-primary-mint/20'
                                         : 'text-text-quaternary hover:text-text-secondary hover:bg-fill'
                                 )}
-                                title={autoSpeak ? '关闭自动朗读' : '开启自动朗读'}
+                                title={autoSpeak ? t('autoSpeakOn') : t('autoSpeakOff')}
                                 type="button"
                             >
                                 {autoSpeak ? <Volume2 size={16} /> : <VolumeX size={16} />}
@@ -727,14 +728,14 @@ const ChatInput: React.FC = () => {
                         <div className="flex items-center gap-2 shrink-0">
                             {isGenerating && (
                                 <span className="text-[11px] text-text-tertiary hidden sm:inline">
-                                    Press Esc to stop
+                                    {t('pressEscToStop')}
                                 </span>
                             )}
                             {isGenerating ? (
                                 <button
                                     onClick={handleStop}
-                                    className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95"
-                                    title="Stop (Esc)"
+                                    className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
+                                    title={t('stopEsc')}
                                 >
                                     <Square size={14} fill="currentColor" />
                                 </button>
@@ -746,9 +747,9 @@ const ChatInput: React.FC = () => {
                                         'p-2 rounded-xl transition-all duration-200',
                                         !inputValue.trim() && !pendingImages.length && !pendingDocs.length
                                             ? 'bg-fill text-text-quaternary cursor-not-allowed'
-                                            : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
+                                            : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95 cursor-pointer'
                                     )}
-                                    title="Send (Enter)"
+                                    title={t('sendEnter')}
                                 >
                                     <Send size={14} />
                                 </button>
@@ -757,7 +758,7 @@ const ChatInput: React.FC = () => {
                     </div>
                 </div>
                 <p className="text-[10px] text-text-quaternary text-center mt-2 hidden sm:block">
-                    <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Enter</kbd> to send · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Shift+Enter</kbd> newline · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+N</kbd> new chat
+                    <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Enter</kbd> {t('enterToSend')} · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Shift+Enter</kbd> {t('shiftEnterNewline')} · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+N</kbd> {t('newChatShortcut')}
                 </p>
             </div>
         </div>
@@ -815,7 +816,7 @@ export const ChatArea: React.FC = () => {
             <div className="h-11 sm:h-14 border-b border-border flex items-center px-4 sm:px-6 pl-14 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <span className="text-sm font-semibold truncate text-text tracking-tight flex-1">
-                    {activeChat?.title ?? 'Welcome'}
+                    {activeChat?.title ?? t('welcome')}
                 </span>
                 {isGenerating && thinkingStatus && (
                     <span className="ml-3 text-xs text-text-tertiary flex items-center gap-1.5 shrink-0">
@@ -826,8 +827,8 @@ export const ChatArea: React.FC = () => {
                 {activeChat && chatMessages.length > 0 && !isGenerating && (
                     <button
                         onClick={() => exportChatAsMarkdown(activeChat.title, chatMessages)}
-                        className="ml-2 p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors shrink-0"
-                        title="Export as Markdown"
+                        className="ml-2 p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors shrink-0 cursor-pointer"
+                        title={t('exportMarkdown')}
                     >
                         <Download size={14} />
                     </button>
@@ -869,8 +870,8 @@ export const ChatArea: React.FC = () => {
                                         </div>
                                     )}
                                     {msg.content && (
-                                        <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
-                                             style={{ boxShadow: 'var(--shadow-soft)' }}>
+                                        <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap break-words"
+                                             style={{ boxShadow: 'var(--shadow-soft)', overflowWrap: 'anywhere' }}>
                                             {msg.content}
                                         </div>
                                     )}
@@ -881,7 +882,7 @@ export const ChatArea: React.FC = () => {
                                         <details className="mb-3 group">
                                             <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5 py-1">
                                                 <ChevronRight size={12} className="transition-transform duration-200 group-open:rotate-90" />
-                                                💭 Thinking
+                                                {t('thinkingLabel')}
                                             </summary>
                                             <div className="mt-2 pl-4 border-l-2 border-border/60 text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">
                                                 {msg.thinking}
@@ -911,7 +912,7 @@ export const ChatArea: React.FC = () => {
                                                 <div key={i} className="relative group">
                                                     <img
                                                         src={src}
-                                                        alt="Generated image"
+                                                        alt={t('generatedImage')}
                                                         className="max-w-sm rounded-2xl border border-border cursor-pointer hover:opacity-95 transition-opacity"
                                                         style={{ boxShadow: 'var(--shadow-soft)' }}
                                                         onClick={() => window.open(src, '_blank')}
@@ -921,7 +922,7 @@ export const ChatArea: React.FC = () => {
                                                             href={src}
                                                             download={`neo-image-${Date.now()}-${i}.png`}
                                                             className="w-8 h-8 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
-                                                            title="Download"
+                                                            title={t('download')}
                                                             onClick={(e) => e.stopPropagation()}
                                                         >
                                                             <Download size={14} />

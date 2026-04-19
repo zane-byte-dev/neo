@@ -190,6 +190,191 @@ export function notebookDelete(id: string) {
     })
 }
 
+// ── Notebook workspace (NotebookLM-style) ────────────────────────────────────
+
+import type {
+    SourceMeta, SourceGuide, NotebookConfig, NotebookNote, Artifact, NotebookChatMessage, ArtifactType,
+} from './types'
+
+async function _jsonOrThrow<T>(r: Response): Promise<T> {
+    if (r.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    if (!r.ok) {
+        const body = await r.json().catch(() => ({}))
+        throw new Error((body as Record<string, string>).error ?? `HTTP ${r.status}`)
+    }
+    return r.json() as Promise<T>
+}
+
+// Sources
+export function notebookListSources(notebook: string): Promise<SourceMeta[]> {
+    return apiGet(`/api/notebook?action=sources&notebook=${encodeURIComponent(notebook)}`)
+}
+
+export function notebookGetSource(notebook: string, sourceId: string) {
+    return apiGet<{ id: string; content: string } & SourceMeta>(
+        `/api/notebook?action=source&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`,
+    )
+}
+
+export function notebookGetSourceGuide(notebook: string, sourceId: string): Promise<SourceGuide> {
+    return apiGet(`/api/notebook?action=source-guide&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`)
+}
+
+export function notebookGenerateSourceGuide(notebook: string, sourceId: string): Promise<SourceGuide> {
+    return _post('/api/notebook/source-guide', { notebook, sourceId }).then((r) => _jsonOrThrow<SourceGuide>(r))
+}
+
+export interface ImportSourcePayload {
+    notebook: string
+    kind: 'url' | 'text' | 'document'
+    url?: string
+    title?: string
+    content?: string
+    filename?: string
+    mimeType?: string
+    source?: string
+}
+
+export function notebookImportSource(payload: ImportSourcePayload): Promise<SourceMeta> {
+    return _post('/api/notebook/import', payload).then((r) => _jsonOrThrow<SourceMeta>(r))
+}
+
+// Config
+export function notebookGetConfig(notebook: string): Promise<NotebookConfig> {
+    return apiGet(`/api/notebook?action=config&notebook=${encodeURIComponent(notebook)}`)
+}
+
+export function notebookUpdateConfig(notebook: string, partial: Partial<NotebookConfig>): Promise<NotebookConfig> {
+    return fetch('/api/notebook/config', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notebook, ...partial }),
+    }).then((r) => _jsonOrThrow<NotebookConfig>(r))
+}
+
+export function notebookGenerateOverview(notebook: string, sourceIds?: string[]): Promise<{ overview: string }> {
+    return _post('/api/notebook/overview', { notebook, sourceIds }).then((r) => _jsonOrThrow<{ overview: string }>(r))
+}
+
+// Notes
+export function notebookListNotes(notebook: string): Promise<NotebookNote[]> {
+    return apiGet(`/api/notebook?action=notes&notebook=${encodeURIComponent(notebook)}`)
+}
+
+export function notebookSaveNote(notebook: string, note: { id?: string; title: string; content: string; source?: 'user' | 'ai-chat' | 'ai-quick-action' }): Promise<NotebookNote> {
+    return _post('/api/notebook/note', { notebook, ...note }).then((r) => _jsonOrThrow<NotebookNote>(r))
+}
+
+export function notebookDeleteNote(notebook: string, id: string) {
+    return fetch(`/api/notebook/note?notebook=${encodeURIComponent(notebook)}&id=${encodeURIComponent(id)}`, {
+        method: 'DELETE', credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+}
+
+export function notebookConvertNoteToSource(notebook: string, id: string): Promise<SourceMeta> {
+    return _post('/api/notebook/note/convert', { notebook, id }).then((r) => _jsonOrThrow<SourceMeta>(r))
+}
+
+export type NoteQuickAction = 'merge' | 'outline' | 'feedback' | 'study-guide'
+
+export function notebookNoteQuickAction(notebook: string, action: NoteQuickAction, ids: string[]): Promise<NotebookNote> {
+    return _post('/api/notebook/note/quick-action', { notebook, action, ids }).then((r) => _jsonOrThrow<NotebookNote>(r))
+}
+
+// Artifacts
+export function notebookListArtifacts(notebook: string, type?: ArtifactType): Promise<Artifact[]> {
+    const t = type ? `&type=${encodeURIComponent(type)}` : ''
+    return apiGet(`/api/notebook?action=artifacts&notebook=${encodeURIComponent(notebook)}${t}`)
+}
+
+export function notebookGetArtifact(notebook: string, id: string): Promise<Artifact> {
+    return apiGet(`/api/notebook?action=artifact&notebook=${encodeURIComponent(notebook)}&id=${encodeURIComponent(id)}`)
+}
+
+export interface GenerateArtifactPayload {
+    notebook: string
+    type: ArtifactType
+    sourceIds?: string[]
+    // mindmap
+    topic?: string
+    // report
+    subtype?: string
+    customPrompt?: string
+    title?: string
+}
+
+export function notebookGenerateArtifact(payload: GenerateArtifactPayload): Promise<Artifact> {
+    return _post('/api/notebook/artifact', payload).then((r) => _jsonOrThrow<Artifact>(r))
+}
+
+export function notebookDeleteArtifact(notebook: string, id: string) {
+    return fetch(`/api/notebook/artifact?notebook=${encodeURIComponent(notebook)}&id=${encodeURIComponent(id)}`, {
+        method: 'DELETE', credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+}
+
+// Chat
+export function notebookChatHistory(notebook: string): Promise<NotebookChatMessage[]> {
+    return apiGet(`/api/notebook?action=chat-history&notebook=${encodeURIComponent(notebook)}`)
+}
+
+export function notebookClearChat(notebook: string) {
+    return fetch(`/api/notebook/chat?notebook=${encodeURIComponent(notebook)}`, {
+        method: 'DELETE', credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+}
+
+export interface NotebookChatEvent {
+    type: 'meta' | 'text' | 'citations' | 'done' | 'error'
+    text?: string
+    citations?: number[]
+    sources?: { n: number; sourceId: string; title: string }[]
+    error?: string
+}
+
+export async function* streamNotebookChat(
+    notebook: string,
+    message: string,
+    sourceIds?: string[],
+    signal?: AbortSignal,
+): AsyncGenerator<NotebookChatEvent> {
+    const res = await fetch('/api/notebook/chat', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notebook, message, ...(sourceIds ? { sourceIds } : {}) }),
+        signal,
+    })
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.body) return
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+        while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split('\n')
+            buffer = lines.pop() ?? ''
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue
+                const data = line.slice(6).trim()
+                if (!data) continue
+                try {
+                    yield JSON.parse(data) as NotebookChatEvent
+                } catch { /* skip */ }
+            }
+        }
+    } finally {
+        reader.releaseLock()
+    }
+}
+
+
 // ── Session API ───────────────────────────────────────────────────────────────
 
 export function sessionNew(sessionId: string, title: string) {

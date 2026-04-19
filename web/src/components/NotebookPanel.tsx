@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { NoteEditor } from './NoteEditor'
 import type { NoteEntry } from '../types'
+import { t } from '../i18n'
 
 /** Matches Tailwind's `md` breakpoint */
 const MOBILE_BREAKPOINT = 768
@@ -39,7 +40,7 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
                 <button
                     onClick={onEdit}
                     className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-text"
-                    title="编辑"
+                    title={t('edit')}
                 >
                     <Pencil size={14} />
                 </button>
@@ -186,7 +187,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                     <div className="w-12 h-12 rounded-2xl bg-fill flex items-center justify-center">
                         <BookOpen size={20} className="text-text-quaternary" />
                     </div>
-                    <span>选择一篇文章阅读</span>
+                    <span>{t('selectArticle')}</span>
                 </div>
             )
 
@@ -301,13 +302,13 @@ const NotebookList: React.FC<{
         <div className="h-14 border-b border-border flex items-center gap-2 px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
              style={{ boxShadow: 'var(--shadow-soft)' }}>
             <BookOpen size={16} className="text-primary-mint shrink-0" />
-            <span className="text-sm font-semibold tracking-tight">Notebook</span>
+            <span className="text-sm font-semibold tracking-tight">{t('notebook')}</span>
             <span className="ml-auto text-xs text-text-tertiary bg-fill px-2 py-0.5 rounded-full">{totalCount}</span>
             {onNew && (
                 <button
                     onClick={onNew}
                     className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-primary-mint"
-                    title="新建文章"
+                    title={t('newArticle')}
                 >
                     <Plus size={16} />
                 </button>
@@ -326,7 +327,7 @@ const NotebookList: React.FC<{
                             : 'text-text-secondary hover:bg-fill-secondary'
                     )}
                 >
-                    全部
+                    {t('allFilter')}
                 </button>
                 {notebooks.map((nb) => (
                     <button
@@ -353,7 +354,7 @@ const NotebookList: React.FC<{
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search notes…"
+                    placeholder={t('searchNotes')}
                     className="w-full bg-fill-secondary border border-border rounded-xl pl-9 pr-9 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all duration-200 placeholder:text-text-quaternary"
                 />
                 {searchQuery && (
@@ -385,7 +386,7 @@ const NotebookList: React.FC<{
                     <div className="w-10 h-10 rounded-xl bg-fill flex items-center justify-center">
                         <Search size={16} className="text-text-quaternary" />
                     </div>
-                    <p className="text-xs text-text-quaternary">{inSearch ? 'No results' : 'No entries'}</p>
+                    <p className="text-xs text-text-quaternary">{inSearch ? t('noResults') : t('noEntries')}</p>
                 </div>
             )}
             {entries.map((entry) => (

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Lock } from 'lucide-react'
 import { login } from '../api'
+import { t } from '../i18n'
 
 export const Login: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
     const [value, setValue] = React.useState('')
@@ -16,9 +17,9 @@ export const Login: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
         if (result === 'ok') {
             onSuccess()
         } else if (result === 'unreachable') {
-            setError('Cannot reach server. Is the backend running?')
+            setError(t('cannotReachServer'))
         } else {
-            setError('Invalid token.')
+            setError(t('invalidToken'))
         }
     }
 
@@ -31,8 +32,8 @@ export const Login: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
                          style={{ boxShadow: '0 0 24px rgba(52, 211, 153, 0.15)' }}>
                         <Lock size={28} className="text-primary-mint" />
                     </div>
-                    <h1 className="text-2xl font-bold tracking-tight">Neo</h1>
-                    <p className="text-sm text-text-secondary mt-1.5">Enter your access token</p>
+                    <h1 className="text-2xl font-bold tracking-tight">{t('neoTitle')}</h1>
+                    <p className="text-sm text-text-secondary mt-1.5">{t('enterAccessToken')}</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
@@ -40,7 +41,7 @@ export const Login: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
                         type="password"
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
-                        placeholder="Access token"
+                        placeholder={t('accessToken')}
                         autoFocus
                         className="w-full bg-fill-secondary border border-border rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-mint/40 focus:border-primary-mint/50 transition-all duration-200 placeholder:text-text-quaternary"
                     />
@@ -59,7 +60,7 @@ export const Login: React.FC<{ onSuccess: () => void }> = ({ onSuccess }) => {
                                 <span className="typing-dot" style={{ width: 4, height: 4 }} />
                                 <span className="typing-dot" style={{ width: 4, height: 4 }} />
                             </span>
-                        ) : 'Sign in'}
+                        ) : t('signIn')}
                     </button>
                 </form>
             </div>

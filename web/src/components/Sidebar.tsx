@@ -1,15 +1,16 @@
 import React from 'react'
-import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X } from 'lucide-react'
+import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, type MeInfo } from '../api'
+import { useT, LOCALE_OPTIONS } from '../i18n'
 import type { Theme } from '../types'
 
-const THEMES: { value: Theme; label: string }[] = [
-    { value: 'light', label: 'Light' },
-    { value: 'dark', label: 'Dark' },
-    { value: 'classic-dark', label: 'Classic Dark' },
+const THEMES: { value: Theme; labelKey: 'themeLight' | 'themeDark' | 'themeClassicDark' }[] = [
+    { value: 'light', labelKey: 'themeLight' },
+    { value: 'dark', labelKey: 'themeDark' },
+    { value: 'classic-dark', labelKey: 'themeClassicDark' },
 ]
 
 const LONG_PRESS_MOVE_THRESHOLD = 10
@@ -17,12 +18,17 @@ const CONTEXT_MENU_HEIGHT_BUFFER = 120
 const CONTEXT_MENU_WIDTH_BUFFER = 170
 
 export const Sidebar: React.FC = () => {
-    const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, setTheme, theme, setChats } = useAppStore()
+    const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, renameChat, setTheme, theme, setChats, locale, setLocale } = useAppStore()
+    const t = useT()
     const [menuOpen, setMenuOpen] = React.useState(false)
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
     const [me, setMe] = React.useState<MeInfo | null>(null)
     const [searchQuery, setSearchQuery] = React.useState('')
+    const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null)
+    const [renamingChat, setRenamingChat] = React.useState<{ id: string; title: string } | null>(null)
+    const [renameValue, setRenameValue] = React.useState('')
     const searchRef = React.useRef<HTMLInputElement>(null)
+    const renameInputRef = React.useRef<HTMLInputElement>(null)
     const longPressTimerRef = React.useRef<number | null>(null)
 
     React.useEffect(() => {
@@ -42,9 +48,38 @@ export const Sidebar: React.FC = () => {
     }, [])
 
     const handleDelete = (id: string) => {
-        deleteSessionApi(id).catch(() => {})
-        deleteChat(id)
+        setConfirmDelete(id)
     }
+
+    const confirmDeleteChat = () => {
+        if (!confirmDelete) return
+        deleteSessionApi(confirmDelete).catch(() => {})
+        deleteChat(confirmDelete)
+        setConfirmDelete(null)
+    }
+
+    const handleRename = (id: string) => {
+        const chat = chats.find((c) => c.id === id)
+        if (chat) {
+            setRenamingChat({ id, title: chat.title })
+            setRenameValue(chat.title)
+        }
+    }
+
+    const confirmRename = () => {
+        if (!renamingChat || !renameValue.trim()) return
+        renameChat(renamingChat.id, renameValue.trim())
+        patchSession(renamingChat.id, { title: renameValue.trim() }).catch(() => {})
+        setRenamingChat(null)
+        setRenameValue('')
+    }
+
+    // Focus rename input when dialog opens
+    React.useEffect(() => {
+        if (renamingChat) {
+            setTimeout(() => renameInputRef.current?.select(), 50)
+        }
+    }, [renamingChat])
 
     const handlePin = (id: string) => {
         const chat = chats.find((c) => c.id === id)
@@ -108,11 +143,11 @@ export const Sidebar: React.FC = () => {
             <div className="px-3 pt-4 pb-3 space-y-2">
                 <button
                     onClick={createChat}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-b from-fill-secondary to-fill border border-border rounded-xl text-text transition-all duration-200 text-sm font-medium hover:border-primary-mint/30 hover:scale-[1.01] active:scale-[0.99]"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-b from-fill-secondary to-fill border border-border rounded-xl text-text transition-all duration-200 text-sm font-medium hover:border-primary-mint/30 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                     style={{ boxShadow: 'var(--shadow-soft)' }}
                 >
                     <Plus size={15} strokeWidth={2.5} />
-                    <span>New Chat</span>
+                    <span>{t('newChat')}</span>
                 </button>
 
                 {/* Search box */}
@@ -123,7 +158,7 @@ export const Sidebar: React.FC = () => {
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search chats…"
+                        placeholder={t('searchChats')}
                         className="w-full bg-fill-secondary/80 border border-border rounded-lg pl-8 pr-8 py-2 text-xs placeholder:text-text-quaternary focus:outline-none focus:ring-1 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all"
                     />
                     {searchQuery && (
@@ -148,7 +183,7 @@ export const Sidebar: React.FC = () => {
                     if (filtered.length === 0 && q) {
                         return (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <p className="text-xs text-text-quaternary">No matching chats</p>
+                                <p className="text-xs text-text-quaternary">{t('noMatchingChats')}</p>
                             </div>
                         )
                     }
@@ -161,8 +196,8 @@ export const Sidebar: React.FC = () => {
                                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
                                     </svg>
                                 </div>
-                                <p className="text-xs text-text-quaternary">No chats yet</p>
-                                <p className="text-[11px] text-text-quaternary mt-0.5">Start a new conversation</p>
+                                <p className="text-xs text-text-quaternary">{t('noChatsYet')}</p>
+                                <p className="text-[11px] text-text-quaternary mt-0.5">{t('startNewConversation')}</p>
                             </div>
                         )
                     }
@@ -187,13 +222,13 @@ export const Sidebar: React.FC = () => {
                             <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity duration-150">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handlePin(chat.id) }}
-                                    className="p-1 hover:bg-fill rounded-md transition-colors"
+                                    className="p-1 hover:bg-fill rounded-md transition-colors cursor-pointer"
                                 >
                                     <Pin size={12} fill={chat.isPinned ? 'currentColor' : 'none'} />
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); setContextMenu({ id: chat.id, x: e.clientX, y: e.clientY }) }}
-                                    className="p-1 hover:bg-fill rounded-md transition-colors"
+                                    className="p-1 hover:bg-fill rounded-md transition-colors cursor-pointer"
                                 >
                                     <MoreHorizontal size={12} />
                                 </button>
@@ -207,7 +242,7 @@ export const Sidebar: React.FC = () => {
             <div className="mt-auto border-t border-border relative">
                 <div
                     onClick={() => setMenuOpen(!menuOpen)}
-                    className="flex items-center gap-3 px-3 py-3 hover:bg-fill-secondary cursor-pointer transition-colors"
+                    className="flex items-center gap-3 px-3 py-3 hover:bg-fill-secondary transition-colors cursor-pointer"
                 >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-mint/30 to-primary-mint/10 border border-primary-mint/20 flex items-center justify-center text-primary-mint text-xs font-bold shrink-0">
                         {me?.displayName?.[0]?.toUpperCase() ?? 'N'}
@@ -230,21 +265,44 @@ export const Sidebar: React.FC = () => {
                         {/* Theme picker */}
                         <div className="px-3 py-2">
                             <p className="text-[11px] text-text-tertiary mb-2 flex items-center gap-1.5 font-medium">
-                                <Palette size={11} /> Theme
+                                <Palette size={11} /> {t('theme')}
                             </p>
                             <div className="flex gap-1.5">
-                                {THEMES.map((t) => (
+                                {THEMES.map((th) => (
                                     <button
-                                        key={t.value}
-                                        onClick={() => { setTheme(t.value); setMenuOpen(false) }}
+                                        key={th.value}
+                                        onClick={() => { setTheme(th.value); setMenuOpen(false) }}
                                         className={cn(
-                                            'flex-1 py-1.5 rounded-lg text-[11px] transition-all duration-200 border',
-                                            theme === t.value
+                                            'flex-1 py-1.5 rounded-lg text-[11px] transition-all duration-200 border cursor-pointer',
+                                            theme === th.value
                                                 ? 'bg-primary-mint/15 border-primary-mint/30 text-text font-medium'
                                                 : 'border-border hover:bg-fill-secondary text-text-secondary hover:text-text'
                                         )}
                                     >
-                                        {t.label}
+                                        {t(th.labelKey)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Language picker */}
+                        <div className="px-3 py-2">
+                            <p className="text-[11px] text-text-tertiary mb-2 flex items-center gap-1.5 font-medium">
+                                <Globe size={11} /> {t('language')}
+                            </p>
+                            <div className="flex gap-1.5">
+                                {LOCALE_OPTIONS.map((lo) => (
+                                    <button
+                                        key={lo.value}
+                                        onClick={() => { setLocale(lo.value); setMenuOpen(false) }}
+                                        className={cn(
+                                            'flex-1 py-1.5 rounded-lg text-[11px] transition-all duration-200 border cursor-pointer',
+                                            locale === lo.value
+                                                ? 'bg-primary-mint/15 border-primary-mint/30 text-text font-medium'
+                                                : 'border-border hover:bg-fill-secondary text-text-secondary hover:text-text'
+                                        )}
+                                    >
+                                        {lo.label}
                                     </button>
                                 ))}
                             </div>
@@ -254,10 +312,10 @@ export const Sidebar: React.FC = () => {
 
                         <button
                             onClick={handleLogout}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/8 transition-colors rounded-lg mx-0"
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/8 transition-colors rounded-lg mx-0 cursor-pointer"
                         >
                             <LogOut size={14} />
-                            Sign out
+                            {t('signOut')}
                         </button>
                     </div>
                 )}
@@ -276,15 +334,21 @@ export const Sidebar: React.FC = () => {
                 >
                     <button
                         onClick={() => { handlePin(contextMenu.id); setContextMenu(null) }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-fill-secondary transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-fill-secondary transition-colors cursor-pointer"
                     >
-                        <Pin size={13} /> Pin / Unpin
+                        <Pin size={13} /> {t('pinUnpin')}
+                    </button>
+                    <button
+                        onClick={() => { handleRename(contextMenu.id); setContextMenu(null) }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-fill-secondary transition-colors cursor-pointer"
+                    >
+                        <Pencil size={13} /> {t('rename')}
                     </button>
                     <button
                         onClick={() => { handleDelete(contextMenu.id); setContextMenu(null) }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/8 transition-colors"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-destructive hover:bg-destructive/8 transition-colors cursor-pointer"
                     >
-                        <Trash2 size={13} /> Delete
+                        <Trash2 size={13} /> {t('delete')}
                     </button>
                 </div>
             )}
@@ -299,9 +363,74 @@ export const Sidebar: React.FC = () => {
                         <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
                         <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
                     </svg>
-                    <span>Notebook</span>
+                    <span>{t('notebook')}</span>
                 </Link>
             </div>
+
+            {/* Delete confirmation dialog */}
+            {confirmDelete && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setConfirmDelete(null)}>
+                    <div
+                        className="glass border border-border rounded-2xl p-5 w-[320px] animate-slide-up"
+                        style={{ boxShadow: 'var(--shadow-float)' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-sm font-semibold mb-2">{t('deleteChat')}</h3>
+                        <p className="text-xs text-text-secondary mb-5 leading-relaxed">
+                            {t('deleteChatConfirm')}
+                        </p>
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                onClick={() => setConfirmDelete(null)}
+                                className="px-3.5 py-1.5 text-xs rounded-lg border border-border hover:bg-fill-secondary transition-colors cursor-pointer"
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button
+                                onClick={confirmDeleteChat}
+                                className="px-3.5 py-1.5 text-xs rounded-lg bg-destructive text-white hover:bg-destructive/90 transition-colors cursor-pointer"
+                            >
+                                {t('delete')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Rename dialog */}
+            {renamingChat && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setRenamingChat(null)}>
+                    <div
+                        className="glass border border-border rounded-2xl p-5 w-[320px] animate-slide-up"
+                        style={{ boxShadow: 'var(--shadow-float)' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-sm font-semibold mb-3">{t('renameChat')}</h3>
+                        <input
+                            ref={renameInputRef}
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) confirmRename(); if (e.key === 'Escape') setRenamingChat(null) }}
+                            className="w-full bg-fill-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all mb-4 select-text"
+                        />
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                onClick={() => setRenamingChat(null)}
+                                className="px-3.5 py-1.5 text-xs rounded-lg border border-border hover:bg-fill-secondary transition-colors cursor-pointer"
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button
+                                onClick={confirmRename}
+                                className="px-3.5 py-1.5 text-xs rounded-lg bg-primary-mint text-white hover:bg-primary-mint/90 transition-colors cursor-pointer"
+                            >
+                                {t('save')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

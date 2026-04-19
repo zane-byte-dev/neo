@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ActivityItem, AgentTodoItem, AppState, Chat, Message, NoteEntry, Theme } from '../types'
+import type {
+    ActivityItem, AgentTodoItem, AppState, Chat, Message, NoteEntry, Theme,
+    SourceMeta, SourceGuide, NotebookChatMessage, NotebookNote, Artifact, NotebookConfig,
+} from '../types'
+import type { Locale } from '../i18n'
+import { t } from '../i18n'
 
 export const useAppStore = create<AppState>()(
     persist(
@@ -12,6 +17,10 @@ export const useAppStore = create<AppState>()(
                 set({ theme })
             },
 
+            // Locale
+            locale: (navigator.language?.startsWith('zh') ? 'zh' : 'en') as Locale,
+            setLocale: (locale: Locale) => set({ locale }),
+
             // Chat
             chats: [],
             activeChatId: null,
@@ -19,7 +28,7 @@ export const useAppStore = create<AppState>()(
             createChat: () => {
                 const newChat: Chat = {
                     id: Math.random().toString(36).substring(7),
-                    title: 'New Chat',
+                    title: t('newChat'),
                     isPinned: false,
                     createdAt: Date.now(),
                 }
@@ -56,6 +65,9 @@ export const useAppStore = create<AppState>()(
                 const others = updated.filter((c) => !c.isPinned).sort((a, b) => b.createdAt - a.createdAt)
                 return { chats: [...pinned, ...others] }
             }),
+            renameChat: (id: string, title: string) => set((state) => ({
+                chats: state.chats.map((c) => c.id === id ? { ...c, title } : c),
+            })),
 
             // Messages
             messages: {},
@@ -69,7 +81,7 @@ export const useAppStore = create<AppState>()(
                 },
                 // Auto-title from first user message
                 chats: state.chats.map((c) =>
-                    c.id === sessionId && c.title === 'New Chat' && message.role === 'user'
+                    c.id === sessionId && (c.title === 'New Chat' || c.title === '新对话') && message.role === 'user'
                         ? { ...c, title: (message.content || (message.images?.length ? '📷 Image' : '') || (message.files?.length ? `📎 ${message.files[0].filename}` : '')).slice(0, 40) }
                         : c
                 ),
@@ -156,12 +168,57 @@ export const useAppStore = create<AppState>()(
             setNotebookEntries: (entries: NoteEntry[]) => set({ notebookEntries: entries }),
             selectedNote: null,
             setSelectedNote: (note: NoteEntry | null) => set({ selectedNote: note, activeChatId: note ? null : null }),
+
+            // Notebook workspace
+            activeNotebook: null,
+            setActiveNotebook: (name: string | null) => set({
+                activeNotebook: name,
+                // Reset workspace state when switching notebooks
+                sources: [],
+                selectedSourceIds: [],
+                sourceGuides: {},
+                notebookMessages: [],
+                notebookNotes: [],
+                notebookArtifacts: [],
+                notebookConfig: null,
+            }),
+            sources: [],
+            setSources: (sources: SourceMeta[]) => set({ sources }),
+            selectedSourceIds: [],
+            setSelectedSourceIds: (ids: string[]) => set({ selectedSourceIds: ids }),
+            toggleSourceSelected: (id: string) => set((state) => ({
+                selectedSourceIds: state.selectedSourceIds.includes(id)
+                    ? state.selectedSourceIds.filter((x) => x !== id)
+                    : [...state.selectedSourceIds, id],
+            })),
+            sourceGuides: {},
+            setSourceGuide: (id: string, guide: SourceGuide) => set((state) => ({
+                sourceGuides: { ...state.sourceGuides, [id]: guide },
+            })),
+            notebookMessages: [],
+            setNotebookMessages: (messages: NotebookChatMessage[]) => set({ notebookMessages: messages }),
+            appendNotebookMessage: (message: NotebookChatMessage) => set((state) => ({
+                notebookMessages: [...state.notebookMessages, message],
+            })),
+            updateLastNotebookMessage: (partial: Partial<NotebookChatMessage>) => set((state) => {
+                const msgs = [...state.notebookMessages]
+                if (!msgs.length) return {}
+                msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], ...partial }
+                return { notebookMessages: msgs }
+            }),
+            notebookNotes: [],
+            setNotebookNotes: (notes: NotebookNote[]) => set({ notebookNotes: notes }),
+            notebookArtifacts: [],
+            setNotebookArtifacts: (artifacts: Artifact[]) => set({ notebookArtifacts: artifacts }),
+            notebookConfig: null,
+            setNotebookConfig: (config: NotebookConfig | null) => set({ notebookConfig: config }),
         }),
         {
             name: 'neo-web-store',
             // Persist chats + messages + theme, not UI state
             partialize: (state) => ({
                 theme: state.theme,
+                locale: state.locale,
                 selectedModel: state.selectedModel,
                 autoSpeak: state.autoSpeak,
             }),

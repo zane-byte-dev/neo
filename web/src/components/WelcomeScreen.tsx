@@ -2,10 +2,12 @@ import React from 'react'
 import { Sparkles, BookOpen, MessageSquare } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
+import { useT } from '../i18n'
 
 export const WelcomeScreen: React.FC = () => {
     const createChat = useAppStore((s) => s.createChat)
     const navigate = useNavigate()
+    const t = useT()
     return (
         <div className="flex flex-col items-center text-center px-1 py-4 sm:py-10 animate-fade-in">
             {/* Glow icon */}
@@ -18,9 +20,9 @@ export const WelcomeScreen: React.FC = () => {
                 </div>
             </div>
 
-            <h1 className="text-xl sm:text-3xl font-bold mb-1.5 sm:mb-3 tracking-tight text-text">Neo</h1>
+            <h1 className="text-xl sm:text-3xl font-bold mb-1.5 sm:mb-3 tracking-tight text-text">{t('neoTitle')}</h1>
             <p className="text-text-secondary max-w-md mb-5 sm:mb-12 text-sm sm:text-[15px] leading-relaxed">
-                Your local AI assistant with access to tools, files, and your knowledge base.
+                {t('welcomeSubtitle')}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4 max-w-sm w-full">
@@ -32,8 +34,8 @@ export const WelcomeScreen: React.FC = () => {
                     <div className="w-9 h-9 rounded-xl bg-primary-mint/10 flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-primary-mint/15 transition-colors">
                         <MessageSquare size={18} className="text-primary-mint" />
                     </div>
-                    <span className="text-sm font-semibold">New Chat</span>
-                    <span className="text-xs text-text-tertiary mt-0.5">Start a conversation</span>
+                    <span className="text-sm font-semibold">{t('newChat')}</span>
+                    <span className="text-xs text-text-tertiary mt-0.5">{t('startConversation')}</span>
                 </button>
                 <button
                     onClick={() => navigate('/notebook')}
@@ -43,8 +45,8 @@ export const WelcomeScreen: React.FC = () => {
                     <div className="w-9 h-9 rounded-xl bg-accent-indigo/10 flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-accent-indigo/15 transition-colors">
                         <BookOpen size={18} className="text-accent-indigo" />
                     </div>
-                    <span className="text-sm font-semibold">Notebook</span>
-                    <span className="text-xs text-text-tertiary mt-0.5">Browse knowledge base</span>
+                    <span className="text-sm font-semibold">{t('notebook')}</span>
+                    <span className="text-xs text-text-tertiary mt-0.5">{t('browseKnowledgeBase')}</span>
                 </button>
             </div>
         </div>

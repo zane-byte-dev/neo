@@ -4,6 +4,7 @@ import { ArrowLeft, Save, Trash2, Eye, Pencil } from 'lucide-react'
 import { notebookRead, notebookUpdate, notebookCreate, notebookDelete } from '../api'
 import { cn } from '../lib/utils'
 import type { NoteEntry } from '../types'
+import { t } from '../i18n'
 
 interface NoteEditorProps {
     note: NoteEntry | null             // null = create new
@@ -86,7 +87,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                     type="text"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="文章标题…"
+                    placeholder={t('articleTitle')}
                     className="flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-text-quaternary tracking-tight"
                 />
 
@@ -98,12 +99,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                             showMeta ? 'bg-primary-mint/12 text-primary-mint' : 'text-text-tertiary hover:bg-fill-secondary hover:text-text-secondary'
                         )}
                     >
-                        Meta
+                        {t('meta')}
                     </button>
                     <button
                         onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}
                         className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-text"
-                        title={mode === 'edit' ? '预览' : '编辑'}
+                        title={mode === 'edit' ? t('preview') : t('edit')}
                     >
                         {mode === 'edit' ? <Eye size={14} /> : <Pencil size={14} />}
                     </button>
@@ -114,20 +115,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                                     onClick={handleDelete}
                                     className="px-2.5 py-1.5 text-xs bg-destructive text-white rounded-lg font-medium transition-all duration-200 hover:bg-destructive/90"
                                 >
-                                    确认删除
+                                    {t('confirmDelete')}
                                 </button>
                                 <button
                                     onClick={() => setConfirmDelete(false)}
                                     className="px-2.5 py-1.5 text-xs text-text-tertiary hover:bg-fill-secondary rounded-lg transition-colors"
                                 >
-                                    取消
+                                    {t('cancel')}
                                 </button>
                             </div>
                         ) : (
                             <button
                                 onClick={() => setConfirmDelete(true)}
                                 className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-tertiary hover:text-destructive"
-                                title="删除"
+                                title={t('delete')}
                             >
                                 <Trash2 size={14} />
                             </button>
@@ -145,7 +146,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         style={!saving && title.trim() ? { boxShadow: '0 2px 8px rgba(52, 211, 153, 0.25)' } : undefined}
                     >
                         <Save size={12} />
-                        {saving ? '保存中…' : '保存'}
+                        {saving ? t('saving') : t('save')}
                     </button>
                 </div>
             </div>
@@ -153,12 +154,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             {/* Meta fields (collapsible) */}
             {showMeta && (
                 <div className="border-b border-border px-4 md:px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0 bg-fill-secondary/30">
-                    <MetaField label="作者" value={author} onChange={setAuthor} />
-                    <MetaField label="日期" value={date} onChange={setDate} type="date" />
-                    <MetaField label="来源" value={source} onChange={setSource} />
-                    <MetaField label="标签" value={tags} onChange={setTags} placeholder='JSON 如 ["标签1","标签2"]' />
+                    <MetaField label={t('author')} value={author} onChange={setAuthor} />
+                    <MetaField label={t('date')} value={date} onChange={setDate} type="date" />
+                    <MetaField label={t('source')} value={source} onChange={setSource} />
+                    <MetaField label={t('tags')} value={tags} onChange={setTags} placeholder={t('tagsPlaceholder')} />
                     <div className="md:col-span-2">
-                        <MetaField label="摘要" value={summary} onChange={setSummary} />
+                        <MetaField label={t('summary')} value={summary} onChange={setSummary} />
                     </div>
                 </div>
             )}
