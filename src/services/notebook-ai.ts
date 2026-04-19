@@ -27,8 +27,8 @@ import {
     type NotebookEntry,
 } from './notebook-service.js';
 
-// Preferred model for non-tool generation — cheap & good at structured output.
-const AI_MODEL = 'gemma';
+// Default model for non-tool generation — cheap & good at structured output.
+const DEFAULT_MODEL = 'gemma';
 
 // Max characters fed into a single generation prompt (budgeted context window)
 const CTX_MAX = 60_000;
@@ -111,6 +111,7 @@ function tryParseJson<T>(text: string): T | null {
 
 export async function generateSourceGuide(
     entry: NotebookEntry,
+    model?: string,
 ): Promise<SourceGuide> {
     const content = (entry.content ?? '').slice(0, CTX_MAX);
     const prompt = `你在分析一份用户导入的来源文档，请严格以 JSON 输出（不要任何额外说明文字、不要代码围栏）：
@@ -129,7 +130,7 @@ ${content}
 """`;
 
     const out = await getClient().generate(prompt, {
-        model: AI_MODEL,
+        model: model || DEFAULT_MODEL,
         temperature: 0.3,
     });
     const parsed = tryParseJson<{
@@ -152,8 +153,9 @@ export async function generateAndSaveSourceGuide(
     workDir: string,
     notebook: string,
     entry: NotebookEntry,
+    model?: string,
 ): Promise<SourceGuide> {
-    const guide = await generateSourceGuide(entry);
+    const guide = await generateSourceGuide(entry, model);
     nbSaveSourceGuide(workDir, notebook, guide);
     return guide;
 }
@@ -164,6 +166,7 @@ export async function generateNotebookOverview(
     workDir: string,
     notebook: string,
     sourceIds?: string[],
+    model?: string,
 ): Promise<string> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     if (!sources.length) return '';
@@ -176,7 +179,7 @@ ${joined}
 请直接输出概览正文，不需要标题或格式化前缀。`;
 
     const out = await getClient().generate(prompt, {
-        model: AI_MODEL,
+        model: model || DEFAULT_MODEL,
         temperature: 0.4,
     });
     const overview = (out ?? '').trim();
@@ -199,6 +202,7 @@ export async function generateMindMap(
     notebook: string,
     sourceIds: string[] | undefined,
     topic?: string,
+    model?: string,
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
@@ -215,7 +219,7 @@ ${topic ? `- 重点围绕主题："${topic}"` : ''}
 ${joined}`;
 
     const out = await getClient().generate(prompt, {
-        model: AI_MODEL,
+        model: model || DEFAULT_MODEL,
         temperature: 0.4,
     });
 
@@ -264,7 +268,7 @@ export async function generateReport(
     workDir: string,
     notebook: string,
     type: ReportType,
-    options?: { sourceIds?: string[]; customPrompt?: string; title?: string },
+    options?: { sourceIds?: string[]; customPrompt?: string; title?: string; model?: string },
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, options?.sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
@@ -284,7 +288,7 @@ export async function generateReport(
 ${joined}`;
 
     const out = await getClient().generate(prompt, {
-        model: AI_MODEL,
+        model: options?.model || DEFAULT_MODEL,
         temperature: 0.5,
     });
     const markdown = (out ?? '').replace(/^\s*```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
@@ -317,6 +321,7 @@ export async function generateAudioScript(
     workDir: string,
     notebook: string,
     sourceIds?: string[],
+    model?: string,
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
@@ -341,7 +346,7 @@ export async function generateAudioScript(
 ${joined}`;
 
     const out = await getClient().generate(prompt, {
-        model: AI_MODEL,
+        model: model || DEFAULT_MODEL,
         temperature: 0.7,
     });
 
@@ -370,6 +375,7 @@ export type NoteQuickAction = 'merge' | 'outline' | 'feedback' | 'study-guide';
 export async function runNoteQuickAction(
     action: NoteQuickAction,
     notes: Array<{ title: string; content: string }>,
+    model?: string,
 ): Promise<string> {
     if (!notes.length) return '';
     const joined = notes
@@ -385,7 +391,7 @@ export async function runNoteQuickAction(
     };
 
     const out = await getClient().generate(prompts[action], {
-        model: AI_MODEL,
+        model: model || DEFAULT_MODEL,
         temperature: 0.5,
     });
     return (out ?? '').trim();

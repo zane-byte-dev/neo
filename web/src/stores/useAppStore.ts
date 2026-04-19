@@ -192,7 +192,7 @@ export const useAppStore = create<AppState>()(
                     : [...state.selectedSourceIds, id],
             })),
             sourceGuides: {},
-            setSourceGuide: (id: string, guide: SourceGuide) => set((state) => ({
+            setSourceGuide: (id: string, guide: SourceGuide | null) => set((state) => ({
                 sourceGuides: { ...state.sourceGuides, [id]: guide },
             })),
             notebookMessages: [],

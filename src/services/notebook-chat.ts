@@ -23,7 +23,7 @@ import {
     type SourceMeta,
 } from './notebook-service.js';
 
-const CHAT_MODEL = 'gemma';
+const DEFAULT_CHAT_MODEL = 'gemma';
 // Max chars of source context injected per turn
 const MAX_CTX_CHARS = 40_000;
 // Max per-passage length (one source chunk)
@@ -271,6 +271,7 @@ export async function streamNotebookChat(
     selectedSourceIds: string[] | undefined,
     onEvent: (evt: NotebookChatStreamEvent) => void,
     signal?: AbortSignal,
+    model?: string,
 ): Promise<NotebookChatMessage> {
     // 1. Persist user message
     const userEntry: NotebookChatMessage = {
@@ -320,7 +321,7 @@ export async function streamNotebookChat(
         // streaming through a new client method that exposes fullStream for a
         // bare prompt without tools.)
         const out = await getClient().generate(fullPrompt, {
-            model: CHAT_MODEL,
+            model: model || DEFAULT_CHAT_MODEL,
             system: systemPrompt,
             temperature: 0.4,
         });

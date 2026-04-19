@@ -1,20 +1,20 @@
 /**
  * SourcePanel — left column of notebook workspace.
- * Lists sources, allows selecting (checkbox) and adding new ones
- * (URL / YouTube / text / document upload).
+ * Lists sources with checkbox selection, context menu (rename/archive),
+ * and prominent "添加来源" button opening AddSourceModal.
  */
 import React from 'react'
-import { FileText, Link as LinkIcon, Type, Upload, Plus, Trash2, Loader2, Youtube, Check } from 'lucide-react'
-import type { SourceMeta, SourceGuide } from '../../types'
+import { FileText, Link as LinkIcon, Type, Plus, Trash2, Loader2, Youtube, Check, MoreVertical, Pencil, Archive } from 'lucide-react'
+import type { SourceMeta } from '../../types'
 import { useAppStore } from '../../stores/useAppStore'
 import {
     notebookListSources,
-    notebookImportSource,
     notebookGetSourceGuide,
-    uploadFiles,
+    notebookGenerateSourceGuide,
+    notebookArchiveSource,
+    notebookRenameSource,
 } from '../../api'
-
-type AddKind = 'url' | 'text' | 'document'
+import { AddSourceModal } from './AddSourceModal'
 
 interface Props {
     notebook: string
@@ -22,14 +22,11 @@ interface Props {
 }
 
 export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
-    const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuide } = useAppStore()
+    const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuide, sourceGuides } = useAppStore()
     const [loading, setLoading] = React.useState(false)
-    const [adding, setAdding] = React.useState<AddKind | null>(null)
-    const [urlInput, setUrlInput] = React.useState('')
-    const [textTitle, setTextTitle] = React.useState('')
-    const [textContent, setTextContent] = React.useState('')
-    const [importing, setImporting] = React.useState(false)
-    const [importError, setImportError] = React.useState('')
+    const [modalOpen, setModalOpen] = React.useState(false)
+    const [batchGenerating, setBatchGenerating] = React.useState(false)
+    const batchAbort = React.useRef(false)
 
     const load = React.useCallback(async () => {
         setLoading(true)
@@ -38,11 +35,11 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
             setSources(data)
             // Select all by default
             setSelectedSourceIds(data.map((s) => s.id))
-            // Prefetch guides
+            // Prefetch guides (store null for sources with no guide yet)
             data.forEach((s) => {
                 notebookGetSourceGuide(notebook, s.id)
-                    .then((g) => { if (g) setSourceGuide(s.id, g) })
-                    .catch(() => { /* no guide yet */ })
+                    .then((g) => setSourceGuide(s.id, g ?? null))
+                    .catch(() => setSourceGuide(s.id, null))
             })
         } catch (e) {
             console.warn('[SourcePanel] load failed', e)
@@ -53,59 +50,29 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
 
     React.useEffect(() => { load() }, [load])
 
-    const handleImportUrl = async () => {
-        if (!urlInput.trim()) return
-        setImporting(true); setImportError('')
-        try {
-            await notebookImportSource({ notebook, kind: 'url', url: urlInput.trim() })
-            setUrlInput(''); setAdding(null)
-            await load()
-        } catch (e) {
-            setImportError((e as Error).message)
-        } finally { setImporting(false) }
-    }
-
-    const handleImportText = async () => {
-        if (!textContent.trim()) return
-        setImporting(true); setImportError('')
-        try {
-            await notebookImportSource({ notebook, kind: 'text', title: textTitle.trim() || undefined, content: textContent })
-            setTextTitle(''); setTextContent(''); setAdding(null)
-            await load()
-        } catch (e) {
-            setImportError((e as Error).message)
-        } finally { setImporting(false) }
-    }
-
-    const handleUpload = async (files: FileList | null) => {
-        if (!files?.length) return
-        setImporting(true); setImportError('')
-        try {
-            const uploaded = await uploadFiles(Array.from(files))
-            for (const f of uploaded) {
-                if (f.type === 'document') {
-                    await notebookImportSource({
-                        notebook, kind: 'document',
-                        filename: f.filename,
-                        content: f.text,
-                        mimeType: f.mimeType,
-                    })
-                } else if (f.type === 'image') {
-                    // Images: not directly supported as "source" text yet; skip
-                    continue
-                }
-            }
-            setAdding(null)
-            await load()
-        } catch (e) {
-            setImportError((e as Error).message)
-        } finally { setImporting(false) }
-    }
-
     const toggleAll = () => {
         if (selectedSourceIds.length === sources.length) setSelectedSourceIds([])
         else setSelectedSourceIds(sources.map((s) => s.id))
     }
+
+    // Count sources without guides (null = checked but no guide)
+    const missingGuideCount = sources.filter((s) => sourceGuides[s.id] === null).length
+
+    const handleBatchGenerate = async () => {
+        batchAbort.current = false
+        setBatchGenerating(true)
+        const missing = sources.filter((s) => sourceGuides[s.id] === null)
+        for (const s of missing) {
+            if (batchAbort.current) break
+            try {
+                const guide = await notebookGenerateSourceGuide(notebook, s.id)
+                setSourceGuide(s.id, guide)
+            } catch { /* skip failed */ }
+        }
+        setBatchGenerating(false)
+    }
+
+    const handleStopBatch = () => { batchAbort.current = true }
 
     return (
         <div className="flex flex-col h-full bg-bg-container border-r border-border">
@@ -113,7 +80,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                 <FileText size={15} className="text-primary-mint" />
                 <span className="text-sm font-semibold flex-1">来源 ({sources.length})</span>
                 <button
-                    onClick={() => setAdding(adding ? null : 'url')}
+                    onClick={() => setModalOpen(true)}
                     className="p-1.5 hover:bg-fill-secondary rounded-lg text-text-secondary hover:text-primary-mint transition-colors"
                     title="添加来源"
                 >
@@ -121,84 +88,15 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                 </button>
             </div>
 
-            {adding && (
-                <div className="border-b border-border p-3 bg-fill-secondary/40 shrink-0">
-                    <div className="flex gap-1 mb-2">
-                        {([
-                            ['url', LinkIcon, '链接 / YouTube'],
-                            ['text', Type, '粘贴文字'],
-                            ['document', Upload, '上传文件'],
-                        ] as const).map(([k, Icon, label]) => (
-                            <button
-                                key={k}
-                                onClick={() => setAdding(k)}
-                                className={`flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg transition-colors ${adding === k ? 'bg-primary-mint/15 text-primary-mint' : 'hover:bg-fill-secondary text-text-secondary'}`}
-                            >
-                                <Icon size={12} /> {label}
-                            </button>
-                        ))}
-                    </div>
-                    {adding === 'url' && (
-                        <div className="space-y-2">
-                            <input
-                                value={urlInput}
-                                onChange={(e) => setUrlInput(e.target.value)}
-                                placeholder="https://... 或 YouTube 链接"
-                                className="w-full bg-bg-container border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-mint/30"
-                                onKeyDown={(e) => { if (e.key === 'Enter') handleImportUrl() }}
-                            />
-                            <button
-                                onClick={handleImportUrl}
-                                disabled={importing || !urlInput.trim()}
-                                className="w-full bg-primary-mint text-white text-xs font-medium py-2 rounded-lg disabled:opacity-50 hover:bg-primary-mint/90"
-                            >
-                                {importing ? <Loader2 size={12} className="animate-spin mx-auto" /> : '导入'}
-                            </button>
-                        </div>
-                    )}
-                    {adding === 'text' && (
-                        <div className="space-y-2">
-                            <input
-                                value={textTitle}
-                                onChange={(e) => setTextTitle(e.target.value)}
-                                placeholder="标题（可选）"
-                                className="w-full bg-bg-container border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-mint/30"
-                            />
-                            <textarea
-                                value={textContent}
-                                onChange={(e) => setTextContent(e.target.value)}
-                                placeholder="粘贴文字内容..."
-                                rows={6}
-                                className="w-full bg-bg-container border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary-mint/30 resize-none"
-                            />
-                            <button
-                                onClick={handleImportText}
-                                disabled={importing || !textContent.trim()}
-                                className="w-full bg-primary-mint text-white text-xs font-medium py-2 rounded-lg disabled:opacity-50 hover:bg-primary-mint/90"
-                            >
-                                {importing ? <Loader2 size={12} className="animate-spin mx-auto" /> : '保存'}
-                            </button>
-                        </div>
-                    )}
-                    {adding === 'document' && (
-                        <div>
-                            <label className="block border-2 border-dashed border-border hover:border-primary-mint/50 rounded-lg p-4 text-center cursor-pointer transition-colors">
-                                <Upload size={20} className="mx-auto text-text-tertiary mb-1" />
-                                <div className="text-xs text-text-secondary">点击上传 PDF / Word / Markdown / 文本</div>
-                                <input
-                                    type="file"
-                                    multiple
-                                    accept=".pdf,.docx,.doc,.md,.txt,.markdown"
-                                    className="hidden"
-                                    onChange={(e) => handleUpload(e.target.files)}
-                                />
-                            </label>
-                            {importing && <div className="mt-2 text-xs text-text-tertiary flex items-center gap-1"><Loader2 size={12} className="animate-spin" /> 解析中…</div>}
-                        </div>
-                    )}
-                    {importError && <p className="text-xs text-destructive mt-2">{importError}</p>}
-                </div>
-            )}
+            {/* Prominent add button */}
+            <div className="px-3 pt-3 pb-2 shrink-0">
+                <button
+                    onClick={() => setModalOpen(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 border-2 border-dashed border-border hover:border-primary-mint/50 rounded-xl text-sm text-text-secondary hover:text-primary-mint transition-colors"
+                >
+                    <Plus size={15} /> 添加来源
+                </button>
+            </div>
 
             {sources.length > 0 && (
                 <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
@@ -211,6 +109,22 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                         </span>
                         选择全部
                     </button>
+                    {missingGuideCount > 0 && !batchGenerating && (
+                        <button
+                            onClick={handleBatchGenerate}
+                            className="text-xs text-primary-mint hover:underline"
+                        >
+                            批量生成摘要 ({missingGuideCount})
+                        </button>
+                    )}
+                    {batchGenerating && (
+                        <button
+                            onClick={handleStopBatch}
+                            className="text-xs text-warning hover:underline flex items-center gap-1"
+                        >
+                            <Loader2 size={10} className="animate-spin" /> 停止
+                        </button>
+                    )}
                     <span className="ml-auto text-xs text-text-tertiary">已选 {selectedSourceIds.length}</span>
                 </div>
             )}
@@ -236,13 +150,15 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                     <SourceRow
                         key={s.id}
                         source={s}
+                        notebook={notebook}
                         checked={selectedSourceIds.includes(s.id)}
                         onToggle={() => toggleSourceSelected(s.id)}
                         onClick={() => onSelectSource?.(s)}
-                        onReload={load}
                     />
                 ))}
             </div>
+
+            <AddSourceModal notebook={notebook} open={modalOpen} onClose={() => setModalOpen(false)} onImported={load} />
         </div>
     )
 }
@@ -258,14 +174,67 @@ const TYPE_ICON: Record<string, React.ComponentType<{ size?: number; className?:
 
 const SourceRow: React.FC<{
     source: SourceMeta
+    notebook: string
     checked: boolean
     onToggle: () => void
     onClick: () => void
-    onReload: () => void
-}> = ({ source, checked, onToggle, onClick }) => {
-    const { sourceGuides } = useAppStore()
-    const guide: SourceGuide | undefined = sourceGuides[source.id]
+}> = ({ source, notebook, checked, onToggle, onClick }) => {
+    const { sourceGuides, setSourceGuide, setSources, sources } = useAppStore()
+    const guideState = sourceGuides[source.id]   // undefined = loading, null = no guide, SourceGuide = exists
     const Icon = TYPE_ICON[source.type] ?? FileText
+    const [generating, setGenerating] = React.useState(false)
+    const [menuOpen, setMenuOpen] = React.useState(false)
+    const [renaming, setRenaming] = React.useState(false)
+    const [renameTitle, setRenameTitle] = React.useState('')
+    const menuRef = React.useRef<HTMLDivElement>(null)
+
+    // Close menu on outside click
+    React.useEffect(() => {
+        if (!menuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
+    const handleGenerate = async (e: React.MouseEvent) => {
+        e.stopPropagation()
+        setGenerating(true)
+        try {
+            const guide = await notebookGenerateSourceGuide(notebook, source.id)
+            setSourceGuide(source.id, guide)
+        } catch {
+            /* failed, stay as null */
+        } finally {
+            setGenerating(false)
+        }
+    }
+
+    const handleArchive = async () => {
+        setMenuOpen(false)
+        if (!confirm(`移除来源「${source.title}」？\n（文件不会被删除，仅从列表中隐藏）`)) return
+        try {
+            await notebookArchiveSource(notebook, source.id)
+            setSources(sources.filter((s) => s.id !== source.id))
+        } catch (e) { alert((e as Error).message) }
+    }
+
+    const handleStartRename = () => {
+        setMenuOpen(false)
+        setRenameTitle(source.title)
+        setRenaming(true)
+    }
+
+    const handleRename = async () => {
+        const newTitle = renameTitle.trim()
+        if (!newTitle || newTitle === source.title) { setRenaming(false); return }
+        try {
+            const updated = await notebookRenameSource(notebook, source.id, newTitle)
+            setSources(sources.map((s) => s.id === source.id ? { ...s, title: updated.title } : s))
+        } catch (e) { alert((e as Error).message) }
+        setRenaming(false)
+    }
 
     return (
         <div className="group px-3 py-3 hover:bg-fill-secondary cursor-pointer border-b border-border-secondary last:border-b-0 transition-colors">
@@ -281,12 +250,65 @@ const SourceRow: React.FC<{
                         <Icon size={11} className="text-text-tertiary shrink-0" />
                         <span className="text-xs text-text-tertiary uppercase">{source.type}</span>
                     </div>
-                    <div className="text-sm font-medium text-text truncate" title={source.title}>{source.title}</div>
-                    {guide?.summary && (
-                        <p className="text-xs text-text-tertiary mt-1 line-clamp-2 leading-relaxed">{guide.summary}</p>
+                    {renaming ? (
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <input
+                                value={renameTitle}
+                                onChange={(e) => setRenameTitle(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleRename(); if (e.key === 'Escape') setRenaming(false) }}
+                                className="flex-1 text-sm bg-bg border border-border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-mint/40"
+                                autoFocus
+                                onBlur={handleRename}
+                            />
+                        </div>
+                    ) : (
+                        <div className="text-sm font-medium text-text truncate" title={source.title}>{source.title}</div>
                     )}
-                    {!guide && (
-                        <p className="text-xs text-text-quaternary mt-1 italic">正在生成摘要…</p>
+                    {guideState && guideState.summary && (
+                        <p className="text-xs text-text-tertiary mt-1 line-clamp-2 leading-relaxed">{guideState.summary}</p>
+                    )}
+                    {guideState === undefined && (
+                        <p className="text-xs text-text-quaternary mt-1 italic flex items-center gap-1">
+                            <Loader2 size={10} className="animate-spin" /> 加载中…
+                        </p>
+                    )}
+                    {guideState === null && !generating && (
+                        <button
+                            onClick={handleGenerate}
+                            className="text-xs text-primary-mint mt-1 hover:underline"
+                        >
+                            生成摘要
+                        </button>
+                    )}
+                    {generating && (
+                        <p className="text-xs text-text-quaternary mt-1 italic flex items-center gap-1">
+                            <Loader2 size={10} className="animate-spin" /> 正在生成摘要…
+                        </p>
+                    )}
+                </div>
+                {/* Context menu trigger */}
+                <div className="relative shrink-0" ref={menuRef}>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }}
+                        className="p-1 rounded hover:bg-fill text-text-quaternary hover:text-text-secondary opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                        <MoreVertical size={14} />
+                    </button>
+                    {menuOpen && (
+                        <div className="absolute right-0 top-full mt-1 bg-bg-container border border-border rounded-xl py-1 shadow-lg z-50 min-w-[140px] animate-slide-up">
+                            <button
+                                onClick={handleStartRename}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text hover:bg-fill-secondary transition-colors"
+                            >
+                                <Pencil size={12} /> 重命名来源
+                            </button>
+                            <button
+                                onClick={handleArchive}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive hover:bg-fill-secondary transition-colors"
+                            >
+                                <Archive size={12} /> 移除来源
+                            </button>
+                        </div>
                     )}
                 </div>
             </div>

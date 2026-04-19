@@ -12,6 +12,8 @@ import {
     nbImportSource,
     nbGetSourceEntry,
     nbGetSourceGuide,
+    nbArchiveSource,
+    nbRenameSource,
     nbGetConfig,
     nbSetConfig,
     nbListNotes,
@@ -38,6 +40,10 @@ import {
 import { streamNotebookChat } from '../services/notebook-chat.js';
 import { parseUrl, parseYouTube, isYouTubeUrl } from '../services/document-parser.js';
 import { calcUser } from '../services/user-service.js';
+
+function extractModel(body: Record<string, unknown>): string | undefined {
+    return typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
+}
 
 // ── GET /api/notebook — Read-only actions ───────────────────────────────────
 
@@ -279,7 +285,7 @@ export function notebookImportSource(router: Router): void {
             // Fire-and-forget: generate guide in background
             const entry = nbGetSourceEntry(workDir, notebook, imported.id);
             if (entry) {
-                generateAndSaveSourceGuide(workDir, notebook, entry).catch((err) => {
+                generateAndSaveSourceGuide(workDir, notebook, entry, extractModel(body as Record<string, unknown>)).catch((err) => {
                     console.warn(`[notebook] guide generation failed for ${imported.id}:`, err);
                 });
             }
@@ -308,11 +314,47 @@ export function notebookGenerateGuide(router: Router): void {
         if (!entry) { ctx.status = 404; ctx.body = { error: 'Source not found' }; return; }
 
         try {
-            ctx.body = await generateAndSaveSourceGuide(workDir, notebook, entry);
+            ctx.body = await generateAndSaveSourceGuide(workDir, notebook, entry, extractModel(body));
         } catch (err) {
             ctx.status = 500;
             ctx.body = { error: err instanceof Error ? err.message : String(err) };
         }
+    });
+}
+
+// ── Source archive (soft-delete) & rename ────────────────────────────────────
+
+export function notebookSourceActions(router: Router): void {
+    // Soft-delete: set archived=true in frontmatter
+    router.post('/api/notebook/source/archive', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir } = await calcUser(userId);
+        const body = ctx.request.body as Record<string, unknown>;
+
+        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
+        const sourceId = typeof body.sourceId === 'string' ? body.sourceId.trim() : '';
+        if (!notebook || !sourceId) { ctx.status = 400; ctx.body = { error: 'notebook + sourceId required' }; return; }
+
+        if (!nbArchiveSource(workDir, notebook, sourceId)) {
+            ctx.status = 404; ctx.body = { error: 'Source not found' }; return;
+        }
+        ctx.body = { ok: true };
+    });
+
+    // Rename: update title in frontmatter
+    router.post('/api/notebook/source/rename', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir } = await calcUser(userId);
+        const body = ctx.request.body as Record<string, unknown>;
+
+        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
+        const sourceId = typeof body.sourceId === 'string' ? body.sourceId.trim() : '';
+        const title = typeof body.title === 'string' ? body.title.trim() : '';
+        if (!notebook || !sourceId || !title) { ctx.status = 400; ctx.body = { error: 'notebook + sourceId + title required' }; return; }
+
+        const updated = nbRenameSource(workDir, notebook, sourceId, title);
+        if (!updated) { ctx.status = 404; ctx.body = { error: 'Source not found' }; return; }
+        ctx.body = updated;
     });
 }
 
@@ -329,7 +371,7 @@ export function notebookOverview(router: Router): void {
 
         const sourceIds = Array.isArray(body.sourceIds) ? (body.sourceIds as string[]) : undefined;
         try {
-            const overview = await generateNotebookOverview(workDir, notebook, sourceIds);
+            const overview = await generateNotebookOverview(workDir, notebook, sourceIds, extractModel(body));
             ctx.body = { overview };
         } catch (err) {
             ctx.status = 500;
@@ -433,7 +475,7 @@ export function notebookNoteQuickAction(router: Router): void {
         if (!selected.length) { ctx.status = 404; ctx.body = { error: 'No matching notes' }; return; }
 
         try {
-            const result = await runNoteQuickAction(action, selected.map(n => ({ title: n.title, content: n.content })));
+            const result = await runNoteQuickAction(action, selected.map(n => ({ title: n.title, content: n.content })), extractModel(body));
             const saved = nbSaveNote(workDir, notebook, {
                 title: `${action} · ${new Date().toLocaleString('zh-CN')}`,
                 content: result,
@@ -465,14 +507,14 @@ export function notebookGenerateArtifact(router: Router): void {
             let artifact;
             if (type === 'mindmap') {
                 const topic = typeof body.topic === 'string' ? body.topic : undefined;
-                artifact = await generateMindMap(workDir, notebook, sourceIds, topic);
+                artifact = await generateMindMap(workDir, notebook, sourceIds, topic, extractModel(body));
             } else if (type === 'report') {
                 const subtype = (typeof body.subtype === 'string' ? body.subtype : 'briefing') as ReportType;
                 const customPrompt = typeof body.customPrompt === 'string' ? body.customPrompt : undefined;
                 const title = typeof body.title === 'string' ? body.title : undefined;
-                artifact = await generateReport(workDir, notebook, subtype, { sourceIds, customPrompt, title });
+                artifact = await generateReport(workDir, notebook, subtype, { sourceIds, customPrompt, title, model: extractModel(body) });
             } else if (type === 'audio') {
-                artifact = await generateAudioScript(workDir, notebook, sourceIds);
+                artifact = await generateAudioScript(workDir, notebook, sourceIds, extractModel(body));
             } else {
                 ctx.status = 400; ctx.body = { error: `Unknown artifact type: ${type}` }; return;
             }
@@ -526,7 +568,7 @@ export function notebookChat(router: Router): void {
         ctx.req.on('close', () => controller.abort());
 
         try {
-            await streamNotebookChat(workDir, notebook, message, selectedSourceIds, send, controller.signal);
+            await streamNotebookChat(workDir, notebook, message, selectedSourceIds, send, controller.signal, extractModel(body));
         } catch (err) {
             send({ type: 'error', error: err instanceof Error ? err.message : String(err) });
         } finally {

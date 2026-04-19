@@ -220,8 +220,8 @@ export function notebookGetSourceGuide(notebook: string, sourceId: string): Prom
     return apiGet(`/api/notebook?action=source-guide&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`)
 }
 
-export function notebookGenerateSourceGuide(notebook: string, sourceId: string): Promise<SourceGuide> {
-    return _post('/api/notebook/source-guide', { notebook, sourceId }).then((r) => _jsonOrThrow<SourceGuide>(r))
+export function notebookGenerateSourceGuide(notebook: string, sourceId: string, model?: string): Promise<SourceGuide> {
+    return _post('/api/notebook/source-guide', { notebook, sourceId, ...(model ? { model } : {}) }).then((r) => _jsonOrThrow<SourceGuide>(r))
 }
 
 export interface ImportSourcePayload {
@@ -239,6 +239,14 @@ export function notebookImportSource(payload: ImportSourcePayload): Promise<Sour
     return _post('/api/notebook/import', payload).then((r) => _jsonOrThrow<SourceMeta>(r))
 }
 
+export function notebookArchiveSource(notebook: string, sourceId: string): Promise<{ ok: boolean }> {
+    return _post('/api/notebook/source/archive', { notebook, sourceId }).then((r) => _jsonOrThrow<{ ok: boolean }>(r))
+}
+
+export function notebookRenameSource(notebook: string, sourceId: string, title: string): Promise<SourceMeta> {
+    return _post('/api/notebook/source/rename', { notebook, sourceId, title }).then((r) => _jsonOrThrow<SourceMeta>(r))
+}
+
 // Config
 export function notebookGetConfig(notebook: string): Promise<NotebookConfig> {
     return apiGet(`/api/notebook?action=config&notebook=${encodeURIComponent(notebook)}`)
@@ -253,8 +261,8 @@ export function notebookUpdateConfig(notebook: string, partial: Partial<Notebook
     }).then((r) => _jsonOrThrow<NotebookConfig>(r))
 }
 
-export function notebookGenerateOverview(notebook: string, sourceIds?: string[]): Promise<{ overview: string }> {
-    return _post('/api/notebook/overview', { notebook, sourceIds }).then((r) => _jsonOrThrow<{ overview: string }>(r))
+export function notebookGenerateOverview(notebook: string, sourceIds?: string[], model?: string): Promise<{ overview: string }> {
+    return _post('/api/notebook/overview', { notebook, sourceIds, ...(model ? { model } : {}) }).then((r) => _jsonOrThrow<{ overview: string }>(r))
 }
 
 // Notes
@@ -278,8 +286,8 @@ export function notebookConvertNoteToSource(notebook: string, id: string): Promi
 
 export type NoteQuickAction = 'merge' | 'outline' | 'feedback' | 'study-guide'
 
-export function notebookNoteQuickAction(notebook: string, action: NoteQuickAction, ids: string[]): Promise<NotebookNote> {
-    return _post('/api/notebook/note/quick-action', { notebook, action, ids }).then((r) => _jsonOrThrow<NotebookNote>(r))
+export function notebookNoteQuickAction(notebook: string, action: NoteQuickAction, ids: string[], model?: string): Promise<NotebookNote> {
+    return _post('/api/notebook/note/quick-action', { notebook, action, ids, ...(model ? { model } : {}) }).then((r) => _jsonOrThrow<NotebookNote>(r))
 }
 
 // Artifacts
@@ -338,12 +346,13 @@ export async function* streamNotebookChat(
     message: string,
     sourceIds?: string[],
     signal?: AbortSignal,
+    model?: string,
 ): AsyncGenerator<NotebookChatEvent> {
     const res = await fetch('/api/notebook/chat', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notebook, message, ...(sourceIds ? { sourceIds } : {}) }),
+        body: JSON.stringify({ notebook, message, ...(sourceIds ? { sourceIds } : {}), ...(model ? { model } : {}) }),
         signal,
     })
     if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })

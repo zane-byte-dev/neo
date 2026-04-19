@@ -52,6 +52,7 @@ export interface FrontmatterMeta {
     source?: string;
     summary?: string;
     tags?: string[];
+    archived?: boolean;
 }
 
 export function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string } {
@@ -79,6 +80,7 @@ export function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: s
                         meta.tags = clean.split(',').map(t => t.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
                         break;
                     }
+                    case 'archived': meta.archived = val === 'true'; break;
                 }
             }
         }
@@ -95,6 +97,7 @@ export function serializeFrontmatter(meta: FrontmatterMeta, body: string): strin
     if (meta.source)  lines.push(`source: ${meta.source}`);
     if (meta.summary) lines.push(`summary: ${meta.summary}`);
     if (meta.tags?.length) lines.push(`tags: [${meta.tags.join(', ')}]`);
+    if (meta.archived) lines.push(`archived: true`);
     lines.push('---\n');
     lines.push(body);
     return lines.join('\n');
@@ -404,6 +407,7 @@ export function nbListSources(workDir: string, notebook: string): SourceMeta[] {
         try {
             const raw = readFileSync(join(dir, filename), 'utf8');
             const { meta } = parseFrontmatter(raw);
+            if (meta.archived) continue;  // soft-deleted
             const sourceId = filename.replace(/\.md$/, '');
             const title = meta.title || titleFromFilename(filename);
 
@@ -461,6 +465,50 @@ export function nbImportSource(workDir: string, notebook: string, data: SourceIm
 export function nbGetSourceEntry(workDir: string, notebook: string, sourceId: string): NotebookEntry | undefined {
     const entryId = `notebooks/${notebook}/${sourceId}.md`;
     return nbGet(workDir, entryId);
+}
+
+/** Soft-delete a source by setting `archived: true` in frontmatter. */
+export function nbArchiveSource(workDir: string, notebook: string, sourceId: string): boolean {
+    const entryId = `notebooks/${notebook}/${sourceId}.md`;
+    const filePath = join(workDir, entryId);
+    if (!resolve(filePath).startsWith(resolve(workDir) + '/')) return false;
+    if (!existsSync(filePath)) return false;
+
+    const raw = readFileSync(filePath, 'utf8');
+    const { meta, body } = parseFrontmatter(raw);
+    meta.archived = true;
+    writeFileSync(filePath, serializeFrontmatter(meta, body), 'utf8');
+    return true;
+}
+
+/** Rename a source (update title in frontmatter, file stays the same). */
+export function nbRenameSource(workDir: string, notebook: string, sourceId: string, newTitle: string): SourceMeta | undefined {
+    const entryId = `notebooks/${notebook}/${sourceId}.md`;
+    const updated = nbUpdate(workDir, entryId, { title: newTitle });
+    if (!updated) return undefined;
+
+    const dir = notebookBaseDir(workDir, notebook);
+    const guideDir = join(dir, '.meta', 'source-guides');
+    const hasGuide = existsSync(join(guideDir, `${sourceId}.json`));
+
+    let type: SourceMeta['type'] = 'text';
+    const src = updated.source || '';
+    if (/youtube\.com|youtu\.be/i.test(src)) type = 'youtube';
+    else if (src.startsWith('http')) type = 'url';
+    else if (/\.pdf$/i.test(src)) type = 'pdf';
+
+    return {
+        id: sourceId,
+        notebook,
+        entryId,
+        title: updated.title,
+        source: updated.source,
+        date: updated.date,
+        summary: updated.summary,
+        tags: updated.tags,
+        type,
+        hasGuide,
+    };
 }
 
 // ── Source guide (AI summary + topics + questions) ───────────────────────────

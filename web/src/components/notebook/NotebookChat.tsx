@@ -21,6 +21,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
     const {
         sources,
         selectedSourceIds,
+        selectedModel,
         notebookMessages,
         setNotebookMessages,
         appendNotebookMessage,
@@ -83,7 +84,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
         try {
             let full = ''
             let meta: { n: number; sourceId: string; title: string }[] = []
-            for await (const evt of streamNotebookChat(notebook, text, selectedSourceIds, controller.signal) as AsyncGenerator<NotebookChatEvent>) {
+            for await (const evt of streamNotebookChat(notebook, text, selectedSourceIds, controller.signal, selectedModel) as AsyncGenerator<NotebookChatEvent>) {
                 if (evt.type === 'meta' && evt.sources) {
                     meta = evt.sources
                     updateLastNotebookMessage({ citedSources: meta })
