@@ -159,6 +159,10 @@ export interface AppState {
     selectedModel: string
     setSelectedModel: (model: string) => void
 
+    // Auto speak
+    autoSpeak: boolean
+    setAutoSpeak: (v: boolean) => void
+
     // Notebook
     notebookEntries: NoteEntry[]
     setNotebookEntries: (entries: NoteEntry[]) => void

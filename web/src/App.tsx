@@ -20,9 +20,17 @@ const ResizeHandle: React.FC = () => (
 
 // ── Top nav bar shared by all pages ───────────────────────────────────────
 
-const TopNav: React.FC = () => (
+const TopNav: React.FC<{ onMenuClick?: () => void; menuOpen?: boolean }> = ({ onMenuClick, menuOpen }) => (
     <div className="h-11 md:h-12 border-b border-border bg-bg-container/80 backdrop-blur-xl flex items-center px-3 md:px-5 gap-1.5 shrink-0"
          style={{ boxShadow: 'var(--shadow-soft)' }}>
+        {onMenuClick && (
+            <button
+                onClick={onMenuClick}
+                className="md:hidden p-1.5 rounded-lg text-text-secondary hover:bg-fill transition-colors mr-0.5"
+            >
+                {menuOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
+        )}
         <div className="flex items-center gap-1.5 mr-2 md:mr-4">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-mint to-emerald-600 flex items-center justify-center">
                 <span className="text-white text-[10px] font-bold leading-none">N</span>
@@ -51,10 +59,9 @@ const TopNav: React.FC = () => (
 
 // ── /chat page ──────────────────────────────────────────────────────────────────
 
-const ChatPage: React.FC = () => {
+const ChatPage: React.FC<{ sidebarOpen: boolean; setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>> }> = ({ sidebarOpen, setSidebarOpen }) => {
     const [searchParams, setSearchParams] = useSearchParams()
     const { activeChatId, selectOrCreateChat, createChat } = useAppStore()
-    const [sidebarOpen, setSidebarOpen] = React.useState(false)
 
     // On mount: if ?sessionId is in the URL, activate that chat
     React.useEffect(() => {
@@ -111,36 +118,29 @@ const ChatPage: React.FC = () => {
                 />
             )}
 
-            {/* Mobile sidebar toggle */}
-            <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="absolute top-3 left-3 z-50 md:hidden p-2 rounded-xl bg-bg-container border border-border hover:bg-fill transition-colors"
-                style={{ boxShadow: 'var(--shadow-soft)' }}
-            >
-                {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
-            </button>
-
             {/* Mobile sidebar drawer */}
             <div className={cn(
-                'fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-out md:hidden',
+                'fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-out md:hidden pt-11',
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
             )}>
                 <Sidebar />
             </div>
 
             {/* Desktop layout with resizable panels */}
-            <PanelGroup direction="horizontal" className="w-full hidden md:flex">
-                <Panel defaultSize={24} minSize={16} maxSize={38}>
-                    <Sidebar />
-                </Panel>
-                <ResizeHandle />
-                <Panel defaultSize={76} minSize={40}>
-                    <ChatArea />
-                </Panel>
-            </PanelGroup>
+            <div className="w-full hidden md:flex">
+                <PanelGroup direction="horizontal" className="w-full">
+                    <Panel defaultSize={24} minSize={16} maxSize={38}>
+                        <Sidebar />
+                    </Panel>
+                    <ResizeHandle />
+                    <Panel defaultSize={76} minSize={40}>
+                        <ChatArea />
+                    </Panel>
+                </PanelGroup>
+            </div>
 
             {/* Mobile layout (no panels) */}
-            <div className="flex-1 md:hidden">
+            <div className="flex-1 min-w-0 md:hidden">
                 <ChatArea />
             </div>
         </div>
@@ -159,6 +159,7 @@ const NotebookPage: React.FC = () => (
 
 const MainLayout: React.FC = () => {
     const { theme } = useAppStore()
+    const [sidebarOpen, setSidebarOpen] = React.useState(false)
 
     React.useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme)
@@ -166,9 +167,9 @@ const MainLayout: React.FC = () => {
 
     return (
         <div className="h-screen w-screen bg-bg-layout overflow-hidden text-text flex flex-col">
-            <TopNav />
+            <TopNav onMenuClick={() => setSidebarOpen((o) => !o)} menuOpen={sidebarOpen} />
             <Routes>
-                <Route path="/chat"     element={<ChatPage />} />
+                <Route path="/chat"     element={<ChatPage sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />} />
                 <Route path="/notebook" element={<NotebookPage />} />
                 <Route path="*"         element={<Navigate to="/chat" replace />} />
             </Routes>

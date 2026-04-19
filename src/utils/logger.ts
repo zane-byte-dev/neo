@@ -94,7 +94,10 @@ function emit(level: Level, module: string, msg: string, data?: Record<string, u
     // Stderr sink (human-readable)
     const color = LEVEL_COLOR[level];
     const prefix = `${color}[${ts.slice(0, 19).replace('T', ' ')}] [${level.padEnd(8)}] [${module}]${RESET}`;
-    process.stderr.write(`${prefix} ${msg}\n`);
+    const dataSuffix = (data && Object.keys(data).length > 0)
+        ? ` ${inspect(data, { depth: 4, breakLength: 160, compact: true })}`
+        : '';
+    process.stderr.write(`${prefix} ${msg}${dataSuffix}\n`);
 }
 
 // ── Public logger API ─────────────────────────────────────────────────────────

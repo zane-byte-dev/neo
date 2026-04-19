@@ -147,6 +147,10 @@ export const useAppStore = create<AppState>()(
             selectedModel: 'auto',
             setSelectedModel: (model: string) => set({ selectedModel: model }),
 
+            // Auto speak
+            autoSpeak: false,
+            setAutoSpeak: (v: boolean) => set({ autoSpeak: v }),
+
             // Notebook
             notebookEntries: [],
             setNotebookEntries: (entries: NoteEntry[]) => set({ notebookEntries: entries }),
@@ -159,6 +163,7 @@ export const useAppStore = create<AppState>()(
             partialize: (state) => ({
                 theme: state.theme,
                 selectedModel: state.selectedModel,
+                autoSpeak: state.autoSpeak,
             }),
         }
     )

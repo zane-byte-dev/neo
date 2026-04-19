@@ -1,5 +1,5 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, VolumeX } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -28,6 +28,27 @@ function exportChatAsMarkdown(title: string, messages: Message[]) {
     a.download = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, '_').slice(0, MAX_EXPORT_FILENAME_LENGTH)}.md`
     a.click()
     URL.revokeObjectURL(url)
+}
+
+// ── Text-to-speech ────────────────────────────────────────────────────────────
+
+function speakText(text: string) {
+    if (!window.speechSynthesis) return
+    window.speechSynthesis.cancel()
+    const plain = text
+        .replace(/```[\s\S]*?```/g, '') // code blocks
+        .replace(/`[^`]+`/g, '')        // inline code
+        .replace(/#{1,6}\s+/g, '')      // headings
+        .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+        .replace(/\*([^*]+)\*/g, '$1') // italic
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
+        .replace(/^[-*+]\s+/gm, '')    // unordered list
+        .replace(/^\d+\.\s+/gm, '')    // ordered list
+        .replace(/\n{2,}/g, ' ')
+        .trim()
+    if (!plain) return
+    const utt = new SpeechSynthesisUtterance(plain)
+    window.speechSynthesis.speak(utt)
 }
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -269,6 +290,7 @@ const ChatInput: React.FC = () => {
         updateLastAssistantThinking, updateLastAssistantTodos, appendToLastAssistantActivity,
         setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
+        autoSpeak, setAutoSpeak,
     } = useAppStore()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -333,6 +355,8 @@ const ChatInput: React.FC = () => {
 
     const handleSend = async () => {
         if ((!inputValue.trim() && !pendingImages.length && !pendingDocs.length) || !activeChatId || isGenerating) return
+        // Cancel any ongoing speech when user sends a new message
+        window.speechSynthesis?.cancel()
         const text = inputValue.trim()
         const images = pendingImages.length ? [...pendingImages] : undefined
         const documents = pendingDocs.length ? [...pendingDocs] : undefined
@@ -420,6 +444,9 @@ const ChatInput: React.FC = () => {
         } finally {
             if (thinkingAccum) {
                 updateLastAssistantThinking(activeChatId, thinkingAccum)
+            }
+            if (autoSpeak && accumulated) {
+                speakText(accumulated)
             }
             setIsGenerating(false)
             setThinkingStatus('')
@@ -574,8 +601,8 @@ const ChatInput: React.FC = () => {
     }, [activeChatId])
 
     return (
-        <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border safe-bottom">
-            <div className="max-w-3xl mx-auto">
+        <div className="p-3 sm:p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border safe-bottom">
+            <div className="max-w-3xl mx-auto min-w-0">
                 {/* Attachment previews */}
                 {(pendingImages.length > 0 || pendingDocs.length > 0) && (
                     <div className="flex flex-wrap gap-2 mb-2">
@@ -648,8 +675,8 @@ const ChatInput: React.FC = () => {
                         rows={1}
                     />
                     {/* Bottom bar: image upload + model selector + send */}
-                    <div className="flex items-center justify-between px-3 pb-2.5 gap-2">
-                        <div className="flex items-center gap-1 min-w-0 mobile-scroll-x">
+                    <div className="flex items-center justify-between px-3 pb-2.5 gap-2 min-w-0">
+                        <div className="flex items-center gap-1 min-w-0 flex-1 mobile-scroll-x">
                             <button
                                 onClick={() => fileInputRef.current?.click()}
                                 className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0"
@@ -667,20 +694,35 @@ const ChatInput: React.FC = () => {
                             >
                                 <Paperclip size={16} />
                             </button>
-                            {(['auto', 'flash', 'pro', 'deepseek', 'gemma', 'gemini-acp'] as const).map((m) => (
-                                <button
-                                    key={m}
-                                    onClick={() => setSelectedModel(m)}
-                                    className={cn(
-                                        'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200 whitespace-nowrap shrink-0',
-                                        selectedModel === m
-                                            ? 'bg-primary-mint/15 text-primary-mint'
-                                            : 'text-text-quaternary hover:text-text-tertiary hover:bg-fill'
-                                    )}
-                                >
-                                    {m === 'auto' ? '🧠 Auto' : m === 'flash' ? '⚡ Flash' : m === 'pro' ? '✨ Pro' : m === 'deepseek' ? '🐋 DeepSeek' : m === 'gemma' ? '🦙 Gemma' : '💎 Gemini'}
-                                </button>
-                            ))}
+                            <button
+                                onClick={() => {
+                                    const next = !autoSpeak
+                                    setAutoSpeak(next)
+                                    if (!next) window.speechSynthesis?.cancel()
+                                }}
+                                className={cn(
+                                    'p-1.5 rounded-lg transition-all duration-200 shrink-0',
+                                    autoSpeak
+                                        ? 'text-primary-mint bg-primary-mint/10 hover:bg-primary-mint/20'
+                                        : 'text-text-quaternary hover:text-text-secondary hover:bg-fill'
+                                )}
+                                title={autoSpeak ? '关闭自动朗读' : '开启自动朗读'}
+                                type="button"
+                            >
+                                {autoSpeak ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                            </button>
+                            <select
+                                value={selectedModel}
+                                onChange={(e) => setSelectedModel(e.target.value as typeof selectedModel)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-medium bg-transparent text-text-tertiary border border-transparent hover:border-fill hover:bg-fill focus:outline-none focus:border-primary-mint/30 focus:text-primary-mint transition-all duration-200 cursor-pointer shrink-0"
+                            >
+                                <option value="auto">🧠 Auto</option>
+                                <option value="flash">⚡ Flash</option>
+                                <option value="pro">✨ Pro</option>
+                                <option value="deepseek">🐋 DeepSeek</option>
+                                <option value="gemma">🦙 Gemma</option>
+                                <option value="gemini-acp">💎 Gemini</option>
+                            </select>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                             {isGenerating && (
@@ -758,7 +800,7 @@ export const ChatArea: React.FC = () => {
     }, [])
 
     React.useEffect(() => {
-        scrollToBottom()
+        if (chatMessages.length > 0) scrollToBottom()
     }, [chatMessages, scrollToBottom])
 
     const handleScroll = React.useCallback(() => {
@@ -768,9 +810,9 @@ export const ChatArea: React.FC = () => {
     }, [])
 
     return (
-        <div className="flex flex-col h-full bg-bg-container overflow-hidden relative">
+        <div className="flex flex-col h-full bg-bg-container overflow-hidden relative min-w-0">
             {/* Header */}
-            <div className="h-14 border-b border-border flex items-center px-6 pl-14 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+            <div className="h-11 sm:h-14 border-b border-border flex items-center px-4 sm:px-6 pl-14 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <span className="text-sm font-semibold truncate text-text tracking-tight flex-1">
                     {activeChat?.title ?? 'Welcome'}
@@ -793,7 +835,7 @@ export const ChatArea: React.FC = () => {
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-3 sm:px-4 py-6 sm:py-8">
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-3 sm:px-4 py-3 sm:py-8">
                 <div className="max-w-3xl mx-auto space-y-5 sm:space-y-7">
                     {chatMessages.length === 0 && <WelcomeScreen />}
 
