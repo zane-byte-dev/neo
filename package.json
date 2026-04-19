@@ -1,7 +1,7 @@
 {
-    "name": "inkClaw-sentinel",
+    "name": "neo",
     "version": "2.0.0",
-    "description": "inkClaw Sentinel - Intelligent note monitoring service (Node.js version)",
+    "description": "Neo - Intelligent note monitoring service (Node.js version)",
     "type": "module",
     "main": "dist/index.js",
     "scripts": {
@@ -12,7 +12,7 @@
         "dev:bot": "tsc && node --enable-source-maps dist/main.js",
         "start:bot": "node dist/main.js",
         "deploy": "npm run build && npm run web:build && pm2 start ecosystem.config.cjs",
-        "deploy:restart": "npm run build && npm run web:build && pm2 restart inkClaw-bot",
+        "deploy:restart": "npm run build && npm run web:build && pm2 restart neo-bot",
         "pm2:start": "npm run build && pm2 start ecosystem.config.cjs",
         "pm2:stop": "pm2 stop all",
         "pm2:restart": "pm2 restart all",
@@ -26,7 +26,7 @@
         "telegram",
         "bot",
         "notes",
-        "sentinel",
+        "neo",
         "gemini"
     ],
     "author": "Zhengchao",

@@ -1,11 +1,12 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { MessageSquare, BookOpen, Menu, X } from 'lucide-react'
+import { MessageSquare, BookOpen, Menu, X, Droplets } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NotebookPanel } from './components/NotebookPanel'
 import { Login } from './components/Login'
+import { WaterPuzzle } from './components/WaterPuzzle'
 import { useAppStore } from './stores/useAppStore'
 import { checkAuth, type AuthResult } from './api'
 import { cn } from './lib/utils'
@@ -40,6 +41,7 @@ const TopNav: React.FC<{ onMenuClick?: () => void; menuOpen?: boolean }> = ({ on
         {([
             { to: '/chat',     icon: <MessageSquare size={14} />, label: 'Chat' },
             { to: '/notebook', icon: <BookOpen size={14} />,      label: 'Notebook' },
+            { to: '/puzzle',   icon: <Droplets size={14} />,       label: 'Puzzle' },
         ] as const).map(({ to, icon, label }) => (
             <NavLink
                 key={to}
@@ -171,6 +173,7 @@ const MainLayout: React.FC = () => {
             <Routes>
                 <Route path="/chat"     element={<ChatPage sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />} />
                 <Route path="/notebook" element={<NotebookPage />} />
+                <Route path="/puzzle"   element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
                 <Route path="*"         element={<Navigate to="/chat" replace />} />
             </Routes>
         </div>
