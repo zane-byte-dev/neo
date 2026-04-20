@@ -140,6 +140,10 @@ const en = {
     noMessages: 'No messages found',
     user: 'User',
     assistant: 'Assistant',
+    systemPrompt: 'System Prompt',
+    actualPrompt: 'Actual Prompt Sent',
+    noSystemPrompt: 'No system prompt (old record)',
+    noActualPrompt: 'No prompt data (old record)',
 } as const
 
 export default en

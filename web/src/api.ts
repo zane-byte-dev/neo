@@ -564,6 +564,8 @@ export interface UsageRecord {
     fallbackUsed: boolean
     originalModel?: string
     sessionId?: string
+    systemPrompt?: string
+    userPrompt?: string
 }
 
 export interface ModelsResponse {
