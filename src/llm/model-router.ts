@@ -1,25 +1,92 @@
 /**
- * src/llm/model-router.ts — Smart model selection.
- *
- * When the user selects "auto", this module picks the best available model
- * based on task characteristics and provider availability.
- *
- * Priority chain:
- *   1. User explicit selection (not "auto") → use as-is
- *   2. Task needs tools → DeepSeek (cheap, reliable tool-calling)
- *   3. Pure conversation / analysis → Gemini ACP (high quality, OAuth quota)
- *   4. ACP unavailable fallback → DeepSeek
- *   5. No cloud keys → Ollama Gemma (local)
+ * src/llm/model-router.ts — Config-driven smart routing.
  */
 
 import { GEMINI_API_KEY, DEEPSEEK_API_KEY } from '../config.js';
 import { isAcpAvailable } from './providers/gemini-acp.js';
+import { scoreRequest, type ScorerDimensions } from './scorer.js';
+import { getFallbackChain, ROUTING_CONFIG, type Tier } from './routing-config.js';
 
 export interface RouteOptions {
     /** The user's explicit model choice (alias). undefined or 'auto' = smart routing. */
     userModel?: string;
     /** Whether this turn will use tools (agent mode). */
     hasTools: boolean;
+    /** Current user message. */
+    message?: string;
+    /** Total history turn count. */
+    conversationDepth?: number;
+    /** Number of available tools. */
+    toolCount?: number;
+    /** Estimated context tokens. */
+    totalContextTokens?: number;
+    /** Recent route history for momentum. */
+    recentTiers?: Tier[];
+}
+
+export interface SmartRouteDecision {
+    model: string;
+    tier: Tier;
+    score: number;
+    confidence: number;
+    reason: string;
+    dimensions: ScorerDimensions;
+    fallbackChain: string[];
+}
+
+function isModelAliasAvailable(alias: string): boolean {
+    if (alias === 'gemini-acp') return isAcpAvailable();
+    if (alias === 'flash' || alias === 'pro') return Boolean(GEMINI_API_KEY);
+    if (alias === 'deepseek' || alias === 'deepseek-chat' || alias === 'deepseek-reasoner') return Boolean(DEEPSEEK_API_KEY);
+    if (alias === 'gemma') return true;
+    return true;
+}
+
+function pickTierModel(tier: Tier): string {
+    const chain = ROUTING_CONFIG.tiers[tier];
+    return chain.find((m) => isModelAliasAvailable(m)) ?? 'gemma';
+}
+
+export function resolveSmartRoute(opts: RouteOptions): SmartRouteDecision {
+    if (opts.userModel && opts.userModel !== 'auto') {
+        return {
+            model: opts.userModel,
+            tier: 'standard',
+            score: 0,
+            confidence: 1,
+            reason: 'user_selected',
+            dimensions: {
+                simpleIndicators: 0,
+                codeGeneration: 0,
+                multiStep: 0,
+                analyticalReasoning: 0,
+                tokenCount: 0,
+                constraintDensity: 0,
+                toolCount: 0,
+                conversationDepth: 0,
+            },
+            fallbackChain: [opts.userModel],
+        };
+    }
+
+    const scored = scoreRequest({
+        message: opts.message ?? '',
+        conversationDepth: opts.conversationDepth ?? 0,
+        toolCount: opts.toolCount ?? 0,
+        hasTools: opts.hasTools,
+        totalContextTokens: opts.totalContextTokens,
+        recentTiers: opts.recentTiers,
+    });
+    const model = pickTierModel(scored.tier);
+    return {
+        model,
+        tier: scored.tier,
+        score: scored.score,
+        confidence: scored.confidence,
+        reason: scored.reason,
+        dimensions: scored.dimensions,
+        fallbackChain: getFallbackChain(model, scored.tier),
+    };
 }
 
 /**
@@ -27,28 +94,5 @@ export interface RouteOptions {
  * Returns a short alias string (e.g. 'deepseek', 'gemini-acp', 'gemma', 'flash').
  */
 export function resolveSmartModel(opts: RouteOptions): string | undefined {
-    // Explicit user choice — pass through (undefined means "use LLMClient default")
-    if (opts.userModel && opts.userModel !== 'auto') {
-        return opts.userModel;
-    }
-
-    // ── Auto routing ──────────────────────────────────────────────────────
-
-    // Tool-requiring tasks need a model with solid function-calling support.
-    // DeepSeek is cheap and reliable for tool use.
-    if (opts.hasTools) {
-        if (DEEPSEEK_API_KEY) return 'deepseek';
-        if (GEMINI_API_KEY) return 'flash';
-        return 'gemma';  // fallback to local
-    }
-
-    // Pure conversation / analysis — prefer Gemini ACP (best quality, free quota)
-    if (isAcpAvailable()) return 'gemini-acp';
-
-    // ACP not available — use cloud providers
-    if (GEMINI_API_KEY) return 'flash';
-    if (DEEPSEEK_API_KEY) return 'deepseek';
-
-    // Last resort: local model
-    return 'gemma';
+    return resolveSmartRoute(opts).model;
 }

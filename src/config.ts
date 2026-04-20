@@ -14,6 +14,11 @@ function envInt(key: string, fallback: number): number {
     return v ? parseInt(v, 10) : fallback;
 }
 
+function envFloat(key: string, fallback: number): number {
+    const v = process.env[key];
+    return v ? parseFloat(v) : fallback;
+}
+
 // ── Agent / Gemini ───────────────────────────────────────────────────────────
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -26,6 +31,10 @@ export const MAX_SUBAGENT_STEPS = 10;
 
 /** Timeout for each individual Gemini API streaming request (ms) */
 export const GEMINI_API_TIMEOUT_MS = 90_000;
+/** First-chunk timeout for streaming LLM requests (ms). */
+export const STREAM_FIRST_CHUNK_TIMEOUT_MS = envInt('STREAM_FIRST_CHUNK_TIMEOUT_MS', 30_000);
+/** Total timeout for non-streaming LLM requests (ms). */
+export const GENERATE_TIMEOUT_MS = envInt('GENERATE_TIMEOUT_MS', 60_000);
 
 /** Read-file content cap to prevent context flooding (chars) */
 export const READ_FILE_CHAR_LIMIT = 50_000;
@@ -72,6 +81,8 @@ export const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID ?? '';
 
 /** Maximum character length for user text inputs (notes, todos, messages). */
 export const MAX_INPUT_LENGTH = 50_000;
+/** Daily budget limit in USD for paid model calls (0 = unlimited). */
+export const DAILY_COST_LIMIT = envFloat('DAILY_COST_LIMIT', 0);
 
 /** Secret used to sign session cookies. Must be set via SESSION_SECRET env var. */
 export const SESSION_SECRET = process.env.SESSION_SECRET;
