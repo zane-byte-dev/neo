@@ -8,6 +8,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { registerTool } from '../llm/client.js';
 import { autoLoad } from '../utils/auto-loader.js';
+import { log } from '../utils/logger.js';
 import type { Tool } from './_base.js';
 
 function isTool(value: unknown): value is Tool {
@@ -31,5 +32,5 @@ export async function setupTools(): Promise<void> {
         registerTool(tool);
         count++;
     }
-    console.log(`[Tools] ✅ ${count} tools registered`);
+    log.info('Tools', `${count} tools registered`);
 }

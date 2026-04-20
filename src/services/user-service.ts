@@ -15,6 +15,7 @@ import { resolveUserWorkspaceDir } from '../utils/workspace.js';
 import type { UserId } from '../types/platform.js';
 import type { SkillRegistry } from '../skills/skill-registry.js';
 import type { Tool } from '../llm/types.js';
+import { log } from '../utils/logger.js';
 
 export interface UserRow {
     id: string;
@@ -110,10 +111,10 @@ const _contextCache = new Map<UserId, UserContext>();
 export function invalidateUserCache(userId?: UserId): void {
     if (userId) {
         _contextCache.delete(userId);
-        console.log(`[UserService] 🔄 Cache invalidated for user: ${userId}`);
+        log.info('UserService', `Cache invalidated for user: ${userId}`);
     } else {
         _contextCache.clear();
-        console.log(`[UserService] 🔄 Cache invalidated for all users`);
+        log.info('UserService', 'Cache invalidated for all users');
     }
 }
 

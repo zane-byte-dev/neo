@@ -6,6 +6,7 @@ import { join, dirname, isAbsolute, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { execa } from 'execa';
 import { logDangerousCommand } from '../utils/audit-logger.js';
+import { log } from '../utils/logger.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
 import type { Tool, FunctionDeclaration, ToolContext } from '../llm/types.js';
 
@@ -108,7 +109,7 @@ export async function executeTool(
     toolRegistry: Map<string, Tool>,
     context?: ToolContext,
 ): Promise<string> {
-    console.log(`[AgentRuntime] Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
+    log.info('AgentRuntime', `Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
 
     try {
         switch (name) {
@@ -118,7 +119,7 @@ export async function executeTool(
                 // Security: Check for dangerous commands
                 const danger = checkDangerousCommand(command);
                 if (danger.blocked) {
-                    console.warn(`[Security] Dangerous command blocked: ${command.slice(0, 100)}`);
+                    log.warn('Security', `Dangerous command blocked: ${command.slice(0, 100)}`);
                     await logDangerousCommand(command, true, danger.reason);
                     return `[BLOCKED] Dangerous command pattern detected: ${danger.reason}`;
                 }
@@ -200,9 +201,9 @@ ${content}
         }
     } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[AgentRuntime] Tool error (${name}): ${msg}`);
+        log.error('AgentRuntime', `Tool error (${name}): ${msg}`);
         if (err instanceof Error && err.stack) {
-            console.error(`[AgentRuntime] Stack:\n${err.stack}`);
+            log.error('AgentRuntime', `Stack:\n${err.stack}`);
         }
         return `[Error] ${name} failed: ${msg}`;
     }

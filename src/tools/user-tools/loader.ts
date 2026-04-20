@@ -16,6 +16,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseYaml, buildParameters, type YamlMap } from '../../utils/yaml.js';
 import { findRunScript, runToolScript } from './runner.js';
+import { log } from '../../utils/logger.js';
 import type { Tool, ToolContext, FunctionDeclaration } from '../../llm/types.js';
 
 export interface UserToolDefinition {
@@ -88,18 +89,18 @@ export async function loadUserTools(workDir: string): Promise<Map<string, Tool>>
         try {
             yamlText = await readFile(yamlPath, 'utf8');
         } catch {
-            console.warn(`[UserTools] Skipped ${entry.name}: no tool.yaml`);
+            log.warn('UserTools', `Skipped ${entry.name}: no tool.yaml`);
             continue;
         }
 
         if (!yamlText.trim()) {
-            console.warn(`[UserTools] Skipped ${entry.name}: tool.yaml is empty`);
+            log.warn('UserTools', `Skipped ${entry.name}: tool.yaml is empty`);
             continue;
         }
 
         const scriptPath = await findRunScript(toolDir);
         if (!scriptPath) {
-            console.warn(`[UserTools] Skipped ${entry.name}: no run script (run.py/run.ts/run.js/run.sh)`);
+            log.warn('UserTools', `Skipped ${entry.name}: no run script (run.py/run.ts/run.js/run.sh)`);
             continue;
         }
 
@@ -107,7 +108,7 @@ export async function loadUserTools(workDir: string): Promise<Map<string, Tool>>
         try {
             parsed = parseToolYaml(yamlText, toolDir);
         } catch (err: unknown) {
-            console.warn(`[UserTools] Skipped ${entry.name}: ${err instanceof Error ? err.message : String(err)}`);
+            log.warn('UserTools', `Skipped ${entry.name}: ${err instanceof Error ? err.message : String(err)}`);
             continue;
         }
 
@@ -158,7 +159,7 @@ export async function loadUserTools(workDir: string): Promise<Map<string, Tool>>
         };
 
         result.set(declaration.name, tool);
-        console.log(`[UserTools] ✅ Loaded user tool: ${declaration.name} (${entry.name}/)`);
+        log.info('UserTools', `Loaded user tool: ${declaration.name} (${entry.name}/)`);
     }
 
     return result;

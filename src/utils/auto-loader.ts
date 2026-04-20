@@ -9,6 +9,7 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { log } from './logger.js';
 
 /** Files that are never auto-loaded. */
 const SKIP = new Set(['index.ts', 'index.js']);
@@ -33,7 +34,7 @@ export async function autoLoad<T>(
     depth = 0,
 ): Promise<T[]> {
     if (depth >= MAX_DEPTH) {
-        console.warn(`[autoLoad] Max recursion depth (${MAX_DEPTH}) reached at: ${dir}`);
+        log.warn('autoLoad', `Max recursion depth (${MAX_DEPTH}) reached at: ${dir}`);
         return [];
     }
 

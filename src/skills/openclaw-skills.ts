@@ -12,6 +12,7 @@
 import { join } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
+import { log } from '../utils/logger.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ export async function loadOpenClawSkills(baseDir?: string): Promise<OpenClawSkil
             });
         } catch {
             // Skip directories without a valid SKILL.md
-            console.warn(`[OpenClaw] Skipped skill dir (no SKILL.md): ${dirPath}`);
+            log.warn('OpenClaw', `Skipped skill dir (no SKILL.md): ${dirPath}`);
         }
     }
 

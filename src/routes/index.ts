@@ -11,6 +11,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type Router from '@koa/router';
 import { autoLoad } from '../utils/auto-loader.js';
+import { log } from '../utils/logger.js';
 
 function isRouteHandler(value: unknown): value is (router: Router) => void {
     return typeof value === 'function';
@@ -22,5 +23,5 @@ export async function setupRoutes(router: Router): Promise<void> {
     for (const handler of handlers) {
         handler(router);
     }
-    console.log(`[Routes] ✅ ${handlers.length} route handlers registered`);
+    log.info('Routes', `${handlers.length} route handlers registered`);
 }

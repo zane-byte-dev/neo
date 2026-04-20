@@ -9,6 +9,7 @@ import type { Tool } from '../_base.js';
 import { LLMClient, getToolRegistry } from '../../llm/client.js';
 import { buildAiToolSubset } from '../../llm/ai-tools.js';
 import { MAX_SUBAGENT_STEPS } from '../../config.js';
+import { log } from '../../utils/logger.js';
 
 /** Shared LLMClient instance for subagent calls. */
 const llm = new LLMClient();
@@ -83,7 +84,7 @@ export const subagent: Tool = {
         const system = `You have access to these tools: ${availableToolNames.join(', ')}. ` +
             'Use them as needed. Be thorough but concise in your final answer.';
 
-        console.log(`[Subagent] Starting task with ${availableToolNames.length} tools: ${availableToolNames.join(', ')}`);
+        log.info('Subagent', `Starting task with ${availableToolNames.length} tools: ${availableToolNames.join(', ')}`);
 
         const result = await llm.generateWithTools(prompt, toolSet, {
             model: modelAlias,

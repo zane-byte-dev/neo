@@ -11,6 +11,7 @@
 import type { Tool, ToolContext } from '../_base.js';
 import { LLMClient, getToolRegistry } from '../../llm/client.js';
 import { buildAiToolSubset } from '../../llm/ai-tools.js';
+import { log } from '../../utils/logger.js';
 
 /** Shared LLMClient instance for research synthesis. */
 const llm = new LLMClient();
@@ -67,7 +68,7 @@ export const researchTool: Tool = {
 
         const maxSteps = isDeep ? RESEARCH_MAX_STEPS : 8;
 
-        console.log(`[Research] Starting ${isDeep ? 'deep' : 'quick'} research on: ${topic}`);
+        log.info('Research', `Starting ${isDeep ? 'deep' : 'quick'} research on: ${topic}`);
 
         const result = await llm.generateWithTools(prompt, toolSet, {
             system,

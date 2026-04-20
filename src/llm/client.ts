@@ -11,7 +11,8 @@ import { promises as fs } from 'node:fs';
 import { streamText, generateText, stepCountIs, type LanguageModel, type ModelMessage } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
-import { setupLogger } from '../utils/logger.js';
+import { setupLogger, log } from '../utils/logger.js';
+import { recordTokenUsage } from '../utils/token-tracker.js';
 import { GEMINI_API_KEY, DEEPSEEK_API_KEY, OLLAMA_BASE_URL, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
 import { isAcpAvailable, acpStream, acpGenerate, tryStartAcp } from './providers/gemini-acp.js';
@@ -38,7 +39,7 @@ const toolRegistry = new Map<string, Tool>();
 
 export function registerTool(tool: Tool): void {
     toolRegistry.set(tool.declaration.name, tool);
-    console.log(`[AgentRuntime] 🔧 Tool registered: ${tool.declaration.name}`);
+    log.info('AgentRuntime', `Tool registered: ${tool.declaration.name}`);
 }
 
 export function getToolRegistry(): Map<string, Tool> {
@@ -114,7 +115,7 @@ export async function loadSystemInstruction(configDir: string, ...fallbackDirs: 
                 } catch { /* optional */ }
             }
             const merged = parts.join('\n\n---\n\n');
-            console.log(`[AgentRuntime] 📜 Loaded prompt from: ${dir} (${loadedFiles.join(' + ')})`);
+            log.info('AgentRuntime', `Loaded prompt from: ${dir} (${loadedFiles.join(' + ')})`);
             return merged;
         } catch { /* try next dir */ }
     }
@@ -122,7 +123,7 @@ export async function loadSystemInstruction(configDir: string, ...fallbackDirs: 
     for (const dir of dirs) {
         try {
             const content = await fs.readFile(join(dir, 'agent.md'), 'utf8');
-            console.log(`[AgentRuntime] 📜 Loaded agent.md from: ${dir}`);
+            log.info('AgentRuntime', `Loaded agent.md from: ${dir}`);
             return content;
         } catch { /* try next */ }
     }
@@ -162,14 +163,14 @@ export class LLMClient {
 
     constructor() {
         if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY) {
-            console.log('[AgentRuntime] ⚠️ No cloud API key set (GEMINI_API_KEY or DEEPSEEK_API_KEY). Ollama/ACP may still work.');
+            log.warn('AgentRuntime', 'No cloud API key set (GEMINI_API_KEY or DEEPSEEK_API_KEY). Ollama/ACP may still work.');
         }
 
         // Default: prefer Gemini API key → DeepSeek → Ollama
         const defaultModel = GEMINI_API_KEY ? 'flash' : DEEPSEEK_API_KEY ? 'deepseek' : 'gemma';
         this.modelId = resolveModel(GEMINI_MODEL_ENV ?? defaultModel);
         this.enabled = true;
-        console.log(`[AgentRuntime] ✅ Initialized (AI SDK). Model: ${this.modelId}`);
+        log.info('AgentRuntime', `Initialized (AI SDK). Model: ${this.modelId}`);
     }
 
     private async buildPrompt(message: string, workDir: string, history?: string): Promise<string> {
@@ -205,7 +206,7 @@ export class LLMClient {
         images?: string[],
     ): Promise<string | null> {
         if (!this.enabled) {
-            console.warn(`[AgentRuntime] Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
+            log.warn('AgentRuntime', `Skipped (disabled): ${message.slice(0, 60).replace(/\n/g, ' ')}`);
             return null;
         }
 
@@ -228,7 +229,7 @@ export class LLMClient {
                 return text || null;
             } catch (err: unknown) {
                 if (err instanceof Error && err.name === 'AbortError') throw err;
-                console.error('[AgentRuntime] ACP stream error:', err);
+                log.error('AgentRuntime', 'ACP stream error', { error: err instanceof Error ? err.message : String(err) });
                 throw err;
             }
         }
@@ -305,16 +306,30 @@ export class LLMClient {
                         fullText += part.text;
                         break;
                     case 'error':
-                        console.error('[AgentRuntime] Stream error:', part.error);
+                        log.error('AgentRuntime', 'Stream error', { error: part.error instanceof Error ? part.error.message : String(part.error) });
                         onChunk({ type: 'text', text: `\n\n🔥 Stream error: ${part.error instanceof Error ? part.error.message : String(part.error)}` });
                         break;
                 }
             }
 
+            // Record token usage (PromiseLike — wrap in Promise.resolve for .catch)
+            Promise.resolve(result.usage).then((usage) => {
+                if (usage) {
+                    recordTokenUsage({
+                        ts: new Date().toISOString(),
+                        model: effectiveModel,
+                        promptTokens: usage.inputTokens ?? 0,
+                        completionTokens: usage.outputTokens ?? 0,
+                        totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
+                        caller: 'chatWithContextStreaming',
+                    });
+                }
+            }).catch(() => { /* never crash over tracking */ });
+
             return fullText || null;
         } catch (err: unknown) {
             if (err instanceof Error && err.name === 'AbortError') throw err;
-            console.error('[AgentRuntime] LLM call error:', err);
+            log.error('AgentRuntime', 'LLM call error', { error: err instanceof Error ? err.message : String(err) });
             throw err;
         }
     }
@@ -329,7 +344,7 @@ export class LLMClient {
         const modelId = options?.model ? resolveModel(options.model) : this.modelId;
         const steps = options?.maxSteps ?? MAX_SUBAGENT_STEPS;
         try {
-            const { text } = await generateText({
+            const { text, usage } = await generateText({
                 model: createModel(modelId),
                 prompt,
                 system: options?.system,
@@ -337,6 +352,16 @@ export class LLMClient {
                 tools: toolSet,
                 stopWhen: stepCountIs(steps),
             });
+            if (usage) {
+                recordTokenUsage({
+                    ts: new Date().toISOString(),
+                    model: modelId,
+                    promptTokens: usage.inputTokens ?? 0,
+                    completionTokens: usage.outputTokens ?? 0,
+                    totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
+                    caller: 'generateWithTools',
+                });
+            }
             return text || null;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -356,15 +381,25 @@ export class LLMClient {
             try { return await acpGenerate(fullPrompt); } catch { return null; }
         }
         try {
-            const { text } = await generateText({
+            const { text, usage } = await generateText({
                 model: createModel(modelId),
                 prompt,
                 system: options?.system,
                 temperature: options?.temperature,
             });
+            if (usage) {
+                recordTokenUsage({
+                    ts: new Date().toISOString(),
+                    model: modelId,
+                    promptTokens: usage.inputTokens ?? 0,
+                    completionTokens: usage.outputTokens ?? 0,
+                    totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
+                    caller: 'generate',
+                });
+            }
             return text || null;
         } catch (err) {
-            console.error('[LLMClient.generate] error:', err instanceof Error ? err.message : err);
+            log.error('LLMClient', 'generate error', { error: err instanceof Error ? err.message : String(err) });
             return null;
         }
     }

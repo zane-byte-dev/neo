@@ -20,6 +20,7 @@ import {
     type RequestPermissionResponse,
 } from '@agentclientprotocol/sdk';
 import { GEMINI_CLI_PATH } from '../../config.js';
+import { log } from '../../utils/logger.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,7 +57,7 @@ export function isAcpAvailable(): boolean {
  */
 export function tryStartAcp(): void {
     ensureAcp().catch((err) => {
-        console.warn(`[GeminiACP] Failed to start: ${err instanceof Error ? err.message : err}`);
+        log.warn('GeminiACP', `Failed to start: ${err instanceof Error ? err.message : String(err)}`);
     });
 }
 
@@ -66,14 +67,14 @@ async function ensureAcp(): Promise<AcpState> {
     if (initialising) return initialising;
 
     initialising = (async () => {
-        console.log('[GeminiACP] Spawning gemini --acp …');
+        log.info('GeminiACP', 'Spawning gemini --acp …');
         const child = spawn(GEMINI_CLI_PATH, ['--acp'], {
             stdio: ['pipe', 'pipe', 'inherit'],
             env: { ...process.env },
         });
 
         child.on('exit', (code) => {
-            console.log(`[GeminiACP] Process exited (code=${code}). Will respawn on next request.`);
+            log.info('GeminiACP', `Process exited (code=${code}). Will respawn on next request.`);
             state = null;
             initialising = null;
         });
@@ -126,16 +127,16 @@ async function ensureAcp(): Promise<AcpState> {
             clientCapabilities: {},
             clientInfo: { name: 'neo', version: '1.0.0' },
         });
-        console.log(`[GeminiACP] Initialized. Agent: ${initResp.agentInfo?.name ?? 'unknown'}`);
+        log.info('GeminiACP', `Initialized. Agent: ${initResp.agentInfo?.name ?? 'unknown'}`);
 
         // Authenticate (use env-based auth — relies on existing gemini CLI login)
         if (initResp.authMethods?.length) {
             const method = initResp.authMethods[0];
             try {
                 await conn.authenticate({ methodId: method.id });
-                console.log(`[GeminiACP] Authenticated via ${method.id}`);
+                log.info('GeminiACP', `Authenticated via ${method.id}`);
             } catch (e) {
-                console.warn(`[GeminiACP] Auth warning: ${e instanceof Error ? e.message : e}`);
+                log.warn('GeminiACP', `Auth warning: ${e instanceof Error ? e.message : String(e)}`);
             }
         }
 
@@ -144,7 +145,7 @@ async function ensureAcp(): Promise<AcpState> {
             cwd: process.cwd(),
             mcpServers: [],
         });
-        console.log(`[GeminiACP] Session created: ${sessionResp.sessionId}`);
+        log.info('GeminiACP', `Session created: ${sessionResp.sessionId}`);
 
         const s: AcpState = { child, conn, sessionId: sessionResp.sessionId };
         state = s;
@@ -173,7 +174,7 @@ export async function acpGenerate(prompt: string): Promise<string> {
             prompt: [{ type: 'text', text: prompt }],
         });
     } catch (err) {
-        console.error('[GeminiACP] Prompt error:', err);
+        log.error('GeminiACP', 'Prompt error', { error: err instanceof Error ? err.message : String(err) });
         throw err;
     } finally {
         currentPromptId = null;

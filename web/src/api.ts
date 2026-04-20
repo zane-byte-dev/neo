@@ -4,6 +4,8 @@
  * All fetch calls use credentials: 'include' so cookies are sent automatically.
  */
 
+import { createSSEStream } from './lib/stream-transport.js'
+
 // ── REST helper ───────────────────────────────────────────────────────────────
 
 export async function apiGet<T = unknown>(path: string): Promise<T> {
@@ -82,47 +84,13 @@ export async function* streamChat(
     images?: string[],
     documents?: { filename: string; text: string }[],
 ): AsyncGenerator<StreamChunk> {
-    const res = await fetch('/api/chat', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            message,
-            sessionId,
-            ...(model ? { model } : {}),
-            ...(images?.length ? { images } : {}),
-            ...(documents?.length ? { documents } : {}),
-        }),
-        signal,
-    })
-
-    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    if (!res.body) return
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-        while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() ?? ''
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue
-                const data = line.slice(6).trim()
-                if (!data) continue
-                try {
-                    yield JSON.parse(data) as StreamChunk
-                } catch { /* skip malformed */ }
-            }
-        }
-    } finally {
-        reader.releaseLock()
-    }
+    yield* createSSEStream<StreamChunk>('/api/chat', {
+        message,
+        sessionId,
+        ...(model ? { model } : {}),
+        ...(images?.length ? { images } : {}),
+        ...(documents?.length ? { documents } : {}),
+    }, { signal });
 }
 
 // ── Notebook API ──────────────────────────────────────────────────────────────
@@ -352,39 +320,12 @@ export async function* streamNotebookChat(
     signal?: AbortSignal,
     model?: string,
 ): AsyncGenerator<NotebookChatEvent> {
-    const res = await fetch('/api/notebook/chat', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notebook, message, ...(sourceIds ? { sourceIds } : {}), ...(model ? { model } : {}) }),
-        signal,
-    })
-    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    if (!res.body) return
-
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    try {
-        while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            buffer += decoder.decode(value, { stream: true })
-            const lines = buffer.split('\n')
-            buffer = lines.pop() ?? ''
-            for (const line of lines) {
-                if (!line.startsWith('data: ')) continue
-                const data = line.slice(6).trim()
-                if (!data) continue
-                try {
-                    yield JSON.parse(data) as NotebookChatEvent
-                } catch { /* skip */ }
-            }
-        }
-    } finally {
-        reader.releaseLock()
-    }
+    yield* createSSEStream<NotebookChatEvent>('/api/notebook/chat', {
+        notebook,
+        message,
+        ...(sourceIds ? { sourceIds } : {}),
+        ...(model ? { model } : {}),
+    }, { signal });
 }
 
 

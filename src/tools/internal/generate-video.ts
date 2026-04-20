@@ -10,6 +10,7 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { GEMINI_API_KEY } from '../../config.js';
 import type { Tool } from '../_base.js';
+import { log } from '../../utils/logger.js';
 
 const VEO_MODEL = 'veo-3.1-generate-preview';
 const POLL_INTERVAL_MS = 10_000;
@@ -54,7 +55,7 @@ export const generateVideoTool: Tool = {
         const aspectRatio = args.aspect_ratio === '9:16' ? '9:16' : '16:9';
         const sessionId = context?.sessionId ?? 'default';
 
-        console.log(`[generate_video] Starting video generation: "${prompt.slice(0, 80)}..." (${aspectRatio})`);
+        log.info('generate_video', `Starting video generation: "${prompt.slice(0, 80)}..." (${aspectRatio})`);
 
         const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
@@ -83,7 +84,7 @@ export const generateVideoTool: Tool = {
                 operation = await ai.operations.getVideosOperation({ operation });
                 attempts++;
                 if (attempts % 3 === 0) {
-                    console.log(`[generate_video] Polling... attempt ${attempts}`);
+                    log.info('generate_video', `Polling... attempt ${attempts}`);
                 }
             }
 
@@ -104,7 +105,7 @@ export const generateVideoTool: Tool = {
 
             const url = `/api/assets/${sessionId}/${filename}`;
             const stat = await fs.stat(filePath);
-            console.log(`[generate_video] Video saved: ${filePath} (${stat.size} bytes)`);
+            log.info('generate_video', `Video saved: ${filePath} (${stat.size} bytes)`);
 
             // Stream video URL back to client
             if (context?.videoCallback) {
@@ -114,7 +115,7 @@ export const generateVideoTool: Tool = {
             return `Video generated successfully. URL: ${url}`;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[generate_video] Error: ${msg}`);
+            log.error('generate_video', `Error: ${msg}`);
             return `Error generating video: ${msg}`;
         }
     },

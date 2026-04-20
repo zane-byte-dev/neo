@@ -41,6 +41,9 @@ import {
 import { streamNotebookChat } from '../services/notebook-chat.js';
 import { parseUrl, parseYouTube, isYouTubeUrl } from '../services/document-parser.js';
 import { calcUser } from '../services/user-service.js';
+import { getMonthlyUsage } from '../utils/token-tracker.js';
+import { log } from '../utils/logger.js';
+import { createSSEResponse } from '../utils/sse.js';
 
 function extractModel(body: Record<string, unknown>): string | undefined {
     return typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
@@ -149,6 +152,12 @@ export function notebookGet(router: Router): void {
                 const nb = q.notebook?.trim();
                 if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
                 ctx.body = nbReadChatHistory(workDir, nb);
+                break;
+            }
+            // ── Token usage ───────────────────────────────────────────────
+            case 'token-usage': {
+                const month = q.month?.trim() || undefined;
+                ctx.body = await getMonthlyUsage(month);
                 break;
             }
             default:
@@ -287,7 +296,7 @@ export function notebookImportSource(router: Router): void {
             const entry = nbGetSourceEntry(workDir, notebook, imported.id);
             if (entry) {
                 generateAndSaveSourceGuide(workDir, notebook, entry, extractModel(body as Record<string, unknown>)).catch((err) => {
-                    console.warn(`[notebook] guide generation failed for ${imported.id}:`, err);
+                    log.warn('notebook', `guide generation failed for ${imported.id}`, { error: err instanceof Error ? err.message : String(err) });
                 });
             }
 
@@ -555,26 +564,14 @@ export function notebookChat(router: Router): void {
 
         const selectedSourceIds = Array.isArray(body.sourceIds) ? (body.sourceIds as string[]) : undefined;
 
-        ctx.set('Content-Type', 'text/event-stream');
-        ctx.set('Cache-Control', 'no-cache');
-        ctx.set('Connection', 'keep-alive');
-        ctx.status = 200;
-        ctx.respond = false;
-
-        const res = ctx.res;
-        const send = (evt: unknown) => {
-            res.write(`data: ${JSON.stringify(evt)}\n\n`);
-        };
-
-        const controller = new AbortController();
-        ctx.req.on('close', () => controller.abort());
+        const sse = createSSEResponse(ctx);
 
         try {
-            await streamNotebookChat(workDir, notebook, message, selectedSourceIds, send, controller.signal, extractModel(body));
+            await streamNotebookChat(workDir, notebook, message, selectedSourceIds, sse.send, sse.signal, extractModel(body));
         } catch (err) {
-            send({ type: 'error', error: err instanceof Error ? err.message : String(err) });
+            sse.send({ type: 'error', error: err instanceof Error ? err.message : String(err) });
         } finally {
-            res.end();
+            sse.close();
         }
     });
 }

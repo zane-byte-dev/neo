@@ -36,7 +36,7 @@ function resolveTelegramUserId(chatId: string): string | null {
 
 export async function startTelegramBot(): Promise<TelegramRuntime | null> {
     if (!TELEGRAM_BOT_TOKEN) {
-        console.log('[Telegram] TELEGRAM_BOT_TOKEN not set, skip startup');
+        log.info(MODULE, 'TELEGRAM_BOT_TOKEN not set, skip startup');
         return null;
     }
 

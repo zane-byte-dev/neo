@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { readFile } from 'fs/promises';
 
 import { SESSION_SECRET } from './config.js';
+import { log } from './utils/logger.js';
 import { setupTools } from './tools/index.js';
 import { setupRoutes } from './routes/index.js';
 import { SESSION_COOKIE } from './const/cookie.js';
@@ -54,7 +55,7 @@ export class CoreServer {
         });
 
         this.httpServer = app.listen(WEB_PORT, () => {
-            console.log(`[CoreServer] 🌐 http://localhost:${WEB_PORT}`);
+            log.info('CoreServer', `http://localhost:${WEB_PORT}`);
         });
     }
 

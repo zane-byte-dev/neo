@@ -12,6 +12,7 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseSkillFile } from './skill-parser.js';
 import type { SkillDefinition } from './skill-parser.js';
+import { log } from '../utils/logger.js';
 
 export type { SkillDefinition };
 
@@ -70,7 +71,7 @@ export async function loadUserSkills(
         // Skills directory doesn't exist yet — that's fine, return empty registry
         const code = (err as NodeJS.ErrnoException).code;
         if (code === 'ENOENT') {
-            console.log(`[SkillRegistry] No skills directory for user "${userId}" (${skillsDir})`);
+            log.info('SkillRegistry', `No skills directory for user "${userId}" (${skillsDir})`);
             return registry;
         }
         throw err;
@@ -102,20 +103,20 @@ export async function loadUserSkills(
             const skill = parseSkillFile(content, filePath);
 
             if (skill.frontmatter.enabled === false) {
-                console.log(`[SkillRegistry] ⏭  Skipped (disabled): ${skill.frontmatter.name}`);
+                log.info('SkillRegistry', `Skipped (disabled): ${skill.frontmatter.name}`);
                 skipped++;
                 continue;
             }
 
             registry.register(skill);
-            console.log(`[SkillRegistry] 🧠 Loaded: ${skill.frontmatter.name} (${filePath})`);
+            log.info('SkillRegistry', `Loaded: ${skill.frontmatter.name} (${filePath})`);
             loaded++;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[SkillRegistry] ❌ Failed to load ${filePath}: ${msg}`);
+            log.error('SkillRegistry', `Failed to load ${filePath}: ${msg}`);
         }
     }
 
-    console.log(`[SkillRegistry] ✅ ${loaded} skill(s) loaded for "${userId}" (${skipped} skipped)`);
+    log.info('SkillRegistry', `${loaded} skill(s) loaded for "${userId}" (${skipped} skipped)`);
     return registry;
 }

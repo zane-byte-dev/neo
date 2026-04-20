@@ -87,7 +87,8 @@ describe('loadUserTools', () => {
     });
 
     it('skips tool.yaml missing name and warns', async () => {
-        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const { log } = await import('../../../utils/logger.js');
+        const warnSpy = vi.spyOn(log, 'warn').mockImplementation(() => {});
         makeToolDir('noname', 'description: Missing name field', 'run.sh');
 
         const result = await loadUserTools(tmpDir);
