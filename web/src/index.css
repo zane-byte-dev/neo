@@ -8,9 +8,9 @@
 
   /* Light theme tokens (default) */
   --color-text: #111827;
-  --color-text-secondary: #4b5563;
-  --color-text-tertiary: #9ca3af;
-  --color-text-quaternary: #d1d5db;
+  --color-text-secondary: #374151;
+  --color-text-tertiary: #6b7280;
+  --color-text-quaternary: #9ca3af;
 
   --color-border: #e5e7eb;
   --color-border-secondary: #f3f4f6;
@@ -22,6 +22,10 @@
   --color-bg-container: #ffffff;
   --color-bg-elevated: #ffffff;
   --color-bg-layout: #f0f1f5;
+  --color-bg-sidebar: #f7f7f5;
+
+  --color-sidebar-active: #efefef;
+  --color-sidebar-hover: #f3f3f1;
 
   --color-destructive: #ef4444;
   --color-success: #22c55e;
@@ -97,8 +101,8 @@
   --color-accent-indigo: #a5b4fc;
   --color-text: #f3f4f6;
   --color-text-secondary: #d1d5db;
-  --color-text-tertiary: #6b7280;
-  --color-text-quaternary: #374151;
+  --color-text-tertiary: #9ca3af;
+  --color-text-quaternary: #6b7280;
   --color-border: #1f2937;
   --color-border-secondary: #111827;
   --color-fill: #1f2937;
@@ -107,6 +111,9 @@
   --color-bg-container: #0a0f1a;
   --color-bg-elevated: #151b2b;
   --color-bg-layout: #060a14;
+  --color-bg-sidebar: #0d1220;
+  --color-sidebar-active: #1a2236;
+  --color-sidebar-hover: #141c2e;
   --color-user-bubble: #1e293b;
   --color-user-bubble-border: #334155;
   --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.2);
@@ -120,8 +127,8 @@
   --color-accent-indigo: #a5b4fc;
   --color-text: #d4d4d4;
   --color-text-secondary: #a1a1aa;
-  --color-text-tertiary: #52525b;
-  --color-text-quaternary: #3f3f46;
+  --color-text-tertiary: #71717a;
+  --color-text-quaternary: #52525b;
   --color-border: #27272a;
   --color-border-secondary: #1c1c1e;
   --color-bg-container: #18181b;
@@ -130,6 +137,9 @@
   --color-fill-secondary: #1c1c1e;
   --color-fill-tertiary: #18181b;
   --color-bg-elevated: #27272a;
+  --color-bg-sidebar: #141416;
+  --color-sidebar-active: #232326;
+  --color-sidebar-hover: #1e1e21;
   --color-user-bubble: #1e293b;
   --color-user-bubble-border: #334155;
   --shadow-soft: 0 1px 3px 0 rgb(0 0 0 / 0.3);

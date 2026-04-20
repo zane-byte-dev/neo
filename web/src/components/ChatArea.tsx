@@ -681,7 +681,7 @@ const ChatInput: React.FC = () => {
                         onKeyDown={handleKeyDown}
                         onPaste={handlePaste}
                         placeholder={t('askAnything')}
-                        className="w-full bg-transparent px-5 pt-3.5 pb-2 pr-14 focus:outline-none resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
+                        className="w-full bg-transparent px-5 pt-3.5 pb-2 pr-14 focus:outline-none resize-none text-sm leading-relaxed placeholder:text-text-tertiary"
                         rows={1}
                     />
                     {/* Bottom bar: image upload + model selector + send */}
@@ -689,7 +689,7 @@ const ChatInput: React.FC = () => {
                         <div className="flex items-center gap-1 min-w-0 flex-1 mobile-scroll-x">
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0 cursor-pointer"
+                                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-fill transition-all duration-150 shrink-0 cursor-pointer"
                                 title={t('uploadImage')}
                                 type="button"
                             >
@@ -697,7 +697,7 @@ const ChatInput: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => docInputRef.current?.click()}
-                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0 cursor-pointer"
+                                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-fill transition-all duration-150 shrink-0 cursor-pointer"
                                 title={t('attachFile')}
                                 type="button"
                                 disabled={isUploading}
@@ -711,10 +711,10 @@ const ChatInput: React.FC = () => {
                                     if (!next) window.speechSynthesis?.cancel()
                                 }}
                                 className={cn(
-                                    'p-1.5 rounded-lg transition-all duration-200 shrink-0 cursor-pointer',
+                                    'p-1.5 rounded-lg transition-all duration-150 shrink-0 cursor-pointer',
                                     autoSpeak
                                         ? 'text-primary-mint bg-primary-mint/10 hover:bg-primary-mint/20'
-                                        : 'text-text-quaternary hover:text-text-secondary hover:bg-fill'
+                                        : 'text-text-tertiary hover:text-text-secondary hover:bg-fill'
                                 )}
                                 title={autoSpeak ? t('autoSpeakOn') : t('autoSpeakOff')}
                                 type="button"
@@ -724,7 +724,7 @@ const ChatInput: React.FC = () => {
                             <select
                                 value={selectedModel}
                                 onChange={(e) => setSelectedModel(e.target.value as typeof selectedModel)}
-                                className="px-2 py-1 rounded-lg text-[11px] font-medium bg-transparent text-text-tertiary border border-transparent hover:border-fill hover:bg-fill focus:outline-none focus:border-primary-mint/30 focus:text-primary-mint transition-all duration-200 cursor-pointer shrink-0"
+                                className="px-2 py-1 rounded-lg text-[11px] font-medium bg-fill/60 text-text-secondary border border-transparent hover:border-border hover:bg-fill focus:outline-none focus:border-primary-mint/30 focus:text-primary-mint transition-all duration-150 cursor-pointer shrink-0"
                             >
                                 <option value="auto">🧠 Auto</option>
                                 <option value="flash">⚡ Flash</option>
@@ -755,7 +755,7 @@ const ChatInput: React.FC = () => {
                                     className={cn(
                                         'p-2 rounded-xl transition-all duration-200',
                                         !inputValue.trim() && !pendingImages.length && !pendingDocs.length
-                                            ? 'bg-fill text-text-quaternary cursor-not-allowed'
+                                            ? 'bg-fill text-text-tertiary cursor-not-allowed'
                                             : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95 cursor-pointer'
                                     )}
                                     title={t('sendEnter')}
@@ -836,7 +836,7 @@ export const ChatArea: React.FC = () => {
                 {activeChat && chatMessages.length > 0 && !isGenerating && (
                     <button
                         onClick={() => exportChatAsMarkdown(activeChat.title, chatMessages)}
-                        className="ml-2 p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors shrink-0 cursor-pointer"
+                        className="ml-2 p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-fill transition-colors shrink-0 cursor-pointer"
                         title={t('exportMarkdown')}
                     >
                         <Download size={14} />

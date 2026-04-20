@@ -140,21 +140,21 @@ export const Sidebar: React.FC = () => {
     }, [contextMenu])
 
     return (
-        <div className="flex flex-col h-full bg-bg-container border-r border-border w-full overflow-hidden select-none">
+        <div className="flex flex-col h-full bg-bg-sidebar border-r border-border w-full overflow-hidden select-none">
             {/* Header */}
-            <div className="px-2 pt-4 pb-3 space-y-2">
+            <div className="px-3 pt-4 pb-2 space-y-2">
 
 
                 {/* Search box */}
                 <div className="relative">
-                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-quaternary" />
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
                     <input
                         ref={searchRef}
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder={t('searchChats')}
-                        className="w-full bg-fill-secondary/80 border border-border rounded-lg pl-8 pr-8 py-2 text-xs placeholder:text-text-quaternary focus:outline-none focus:ring-1 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all"
+                        className="w-full bg-sidebar-hover border border-transparent rounded-lg pl-8 pr-8 py-[7px] text-[13px] placeholder:text-text-quaternary focus:outline-none focus:bg-bg-container focus:border-border focus:ring-1 focus:ring-primary-mint/20 transition-all"
                     />
                     {searchQuery && (
                         <button
@@ -168,44 +168,46 @@ export const Sidebar: React.FC = () => {
             </div>
 
             {/* Navigation: Notebook & Apps */}
-            <div className="px-2 py-1.5 space-y-0.5 border-b border-border">
+            <div className="px-3 py-1.5 space-y-0.5 border-b border-border">
                 <button
                     onClick={createChat}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-text-secondary transition-all duration-200 text-sm font-medium hover:bg-fill-secondary hover:text-text active:scale-[0.99] cursor-pointer"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-text transition-all duration-150 text-[13px] font-medium hover:bg-sidebar-hover active:scale-[0.98] cursor-pointer"
                 >
-                    <Plus size={15} strokeWidth={2.5} />
+                    <div className="w-5 h-5 rounded-md bg-primary-mint/15 flex items-center justify-center">
+                        <Plus size={13} strokeWidth={2.5} className="text-primary-mint" />
+                    </div>
                     <span>{t('newChat')}</span>
                 </button>
                 <Link
                     to="/notebook"
                     className={cn(
-                        'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all duration-200',
+                        'flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150',
                         location.pathname.startsWith('/notebook')
-                            ? 'bg-fill-secondary text-text font-medium'
-                            : 'text-text-secondary hover:bg-fill-secondary hover:text-text'
+                            ? 'bg-sidebar-active text-text font-medium'
+                            : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
                     )}
                 >
-                    <BookOpen size={15} className="shrink-0" />
+                    <BookOpen size={15} className="shrink-0 text-text-tertiary" />
                     <span>{t('notebook')}</span>
                 </Link>
                 <div>
                     <button
                         onClick={() => setAppsOpen(!appsOpen)}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-text-secondary hover:bg-fill-secondary hover:text-text transition-all duration-200 cursor-pointer"
+                        className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150 cursor-pointer"
                     >
-                        <LayoutGrid size={15} className="shrink-0" />
+                        <LayoutGrid size={15} className="shrink-0 text-text-tertiary" />
                         <span className="flex-1 text-left">{t('apps')}</span>
                         {appsOpen ? <ChevronDown size={13} className="text-text-quaternary" /> : <ChevronRight size={13} className="text-text-quaternary" />}
                     </button>
                     {appsOpen && (
-                        <div className="ml-4 mt-0.5 space-y-0.5">
+                        <div className="ml-5 mt-0.5 space-y-0.5 border-l border-border pl-2">
                             <Link
                                 to="/puzzle"
                                 className={cn(
-                                    'flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs transition-all duration-200',
+                                    'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150',
                                     location.pathname === '/puzzle'
-                                        ? 'bg-fill-secondary text-text font-medium'
-                                        : 'text-text-tertiary hover:bg-fill-secondary hover:text-text'
+                                        ? 'bg-sidebar-active text-text font-medium'
+                                        : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
                                 )}
                             >
                                 <Droplets size={13} className="shrink-0" />
@@ -217,7 +219,9 @@ export const Sidebar: React.FC = () => {
             </div>
 
             {/* Chat list */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-1 space-y-0.5">
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2">
+                <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wider px-2.5 mb-1.5">{t('chats') ?? 'Chats'}</p>
+                <div className="space-y-px">
                 {(() => {
                     const q = searchQuery.toLowerCase().trim()
                     const filtered = q
@@ -227,7 +231,7 @@ export const Sidebar: React.FC = () => {
                     if (filtered.length === 0 && q) {
                         return (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <p className="text-xs text-text-quaternary">{t('noMatchingChats')}</p>
+                                <p className="text-xs text-text-tertiary">{t('noMatchingChats')}</p>
                             </div>
                         )
                     }
@@ -236,11 +240,11 @@ export const Sidebar: React.FC = () => {
                         return (
                             <div className="flex flex-col items-center justify-center py-12 text-center">
                                 <div className="w-10 h-10 rounded-xl bg-fill flex items-center justify-center mb-3">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-quaternary">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-tertiary">
                                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
                                     </svg>
                                 </div>
-                                <p className="text-xs text-text-quaternary">{t('noChatsYet')}</p>
+                                <p className="text-xs text-text-tertiary">{t('noChatsYet')}</p>
                                 <p className="text-[11px] text-text-quaternary mt-0.5">{t('startNewConversation')}</p>
                             </div>
                         )
@@ -255,10 +259,10 @@ export const Sidebar: React.FC = () => {
                             onTouchEnd={handleTouchEnd}
                             onTouchMove={handleTouchMove}
                             className={cn(
-                                'group relative flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 text-sm',
+                                'group relative flex items-center gap-2 px-2.5 py-[7px] rounded-lg cursor-pointer transition-all duration-150 text-[13px]',
                                 activeChatId === chat.id
-                                    ? 'bg-fill-secondary text-text font-medium'
-                                    : 'text-text-secondary hover:bg-fill-secondary'
+                                    ? 'bg-sidebar-active text-text font-medium'
+                                    : 'text-text-secondary hover:bg-sidebar-hover'
                             )}
                         >
                             {chat.isPinned && <Pin size={11} className="shrink-0 text-primary-mint" fill="currentColor" />}
@@ -266,13 +270,13 @@ export const Sidebar: React.FC = () => {
                             <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity duration-150">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handlePin(chat.id) }}
-                                    className="p-1 hover:bg-fill rounded-md transition-colors cursor-pointer"
+                                    className="p-1 hover:bg-fill rounded transition-colors cursor-pointer text-text-tertiary hover:text-text-secondary"
                                 >
                                     <Pin size={12} fill={chat.isPinned ? 'currentColor' : 'none'} />
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); setContextMenu({ id: chat.id, x: e.clientX, y: e.clientY }) }}
-                                    className="p-1 hover:bg-fill rounded-md transition-colors cursor-pointer"
+                                    className="p-1 hover:bg-fill rounded transition-colors cursor-pointer text-text-tertiary hover:text-text-secondary"
                                 >
                                     <MoreHorizontal size={12} />
                                 </button>
@@ -280,24 +284,25 @@ export const Sidebar: React.FC = () => {
                         </div>
                     ))
                 })()}
+                </div>
             </div>
 
             {/* Footer */}
             <div className="mt-auto border-t border-border relative">
                 <div
                     onClick={() => setMenuOpen(!menuOpen)}
-                    className="flex items-center gap-3 px-3 py-3 hover:bg-fill-secondary transition-colors cursor-pointer"
+                    className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-sidebar-hover transition-colors cursor-pointer mx-1 my-1 rounded-lg"
                 >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-mint/30 to-primary-mint/10 border border-primary-mint/20 flex items-center justify-center text-primary-mint text-xs font-bold shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-mint/40 to-primary-mint/15 flex items-center justify-center text-primary-mint text-xs font-bold shrink-0">
                         {me?.displayName?.[0]?.toUpperCase() ?? 'N'}
                     </div>
                     <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-sm font-medium truncate leading-tight">{me?.displayName ?? 'Neo Web'}</span>
+                        <span className="text-[13px] font-medium truncate leading-tight">{me?.displayName ?? 'Neo Web'}</span>
                         {me?.userId && (
                             <span className="text-[11px] text-text-tertiary truncate leading-tight">{me.userId}</span>
                         )}
                     </div>
-                    <MoreHorizontal size={14} className="text-text-tertiary shrink-0" />
+                    <MoreHorizontal size={14} className="text-text-quaternary shrink-0" />
                 </div>
 
                 {menuOpen && (

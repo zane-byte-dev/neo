@@ -7,6 +7,7 @@ const en = {
 
     // Sidebar
     newChat: 'New Chat',
+    chats: 'Chats',
     searchChats: 'Search chats…',
     noMatchingChats: 'No matching chats',
     noChatsYet: 'No chats yet',
