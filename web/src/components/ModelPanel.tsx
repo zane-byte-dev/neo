@@ -338,6 +338,30 @@ const DetailModal: React.FC<{
                         ))}
                     </div>
 
+                    {/* System Prompt */}
+                    <div>
+                        <h3 className="text-xs font-semibold text-text mb-2">{t('systemPrompt')}</h3>
+                        {record.systemPrompt ? (
+                            <pre className="whitespace-pre-wrap break-words text-text-secondary font-mono text-[11px] leading-relaxed bg-fill-secondary border border-border-secondary rounded-lg p-3 max-h-48 overflow-y-auto">
+                                {record.systemPrompt}
+                            </pre>
+                        ) : (
+                            <p className="text-xs text-text-tertiary">{t('noSystemPrompt')}</p>
+                        )}
+                    </div>
+
+                    {/* Actual Prompt Sent */}
+                    <div>
+                        <h3 className="text-xs font-semibold text-text mb-2">{t('actualPrompt')}</h3>
+                        {record.userPrompt ? (
+                            <pre className="whitespace-pre-wrap break-words text-text-secondary font-mono text-[11px] leading-relaxed bg-fill-secondary border border-border-secondary rounded-lg p-3 max-h-48 overflow-y-auto">
+                                {record.userPrompt}
+                            </pre>
+                        ) : (
+                            <p className="text-xs text-text-tertiary">{t('noActualPrompt')}</p>
+                        )}
+                    </div>
+
                     {/* Chat messages */}
                     <div>
                         <h3 className="text-xs font-semibold text-text mb-2">{t('chatMessages')}</h3>

@@ -142,6 +142,10 @@ const zh: Record<TranslationKeys, string> = {
     noMessages: '未找到消息',
     user: '用户',
     assistant: '助手',
+    systemPrompt: '系统提示词',
+    actualPrompt: '实际发送的 Prompt',
+    noSystemPrompt: '无系统提示词（旧记录）',
+    noActualPrompt: '无 Prompt 数据（旧记录）',
 }
 
 export default zh

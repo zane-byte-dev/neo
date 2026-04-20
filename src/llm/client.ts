@@ -388,6 +388,10 @@ export class LLMClient {
                             });
                             const baseReason = route?.reason ?? 'scored';
                             const reason = forceFreeOnly ? `${baseReason}|budget_limited` : baseReason;
+                            // Capture the actual user prompt sent to the model
+                            const actualUserPrompt = useMessages
+                                ? messages.filter(m => m.role === 'user').map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n---\n')
+                                : prompt ?? '';
                             void appendUsageRecord({
                                 timestamp: Date.now(),
                                 userId: context.userId,
@@ -404,6 +408,8 @@ export class LLMClient {
                                 fallbackUsed: alias !== originalAlias,
                                 originalModel: alias !== originalAlias ? resolveModel(originalAlias) : undefined,
                                 sessionId: context.sessionId,
+                                systemPrompt: systemInstruction || undefined,
+                                userPrompt: actualUserPrompt || undefined,
                             }).catch(() => { /* never crash over tracking */ });
                         }
                     }).catch(() => { /* never crash over tracking */ });
