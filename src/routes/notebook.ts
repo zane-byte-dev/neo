@@ -399,6 +399,7 @@ export function notebookConfig(router: Router): void {
             ...(typeof body.chatStyle === 'string' ? { chatStyle: body.chatStyle as 'default' | 'study-guide' | 'custom' } : {}),
             ...(typeof body.customStyle === 'string' ? { customStyle: body.customStyle } : {}),
             ...(typeof body.answerLength === 'string' ? { answerLength: body.answerLength as 'short' | 'default' | 'long' } : {}),
+            ...(typeof body.citationMode === 'string' && ['strict', 'mixed'].includes(body.citationMode as string) ? { citationMode: body.citationMode as 'strict' | 'mixed' } : {}),
         };
         nbSetConfig(workDir, notebook, merged);
         ctx.body = merged;

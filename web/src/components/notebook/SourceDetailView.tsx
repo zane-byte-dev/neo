@@ -1,9 +1,10 @@
 /**
  * SourceDetailView — full-width source content viewer.
  * Shown in the middle column when a source is clicked.
+ * Features: guide / raw content tabs, in-content search (Ctrl+F style).
  */
 import React from 'react'
-import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, HelpCircle } from 'lucide-react'
+import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, HelpCircle, Search, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useAppStore } from '../../stores/useAppStore'
 import { notebookGetSource, notebookGetSourceGuide, notebookGenerateSourceGuide } from '../../api'
 import type { SourceMeta, SourceGuide } from '../../types'
@@ -38,8 +39,28 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
     const [loading, setLoading] = React.useState(true)
     const [guideLoading, setGuideLoading] = React.useState(false)
     const [activeTab, setActiveTab] = React.useState<'content' | 'guide'>('guide')
+    const [searchOpen, setSearchOpen] = React.useState(false)
+    const [searchTerm, setSearchTerm] = React.useState('')
+    const [matchIndex, setMatchIndex] = React.useState(0)
 
     const guide = sourceGuides[source.id] ?? null
+
+    // Ctrl+F shortcut
+    React.useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+                e.preventDefault()
+                setSearchOpen(true)
+                setActiveTab('content')
+            }
+            if (e.key === 'Escape' && searchOpen) {
+                setSearchOpen(false)
+                setSearchTerm('')
+            }
+        }
+        window.addEventListener('keydown', handler)
+        return () => window.removeEventListener('keydown', handler)
+    }, [searchOpen])
 
     // Load source content + guide
     React.useEffect(() => {
@@ -129,6 +150,18 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
                 ))}
             </div>
 
+            {/* Search bar */}
+            {searchOpen && (
+                <SearchBar
+                    term={searchTerm}
+                    setTerm={setSearchTerm}
+                    matchIndex={matchIndex}
+                    setMatchIndex={setMatchIndex}
+                    totalMatches={searchTerm ? countMatches(content ?? '', searchTerm) : 0}
+                    onClose={() => { setSearchOpen(false); setSearchTerm('') }}
+                />
+            )}
+
             {/* Body */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {loading ? (
@@ -138,7 +171,7 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
                 ) : activeTab === 'guide' ? (
                     <GuideView guide={guide} loading={guideLoading} onGenerate={handleGenerateGuide} />
                 ) : (
-                    <ContentView content={content ?? ''} />
+                    <ContentView content={content ?? ''} searchTerm={searchTerm} matchIndex={matchIndex} />
                 )}
             </div>
         </div>
@@ -224,9 +257,53 @@ const GuideView: React.FC<{
     )
 }
 
-// ── Content sub-view ────────────────────────────────────────────────────────
+// ── Content sub-view with search highlighting ───────────────────────────────
 
-const ContentView: React.FC<{ content: string }> = ({ content }) => {
+function countMatches(text: string, term: string): number {
+    if (!term) return 0
+    const lower = text.toLowerCase()
+    const tl = term.toLowerCase()
+    let count = 0, idx = 0
+    while ((idx = lower.indexOf(tl, idx)) !== -1) { count++; idx += tl.length }
+    return count
+}
+
+function highlightText(text: string, term: string, activeIdx: number): React.ReactNode[] {
+    if (!term) return [text]
+    const lower = text.toLowerCase()
+    const tl = term.toLowerCase()
+    const parts: React.ReactNode[] = []
+    let last = 0, matchNum = 0
+    let idx: number
+    while ((idx = lower.indexOf(tl, last)) !== -1) {
+        if (idx > last) parts.push(text.slice(last, idx))
+        const isActive = matchNum === activeIdx
+        parts.push(
+            <mark
+                key={`m-${idx}`}
+                className={isActive ? 'bg-primary-mint/40 text-text rounded px-0.5' : 'bg-warning/30 text-text rounded px-0.5'}
+                data-match-idx={matchNum}
+            >
+                {text.slice(idx, idx + term.length)}
+            </mark>,
+        )
+        matchNum++
+        last = idx + tl.length
+    }
+    if (last < text.length) parts.push(text.slice(last))
+    return parts
+}
+
+const ContentView: React.FC<{ content: string; searchTerm?: string; matchIndex?: number }> = ({ content, searchTerm = '', matchIndex = 0 }) => {
+    const containerRef = React.useRef<HTMLDivElement>(null)
+
+    // Scroll active match into view
+    React.useEffect(() => {
+        if (!searchTerm || !containerRef.current) return
+        const el = containerRef.current.querySelector(`[data-match-idx="${matchIndex}"]`)
+        el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, [searchTerm, matchIndex])
+
     if (!content.trim()) {
         return (
             <div className="flex items-center justify-center py-16 text-text-quaternary text-sm">
@@ -236,10 +313,59 @@ const ContentView: React.FC<{ content: string }> = ({ content }) => {
     }
 
     return (
-        <div className="p-4">
+        <div className="p-4" ref={containerRef}>
             <pre className="text-sm text-text leading-relaxed whitespace-pre-wrap font-sans break-words">
-                {content}
+                {searchTerm ? highlightText(content, searchTerm, matchIndex) : content}
             </pre>
+        </div>
+    )
+}
+
+// ── Search bar ──────────────────────────────────────────────────────────────
+
+const SearchBar: React.FC<{
+    term: string
+    setTerm: (t: string) => void
+    matchIndex: number
+    setMatchIndex: (i: number) => void
+    totalMatches: number
+    onClose: () => void
+}> = ({ term, setTerm, matchIndex, setMatchIndex, totalMatches, onClose }) => {
+    const inputRef = React.useRef<HTMLInputElement>(null)
+
+    React.useEffect(() => { inputRef.current?.focus() }, [])
+
+    const prev = () => setMatchIndex(matchIndex <= 0 ? Math.max(totalMatches - 1, 0) : matchIndex - 1)
+    const next = () => setMatchIndex(matchIndex >= totalMatches - 1 ? 0 : matchIndex + 1)
+
+    return (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-fill-secondary shrink-0">
+            <Search size={13} className="text-text-tertiary shrink-0" />
+            <input
+                ref={inputRef}
+                value={term}
+                onChange={(e) => { setTerm(e.target.value); setMatchIndex(0) }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.shiftKey ? prev() : next() }
+                    if (e.key === 'Escape') onClose()
+                }}
+                placeholder="搜索内容…"
+                className="flex-1 bg-transparent text-sm focus:outline-none min-w-0"
+            />
+            {term && (
+                <span className="text-[10px] text-text-tertiary whitespace-nowrap">
+                    {totalMatches > 0 ? `${matchIndex + 1} / ${totalMatches}` : '无结果'}
+                </span>
+            )}
+            <button onClick={prev} className="p-1 hover:bg-fill rounded transition-colors" title="上一个">
+                <ChevronUp size={13} />
+            </button>
+            <button onClick={next} className="p-1 hover:bg-fill rounded transition-colors" title="下一个">
+                <ChevronDown size={13} />
+            </button>
+            <button onClick={onClose} className="p-1 hover:bg-fill rounded transition-colors" title="关闭搜索">
+                <X size={13} />
+            </button>
         </div>
     )
 }

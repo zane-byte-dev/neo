@@ -542,6 +542,7 @@ export interface NotebookConfig {
     chatStyle?: 'default' | 'study-guide' | 'custom';
     customStyle?: string;
     answerLength?: 'short' | 'default' | 'long';
+    citationMode?: 'strict' | 'mixed';
     overview?: string;         // cached notebook-level overview
 }
 

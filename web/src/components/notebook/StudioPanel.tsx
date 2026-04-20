@@ -411,36 +411,121 @@ const NoteEditorInline: React.FC<{ notebook: string; note: NotebookNote | null; 
     )
 }
 
+// ── Simple markdown-to-HTML for export ──────────────────────────────────────
+
+function markdownToSimpleHtml(md: string): string {
+    // Minimal markdown → HTML conversion for export
+    return md
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+        .replace(/\n{2,}/g, '</p><p>')
+        .replace(/^/, '<p>')
+        .replace(/$/, '</p>')
+}
+
 // ── Artifact viewer ─────────────────────────────────────────────────────────
 
 const ArtifactViewer: React.FC<{ artifact: Artifact; onBack: () => void }> = ({ artifact, onBack }) => {
     const markdown = typeof artifact.data.markdown === 'string' ? artifact.data.markdown : ''
     const script = Array.isArray(artifact.data.script) ? (artifact.data.script as AudioLine[]) : []
 
-    const download = () => {
+    const download = (format: 'md' | 'json' | 'txt' | 'html') => {
         let content = ''
-        let filename = `${artifact.title}.md`
+        let filename = artifact.title
+        let mime = 'text/plain'
+
         if (artifact.type === 'audio') {
-            content = JSON.stringify(script, null, 2)
-            filename = `${artifact.title}.json`
+            if (format === 'json') {
+                content = JSON.stringify(script, null, 2)
+                filename += '.json'
+                mime = 'application/json'
+            } else {
+                // Export as readable transcript
+                content = script.map((l) => `[${l.speaker}] ${l.text}`).join('\n\n')
+                filename += '.txt'
+            }
+        } else if (format === 'html') {
+            // Simple HTML export with basic styling
+            const htmlContent = markdownToSimpleHtml(markdown)
+            content = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${artifact.title}</title>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#1a1a1a}h1,h2,h3{margin-top:1.5em}blockquote{border-left:3px solid #34d399;padding-left:1em;color:#555}code{background:#f5f5f5;padding:2px 6px;border-radius:3px;font-size:0.9em}pre{background:#f5f5f5;padding:1em;border-radius:8px;overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9f9f9}.meta{color:#888;font-size:0.85em;margin-bottom:2em}</style>
+</head>
+<body>
+<div class="meta">来源：Neo Notebook · ${artifact.subtype ?? artifact.type} · ${new Date(artifact.createdAt).toLocaleString('zh-CN')}</div>
+${htmlContent}
+</body></html>`
+            filename += '.html'
+            mime = 'text/html'
         } else {
-            content = markdown
+            // Markdown with metadata header
+            const header = `---\ntitle: ${artifact.title}\ntype: ${artifact.type}${artifact.subtype ? `\nsubtype: ${artifact.subtype}` : ''}\ndate: ${new Date(artifact.createdAt).toISOString()}\n---\n\n`
+            content = header + markdown
+            filename += '.md'
+            mime = 'text/markdown'
         }
-        const blob = new Blob([content], { type: 'text/plain' })
+
+        const blob = new Blob([content], { type: mime })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url; a.download = filename; a.click()
         URL.revokeObjectURL(url)
     }
 
+    const [exportOpen, setExportOpen] = React.useState(false)
+    const exportRef = React.useRef<HTMLDivElement>(null)
+
+    // Close export dropdown on outside click
+    React.useEffect(() => {
+        if (!exportOpen) return
+        const handler = (e: MouseEvent) => {
+            if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [exportOpen])
+
     return (
         <div className="flex flex-col h-full">
             <div className="p-3 border-b border-border flex items-center gap-2 shrink-0">
                 <button onClick={onBack} className="text-xs px-2.5 py-1.5 bg-fill-secondary rounded-lg hover:bg-fill">← 返回</button>
                 <span className="text-sm font-medium flex-1 truncate">{artifact.title}</span>
-                <button onClick={download} className="text-xs text-text-secondary hover:text-text p-1.5 hover:bg-fill-secondary rounded-lg">
-                    <Download size={13} />
-                </button>
+                <div className="relative" ref={exportRef}>
+                    <button
+                        onClick={() => setExportOpen(!exportOpen)}
+                        className="text-xs text-text-secondary hover:text-text p-1.5 hover:bg-fill-secondary rounded-lg flex items-center gap-1"
+                    >
+                        <Download size={13} />
+                        <span className="hidden sm:inline">导出</span>
+                    </button>
+                    {exportOpen && (
+                        <div className="absolute right-0 top-full mt-1 bg-bg-container border border-border rounded-xl py-1 shadow-lg z-50 min-w-[140px] animate-slide-up">
+                            <button onClick={() => { download('md'); setExportOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text hover:bg-fill-secondary transition-colors">
+                                📝 Markdown
+                            </button>
+                            <button onClick={() => { download('html'); setExportOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text hover:bg-fill-secondary transition-colors">
+                                🌐 HTML
+                            </button>
+                            {artifact.type === 'audio' && (
+                                <>
+                                    <button onClick={() => { download('json'); setExportOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text hover:bg-fill-secondary transition-colors">
+                                        📋 JSON (脚本)
+                                    </button>
+                                    <button onClick={() => { download('txt'); setExportOpen(false) }} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text hover:bg-fill-secondary transition-colors">
+                                        📄 TXT (对话稿)
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
             <div className="flex-1 overflow-hidden">
                 {artifact.type === 'mindmap' && <MindMap markdown={markdown} />}

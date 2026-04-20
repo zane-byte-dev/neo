@@ -3,13 +3,14 @@
  * Source-grounded chat with 【N】 citations.
  */
 import React from 'react'
-import { Send, Trash2, Loader2, Sparkles, MessageSquare } from 'lucide-react'
+import { Send, Trash2, Loader2, Sparkles, MessageSquare, Shield, ShieldOff } from 'lucide-react'
 import { useAppStore } from '../../stores/useAppStore'
 import {
     streamNotebookChat,
     notebookChatHistory,
     notebookClearChat,
     notebookSaveNote,
+    notebookUpdateConfig,
     type NotebookChatEvent,
 } from '../../api'
 import { CitationRenderer } from './CitationRenderer'
@@ -32,11 +33,23 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
         appendNotebookMessage,
         updateLastNotebookMessage,
         sourceGuides,
+        notebookConfig,
+        setNotebookConfig,
     } = useAppStore()
     const [input, setInput] = React.useState('')
     const [sending, setSending] = React.useState(false)
     const abortRef = React.useRef<AbortController | null>(null)
     const scrollRef = React.useRef<HTMLDivElement>(null)
+
+    const citationMode = notebookConfig?.citationMode ?? 'strict'
+    const toggleCitationMode = async () => {
+        const next = citationMode === 'strict' ? 'mixed' : 'strict'
+        try {
+            const updated = await notebookUpdateConfig(notebook, { citationMode: next })
+            setNotebookConfig(updated)
+            toast.info(next === 'strict' ? '已切换为严格引用模式' : '已切换为混合引用模式')
+        } catch { /* ignore */ }
+    }
 
     // Load chat history
     React.useEffect(() => {
@@ -155,6 +168,18 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
             <div className="h-14 border-b border-border flex items-center gap-2 px-4 shrink-0">
                 <MessageSquare size={15} className="text-primary-mint" />
                 <span className="text-sm font-semibold flex-1">对话</span>
+                <button
+                    onClick={toggleCitationMode}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ${
+                        citationMode === 'strict'
+                            ? 'bg-primary-mint/10 text-primary-mint'
+                            : 'bg-warning/10 text-warning'
+                    }`}
+                    title={citationMode === 'strict' ? '严格模式：仅基于来源回答' : '混合模式：允许常识补充'}
+                >
+                    {citationMode === 'strict' ? <Shield size={11} /> : <ShieldOff size={11} />}
+                    {citationMode === 'strict' ? '严格' : '混合'}
+                </button>
                 {notebookMessages.length > 0 && (
                     <button
                         onClick={clear}

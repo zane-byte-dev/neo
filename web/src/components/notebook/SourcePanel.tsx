@@ -4,7 +4,7 @@
  * and prominent "添加来源" button opening AddSourceModal.
  */
 import React from 'react'
-import { FileText, Link as LinkIcon, Type, Plus, Trash2, Loader2, Youtube, Check, MoreVertical, Pencil, Archive } from 'lucide-react'
+import { FileText, Link as LinkIcon, Type, Plus, Trash2, Loader2, Youtube, Check, MoreVertical, Pencil, Archive, ArrowUpDown } from 'lucide-react'
 import type { SourceMeta } from '../../types'
 import { useAppStore } from '../../stores/useAppStore'
 import {
@@ -23,11 +23,23 @@ interface Props {
     onSelectSource?: (source: SourceMeta) => void
 }
 
+type SortOption = 'default' | 'type' | 'title' | 'words-desc' | 'words-asc' | 'has-guide'
+
+const SORT_LABELS: Record<SortOption, string> = {
+    default: '默认',
+    type: '类型',
+    title: '标题',
+    'words-desc': '字数↓',
+    'words-asc': '字数↑',
+    'has-guide': '有摘要优先',
+}
+
 export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
     const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuide, sourceGuides } = useAppStore()
     const [loading, setLoading] = React.useState(false)
     const [modalOpen, setModalOpen] = React.useState(false)
     const [batchGenerating, setBatchGenerating] = React.useState(false)
+    const [sortBy, setSortBy] = React.useState<SortOption>('default')
     const batchAbort = React.useRef(false)
 
     const load = React.useCallback(async () => {
@@ -97,6 +109,35 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
         }
     }
 
+    // Sort sources
+    const sortedSources = React.useMemo(() => {
+        const sorted = [...sources]
+        switch (sortBy) {
+            case 'type':
+                sorted.sort((a, b) => a.type.localeCompare(b.type))
+                break
+            case 'title':
+                sorted.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+                break
+            case 'words-desc':
+                sorted.sort((a, b) => (b.wordCount ?? 0) - (a.wordCount ?? 0))
+                break
+            case 'words-asc':
+                sorted.sort((a, b) => (a.wordCount ?? 0) - (b.wordCount ?? 0))
+                break
+            case 'has-guide':
+                sorted.sort((a, b) => {
+                    const aHas = sourceGuides[a.id] ? 1 : 0
+                    const bHas = sourceGuides[b.id] ? 1 : 0
+                    return bHas - aHas
+                })
+                break
+            default: // 'default' — keep original order
+                break
+        }
+        return sorted
+    }, [sources, sortBy, sourceGuides])
+
     return (
         <div className="flex flex-col h-full bg-bg-container border-r border-border">
             <div className="h-14 border-b border-border flex items-center gap-2 px-4 shrink-0">
@@ -130,7 +171,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                         <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${selectedSourceIds.length === sources.length ? 'bg-primary-mint border-primary-mint' : 'border-border'}`}>
                             {selectedSourceIds.length === sources.length && <Check size={10} className="text-white" />}
                         </span>
-                        选择全部
+                        全选
                     </button>
                     {missingGuideCount > 0 && !batchGenerating && (
                         <button
@@ -156,7 +197,20 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                             <Archive size={10} /> 批量移除
                         </button>
                     )}
-                    <span className="ml-auto text-xs text-text-tertiary">已选 {selectedSourceIds.length}</span>
+                    {/* Sort dropdown */}
+                    <div className="ml-auto flex items-center gap-1">
+                        <ArrowUpDown size={10} className="text-text-quaternary" />
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as SortOption)}
+                            className="text-[10px] bg-transparent text-text-tertiary border-none focus:outline-none cursor-pointer"
+                        >
+                            {Object.entries(SORT_LABELS).map(([k, v]) => (
+                                <option key={k} value={k}>{v}</option>
+                            ))}
+                        </select>
+                        <span className="text-[10px] text-text-quaternary">{selectedSourceIds.length}/{sources.length}</span>
+                    </div>
                 </div>
             )}
 
@@ -177,7 +231,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                         <p className="text-xs text-center">还没有来源。<br />点击右上 + 添加来源</p>
                     </div>
                 )}
-                {sources.map((s) => (
+                {sortedSources.map((s) => (
                     <SourceRow
                         key={s.id}
                         source={s}
