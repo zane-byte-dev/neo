@@ -300,7 +300,6 @@ export class LLMClient {
         const startedAt = Date.now();
         const originalAlias = aliasChain[0];
         let lastError: unknown = null;
-        const sameModelRetries = new Map<string, number>();
 
         for (let i = 0; i < aliasChain.length; i++) {
             const alias = aliasChain[i];
@@ -330,101 +329,99 @@ export class LLMClient {
                 }
             }
 
-            try {
-                const baseOpts = {
-                    model: createModel(effectiveModel),
-                    system: systemInstruction,
-                    tools,
-                    stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
-                    abortSignal: withTimeoutSignal(signal, STREAM_FIRST_CHUNK_TIMEOUT_MS),
-                    temperature: 0.7,
-                };
+            let sameModelRetryLeft = ROUTING_CONFIG.fallback.maxRetries;
+            while (true) {
+                try {
+                    const baseOpts = {
+                        model: createModel(effectiveModel),
+                        system: systemInstruction,
+                        tools,
+                        stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
+                        abortSignal: withTimeoutSignal(signal, STREAM_FIRST_CHUNK_TIMEOUT_MS),
+                        temperature: 0.7,
+                    };
 
-                const result = useMessages
-                    ? streamText({ ...baseOpts, messages })
-                    : streamText({ ...baseOpts, prompt: prompt! });
+                    const result = useMessages
+                        ? streamText({ ...baseOpts, messages })
+                        : streamText({ ...baseOpts, prompt: prompt! });
 
-                let fullText = '';
+                    let fullText = '';
 
-                for await (const part of result.fullStream) {
-                    switch (part.type) {
-                        case 'reasoning-delta':
-                            onChunk({ type: 'thought', text: part.text });
-                            break;
-                        case 'tool-call':
-                            onChunk({ type: 'tool_call', toolName: part.toolName, args: part.input as Record<string, unknown> });
-                            break;
-                        case 'tool-result': {
-                            const r = part.output;
-                            const s = typeof r === 'string' ? r : JSON.stringify(r);
-                            onChunk({ type: 'tool_result', toolName: part.toolName, result: s.slice(0, 500) });
-                            break;
+                    for await (const part of result.fullStream) {
+                        switch (part.type) {
+                            case 'reasoning-delta':
+                                onChunk({ type: 'thought', text: part.text });
+                                break;
+                            case 'tool-call':
+                                onChunk({ type: 'tool_call', toolName: part.toolName, args: part.input as Record<string, unknown> });
+                                break;
+                            case 'tool-result': {
+                                const r = part.output;
+                                const s = typeof r === 'string' ? r : JSON.stringify(r);
+                                onChunk({ type: 'tool_result', toolName: part.toolName, result: s.slice(0, 500) });
+                                break;
+                            }
+                            case 'text-delta':
+                                onChunk({ type: 'text', text: part.text });
+                                fullText += part.text;
+                                break;
+                            case 'error':
+                                log.error('AgentRuntime', 'Stream error', { error: part.error instanceof Error ? part.error.message : String(part.error) });
+                                onChunk({ type: 'text', text: `\n\n🔥 Stream error: ${part.error instanceof Error ? part.error.message : String(part.error)}` });
+                                break;
                         }
-                        case 'text-delta':
-                            onChunk({ type: 'text', text: part.text });
-                            fullText += part.text;
-                            break;
-                        case 'error':
-                            log.error('AgentRuntime', 'Stream error', { error: part.error instanceof Error ? part.error.message : String(part.error) });
-                            onChunk({ type: 'text', text: `\n\n🔥 Stream error: ${part.error instanceof Error ? part.error.message : String(part.error)}` });
-                            break;
                     }
-                }
 
-                // Record token usage (PromiseLike — wrap in Promise.resolve for .catch)
-                Promise.resolve(result.usage).then((usage) => {
-                    if (usage) {
-                        const promptTokens = usage.inputTokens ?? 0;
-                        const completionTokens = usage.outputTokens ?? 0;
-                        const totalTokens = usage.totalTokens ?? (promptTokens + completionTokens);
-                        recordTokenUsage({
-                            ts: new Date().toISOString(),
-                            model: effectiveModel,
-                            promptTokens,
-                            completionTokens,
-                            totalTokens,
-                            caller: 'chatWithContextStreaming',
-                        });
-                        const baseReason = route?.reason ?? 'scored';
-                        const reason = forceFreeOnly ? `${baseReason}|budget_limited` : baseReason;
-                        void appendUsageRecord({
-                            timestamp: Date.now(),
-                            userId: context.userId,
-                            model: effectiveModel,
-                            tier: route?.tier ?? 'standard',
-                            score: route?.score ?? 0,
-                            confidence: route?.confidence ?? 1,
-                            reason,
-                            promptTokens,
-                            completionTokens,
-                            totalTokens,
-                            estimatedCost: estimateCost(effectiveModel, promptTokens, completionTokens),
-                            durationMs: Date.now() - startedAt,
-                            fallbackUsed: alias !== originalAlias,
-                            originalModel: alias !== originalAlias ? resolveModel(originalAlias) : undefined,
-                        }).catch(() => { /* never crash over tracking */ });
-                    }
-                }).catch(() => { /* never crash over tracking */ });
+                    // Record token usage (PromiseLike — wrap in Promise.resolve for .catch)
+                    Promise.resolve(result.usage).then((usage) => {
+                        if (usage) {
+                            const promptTokens = usage.inputTokens ?? 0;
+                            const completionTokens = usage.outputTokens ?? 0;
+                            const totalTokens = usage.totalTokens ?? (promptTokens + completionTokens);
+                            recordTokenUsage({
+                                ts: new Date().toISOString(),
+                                model: effectiveModel,
+                                promptTokens,
+                                completionTokens,
+                                totalTokens,
+                                caller: 'chatWithContextStreaming',
+                            });
+                            const baseReason = route?.reason ?? 'scored';
+                            const reason = forceFreeOnly ? `${baseReason}|budget_limited` : baseReason;
+                            void appendUsageRecord({
+                                timestamp: Date.now(),
+                                userId: context.userId,
+                                model: effectiveModel,
+                                tier: route?.tier ?? 'standard',
+                                score: route?.score ?? 0,
+                                confidence: route?.confidence ?? 1,
+                                reason,
+                                promptTokens,
+                                completionTokens,
+                                totalTokens,
+                                estimatedCost: estimateCost(effectiveModel, promptTokens, completionTokens),
+                                durationMs: Date.now() - startedAt,
+                                fallbackUsed: alias !== originalAlias,
+                                originalModel: alias !== originalAlias ? resolveModel(originalAlias) : undefined,
+                            }).catch(() => { /* never crash over tracking */ });
+                        }
+                    }).catch(() => { /* never crash over tracking */ });
 
-                return fullText || null;
-            } catch (err: unknown) {
-                if (err instanceof Error && err.name === 'AbortError') throw err;
-                lastError = err;
-                const kind = classifyError(err);
-                if (kind === 'retry-same') {
-                    const retries = sameModelRetries.get(alias) ?? 0;
-                    if (retries >= ROUTING_CONFIG.fallback.maxRetries) {
-                        if (i >= aliasChain.length - 1) throw err;
+                    return fullText || null;
+                } catch (err: unknown) {
+                    if (err instanceof Error && err.name === 'AbortError') throw err;
+                    lastError = err;
+                    const kind = classifyError(err);
+                    if (kind === 'retry-same' && sameModelRetryLeft > 0) {
+                        sameModelRetryLeft--;
+                        await sleep(1000);
                         continue;
                     }
-                    sameModelRetries.set(alias, retries + 1);
-                    await sleep(1000);
-                    i--;
-                    continue;
-                }
-                if (kind === 'fatal' || i >= aliasChain.length - 1) {
-                    log.error('AgentRuntime', 'LLM call error', { error: err instanceof Error ? err.message : String(err), model: effectiveModel });
-                    throw err;
+                    if (kind === 'fatal' || i >= aliasChain.length - 1) {
+                        log.error('AgentRuntime', 'LLM call error', { error: err instanceof Error ? err.message : String(err), model: effectiveModel });
+                        throw err;
+                    }
+                    break;
                 }
             }
         }

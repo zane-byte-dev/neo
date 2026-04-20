@@ -166,28 +166,28 @@ export function scoreRequest(input: ScorerInput): ScorerResult {
 
     const baseTier = getTierByScore(score);
     let tier = applyMomentum(baseTier, input);
-    let reason = tier !== baseTier ? 'momentum_override' : 'scored';
+    const reasons = new Set<string>(tier !== baseTier ? ['momentum_override'] : ['scored']);
 
     if (input.hasTools) {
         tier = maxTier(tier, ROUTING_CONFIG.overrides.toolFloor);
-        reason = 'tool_detected';
+        reasons.add('tool_detected');
     }
     if ((input.totalContextTokens ?? 0) > ROUTING_CONFIG.overrides.largeContextThreshold) {
         tier = maxTier(tier, ROUTING_CONFIG.overrides.largeContextFloor);
-        reason = 'large_context';
+        reasons.add('large_context');
     }
 
     const confidence = calcConfidence(score);
     if (confidence < ROUTING_CONFIG.confidence.fallbackThreshold) {
         tier = 'standard';
-        reason = 'low_confidence';
+        reasons.add('low_confidence');
     }
 
     return {
         tier,
         score,
         confidence,
-        reason,
+        reason: [...reasons].join('|'),
         dimensions,
     };
 }
