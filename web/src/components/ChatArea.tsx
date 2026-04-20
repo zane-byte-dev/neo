@@ -7,9 +7,13 @@ import { streamChat, fetchMessages, uploadFiles } from '../api'
 import { t } from '../i18n'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import type { ActivityItem, AgentTodoItem, FileAttachment, Message } from '../types'
 import { CodeBlock, InlineCode } from './CodeBlock'
+import { MermaidBlock } from './MermaidBlock'
 
 // ── Export chat as Markdown ───────────────────────────────────────────────────
 
@@ -62,6 +66,11 @@ const markdownComponents: import('react-markdown').Components = {
         const match = /language-(\w+)/.exec(className || '')
         const text = String(children).replace(/\n$/, '')
 
+        // Mermaid diagrams — render as SVG
+        if (match?.[1] === 'mermaid') {
+            return <MermaidBlock>{text}</MermaidBlock>
+        }
+
         // Block code (inside pre) — detect by the presence of language class or multiline content
         if (match || text.includes('\n')) {
             return <CodeBlock language={match?.[1]}>{text}</CodeBlock>
@@ -75,8 +84,8 @@ const markdownComponents: import('react-markdown').Components = {
 const MD: React.FC<{ content: string }> = ({ content }) => (
     <div className="markdown-content max-w-none">
         <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeHighlight, rehypeKatex]}
             components={markdownComponents}
         >
             {content}
