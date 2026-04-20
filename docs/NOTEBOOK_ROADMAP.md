@@ -131,14 +131,14 @@
 
 ## 五、技术债与基础设施
 
-- [ ] **测试覆盖**：notebook 相关只有 `src/services/__tests__/notebook-service.test.ts`，需补 `notebook-ai`、`notebook-chat`、新增路由的单元测试。
-- [ ] **Token 用量 / 成本追踪**：`llm/client.ts` 的每次调用记录 prompt_tokens / completion_tokens，在 notebook 页面展示当月消耗。
-- [ ] **日志分级**：目前大量 `console.log`，统一走 `utils/audit-logger.ts`。
-- [ ] **前端代码拆分**：`StudioPanel.tsx`（600+ 行）、`SourcePanel.tsx`（500+ 行）按 tab / 子组件拆文件。
-- [ ] **Store 模块化**：`useAppStore` 已经是上千行，拆成 `chatStore` / `notebookStore` / `uiStore`。
-- [ ] **Tailwind Design Tokens**：颜色、圆角、动画都散落在 className 里，抽成 tokens（或 CSS variables）。
+- [x] **测试覆盖**：新增 `notebook-ai.test.ts`（15 用例）、`notebook-chat.test.ts`（7 用例）、`notebook-routes.test.ts`（20 用例），全部通过（313 测试绿灯）。
+- [x] **Token 用量 / 成本追踪**：新建 `src/utils/token-tracker.ts`，在 `LLMClient` 三个生成方法中异步记录 `inputTokens / outputTokens`，写入 `logs/token-usage-YYYY-MM.jsonl`；路由新增 `GET /api/notebook?action=token-usage` 返回当月聚合数据。
+- [x] **日志分级**：全项目 `console.log/warn/error` 统一替换为 `log.info/warn/error(module, msg, data?)` 结构化日志（`src/utils/logger.ts`），输出至 `logs/YYYY-MM-DD.jsonl` + 彩色 stderr。
+- [x] **前端代码拆分**：`StudioPanel.tsx` 拆出 `StudioOutputs`、`OverviewTab`、`NotesTab`、`NoteEditorInline`、`ArtifactViewer`；`SourcePanel.tsx` 拆出 `SourceRow`，各放独立文件。
+- [x] **Store 模块化**：`useAppStore.ts` 按 Zustand slice 模式拆成 `chatSlice`、`notebookSlice`、`uiSlice`，主 store 组合三者。
+- [x] **Tailwind Design Tokens**：`web/src/index.css` 的 `@theme {}` 块补全语义颜色（`--color-surface`、`--color-border` 等）、间距（`--spacing-*`）、圆角（`--radius-*`）CSS 变量。
 - [ ] **E2E 测试**：浏览器自动化覆盖"导入 → 摘要 → 对话 → 生成报告"主流程。
-- [ ] **SSE / WebSocket 统一**：notebook-chat、agent-runner、未来的 interactive audio 都需要长连接，考虑抽一层。
+- [x] **SSE / WebSocket 统一**：新建 `src/utils/sse.ts` 提供 `createSSEResponse(ctx)` → `{ send, signal, close }`；`chat.ts` 和 `notebook.ts` 的 SSE 样板统一使用该接口；前端 `api.ts` 的 `streamChat` / `streamNotebookChat` 改为 `yield*` 委托 `lib/stream-transport.ts` 的 `createSSEStream<T>()`。
 
 ---
 
