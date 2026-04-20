@@ -1,6 +1,6 @@
 import React from 'react'
-import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, Droplets, ChevronDown, ChevronRight, LayoutGrid } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, type MeInfo } from '../api'
@@ -20,7 +20,9 @@ const CONTEXT_MENU_WIDTH_BUFFER = 170
 export const Sidebar: React.FC = () => {
     const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, renameChat, setTheme, theme, setChats, locale, setLocale } = useAppStore()
     const t = useT()
+    const location = useLocation()
     const [menuOpen, setMenuOpen] = React.useState(false)
+    const [appsOpen, setAppsOpen] = React.useState(false)
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
     const [me, setMe] = React.useState<MeInfo | null>(null)
     const [searchQuery, setSearchQuery] = React.useState('')
@@ -168,6 +170,48 @@ export const Sidebar: React.FC = () => {
                         >
                             <X size={12} className="text-text-tertiary" />
                         </button>
+                    )}
+                </div>
+            </div>
+
+            {/* Navigation: Notebook & Apps */}
+            <div className="px-2 py-1.5 space-y-0.5 border-b border-border">
+                <Link
+                    to="/notebook"
+                    className={cn(
+                        'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all duration-200',
+                        location.pathname.startsWith('/notebook')
+                            ? 'bg-primary-mint/10 text-text font-medium'
+                            : 'text-text-secondary hover:bg-fill-secondary hover:text-text'
+                    )}
+                >
+                    <BookOpen size={15} className="shrink-0" />
+                    <span>{t('notebook')}</span>
+                </Link>
+                <div>
+                    <button
+                        onClick={() => setAppsOpen(!appsOpen)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm text-text-secondary hover:bg-fill-secondary hover:text-text transition-all duration-200 cursor-pointer"
+                    >
+                        <LayoutGrid size={15} className="shrink-0" />
+                        <span className="flex-1 text-left">{t('apps')}</span>
+                        {appsOpen ? <ChevronDown size={13} className="text-text-quaternary" /> : <ChevronRight size={13} className="text-text-quaternary" />}
+                    </button>
+                    {appsOpen && (
+                        <div className="ml-4 mt-0.5 space-y-0.5">
+                            <Link
+                                to="/puzzle"
+                                className={cn(
+                                    'flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs transition-all duration-200',
+                                    location.pathname === '/puzzle'
+                                        ? 'bg-primary-mint/10 text-text font-medium'
+                                        : 'text-text-tertiary hover:bg-fill-secondary hover:text-text'
+                                )}
+                            >
+                                <Droplets size={13} className="shrink-0" />
+                                <span>{t('puzzle')}</span>
+                            </Link>
+                        </div>
                     )}
                 </div>
             </div>
@@ -353,19 +397,6 @@ export const Sidebar: React.FC = () => {
                 </div>
             )}
 
-            {/* Notebook link */}
-            <div className="px-2 pb-2 border-t border-border pt-2">
-                <Link
-                    to="/notebook"
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-tertiary hover:text-text hover:bg-fill-secondary rounded-xl transition-all duration-200"
-                >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-                    </svg>
-                    <span>{t('notebook')}</span>
-                </Link>
-            </div>
 
             {/* Delete confirmation dialog */}
             {confirmDelete && (

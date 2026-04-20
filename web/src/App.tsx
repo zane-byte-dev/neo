@@ -1,7 +1,7 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { MessageSquare, BookOpen, Menu, X, Droplets } from 'lucide-react'
+import { MessageSquare, BookOpen, Menu, X } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NotebookPanel } from './components/NotebookPanel'
@@ -43,7 +43,6 @@ const TopNav: React.FC<{ onMenuClick?: () => void; menuOpen?: boolean }> = ({ on
         {([
             { to: '/chat',     icon: <MessageSquare size={14} />, label: 'Chat' },
             { to: '/notebook', icon: <BookOpen size={14} />,      label: 'Notebook' },
-            { to: '/puzzle',   icon: <Droplets size={14} />,       label: 'Puzzle' },
         ] as const).map(({ to, icon, label }) => (
             <NavLink
                 key={to}

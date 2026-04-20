@@ -21,6 +21,8 @@ const zh: Record<TranslationKeys, string> = {
     pinUnpin: '置顶 / 取消置顶',
     rename: '重命名',
     notebook: '笔记本',
+    apps: '应用',
+    puzzle: '水壶谜题',
     deleteChat: '删除对话',
     deleteChatConfirm: '确定要删除这个对话吗？此操作无法撤销。',
     renameChat: '重命名对话',

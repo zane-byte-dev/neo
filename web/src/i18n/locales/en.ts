@@ -19,6 +19,8 @@ const en = {
     pinUnpin: 'Pin / Unpin',
     rename: 'Rename',
     notebook: 'Notebook',
+    apps: 'Apps',
+    puzzle: 'Puzzle',
     deleteChat: 'Delete Chat',
     deleteChatConfirm: 'Are you sure you want to delete this chat? This action cannot be undone.',
     renameChat: 'Rename Chat',
