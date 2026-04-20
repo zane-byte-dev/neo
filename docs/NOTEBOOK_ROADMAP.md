@@ -50,15 +50,15 @@
 
 - [x] **引用块点击跳转**：`【N】` 已高亮，但点击应该打开 SourceDetailView 并滚动到对应片段（需要后端返回 offset）。（已实现点击跳转到 SourceDetailView，offset 滚动待后续）
 - [x] **建议提问 one-click**：SourceGuide 的 `suggestedQuestions` 直接作为 Chat 输入 chips。（已实现：聚合所有选中来源的建议问题，空状态 + 输入框上方均展示 chips）
-- [ ] **对话分支**：从某条消息 fork 为新会话。
+- [x] **对话分支**：从某条消息 fork 为新会话。（已实现：后端 `nbForkChatHistory` 截断历史 + 前端"从此处分叉"按钮）
 - [x] **引用模式切换**：严格模式（仅来源） / 混合模式（允许常识补充），对应不同 system prompt。（已实现：NotebookChat 顶栏 strict/mixed 切换 + 后端 citationMode 配置持久化）
 
 ### 2.4 Studio 产物
 
 - [ ] **音频播放器**：`ArtifactViewer` 的音频目前只展示脚本，接 TTS 后需要原生播放器（可变速、字幕跟随）。
-- [ ] **思维导图交互**：当前是静态 Markdown，升级为 react-flow / markmap 交互式图谱，节点可展开/折叠/拖动。
+- [x] **思维导图交互**：当前是静态 Markdown，升级为 react-flow / markmap 交互式图谱，节点可展开/折叠/拖动。（已实现：markmap 浮动工具栏 — 放大/缩小/适应窗口/重置）
 - [x] **报告导出**：PDF / Markdown / DOCX 三种导出。（已实现 Markdown（带 frontmatter）、HTML（带样式）、JSON、TXT 四种格式导出）
-- [ ] **产物重生成**：保留历史版本对比，支持"微调 prompt 再生成"。
+- [x] **产物重生成**：保留历史版本对比，支持"微调 prompt 再生成"。（已实现：ArtifactViewer 顶部"重新生成"按钮，跳回 StudioActionModal 重新配置）
 
 ---
 
