@@ -175,17 +175,17 @@ async function _jsonOrThrow<T>(r: Response): Promise<T> {
 
 // Sources
 export function notebookListSources(notebook: string): Promise<SourceMeta[]> {
-    return apiGet(`/api/notebook?action=sources&notebook=${encodeURIComponent(notebook)}`)
+    return apiGet(`/api/notebook/source?action=list&notebook=${encodeURIComponent(notebook)}`)
 }
 
 export function notebookGetSource(notebook: string, sourceId: string) {
     return apiGet<{ id: string; content: string } & SourceMeta>(
-        `/api/notebook?action=source&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`,
+        `/api/notebook/source?action=read&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`,
     )
 }
 
 export function notebookGetSourceGuide(notebook: string, sourceId: string): Promise<SourceGuide> {
-    return apiGet(`/api/notebook?action=source-guide&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`)
+    return apiGet(`/api/notebook/source?action=guide&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`)
 }
 
 export function notebookGenerateSourceGuide(notebook: string, sourceId: string, model?: string): Promise<SourceGuide> {
@@ -261,11 +261,11 @@ export function notebookNoteQuickAction(notebook: string, action: NoteQuickActio
 // Artifacts
 export function notebookListArtifacts(notebook: string, type?: ArtifactType): Promise<Artifact[]> {
     const t = type ? `&type=${encodeURIComponent(type)}` : ''
-    return apiGet(`/api/notebook?action=artifacts&notebook=${encodeURIComponent(notebook)}${t}`)
+    return apiGet(`/api/notebook/studio?action=artifacts&notebook=${encodeURIComponent(notebook)}${t}`)
 }
 
 export function notebookGetArtifact(notebook: string, id: string): Promise<Artifact> {
-    return apiGet(`/api/notebook?action=artifact&notebook=${encodeURIComponent(notebook)}&id=${encodeURIComponent(id)}`)
+    return apiGet(`/api/notebook/studio?action=artifact&notebook=${encodeURIComponent(notebook)}&id=${encodeURIComponent(id)}`)
 }
 
 export interface GenerateArtifactPayload {
@@ -292,7 +292,7 @@ export function notebookDeleteArtifact(notebook: string, id: string) {
 
 // Chat
 export function notebookChatHistory(notebook: string): Promise<NotebookChatMessage[]> {
-    return apiGet(`/api/notebook?action=chat-history&notebook=${encodeURIComponent(notebook)}`)
+    return apiGet(`/api/notebook/chat?notebook=${encodeURIComponent(notebook)}`)
 }
 
 export function notebookClearChat(notebook: string) {

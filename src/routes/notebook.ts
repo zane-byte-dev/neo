@@ -1,3 +1,10 @@
+/**
+ * src/routes/notebook.ts — Core notebook CRUD, config, and notes.
+ *
+ * Source management  → notebook-source.ts
+ * AI generation      → notebook-studio.ts
+ * Notebook chat      → notebook-chat.ts
+ */
 import type Router from '@koa/router';
 import {
     nbListNotebooks,
@@ -8,46 +15,17 @@ import {
     nbCreate,
     nbUpdate,
     nbDelete,
-    nbListSources,
-    nbImportSource,
-    nbGetSourceEntry,
-    nbGetSourceGuide,
-    nbArchiveSource,
-    nbRenameSource,
     nbGetConfig,
     nbSetConfig,
     nbListNotes,
     nbSaveNote,
     nbDeleteNote,
     nbConvertNoteToSource,
-    nbListArtifacts,
-    nbGetArtifact,
-    nbDeleteArtifact,
-    nbReadChatHistory,
-    nbClearChatHistory,
-    nbForkChatHistory,
-    type ArtifactType,
+    nbGetSourceEntry,
 } from '../services/notebook-service.js';
-import {
-    generateAndSaveSourceGuide,
-    generateNotebookOverview,
-    generateMindMap,
-    generateReport,
-    generateAudioScript,
-    runNoteQuickAction,
-    type ReportType,
-    type NoteQuickAction,
-} from '../services/notebook-ai.js';
-import { streamNotebookChat } from '../services/notebook-chat.js';
-import { parseUrl, parseYouTube, isYouTubeUrl } from '../services/document-parser.js';
+import { generateAndSaveSourceGuide } from '../services/notebook-ai.js';
 import { calcUser } from '../services/user-service.js';
 import { getMonthlyUsage } from '../utils/token-tracker.js';
-import { log } from '../utils/logger.js';
-import { createSSEResponse } from '../utils/sse.js';
-
-function extractModel(body: Record<string, unknown>): string | undefined {
-    return typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
-}
 
 // ── GET /api/notebook — Read-only actions ───────────────────────────────────
 
@@ -92,30 +70,6 @@ export function notebookGet(router: Router): void {
                 ctx.body = row;
                 break;
             }
-            // ── Sources ───────────────────────────────────────────────────
-            case 'sources': {
-                const nb = q.notebook?.trim();
-                if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
-                ctx.body = nbListSources(workDir, nb);
-                break;
-            }
-            case 'source': {
-                const nb = q.notebook?.trim();
-                const sid = q.sourceId?.trim();
-                if (!nb || !sid) { ctx.status = 400; ctx.body = { error: 'notebook + sourceId required' }; return; }
-                const entry = nbGetSourceEntry(workDir, nb, sid);
-                if (!entry) { ctx.status = 404; ctx.body = { error: 'Source not found' }; return; }
-                ctx.body = entry;
-                break;
-            }
-            case 'source-guide': {
-                const nb = q.notebook?.trim();
-                const sid = q.sourceId?.trim();
-                if (!nb || !sid) { ctx.status = 400; ctx.body = { error: 'notebook + sourceId required' }; return; }
-                const guide = nbGetSourceGuide(workDir, nb, sid);
-                ctx.body = guide ?? null;
-                break;
-            }
             // ── Config ────────────────────────────────────────────────────
             case 'config': {
                 const nb = q.notebook?.trim();
@@ -128,30 +82,6 @@ export function notebookGet(router: Router): void {
                 const nb = q.notebook?.trim();
                 if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
                 ctx.body = nbListNotes(workDir, nb);
-                break;
-            }
-            // ── Artifacts ─────────────────────────────────────────────────
-            case 'artifacts': {
-                const nb = q.notebook?.trim();
-                if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
-                const type = (q.type?.trim() || undefined) as ArtifactType | undefined;
-                ctx.body = nbListArtifacts(workDir, nb, type);
-                break;
-            }
-            case 'artifact': {
-                const nb = q.notebook?.trim();
-                const id = q.id?.trim();
-                if (!nb || !id) { ctx.status = 400; ctx.body = { error: 'notebook + id required' }; return; }
-                const a = nbGetArtifact(workDir, nb, id);
-                if (!a) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
-                ctx.body = a;
-                break;
-            }
-            // ── Chat history ──────────────────────────────────────────────
-            case 'chat-history': {
-                const nb = q.notebook?.trim();
-                if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
-                ctx.body = nbReadChatHistory(workDir, nb);
                 break;
             }
             // ── Token usage ───────────────────────────────────────────────
@@ -226,167 +156,6 @@ export function notebookDelete(router: Router): void {
         if (!id) { ctx.status = 400; ctx.body = { error: 'id required' }; return; }
         if (!nbDelete(workDir, id)) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
         ctx.body = { ok: true };
-    });
-}
-
-// ── Source import ───────────────────────────────────────────────────────────
-
-export function notebookImportSource(router: Router): void {
-    router.post('/api/notebook/import', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-
-        const notebook = typeof body.notebook === 'string' && body.notebook.trim() ? body.notebook.trim() : 'personal';
-        const kind = typeof body.kind === 'string' ? body.kind : 'text';
-
-        try {
-            let title = '';
-            let content = '';
-            let source: string | null = null;
-            let type: 'text' | 'url' | 'youtube' | 'pdf' | 'audio' | 'image' = 'text';
-
-            if (kind === 'url') {
-                const url = typeof body.url === 'string' ? body.url.trim() : '';
-                if (!url) { ctx.status = 400; ctx.body = { error: 'url required' }; return; }
-
-                if (isYouTubeUrl(url)) {
-                    const p = await parseYouTube(url);
-                    title = p.title;
-                    content = p.text;
-                    source = p.url;
-                    type = 'youtube';
-                } else {
-                    const p = await parseUrl(url);
-                    title = p.title;
-                    content = p.text;
-                    source = p.url;
-                    type = /\.pdf(\?|$)/i.test(url) ? 'pdf' : 'url';
-                }
-            } else if (kind === 'text') {
-                title = typeof body.title === 'string' ? body.title.trim() : '';
-                content = typeof body.content === 'string' ? body.content : '';
-                source = typeof body.source === 'string' ? body.source : null;
-                if (!title) title = content.slice(0, 40).replace(/\n.*/s, '').trim() || 'Untitled';
-                type = 'text';
-            } else if (kind === 'document') {
-                // Pre-parsed content (from /api/upload)
-                title = typeof body.title === 'string' ? body.title.trim() :
-                    typeof body.filename === 'string' ? body.filename.replace(/\.[^.]+$/, '') : 'Untitled';
-                content = typeof body.content === 'string' ? body.content : '';
-                source = typeof body.filename === 'string' ? body.filename : null;
-                const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
-                if (mimeType.includes('pdf') || /\.pdf$/i.test(source ?? '')) type = 'pdf';
-                else type = 'text';
-            } else {
-                ctx.status = 400; ctx.body = { error: `Unknown kind: ${kind}` }; return;
-            }
-
-            if (!content) { ctx.status = 400; ctx.body = { error: 'no content extracted' }; return; }
-
-            const imported = nbImportSource(workDir, notebook, {
-                title,
-                content,
-                source,
-                type,
-                summary: content.slice(0, 200).replace(/\n+/g, ' ').trim(),
-            });
-
-            // Fire-and-forget: generate guide in background
-            const entry = nbGetSourceEntry(workDir, notebook, imported.id);
-            if (entry) {
-                generateAndSaveSourceGuide(workDir, notebook, entry, extractModel(body as Record<string, unknown>)).catch((err) => {
-                    log.warn('notebook', `guide generation failed for ${imported.id}`, { error: err instanceof Error ? err.message : String(err) });
-                });
-            }
-
-            ctx.body = imported;
-        } catch (err: unknown) {
-            ctx.status = 500;
-            ctx.body = { error: err instanceof Error ? err.message : String(err) };
-        }
-    });
-}
-
-// ── Source guide generation (on demand) ─────────────────────────────────────
-
-export function notebookGenerateGuide(router: Router): void {
-    router.post('/api/notebook/source-guide', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-
-        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
-        const sourceId = typeof body.sourceId === 'string' ? body.sourceId.trim() : '';
-        if (!notebook || !sourceId) { ctx.status = 400; ctx.body = { error: 'notebook + sourceId required' }; return; }
-
-        const entry = nbGetSourceEntry(workDir, notebook, sourceId);
-        if (!entry) { ctx.status = 404; ctx.body = { error: 'Source not found' }; return; }
-
-        try {
-            ctx.body = await generateAndSaveSourceGuide(workDir, notebook, entry, extractModel(body));
-        } catch (err) {
-            ctx.status = 500;
-            ctx.body = { error: err instanceof Error ? err.message : String(err) };
-        }
-    });
-}
-
-// ── Source archive (soft-delete) & rename ────────────────────────────────────
-
-export function notebookSourceActions(router: Router): void {
-    // Soft-delete: set archived=true in frontmatter
-    router.post('/api/notebook/source/archive', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-
-        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
-        const sourceId = typeof body.sourceId === 'string' ? body.sourceId.trim() : '';
-        if (!notebook || !sourceId) { ctx.status = 400; ctx.body = { error: 'notebook + sourceId required' }; return; }
-
-        if (!nbArchiveSource(workDir, notebook, sourceId)) {
-            ctx.status = 404; ctx.body = { error: 'Source not found' }; return;
-        }
-        ctx.body = { ok: true };
-    });
-
-    // Rename: update title in frontmatter
-    router.post('/api/notebook/source/rename', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-
-        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
-        const sourceId = typeof body.sourceId === 'string' ? body.sourceId.trim() : '';
-        const title = typeof body.title === 'string' ? body.title.trim() : '';
-        if (!notebook || !sourceId || !title) { ctx.status = 400; ctx.body = { error: 'notebook + sourceId + title required' }; return; }
-
-        const updated = nbRenameSource(workDir, notebook, sourceId, title);
-        if (!updated) { ctx.status = 404; ctx.body = { error: 'Source not found' }; return; }
-        ctx.body = updated;
-    });
-}
-
-// ── Notebook overview ───────────────────────────────────────────────────────
-
-export function notebookOverview(router: Router): void {
-    router.post('/api/notebook/overview', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-
-        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
-        if (!notebook) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
-
-        const sourceIds = Array.isArray(body.sourceIds) ? (body.sourceIds as string[]) : undefined;
-        try {
-            const overview = await generateNotebookOverview(workDir, notebook, sourceIds, extractModel(body));
-            ctx.body = { overview };
-        } catch (err) {
-            ctx.status = 500;
-            ctx.body = { error: err instanceof Error ? err.message : String(err) };
-        }
     });
 }
 
@@ -467,140 +236,5 @@ export function notebookNoteConvertToSource(router: Router): void {
             generateAndSaveSourceGuide(workDir, notebook, entry).catch(() => { /* ignore */ });
         }
         ctx.body = imported;
-    });
-}
-
-export function notebookNoteQuickAction(router: Router): void {
-    router.post('/api/notebook/note/quick-action', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-
-        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
-        const action = typeof body.action === 'string' ? body.action as NoteQuickAction : 'merge';
-        const ids = Array.isArray(body.ids) ? (body.ids as string[]) : [];
-        if (!notebook || !ids.length) { ctx.status = 400; ctx.body = { error: 'notebook + ids required' }; return; }
-
-        const allNotes = nbListNotes(workDir, notebook);
-        const selected = allNotes.filter(n => ids.includes(n.id));
-        if (!selected.length) { ctx.status = 404; ctx.body = { error: 'No matching notes' }; return; }
-
-        try {
-            const result = await runNoteQuickAction(action, selected.map(n => ({ title: n.title, content: n.content })), extractModel(body));
-            const saved = nbSaveNote(workDir, notebook, {
-                title: `${action} · ${new Date().toLocaleString('zh-CN')}`,
-                content: result,
-                source: 'ai-quick-action',
-            });
-            ctx.body = saved;
-        } catch (err) {
-            ctx.status = 500;
-            ctx.body = { error: err instanceof Error ? err.message : String(err) };
-        }
-    });
-}
-
-// ── Artifacts (mindmap / report / audio) ────────────────────────────────────
-
-export function notebookGenerateArtifact(router: Router): void {
-    router.post('/api/notebook/artifact', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-
-        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
-        const type = typeof body.type === 'string' ? body.type : '';
-        if (!notebook || !type) { ctx.status = 400; ctx.body = { error: 'notebook + type required' }; return; }
-
-        const sourceIds = Array.isArray(body.sourceIds) ? (body.sourceIds as string[]) : undefined;
-
-        try {
-            let artifact;
-            if (type === 'mindmap') {
-                const topic = typeof body.topic === 'string' ? body.topic : undefined;
-                artifact = await generateMindMap(workDir, notebook, sourceIds, topic, extractModel(body));
-            } else if (type === 'report') {
-                const subtype = (typeof body.subtype === 'string' ? body.subtype : 'briefing') as ReportType;
-                const customPrompt = typeof body.customPrompt === 'string' ? body.customPrompt : undefined;
-                const title = typeof body.title === 'string' ? body.title : undefined;
-                artifact = await generateReport(workDir, notebook, subtype, { sourceIds, customPrompt, title, model: extractModel(body) });
-            } else if (type === 'audio') {
-                artifact = await generateAudioScript(workDir, notebook, sourceIds, extractModel(body));
-            } else {
-                ctx.status = 400; ctx.body = { error: `Unknown artifact type: ${type}` }; return;
-            }
-            ctx.body = artifact;
-        } catch (err) {
-            ctx.status = 500;
-            ctx.body = { error: err instanceof Error ? err.message : String(err) };
-        }
-    });
-}
-
-export function notebookDeleteArtifact(router: Router): void {
-    router.delete('/api/notebook/artifact', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const q = ctx.query as Record<string, string>;
-        const notebook = q.notebook?.trim();
-        const id = q.id?.trim();
-        if (!notebook || !id) { ctx.status = 400; ctx.body = { error: 'notebook + id required' }; return; }
-        if (!nbDeleteArtifact(workDir, notebook, id)) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
-        ctx.body = { ok: true };
-    });
-}
-
-// ── Source-grounded chat (SSE) ──────────────────────────────────────────────
-
-export function notebookChat(router: Router): void {
-    router.post('/api/notebook/chat', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-
-        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
-        const message = typeof body.message === 'string' ? body.message : '';
-        if (!notebook || !message.trim()) { ctx.status = 400; ctx.body = { error: 'notebook + message required' }; return; }
-
-        const selectedSourceIds = Array.isArray(body.sourceIds) ? (body.sourceIds as string[]) : undefined;
-
-        const sse = createSSEResponse(ctx);
-
-        try {
-            await streamNotebookChat(workDir, notebook, message, selectedSourceIds, sse.send, sse.signal, extractModel(body));
-        } catch (err) {
-            sse.send({ type: 'error', error: err instanceof Error ? err.message : String(err) });
-        } finally {
-            sse.close();
-        }
-    });
-}
-
-export function notebookClearChat(router: Router): void {
-    router.delete('/api/notebook/chat', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const q = ctx.query as Record<string, string>;
-        const notebook = q.notebook?.trim();
-        if (!notebook) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
-        nbClearChatHistory(workDir, notebook);
-        ctx.body = { ok: true };
-    });
-}
-
-export function notebookForkChat(router: Router): void {
-    router.post('/api/notebook/chat/fork', async (ctx) => {
-        const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
-        const body = ctx.request.body as Record<string, unknown>;
-        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
-        const messageId = typeof body.messageId === 'string' ? body.messageId.trim() : '';
-        if (!notebook || !messageId) {
-            ctx.status = 400;
-            ctx.body = { error: 'notebook and messageId required' };
-            return;
-        }
-        const messages = nbForkChatHistory(workDir, notebook, messageId);
-        ctx.body = { messages };
     });
 }
