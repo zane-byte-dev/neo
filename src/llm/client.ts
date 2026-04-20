@@ -13,11 +13,12 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { setupLogger, log } from '../utils/logger.js';
 import { recordTokenUsage } from '../utils/token-tracker.js';
-import { DAILY_COST_LIMIT, GEMINI_API_KEY, DEEPSEEK_API_KEY, OLLAMA_BASE_URL, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
+import { DAILY_COST_LIMIT, DEEPSEEK_API_KEY, GEMINI_API_KEY, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, MODEL_ALIASES, OLLAMA_BASE_URL, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
 import { acpStream, acpGenerate } from './providers/gemini-acp.js';
 import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
 import type { SmartRouteDecision } from './model-router.js';
+import { ROUTING_CONFIG } from './routing-config.js';
 import type {
     StreamCallback,
     Tool,
@@ -299,6 +300,7 @@ export class LLMClient {
         const startedAt = Date.now();
         const originalAlias = aliasChain[0];
         let lastError: unknown = null;
+        const sameModelRetries = new Map<string, number>();
 
         for (let i = 0; i < aliasChain.length; i++) {
             const alias = aliasChain[i];
@@ -334,7 +336,7 @@ export class LLMClient {
                     system: systemInstruction,
                     tools,
                     stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
-                    abortSignal: withTimeoutSignal(signal, 30_000),
+                    abortSignal: withTimeoutSignal(signal, STREAM_FIRST_CHUNK_TIMEOUT_MS),
                     temperature: 0.7,
                 };
 
@@ -383,6 +385,8 @@ export class LLMClient {
                             totalTokens,
                             caller: 'chatWithContextStreaming',
                         });
+                        const baseReason = route?.reason ?? 'scored';
+                        const reason = forceFreeOnly ? `${baseReason}|budget_limited` : baseReason;
                         void appendUsageRecord({
                             timestamp: Date.now(),
                             userId: context.userId,
@@ -390,7 +394,7 @@ export class LLMClient {
                             tier: route?.tier ?? 'standard',
                             score: route?.score ?? 0,
                             confidence: route?.confidence ?? 1,
-                            reason: route?.reason ?? (forceFreeOnly ? 'budget_limited' : 'scored'),
+                            reason,
                             promptTokens,
                             completionTokens,
                             totalTokens,
@@ -408,6 +412,12 @@ export class LLMClient {
                 lastError = err;
                 const kind = classifyError(err);
                 if (kind === 'retry-same') {
+                    const retries = sameModelRetries.get(alias) ?? 0;
+                    if (retries >= ROUTING_CONFIG.fallback.maxRetries) {
+                        if (i >= aliasChain.length - 1) throw err;
+                        continue;
+                    }
+                    sameModelRetries.set(alias, retries + 1);
                     await sleep(1000);
                     i--;
                     continue;
@@ -478,7 +488,7 @@ export class LLMClient {
                     prompt,
                     system: options?.system,
                     temperature: options?.temperature,
-                    abortSignal: withTimeoutSignal(undefined, 60_000),
+                    abortSignal: withTimeoutSignal(undefined, GENERATE_TIMEOUT_MS),
                 });
                 if (usage) {
                     recordTokenUsage({

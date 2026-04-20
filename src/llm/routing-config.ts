@@ -51,7 +51,7 @@ export function getFallbackChain(primary: string, tier?: Tier): string[] {
     const tierModels = ROUTING_CONFIG.tiers[tier];
     const idx = tierModels.indexOf(primary);
     if (idx < 0) return [primary];
+    // maxRetries is retry count; chain includes primary + retry targets.
     const chain = tierModels.slice(idx, idx + ROUTING_CONFIG.fallback.maxRetries + 1);
     return [...new Set(chain)];
 }
-

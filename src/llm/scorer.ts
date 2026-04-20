@@ -164,9 +164,9 @@ export function scoreRequest(input: ScorerInput): ScorerResult {
         + dimensions.conversationDepth * WEIGHTS.conversationDepth
     );
 
-    let tier = getTierByScore(score);
-    let reason = 'scored';
-    tier = applyMomentum(tier, input);
+    const baseTier = getTierByScore(score);
+    let tier = applyMomentum(baseTier, input);
+    let reason = tier !== baseTier ? 'momentum_override' : 'scored';
 
     if (input.hasTools) {
         tier = maxTier(tier, ROUTING_CONFIG.overrides.toolFloor);
@@ -191,4 +191,3 @@ export function scoreRequest(input: ScorerInput): ScorerResult {
         dimensions,
     };
 }
-

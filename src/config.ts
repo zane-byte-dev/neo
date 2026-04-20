@@ -31,6 +31,10 @@ export const MAX_SUBAGENT_STEPS = 10;
 
 /** Timeout for each individual Gemini API streaming request (ms) */
 export const GEMINI_API_TIMEOUT_MS = 90_000;
+/** First-chunk timeout for streaming LLM requests (ms). */
+export const STREAM_FIRST_CHUNK_TIMEOUT_MS = envInt('STREAM_FIRST_CHUNK_TIMEOUT_MS', 30_000);
+/** Total timeout for non-streaming LLM requests (ms). */
+export const GENERATE_TIMEOUT_MS = envInt('GENERATE_TIMEOUT_MS', 60_000);
 
 /** Read-file content cap to prevent context flooding (chars) */
 export const READ_FILE_CHAR_LIMIT = 50_000;
