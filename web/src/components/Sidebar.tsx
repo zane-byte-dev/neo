@@ -142,15 +142,8 @@ export const Sidebar: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-bg-container border-r border-border w-full overflow-hidden select-none">
             {/* Header */}
-            <div className="px-3 pt-4 pb-3 space-y-2">
-                <button
-                    onClick={createChat}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-b from-fill-secondary to-fill border border-border rounded-xl text-text transition-all duration-200 text-sm font-medium hover:border-primary-mint/30 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
-                    style={{ boxShadow: 'var(--shadow-soft)' }}
-                >
-                    <Plus size={15} strokeWidth={2.5} />
-                    <span>{t('newChat')}</span>
-                </button>
+            <div className="px-2 pt-4 pb-3 space-y-2">
+
 
                 {/* Search box */}
                 <div className="relative">
@@ -176,12 +169,19 @@ export const Sidebar: React.FC = () => {
 
             {/* Navigation: Notebook & Apps */}
             <div className="px-2 py-1.5 space-y-0.5 border-b border-border">
+                <button
+                    onClick={createChat}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-text-secondary transition-all duration-200 text-sm font-medium hover:bg-fill-secondary hover:text-text active:scale-[0.99] cursor-pointer"
+                >
+                    <Plus size={15} strokeWidth={2.5} />
+                    <span>{t('newChat')}</span>
+                </button>
                 <Link
                     to="/notebook"
                     className={cn(
                         'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm transition-all duration-200',
                         location.pathname.startsWith('/notebook')
-                            ? 'bg-primary-mint/10 text-text font-medium'
+                            ? 'bg-fill-secondary text-text font-medium'
                             : 'text-text-secondary hover:bg-fill-secondary hover:text-text'
                     )}
                 >
@@ -204,7 +204,7 @@ export const Sidebar: React.FC = () => {
                                 className={cn(
                                     'flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-xs transition-all duration-200',
                                     location.pathname === '/puzzle'
-                                        ? 'bg-primary-mint/10 text-text font-medium'
+                                        ? 'bg-fill-secondary text-text font-medium'
                                         : 'text-text-tertiary hover:bg-fill-secondary hover:text-text'
                                 )}
                             >
@@ -257,8 +257,8 @@ export const Sidebar: React.FC = () => {
                             className={cn(
                                 'group relative flex items-center gap-2 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 text-sm',
                                 activeChatId === chat.id
-                                    ? 'bg-primary-mint/10 text-text font-medium border border-primary-mint/15'
-                                    : 'text-text-secondary hover:bg-fill-secondary border border-transparent'
+                                    ? 'bg-fill-secondary text-text font-medium'
+                                    : 'text-text-secondary hover:bg-fill-secondary'
                             )}
                         >
                             {chat.isPinned && <Pin size={11} className="shrink-0 text-primary-mint" fill="currentColor" />}
