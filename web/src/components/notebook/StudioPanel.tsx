@@ -413,20 +413,57 @@ const NoteEditorInline: React.FC<{ notebook: string; note: NotebookNote | null; 
 
 // ── Simple markdown-to-HTML for export ──────────────────────────────────────
 
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+}
+
 function markdownToSimpleHtml(md: string): string {
     // Minimal markdown → HTML conversion for export
-    return md
-        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // First escape HTML entities for safety, then apply markdown transforms
+    const escaped = escapeHtml(md)
+    const lines = escaped.split('\n')
+    const result: string[] = []
+    let inList = false
+
+    for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed.startsWith('### ')) {
+            if (inList) { result.push('</ul>'); inList = false }
+            result.push(`<h3>${trimmed.slice(4)}</h3>`)
+        } else if (trimmed.startsWith('## ')) {
+            if (inList) { result.push('</ul>'); inList = false }
+            result.push(`<h2>${trimmed.slice(3)}</h2>`)
+        } else if (trimmed.startsWith('# ')) {
+            if (inList) { result.push('</ul>'); inList = false }
+            result.push(`<h1>${trimmed.slice(2)}</h1>`)
+        } else if (trimmed.startsWith('- ')) {
+            if (!inList) { result.push('<ul>'); inList = true }
+            result.push(`<li>${applyInlineFormatting(trimmed.slice(2))}</li>`)
+        } else if (trimmed.startsWith('&gt; ')) {
+            if (inList) { result.push('</ul>'); inList = false }
+            result.push(`<blockquote>${applyInlineFormatting(trimmed.slice(5))}</blockquote>`)
+        } else if (trimmed === '') {
+            if (inList) { result.push('</ul>'); inList = false }
+            result.push('')
+        } else {
+            if (inList) { result.push('</ul>'); inList = false }
+            result.push(`<p>${applyInlineFormatting(trimmed)}</p>`)
+        }
+    }
+    if (inList) result.push('</ul>')
+    return result.join('\n')
+}
+
+function applyInlineFormatting(text: string): string {
+    return text
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
         .replace(/`(.+?)`/g, '<code>$1</code>')
-        .replace(/^- (.+)$/gm, '<li>$1</li>')
-        .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-        .replace(/\n{2,}/g, '</p><p>')
-        .replace(/^/, '<p>')
-        .replace(/$/, '</p>')
 }
 
 // ── Artifact viewer ─────────────────────────────────────────────────────────
@@ -453,13 +490,15 @@ const ArtifactViewer: React.FC<{ artifact: Artifact; onBack: () => void }> = ({ 
         } else if (format === 'html') {
             // Simple HTML export with basic styling
             const htmlContent = markdownToSimpleHtml(markdown)
+            const safeTitle = escapeHtml(artifact.title)
+            const safeType = escapeHtml(artifact.subtype ?? artifact.type)
             content = `<!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${artifact.title}</title>
-<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#1a1a1a}h1,h2,h3{margin-top:1.5em}blockquote{border-left:3px solid #34d399;padding-left:1em;color:#555}code{background:#f5f5f5;padding:2px 6px;border-radius:3px;font-size:0.9em}pre{background:#f5f5f5;padding:1em;border-radius:8px;overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9f9f9}.meta{color:#888;font-size:0.85em;margin-bottom:2em}</style>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${safeTitle}</title>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#1a1a1a}h1,h2,h3{margin-top:1.5em}blockquote{border-left:3px solid #34d399;padding-left:1em;color:#555}code{background:#f5f5f5;padding:2px 6px;border-radius:3px;font-size:0.9em}pre{background:#f5f5f5;padding:1em;border-radius:8px;overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9f9f9}.meta{color:#888;font-size:0.85em;margin-bottom:2em}ul{padding-left:1.5em}</style>
 </head>
 <body>
-<div class="meta">来源：Neo Notebook · ${artifact.subtype ?? artifact.type} · ${new Date(artifact.createdAt).toLocaleString('zh-CN')}</div>
+<div class="meta">来源：Neo Notebook · ${safeType} · ${new Date(artifact.createdAt).toLocaleString('zh-CN')}</div>
 ${htmlContent}
 </body></html>`
             filename += '.html'

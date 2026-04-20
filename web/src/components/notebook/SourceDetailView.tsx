@@ -280,7 +280,7 @@ function highlightText(text: string, term: string, activeIdx: number): React.Rea
         const isActive = matchNum === activeIdx
         parts.push(
             <mark
-                key={`m-${idx}`}
+                key={`m-${matchNum}`}
                 className={isActive ? 'bg-primary-mint/40 text-text rounded px-0.5' : 'bg-warning/30 text-text rounded px-0.5'}
                 data-match-idx={matchNum}
             >
