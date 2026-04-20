@@ -72,7 +72,15 @@ export const StudioPanel: React.FC<Props> = ({ notebook }) => {
     if (view === 'artifact-view' && viewingArtifact) {
         return (
             <div className="flex flex-col h-full bg-bg-container border-l border-border">
-                <ArtifactViewer artifact={viewingArtifact} onBack={() => { setViewingArtifact(null); setView('home') }} />
+                <ArtifactViewer
+                    artifact={viewingArtifact}
+                    onBack={() => { setViewingArtifact(null); setView('home') }}
+                    onRegenerate={(type) => {
+                        setViewingArtifact(null)
+                        setView('home')
+                        setModalAction(type as ModalAction)
+                    }}
+                />
             </div>
         )
     }
@@ -468,7 +476,7 @@ function applyInlineFormatting(text: string): string {
 
 // ── Artifact viewer ─────────────────────────────────────────────────────────
 
-const ArtifactViewer: React.FC<{ artifact: Artifact; onBack: () => void }> = ({ artifact, onBack }) => {
+const ArtifactViewer: React.FC<{ artifact: Artifact; onBack: () => void; onRegenerate?: (type: 'audio' | 'mindmap' | 'report') => void }> = ({ artifact, onBack, onRegenerate }) => {
     const markdown = typeof artifact.data.markdown === 'string' ? artifact.data.markdown : ''
     const script = Array.isArray(artifact.data.script) ? (artifact.data.script as AudioLine[]) : []
 
@@ -536,6 +544,16 @@ ${htmlContent}
             <div className="p-3 border-b border-border flex items-center gap-2 shrink-0">
                 <button onClick={onBack} className="text-xs px-2.5 py-1.5 bg-fill-secondary rounded-lg hover:bg-fill">← 返回</button>
                 <span className="text-sm font-medium flex-1 truncate">{artifact.title}</span>
+                {onRegenerate && (
+                    <button
+                        onClick={() => onRegenerate(artifact.type)}
+                        className="text-xs text-text-secondary hover:text-primary-mint p-1.5 hover:bg-fill-secondary rounded-lg flex items-center gap-1"
+                        title="重新生成"
+                    >
+                        <RefreshCw size={13} />
+                        <span className="hidden sm:inline">重新生成</span>
+                    </button>
+                )}
                 <div className="relative" ref={exportRef}>
                     <button
                         onClick={() => setExportOpen(!exportOpen)}

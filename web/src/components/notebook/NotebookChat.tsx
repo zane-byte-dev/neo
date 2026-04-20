@@ -3,12 +3,13 @@
  * Source-grounded chat with 【N】 citations.
  */
 import React from 'react'
-import { Send, Trash2, Loader2, Sparkles, MessageSquare, Shield, ShieldOff } from 'lucide-react'
+import { Send, Trash2, Loader2, Sparkles, MessageSquare, Shield, ShieldOff, GitBranch } from 'lucide-react'
 import { useAppStore } from '../../stores/useAppStore'
 import {
     streamNotebookChat,
     notebookChatHistory,
     notebookClearChat,
+    notebookForkChat,
     notebookSaveNote,
     notebookUpdateConfig,
     type NotebookChatEvent,
@@ -163,6 +164,17 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
         }
     }
 
+    const forkFrom = async (msg: NotebookChatMessage) => {
+        if (!(await confirm('从此消息处分叉？此操作将移除之后的所有消息。', { confirmText: '分叉' }))) return
+        try {
+            const { messages: kept } = await notebookForkChat(notebook, msg.id)
+            setNotebookMessages(kept.map((m) => ({ ...m, id: m.id || String(m.timestamp) })))
+            toast.success('已分叉对话')
+        } catch (e) {
+            toast.error(`分叉失败：${(e as Error).message}`)
+        }
+    }
+
     return (
         <div className="flex flex-col h-full bg-bg">
             <div className="h-14 border-b border-border flex items-center gap-2 px-4 shrink-0">
@@ -231,6 +243,12 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
                                                     className="text-xs text-text-tertiary hover:text-primary-mint transition-colors"
                                                 >
                                                     📌 保存为笔记
+                                                </button>
+                                                <button
+                                                    onClick={() => forkFrom(m)}
+                                                    className="text-xs text-text-tertiary hover:text-primary-mint transition-colors flex items-center gap-0.5"
+                                                >
+                                                    <GitBranch size={10} /> 从此处分叉
                                                 </button>
                                             </div>
                                         )}

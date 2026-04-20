@@ -25,6 +25,7 @@ import {
     nbDeleteArtifact,
     nbReadChatHistory,
     nbClearChatHistory,
+    nbForkChatHistory,
     type ArtifactType,
 } from '../services/notebook-service.js';
 import {
@@ -587,5 +588,22 @@ export function notebookClearChat(router: Router): void {
         if (!notebook) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
         nbClearChatHistory(workDir, notebook);
         ctx.body = { ok: true };
+    });
+}
+
+export function notebookForkChat(router: Router): void {
+    router.post('/api/notebook/chat/fork', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir } = await calcUser(userId);
+        const body = ctx.request.body as Record<string, unknown>;
+        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
+        const messageId = typeof body.messageId === 'string' ? body.messageId.trim() : '';
+        if (!notebook || !messageId) {
+            ctx.status = 400;
+            ctx.body = { error: 'notebook and messageId required' };
+            return;
+        }
+        const messages = nbForkChatHistory(workDir, notebook, messageId);
+        ctx.body = { messages };
     });
 }

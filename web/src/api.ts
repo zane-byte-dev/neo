@@ -333,6 +333,10 @@ export function notebookClearChat(notebook: string) {
     }).then((r) => _jsonOrThrow<{ ok: true }>(r))
 }
 
+export function notebookForkChat(notebook: string, messageId: string): Promise<{ messages: NotebookChatMessage[] }> {
+    return _post('/api/notebook/chat/fork', { notebook, messageId }).then((r) => _jsonOrThrow<{ messages: NotebookChatMessage[] }>(r))
+}
+
 export interface NotebookChatEvent {
     type: 'meta' | 'text' | 'citations' | 'done' | 'error'
     text?: string
