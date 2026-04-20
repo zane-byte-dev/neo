@@ -63,9 +63,9 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
                     seen.add(key)
                     questions.push(q)
                 }
-                if (questions.length >= 6) break
+                if (questions.length >= 4) break
             }
-            if (questions.length >= 6) break
+            if (questions.length >= 4) break
         }
         return questions
     }, [selectedSourceIds, sourceGuides])

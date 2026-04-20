@@ -259,10 +259,15 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
                                 </span>
                             </div>
                             <div className="w-full bg-fill rounded-full h-1.5 overflow-hidden">
-                                <div
-                                    className="h-full bg-primary-mint rounded-full transition-all duration-1000 ease-out"
-                                    style={{ width: generatePhase === 'planning' ? '30%' : generatePhase === 'generating' ? '70%' : '100%' }}
-                                />
+                                {(() => {
+                                    const phaseWidth: Record<string, string> = { planning: '30%', generating: '70%', done: '100%' }
+                                    return (
+                                        <div
+                                            className="h-full bg-primary-mint rounded-full transition-all duration-1000 ease-out"
+                                            style={{ width: phaseWidth[generatePhase] ?? '0%' }}
+                                        />
+                                    )
+                                })()}
                             </div>
                         </div>
                     )}
