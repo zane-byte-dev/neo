@@ -522,3 +522,80 @@ export interface MeInfo {
 export function fetchMe(): Promise<MeInfo> {
     return apiGet<MeInfo>('/api/me')
 }
+
+// ── Model / usage API ─────────────────────────────────────────────────────────
+
+export interface ModelInfo {
+    alias: string
+    modelId: string
+    provider: string
+    pricing: { input: number; output: number }
+    free: boolean
+    tiers: string[]
+}
+
+export interface MonthlyUsageSummary {
+    month: string
+    totalPromptTokens: number
+    totalCompletionTokens: number
+    totalTokens: number
+    callCount: number
+    byModel: Record<string, {
+        promptTokens: number
+        completionTokens: number
+        totalTokens: number
+        callCount: number
+    }>
+}
+
+export interface UsageRecord {
+    timestamp: number
+    userId: string
+    model: string
+    tier: string
+    score: number
+    confidence: number
+    reason: string
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    estimatedCost: number
+    durationMs: number
+    fallbackUsed: boolean
+    originalModel?: string
+    sessionId?: string
+}
+
+export interface ModelsResponse {
+    models: ModelInfo[]
+    routing: {
+        tiers: Record<string, string[]>
+        boundaries: { simpleMax: number; standardMax: number }
+        overrides: { toolFloor: string; largeContextFloor: string; largeContextThreshold: number }
+        momentum: { historySize: number; maxWeight: number; messageThreshold: number }
+        confidence: { k: number; fallbackThreshold: number }
+    }
+    usage: MonthlyUsageSummary
+    history: UsageRecord[]
+    dailyCost: number
+    dailyCostLimit: number
+}
+
+export function fetchModels(month?: string): Promise<ModelsResponse> {
+    const qs = month ? `?month=${encodeURIComponent(month)}` : ''
+    return apiGet<ModelsResponse>(`/api/models${qs}`)
+}
+
+export interface SessionMessage {
+    id: number
+    session_id: string
+    user_id: string
+    role: string
+    content: string
+    user_name: string | null
+    timestamp: string
+}
+
+export function fetchModelMessages(sessionId: string): Promise<{ messages: SessionMessage[] }> {
+    return apiGet(`/api/models/messages?sessionId=${encodeURIComponent(sessionId)}`)
+}

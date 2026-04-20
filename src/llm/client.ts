@@ -403,6 +403,7 @@ export class LLMClient {
                                 durationMs: Date.now() - startedAt,
                                 fallbackUsed: alias !== originalAlias,
                                 originalModel: alias !== originalAlias ? resolveModel(originalAlias) : undefined,
+                                sessionId: context.sessionId,
                             }).catch(() => { /* never crash over tracking */ });
                         }
                     }).catch(() => { /* never crash over tracking */ });

@@ -1,12 +1,13 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { MessageSquare, BookOpen, Menu, X } from 'lucide-react'
+import { MessageSquare, BookOpen, Cpu, Menu, X } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NotebookPanel } from './components/NotebookPanel'
 import { Login } from './components/Login'
 import { WaterPuzzle } from './components/WaterPuzzle'
+import { ModelPanel } from './components/ModelPanel'
 import { useAppStore } from './stores/useAppStore'
 import { checkAuth, type AuthResult } from './api'
 import { cn } from './lib/utils'
@@ -43,6 +44,7 @@ const TopNav: React.FC<{ onMenuClick?: () => void; menuOpen?: boolean }> = ({ on
         {([
             { to: '/chat',     icon: <MessageSquare size={14} />, label: 'Chat' },
             { to: '/notebook', icon: <BookOpen size={14} />,      label: 'Notebook' },
+            { to: '/models',   icon: <Cpu size={14} />,           label: 'Models' },
         ] as const).map(({ to, icon, label }) => (
             <NavLink
                 key={to}
@@ -179,6 +181,7 @@ const MainLayout: React.FC = () => {
                 <Route path="/chat"     element={<ChatPage sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />} />
                 <Route path="/notebook" element={<NotebookPage />} />
                 <Route path="/notebook/:notebookName" element={<NotebookPage />} />
+                <Route path="/models"   element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><ModelPanel /></div>} />
                 <Route path="/puzzle"   element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
                 <Route path="*"         element={<Navigate to="/chat" replace />} />
             </Routes>

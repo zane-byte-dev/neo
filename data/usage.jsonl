@@ -1,0 +1,2 @@
+{"timestamp":1776679179935,"userId":"8094416266","model":"deepseek-chat","tier":"standard","score":0,"confidence":1,"reason":"user_selected","promptTokens":6688,"completionTokens":2,"totalTokens":6690,"estimatedCost":0.00093688,"durationMs":1623,"fallbackUsed":false}
+{"timestamp":1776679866839,"userId":"8094416266","model":"deepseek-chat","tier":"standard","score":0,"confidence":1,"reason":"user_selected","promptTokens":6756,"completionTokens":2,"totalTokens":6758,"estimatedCost":0.0009464,"durationMs":2522,"fallbackUsed":false,"sessionId":"psz7wj"}

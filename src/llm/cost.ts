@@ -29,6 +29,7 @@ export interface UsageRecord {
     durationMs: number;
     fallbackUsed: boolean;
     originalModel?: string;
+    sessionId?: string;
 }
 
 function ensureUsageDir(): void {
