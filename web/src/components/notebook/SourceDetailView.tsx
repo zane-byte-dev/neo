@@ -97,6 +97,11 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
 
     const Icon = TYPE_ICON[source.type] ?? FileText
 
+    const totalMatches = React.useMemo(
+        () => (searchTerm ? countMatches(content ?? '', searchTerm) : 0),
+        [content, searchTerm],
+    )
+
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
@@ -157,7 +162,7 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
                     setTerm={setSearchTerm}
                     matchIndex={matchIndex}
                     setMatchIndex={setMatchIndex}
-                    totalMatches={searchTerm ? countMatches(content ?? '', searchTerm) : 0}
+                    totalMatches={totalMatches}
                     onClose={() => { setSearchOpen(false); setSearchTerm('') }}
                 />
             )}
