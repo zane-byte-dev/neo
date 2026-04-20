@@ -45,16 +45,17 @@ export type NotebookUpdateInput = Partial<NotebookCreateInput>;
 
 // ── Frontmatter helpers ───────────────────────────────────────────────────────
 
-interface FrontmatterMeta {
+export interface FrontmatterMeta {
     title?: string;
     date?: string;
     author?: string;
     source?: string;
     summary?: string;
     tags?: string[];
+    archived?: boolean;
 }
 
-function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string } {
+export function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string } {
     const meta: FrontmatterMeta = {};
     let body = text;
 
@@ -79,6 +80,7 @@ function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string }
                         meta.tags = clean.split(',').map(t => t.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
                         break;
                     }
+                    case 'archived': meta.archived = val === 'true'; break;
                 }
             }
         }
@@ -87,7 +89,7 @@ function parseFrontmatter(text: string): { meta: FrontmatterMeta; body: string }
     return { meta, body };
 }
 
-function serializeFrontmatter(meta: FrontmatterMeta, body: string): string {
+export function serializeFrontmatter(meta: FrontmatterMeta, body: string): string {
     const lines: string[] = ['---'];
     if (meta.title)   lines.push(`title: ${meta.title}`);
     if (meta.date)    lines.push(`date: ${meta.date}`);
@@ -95,12 +97,13 @@ function serializeFrontmatter(meta: FrontmatterMeta, body: string): string {
     if (meta.source)  lines.push(`source: ${meta.source}`);
     if (meta.summary) lines.push(`summary: ${meta.summary}`);
     if (meta.tags?.length) lines.push(`tags: [${meta.tags.join(', ')}]`);
+    if (meta.archived) lines.push(`archived: true`);
     lines.push('---\n');
     lines.push(body);
     return lines.join('\n');
 }
 
-function titleFromFilename(filename: string): string {
+export function titleFromFilename(filename: string): string {
     return filename
         .replace(/\.md$/, '')
         .replace(/^\d+_/, '')
@@ -136,7 +139,9 @@ function parseEntry(workDir: string, relPath: string, includeContent: boolean): 
 
     const parts    = relPath.split('/');
     const filename = parts[parts.length - 1];
-    const notebook = parts.length > 1 ? parts[0] : '.';
+    // relPath = "notebooks/{nbName}/file.md" → notebook = parts[1]
+    // Fallback for legacy paths without "notebooks/" prefix: notebook = parts[0]
+    const notebook = parts[0] === 'notebooks' && parts.length >= 3 ? parts[1] : (parts.length > 1 ? parts[0] : '.');
     const title    = meta.title || titleFromFilename(filename);
     const tags     = meta.tags?.length ? JSON.stringify(meta.tags) : null;
 
@@ -157,18 +162,20 @@ function parseEntry(workDir: string, relPath: string, includeContent: boolean): 
 // ── Operations ────────────────────────────────────────────────────────────────
 
 export function nbListNotebooks(workDir: string): string[] {
-    if (!existsSync(workDir)) return [];
-    return readdirSync(workDir, { withFileTypes: true })
+    const dir = notebooksDir(workDir);
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir, { withFileTypes: true })
         .filter(d => d.isDirectory() && d.name !== '.tmp' && !d.name.endsWith('.tmp') && !d.name.startsWith('.'))
         .map(d => d.name)
         .sort();
 }
 
 export function nbList(workDir: string, opts?: { notebook?: string; limit?: number }): NotebookEntryPartial[] {
-    if (!existsSync(workDir)) return [];
+    const nbRoot = notebooksDir(workDir);
+    if (!existsSync(nbRoot)) return [];
 
-    const baseDir = opts?.notebook ? join(workDir, opts.notebook) : workDir;
-    const baseRel = opts?.notebook ?? '';
+    const baseDir = opts?.notebook ? join(nbRoot, opts.notebook) : nbRoot;
+    const baseRel = opts?.notebook ? `notebooks/${opts.notebook}` : 'notebooks';
     const relPaths = listMdFilesRecursive(baseDir, baseRel);
     const limit    = Math.min(opts?.limit ?? 300, 500);
     const entries: NotebookEntryPartial[] = [];
@@ -306,4 +313,444 @@ export function nbDelete(workDir: string, id: string): boolean {
     return true;
 }
 
+// ── NotebookLM-style extensions ──────────────────────────────────────────────
+//
+// The functions below add source/note/artifact/config/chat primitives layered
+// on top of the existing per-notebook directory: `{workDir}/notebooks/{name}/`.
+// Sub-resources are stored under dotfile directories so they don't collide
+// with article `.md` files:
+//
+//   .meta/config.json                      — notebook settings (emoji, chat style)
+//   .meta/source-guides/{sourceId}.json    — AI-generated summary + topics + Qs
+//   .notes/{noteId}.md                     — user/AI notes
+//   .artifacts/{artifactId}.json           — generated artifacts (mindmap/report/audio)
+//   .chat/history.jsonl                    — notebook-scoped chat messages
+//
+// `sourceId` = filename without the `.md` extension (human-readable, stable).
+
+function notebookBaseDir(workDir: string, notebook: string): string {
+    return join(workDir, 'notebooks', notebook);
+}
+
+/** Derive a stable sourceId from an entry ID ("notebooks/xx/foo.md" → "foo"). */
+export function sourceIdFromEntryId(id: string): string {
+    const parts = id.split('/');
+    return parts[parts.length - 1].replace(/\.md$/, '');
+}
+
+function ensureDir(dir: string): void {
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+}
+
+function safeWithin(baseDir: string, target: string): boolean {
+    return resolve(target).startsWith(resolve(baseDir) + '/');
+}
+
+function safeFilename(name: string): string {
+    return name.replace(/[<>:"/\\|?*\n\r]/g, '').replace(/\s+/g, '_').slice(0, 100);
+}
+
+// ── Notebook directory listing (proper) ──────────────────────────────────────
+
+/** List proper notebook names under `{workDir}/notebooks/` (excludes dotfiles). */
+export function nbListNotebooksProper(workDir: string): string[] {
+    const dir = join(workDir, 'notebooks');
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir, { withFileTypes: true })
+        .filter(d => d.isDirectory() && !d.name.startsWith('.') && !d.name.endsWith('.tmp'))
+        .map(d => d.name)
+        .sort();
+}
+
+// ── Source management ────────────────────────────────────────────────────────
+
+export interface SourceMeta {
+    id: string;           // sourceId (filename without .md)
+    notebook: string;
+    entryId: string;      // full entry id "notebooks/{nb}/{filename}"
+    title: string;
+    source: string | null;   // original URL or null
+    date: string | null;
+    summary: string | null;
+    tags: string | null;
+    type: 'text' | 'url' | 'youtube' | 'pdf' | 'audio' | 'image';
+    hasGuide: boolean;    // whether source-guide has been generated
+}
+
+export interface SourceImportInput {
+    title: string;
+    content: string;
+    source?: string | null;    // original URL
+    type?: SourceMeta['type'];
+    date?: string | null;
+    summary?: string | null;
+    tags?: string[] | null;
+}
+
+/** List all sources in a notebook with guide-availability flag. */
+export function nbListSources(workDir: string, notebook: string): SourceMeta[] {
+    const dir = notebookBaseDir(workDir, notebook);
+    if (!existsSync(dir)) return [];
+
+    const files = readdirSync(dir, { withFileTypes: true })
+        .filter(d => d.isFile() && d.name.endsWith('.md'))
+        .map(d => d.name)
+        .sort();
+
+    const guideDir = join(dir, '.meta', 'source-guides');
+    const existingGuides = existsSync(guideDir)
+        ? new Set(readdirSync(guideDir).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, '')))
+        : new Set<string>();
+
+    const results: SourceMeta[] = [];
+    for (const filename of files) {
+        try {
+            const raw = readFileSync(join(dir, filename), 'utf8');
+            const { meta } = parseFrontmatter(raw);
+            if (meta.archived) continue;  // soft-deleted
+            const sourceId = filename.replace(/\.md$/, '');
+            const title = meta.title || titleFromFilename(filename);
+
+            // infer type from metadata
+            let type: SourceMeta['type'] = 'text';
+            const src = meta.source || '';
+            if (/youtube\.com|youtu\.be/i.test(src)) type = 'youtube';
+            else if (src.startsWith('http')) type = 'url';
+            else if (/\.pdf$/i.test(src)) type = 'pdf';
+
+            results.push({
+                id: sourceId,
+                notebook,
+                entryId: `notebooks/${notebook}/${filename}`,
+                title,
+                source: meta.source || null,
+                date: meta.date || null,
+                summary: meta.summary || null,
+                tags: meta.tags?.length ? JSON.stringify(meta.tags) : null,
+                type,
+                hasGuide: existingGuides.has(sourceId),
+            });
+        } catch { /* skip */ }
+    }
+    return results;
+}
+
+/** Import a new source from extracted text content. */
+export function nbImportSource(workDir: string, notebook: string, data: SourceImportInput): SourceMeta {
+    const created = nbCreate(workDir, notebook, {
+        title: data.title,
+        content: data.content,
+        source: data.source ?? null,
+        date: data.date ?? null,
+        summary: data.summary ?? null,
+        tags: data.tags?.length ? JSON.stringify(data.tags) : null,
+    });
+
+    const sourceId = sourceIdFromEntryId(created.id);
+    return {
+        id: sourceId,
+        notebook,
+        entryId: created.id,
+        title: created.title,
+        source: created.source,
+        date: created.date,
+        summary: created.summary,
+        tags: created.tags,
+        type: data.type ?? 'text',
+        hasGuide: false,
+    };
+}
+
+/** Resolve a sourceId back to an entry within a notebook. */
+export function nbGetSourceEntry(workDir: string, notebook: string, sourceId: string): NotebookEntry | undefined {
+    const entryId = `notebooks/${notebook}/${sourceId}.md`;
+    return nbGet(workDir, entryId);
+}
+
+/** Soft-delete a source by setting `archived: true` in frontmatter. */
+export function nbArchiveSource(workDir: string, notebook: string, sourceId: string): boolean {
+    const entryId = `notebooks/${notebook}/${sourceId}.md`;
+    const filePath = join(workDir, entryId);
+    if (!resolve(filePath).startsWith(resolve(workDir) + '/')) return false;
+    if (!existsSync(filePath)) return false;
+
+    const raw = readFileSync(filePath, 'utf8');
+    const { meta, body } = parseFrontmatter(raw);
+    meta.archived = true;
+    writeFileSync(filePath, serializeFrontmatter(meta, body), 'utf8');
+    return true;
+}
+
+/** Rename a source (update title in frontmatter, file stays the same). */
+export function nbRenameSource(workDir: string, notebook: string, sourceId: string, newTitle: string): SourceMeta | undefined {
+    const entryId = `notebooks/${notebook}/${sourceId}.md`;
+    const updated = nbUpdate(workDir, entryId, { title: newTitle });
+    if (!updated) return undefined;
+
+    const dir = notebookBaseDir(workDir, notebook);
+    const guideDir = join(dir, '.meta', 'source-guides');
+    const hasGuide = existsSync(join(guideDir, `${sourceId}.json`));
+
+    let type: SourceMeta['type'] = 'text';
+    const src = updated.source || '';
+    if (/youtube\.com|youtu\.be/i.test(src)) type = 'youtube';
+    else if (src.startsWith('http')) type = 'url';
+    else if (/\.pdf$/i.test(src)) type = 'pdf';
+
+    return {
+        id: sourceId,
+        notebook,
+        entryId,
+        title: updated.title,
+        source: updated.source,
+        date: updated.date,
+        summary: updated.summary,
+        tags: updated.tags,
+        type,
+        hasGuide,
+    };
+}
+
+// ── Source guide (AI summary + topics + questions) ───────────────────────────
+
+export interface SourceGuide {
+    sourceId: string;
+    summary: string;
+    keyTopics: string[];
+    suggestedQuestions: string[];
+    generatedAt: number;
+}
+
+export function nbGetSourceGuide(workDir: string, notebook: string, sourceId: string): SourceGuide | undefined {
+    const file = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides', `${safeFilename(sourceId)}.json`);
+    if (!existsSync(file)) return undefined;
+    try { return JSON.parse(readFileSync(file, 'utf8')) as SourceGuide; } catch { return undefined; }
+}
+
+export function nbSaveSourceGuide(workDir: string, notebook: string, guide: SourceGuide): void {
+    const dir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
+    ensureDir(dir);
+    const file = join(dir, `${safeFilename(guide.sourceId)}.json`);
+    writeFileSync(file, JSON.stringify(guide, null, 2), 'utf8');
+}
+
+// ── Notebook config ──────────────────────────────────────────────────────────
+
+export interface NotebookConfig {
+    emoji?: string;
+    description?: string;
+    chatStyle?: 'default' | 'study-guide' | 'custom';
+    customStyle?: string;
+    answerLength?: 'short' | 'default' | 'long';
+    overview?: string;         // cached notebook-level overview
+}
+
+export function nbGetConfig(workDir: string, notebook: string): NotebookConfig {
+    const file = join(notebookBaseDir(workDir, notebook), '.meta', 'config.json');
+    if (!existsSync(file)) return {};
+    try { return JSON.parse(readFileSync(file, 'utf8')) as NotebookConfig; } catch { return {}; }
+}
+
+export function nbSetConfig(workDir: string, notebook: string, config: NotebookConfig): void {
+    const dir = join(notebookBaseDir(workDir, notebook), '.meta');
+    ensureDir(dir);
+    writeFileSync(join(dir, 'config.json'), JSON.stringify(config, null, 2), 'utf8');
+}
+
+// ── Notes ────────────────────────────────────────────────────────────────────
+
+export interface NotebookNote {
+    id: string;
+    notebook: string;
+    title: string;
+    content: string;
+    createdAt: number;
+    updatedAt: number;
+    source: 'user' | 'ai-chat' | 'ai-quick-action';
+}
+
+export function nbListNotes(workDir: string, notebook: string): NotebookNote[] {
+    const dir = join(notebookBaseDir(workDir, notebook), '.notes');
+    if (!existsSync(dir)) return [];
+    const results: NotebookNote[] = [];
+    for (const f of readdirSync(dir).filter(f => f.endsWith('.md')).sort()) {
+        try {
+            const raw = readFileSync(join(dir, f), 'utf8');
+            const { meta, body } = parseFrontmatter(raw);
+            // Custom meta: title, createdAt, updatedAt, source (kept as tags[0] if present)
+            const id = f.replace(/\.md$/, '');
+            const createdAt = Number(meta.date) || 0;
+            results.push({
+                id,
+                notebook,
+                title: meta.title || titleFromFilename(f),
+                content: body,
+                createdAt,
+                updatedAt: createdAt,
+                source: (meta.author as NotebookNote['source']) || 'user',
+            });
+        } catch { /* skip */ }
+    }
+    return results.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export interface NoteSaveInput {
+    id?: string;
+    title: string;
+    content: string;
+    source?: NotebookNote['source'];
+}
+
+export function nbSaveNote(workDir: string, notebook: string, data: NoteSaveInput): NotebookNote {
+    const dir = join(notebookBaseDir(workDir, notebook), '.notes');
+    ensureDir(dir);
+    const now = Date.now();
+    const id = data.id || `note_${now}_${Math.random().toString(36).slice(2, 8)}`;
+    const source = data.source || 'user';
+    const meta: FrontmatterMeta = {
+        title: data.title,
+        date: String(now),
+        author: source,   // reuse author field to tag source
+    };
+    writeFileSync(join(dir, `${safeFilename(id)}.md`), serializeFrontmatter(meta, data.content), 'utf8');
+    return {
+        id,
+        notebook,
+        title: data.title,
+        content: data.content,
+        createdAt: now,
+        updatedAt: now,
+        source,
+    };
+}
+
+export function nbDeleteNote(workDir: string, notebook: string, noteId: string): boolean {
+    const dir = join(notebookBaseDir(workDir, notebook), '.notes');
+    const file = join(dir, `${safeFilename(noteId)}.md`);
+    if (!safeWithin(dir, file)) return false;
+    if (!existsSync(file)) return false;
+    unlinkSync(file);
+    return true;
+}
+
+/** Promote a note into a full source document. */
+export function nbConvertNoteToSource(workDir: string, notebook: string, noteId: string): SourceMeta | undefined {
+    const notes = nbListNotes(workDir, notebook);
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return undefined;
+    const imported = nbImportSource(workDir, notebook, {
+        title: note.title,
+        content: note.content,
+        summary: note.content.slice(0, 120).replace(/\n+/g, ' ').trim(),
+        type: 'text',
+    });
+    nbDeleteNote(workDir, notebook, noteId);
+    return imported;
+}
+
+// ── Artifacts (mindmap / report / audio script / etc.) ───────────────────────
+
+export type ArtifactType = 'mindmap' | 'report' | 'audio' | 'flashcards' | 'custom';
+
+export interface Artifact {
+    id: string;
+    notebook: string;
+    type: ArtifactType;
+    subtype?: string;         // e.g. report subtype: 'faq' | 'study-guide' | 'briefing'
+    title: string;
+    data: unknown;            // type-specific payload
+    createdAt: number;
+}
+
+export function nbListArtifacts(workDir: string, notebook: string, type?: ArtifactType): Artifact[] {
+    const dir = join(notebookBaseDir(workDir, notebook), '.artifacts');
+    if (!existsSync(dir)) return [];
+    const results: Artifact[] = [];
+    for (const f of readdirSync(dir).filter(f => f.endsWith('.json'))) {
+        try {
+            const a = JSON.parse(readFileSync(join(dir, f), 'utf8')) as Artifact;
+            if (!type || a.type === type) results.push(a);
+        } catch { /* skip */ }
+    }
+    return results.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export function nbGetArtifact(workDir: string, notebook: string, id: string): Artifact | undefined {
+    const file = join(notebookBaseDir(workDir, notebook), '.artifacts', `${safeFilename(id)}.json`);
+    if (!existsSync(file)) return undefined;
+    try { return JSON.parse(readFileSync(file, 'utf8')) as Artifact; } catch { return undefined; }
+}
+
+export interface ArtifactSaveInput {
+    id?: string;
+    type: ArtifactType;
+    subtype?: string;
+    title: string;
+    data: unknown;
+}
+
+export function nbSaveArtifact(workDir: string, notebook: string, input: ArtifactSaveInput): Artifact {
+    const dir = join(notebookBaseDir(workDir, notebook), '.artifacts');
+    ensureDir(dir);
+    const now = Date.now();
+    const id = input.id || `${input.type}_${now}_${Math.random().toString(36).slice(2, 8)}`;
+    const artifact: Artifact = {
+        id,
+        notebook,
+        type: input.type,
+        subtype: input.subtype,
+        title: input.title,
+        data: input.data,
+        createdAt: now,
+    };
+    writeFileSync(join(dir, `${safeFilename(id)}.json`), JSON.stringify(artifact, null, 2), 'utf8');
+    return artifact;
+}
+
+export function nbDeleteArtifact(workDir: string, notebook: string, id: string): boolean {
+    const file = join(notebookBaseDir(workDir, notebook), '.artifacts', `${safeFilename(id)}.json`);
+    if (!existsSync(file)) return false;
+    unlinkSync(file);
+    return true;
+}
+
+// ── Notebook chat history ────────────────────────────────────────────────────
+
+export interface NotebookChatMessage {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    citations?: Array<{ n: number; sourceId: string; title: string; snippet?: string }>;
+    selectedSources?: string[];   // snapshot of sourceIds active at send time
+    timestamp: number;
+}
+
+function chatFilePath(workDir: string, notebook: string): string {
+    return join(notebookBaseDir(workDir, notebook), '.chat', 'history.jsonl');
+}
+
+export function nbReadChatHistory(workDir: string, notebook: string): NotebookChatMessage[] {
+    const file = chatFilePath(workDir, notebook);
+    if (!existsSync(file)) return [];
+    const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean);
+    const results: NotebookChatMessage[] = [];
+    for (const line of lines) {
+        try { results.push(JSON.parse(line) as NotebookChatMessage); } catch { /* skip */ }
+    }
+    return results;
+}
+
+export function nbAppendChatMessage(workDir: string, notebook: string, msg: NotebookChatMessage): void {
+    const dir = join(notebookBaseDir(workDir, notebook), '.chat');
+    ensureDir(dir);
+    const file = join(dir, 'history.jsonl');
+    const existing = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const line = JSON.stringify(msg);
+    writeFileSync(file, existing + (existing && !existing.endsWith('\n') ? '\n' : '') + line + '\n', 'utf8');
+}
+
+export function nbClearChatHistory(workDir: string, notebook: string): void {
+    const file = chatFilePath(workDir, notebook);
+    if (existsSync(file)) unlinkSync(file);
+}
 

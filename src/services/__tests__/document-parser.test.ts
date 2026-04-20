@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isDocumentType, isImageType } from '../document-parser.js';
+import { isDocumentType, isImageType, parseDocument } from '../document-parser.js';
 
 describe('isDocumentType', () => {
     it('returns true for PDF by extension', () => {
@@ -102,5 +102,31 @@ describe('isImageType', () => {
 
     it('returns false for application/octet-stream', () => {
         expect(isImageType('application/octet-stream')).toBe(false);
+    });
+});
+
+describe('parseDocument', () => {
+    it('extracts text from a .txt buffer', async () => {
+        const content = 'Hello, this is a text file.';
+        const buffer = Buffer.from(content, 'utf8');
+        const result = await parseDocument(buffer, 'readme.txt', 'text/plain');
+        expect(result).not.toBeNull();
+        expect(result!.text).toBe(content);
+        expect(result!.filename).toBe('readme.txt');
+        expect(result!.mimeType).toBe('text/plain');
+    });
+
+    it('truncates text longer than MAX_EXTRACT_LENGTH', async () => {
+        const content = 'a'.repeat(200_000);
+        const buffer = Buffer.from(content, 'utf8');
+        const result = await parseDocument(buffer, 'big.txt', 'text/plain');
+        expect(result).not.toBeNull();
+        expect(result!.text.length).toBe(100_000);
+    });
+
+    it('returns null for unsupported binary type', async () => {
+        const buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+        const result = await parseDocument(buffer, 'image.png', 'image/png');
+        expect(result).toBeNull();
     });
 });

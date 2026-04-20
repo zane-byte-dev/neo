@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { checkDangerousCommand } from '../executor.js';
+import { checkDangerousCommand, safePath } from '../executor.js';
+import { resolve } from 'node:path';
 
 describe('checkDangerousCommand', () => {
     describe('blocks dangerous commands', () => {
@@ -107,5 +108,28 @@ describe('checkDangerousCommand', () => {
         const result = checkDangerousCommand('echo hi');
         expect(result.blocked).toBe(false);
         expect(result.reason).toBeUndefined();
+    });
+});
+
+describe('safePath', () => {
+    const workDir = '/home/user/workspace';
+
+    it('resolves relative path within workDir', () => {
+        const result = safePath('subdir/file.txt', workDir);
+        expect(result).toBe(resolve(workDir, 'subdir/file.txt'));
+    });
+
+    it('allows absolute path inside workDir', () => {
+        const absPath = resolve(workDir, 'notes/readme.md');
+        const result = safePath(absPath, workDir);
+        expect(result).toBe(absPath);
+    });
+
+    it('blocks path traversal with ../../etc/passwd', () => {
+        expect(() => safePath('../../etc/passwd', workDir)).toThrow('Path traversal blocked');
+    });
+
+    it('blocks absolute path outside workDir', () => {
+        expect(() => safePath('/etc/passwd', workDir)).toThrow('Path traversal blocked');
     });
 });

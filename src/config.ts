@@ -37,6 +37,8 @@ export const MODEL_ALIASES: Record<string, string> = {
     deepseek: 'deepseek-chat',
     'deepseek-chat': 'deepseek-chat',
     'deepseek-reasoner': 'deepseek-reasoner',
+    gemma: 'ollama/gemma4:e4b',
+    'gemini-acp': 'acp/gemini',
 };
 
 // ── File system ──────────────────────────────────────────────────────────────
@@ -61,6 +63,8 @@ export const DANGEROUS_PATTERNS = [
 
 export const GEMINI_API_KEY   = process.env.GEMINI_API_KEY ?? '';
 export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY ?? '';
+export const OLLAMA_BASE_URL  = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1';
+export const GEMINI_CLI_PATH  = process.env.GEMINI_CLI_PATH ?? 'gemini';
 /** Raw GEMINI_MODEL env value; consumers apply their own default/alias. */
 export const GEMINI_MODEL_ENV: string | undefined = process.env.GEMINI_MODEL;
 export const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';

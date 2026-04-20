@@ -1,9 +1,10 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, VolumeX } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
 import { streamChat, fetchMessages, uploadFiles } from '../api'
+import { t } from '../i18n'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -21,7 +22,7 @@ const MAX_EXPORT_FILENAME_LENGTH = 50
 function exportChatAsMarkdown(title: string, messages: Message[]) {
     const lines = [`# ${title}\n`]
     for (const msg of messages) {
-        const role = msg.role === 'user' ? '**You**' : '**Neo**'
+        const role = msg.role === 'user' ? t('you') : t('neo')
         lines.push(`### ${role}\n`)
         if (msg.content) lines.push(msg.content + '\n')
     }
@@ -32,6 +33,27 @@ function exportChatAsMarkdown(title: string, messages: Message[]) {
     a.download = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, '_').slice(0, MAX_EXPORT_FILENAME_LENGTH)}.md`
     a.click()
     URL.revokeObjectURL(url)
+}
+
+// ── Text-to-speech ────────────────────────────────────────────────────────────
+
+function speakText(text: string) {
+    if (!window.speechSynthesis) return
+    window.speechSynthesis.cancel()
+    const plain = text
+        .replace(/```[\s\S]*?```/g, '') // code blocks
+        .replace(/`[^`]+`/g, '')        // inline code
+        .replace(/#{1,6}\s+/g, '')      // headings
+        .replace(/\*\*([^*]+)\*\*/g, '$1') // bold
+        .replace(/\*([^*]+)\*/g, '$1') // italic
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
+        .replace(/^[-*+]\s+/gm, '')    // unordered list
+        .replace(/^\d+\.\s+/gm, '')    // ordered list
+        .replace(/\n{2,}/g, ' ')
+        .trim()
+    if (!plain) return
+    const utt = new SpeechSynthesisUtterance(plain)
+    window.speechSynthesis.speak(utt)
 }
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -96,7 +118,7 @@ const TypingIndicator: React.FC = () => (
                 <span className="typing-dot" />
                 <span className="typing-dot" />
             </div>
-            <span className="text-xs text-text-tertiary ml-1">Thinking…</span>
+            <span className="text-xs text-text-tertiary ml-1">{t('thinking')}</span>
         </div>
     </div>
 )
@@ -112,7 +134,7 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
     }, [items.length, isLive])
 
     const callCount = items.filter(i => i.type === 'tool_call').length
-    const summary = callCount === 1 ? '1 tool call' : `${callCount} tool calls`
+    const summary = callCount === 1 ? t('toolCall', { n: 1 }) : t('toolCalls', { n: callCount })
 
     const content = (
         <div
@@ -163,7 +185,7 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <div className="flex items-center gap-2 text-xs text-text-tertiary mb-2">
                     <Loader2 size={12} className="animate-spin text-primary-mint" />
-                    <span className="font-medium">Working…</span>
+                    <span className="font-medium">{t('working')}</span>
                 </div>
                 {content}
             </div>
@@ -207,7 +229,7 @@ const TodoPanel: React.FC<{ todos: AgentTodoItem[] }> = ({ todos }) => {
              style={{ boxShadow: 'var(--shadow-soft)' }}>
             {/* Header with progress bar */}
             <div className="px-4 py-2.5 flex items-center gap-2.5 text-xs text-text-secondary">
-                <span className="font-semibold">Tasks</span>
+                <span className="font-semibold">{t('tasks')}</span>
                 <span className="text-text-tertiary">{completed}/{total}</span>
                 <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
                     <div
@@ -278,6 +300,7 @@ const ChatInput: React.FC = () => {
         updateLastAssistantThinking, updateLastAssistantTodos, appendToLastAssistantActivity,
         setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
+        autoSpeak, setAutoSpeak,
     } = useAppStore()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -342,6 +365,8 @@ const ChatInput: React.FC = () => {
 
     const handleSend = async () => {
         if ((!inputValue.trim() && !pendingImages.length && !pendingDocs.length) || !activeChatId || isGenerating) return
+        // Cancel any ongoing speech when user sends a new message
+        window.speechSynthesis?.cancel()
         const text = inputValue.trim()
         const images = pendingImages.length ? [...pendingImages] : undefined
         const documents = pendingDocs.length ? [...pendingDocs] : undefined
@@ -369,7 +394,7 @@ const ChatInput: React.FC = () => {
         setPendingImages([])
         setPendingDocs([])
         setIsGenerating(true)
-        setThinkingStatus('Thinking…')
+        setThinkingStatus(t('thinking'))
 
         // Placeholder for assistant
         addMessage(activeChatId, {
@@ -424,11 +449,14 @@ const ChatInput: React.FC = () => {
         } catch (err: unknown) {
             const name = err instanceof Error ? err.name : ''
             if (name !== 'AbortError' && !accumulated) {
-                updateLastAssistantMessage(activeChatId, `⚠️ ${err instanceof Error ? err.message : 'Request failed'}`)
+                updateLastAssistantMessage(activeChatId, `⚠️ ${err instanceof Error ? err.message : t('requestFailed')}`)
             }
         } finally {
             if (thinkingAccum) {
                 updateLastAssistantThinking(activeChatId, thinkingAccum)
+            }
+            if (autoSpeak && accumulated) {
+                speakText(accumulated)
             }
             setIsGenerating(false)
             setThinkingStatus('')
@@ -583,8 +611,8 @@ const ChatInput: React.FC = () => {
     }, [activeChatId])
 
     return (
-        <div className="p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border">
-            <div className="max-w-3xl mx-auto">
+        <div className="p-3 sm:p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border safe-bottom">
+            <div className="max-w-3xl mx-auto min-w-0">
                 {/* Attachment previews */}
                 {(pendingImages.length > 0 || pendingDocs.length > 0) && (
                     <div className="flex flex-wrap gap-2 mb-2">
@@ -615,7 +643,7 @@ const ChatInput: React.FC = () => {
                         {isUploading && (
                             <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-fill-secondary/60 text-xs text-text-tertiary">
                                 <Loader2 size={14} className="animate-spin" />
-                                <span>Uploading…</span>
+                                <span>{t('uploading')}</span>
                             </div>
                         )}
                     </div>
@@ -652,56 +680,71 @@ const ChatInput: React.FC = () => {
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
                         onPaste={handlePaste}
-                        placeholder="Ask anything… (Shift+Enter for newline)"
+                        placeholder={t('askAnything')}
                         className="w-full bg-transparent px-5 pt-3.5 pb-2 pr-14 focus:outline-none resize-none text-sm leading-relaxed placeholder:text-text-quaternary"
                         rows={1}
                     />
                     {/* Bottom bar: image upload + model selector + send */}
-                    <div className="flex items-center justify-between px-3 pb-2.5">
-                        <div className="flex items-center gap-1">
+                    <div className="flex items-center justify-between px-3 pb-2.5 gap-2 min-w-0">
+                        <div className="flex items-center gap-1 min-w-0 flex-1 mobile-scroll-x">
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200"
-                                title="Upload image"
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0 cursor-pointer"
+                                title={t('uploadImage')}
                                 type="button"
                             >
                                 <ImagePlus size={16} />
                             </button>
                             <button
                                 onClick={() => docInputRef.current?.click()}
-                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200"
-                                title="Attach file (PDF, Word, Excel…)"
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-all duration-200 shrink-0 cursor-pointer"
+                                title={t('attachFile')}
                                 type="button"
                                 disabled={isUploading}
                             >
                                 <Paperclip size={16} />
                             </button>
-                            {(['flash', 'pro', 'deepseek'] as const).map((m) => (
-                                <button
-                                    key={m}
-                                    onClick={() => setSelectedModel(m)}
-                                    className={cn(
-                                        'px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-200',
-                                        selectedModel === m
-                                            ? 'bg-primary-mint/15 text-primary-mint'
-                                            : 'text-text-quaternary hover:text-text-tertiary hover:bg-fill'
-                                    )}
-                                >
-                                    {m === 'flash' ? '⚡ Flash' : m === 'pro' ? '✨ Pro' : '🐋 DeepSeek'}
-                                </button>
-                            ))}
+                            <button
+                                onClick={() => {
+                                    const next = !autoSpeak
+                                    setAutoSpeak(next)
+                                    if (!next) window.speechSynthesis?.cancel()
+                                }}
+                                className={cn(
+                                    'p-1.5 rounded-lg transition-all duration-200 shrink-0 cursor-pointer',
+                                    autoSpeak
+                                        ? 'text-primary-mint bg-primary-mint/10 hover:bg-primary-mint/20'
+                                        : 'text-text-quaternary hover:text-text-secondary hover:bg-fill'
+                                )}
+                                title={autoSpeak ? t('autoSpeakOn') : t('autoSpeakOff')}
+                                type="button"
+                            >
+                                {autoSpeak ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                            </button>
+                            <select
+                                value={selectedModel}
+                                onChange={(e) => setSelectedModel(e.target.value as typeof selectedModel)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-medium bg-transparent text-text-tertiary border border-transparent hover:border-fill hover:bg-fill focus:outline-none focus:border-primary-mint/30 focus:text-primary-mint transition-all duration-200 cursor-pointer shrink-0"
+                            >
+                                <option value="auto">🧠 Auto</option>
+                                <option value="flash">⚡ Flash</option>
+                                <option value="pro">✨ Pro</option>
+                                <option value="deepseek">🐋 DeepSeek</option>
+                                <option value="gemma">🦙 Gemma</option>
+                                <option value="gemini-acp">💎 Gemini</option>
+                            </select>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                             {isGenerating && (
                                 <span className="text-[11px] text-text-tertiary hidden sm:inline">
-                                    Press Esc to stop
+                                    {t('pressEscToStop')}
                                 </span>
                             )}
                             {isGenerating ? (
                                 <button
                                     onClick={handleStop}
-                                    className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95"
-                                    title="Stop (Esc)"
+                                    className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
+                                    title={t('stopEsc')}
                                 >
                                     <Square size={14} fill="currentColor" />
                                 </button>
@@ -713,9 +756,9 @@ const ChatInput: React.FC = () => {
                                         'p-2 rounded-xl transition-all duration-200',
                                         !inputValue.trim() && !pendingImages.length && !pendingDocs.length
                                             ? 'bg-fill text-text-quaternary cursor-not-allowed'
-                                            : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95'
+                                            : 'bg-gradient-to-r from-primary-mint to-emerald-500 text-white shadow-sm hover:opacity-90 hover:scale-105 active:scale-95 cursor-pointer'
                                     )}
-                                    title="Send (Enter)"
+                                    title={t('sendEnter')}
                                 >
                                     <Send size={14} />
                                 </button>
@@ -724,7 +767,7 @@ const ChatInput: React.FC = () => {
                     </div>
                 </div>
                 <p className="text-[10px] text-text-quaternary text-center mt-2 hidden sm:block">
-                    <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Enter</kbd> to send · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Shift+Enter</kbd> newline · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+N</kbd> new chat
+                    <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Enter</kbd> {t('enterToSend')} · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">Shift+Enter</kbd> {t('shiftEnterNewline')} · <kbd className="px-1 py-0.5 rounded bg-fill border border-border-secondary text-[10px]">{navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl'}+N</kbd> {t('newChatShortcut')}
                 </p>
             </div>
         </div>
@@ -767,7 +810,7 @@ export const ChatArea: React.FC = () => {
     }, [])
 
     React.useEffect(() => {
-        scrollToBottom()
+        if (chatMessages.length > 0) scrollToBottom()
     }, [chatMessages, scrollToBottom])
 
     const handleScroll = React.useCallback(() => {
@@ -777,12 +820,12 @@ export const ChatArea: React.FC = () => {
     }, [])
 
     return (
-        <div className="flex flex-col h-full bg-bg-container overflow-hidden relative">
+        <div className="flex flex-col h-full bg-bg-container overflow-hidden relative min-w-0">
             {/* Header */}
-            <div className="h-14 border-b border-border flex items-center px-6 pl-14 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+            <div className="h-11 sm:h-14 border-b border-border flex items-center px-4 sm:px-6 pl-14 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <span className="text-sm font-semibold truncate text-text tracking-tight flex-1">
-                    {activeChat?.title ?? 'Welcome'}
+                    {activeChat?.title ?? t('welcome')}
                 </span>
                 {isGenerating && thinkingStatus && (
                     <span className="ml-3 text-xs text-text-tertiary flex items-center gap-1.5 shrink-0">
@@ -793,8 +836,8 @@ export const ChatArea: React.FC = () => {
                 {activeChat && chatMessages.length > 0 && !isGenerating && (
                     <button
                         onClick={() => exportChatAsMarkdown(activeChat.title, chatMessages)}
-                        className="ml-2 p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors shrink-0"
-                        title="Export as Markdown"
+                        className="ml-2 p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors shrink-0 cursor-pointer"
+                        title={t('exportMarkdown')}
                     >
                         <Download size={14} />
                     </button>
@@ -802,7 +845,7 @@ export const ChatArea: React.FC = () => {
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-3 sm:px-4 py-6 sm:py-8">
+            <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto custom-scrollbar px-3 sm:px-4 py-3 sm:py-8">
                 <div className="max-w-3xl mx-auto space-y-5 sm:space-y-7">
                     {chatMessages.length === 0 && <WelcomeScreen />}
 
@@ -836,8 +879,8 @@ export const ChatArea: React.FC = () => {
                                         </div>
                                     )}
                                     {msg.content && (
-                                        <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed"
-                                             style={{ boxShadow: 'var(--shadow-soft)' }}>
+                                        <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap break-words"
+                                             style={{ boxShadow: 'var(--shadow-soft)', overflowWrap: 'anywhere' }}>
                                             {msg.content}
                                         </div>
                                     )}
@@ -848,7 +891,7 @@ export const ChatArea: React.FC = () => {
                                         <details className="mb-3 group">
                                             <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5 py-1">
                                                 <ChevronRight size={12} className="transition-transform duration-200 group-open:rotate-90" />
-                                                💭 Thinking
+                                                {t('thinkingLabel')}
                                             </summary>
                                             <div className="mt-2 pl-4 border-l-2 border-border/60 text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">
                                                 {msg.thinking}
@@ -878,7 +921,7 @@ export const ChatArea: React.FC = () => {
                                                 <div key={i} className="relative group">
                                                     <img
                                                         src={src}
-                                                        alt="Generated image"
+                                                        alt={t('generatedImage')}
                                                         className="max-w-sm rounded-2xl border border-border cursor-pointer hover:opacity-95 transition-opacity"
                                                         style={{ boxShadow: 'var(--shadow-soft)' }}
                                                         onClick={() => window.open(src, '_blank')}
@@ -888,7 +931,7 @@ export const ChatArea: React.FC = () => {
                                                             href={src}
                                                             download={`neo-image-${Date.now()}-${i}.png`}
                                                             className="w-8 h-8 rounded-lg bg-black/50 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/70 transition-colors"
-                                                            title="Download"
+                                                            title={t('download')}
                                                             onClick={(e) => e.stopPropagation()}
                                                         >
                                                             <Download size={14} />

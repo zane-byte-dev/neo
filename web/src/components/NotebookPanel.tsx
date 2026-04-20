@@ -1,5 +1,5 @@
 import React from 'react'
-import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X, Plus, Pencil } from 'lucide-react'
+import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X, Plus, Pencil, Sparkles } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { notebookList, notebookSearch, notebookRead, notebookListNotebooks } from '../api'
@@ -7,6 +7,11 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { NoteEditor } from './NoteEditor'
 import type { NoteEntry } from '../types'
+import { t } from '../i18n'
+import { NotebookWorkspace } from './notebook/NotebookWorkspace'
+
+/** Matches Tailwind's `md` breakpoint */
+const MOBILE_BREAKPOINT = 768
 
 // ── Note detail view ──────────────────────────────────────────────────────────
 
@@ -24,7 +29,7 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
 
     return (
         <div className="flex flex-col h-full">
-            <div className="h-14 border-b border-border flex items-center gap-2 px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+            <div className="h-14 border-b border-border flex items-center gap-2 px-3 md:px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <button
                     onClick={onBack}
@@ -36,13 +41,13 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
                 <button
                     onClick={onEdit}
                     className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-text"
-                    title="编辑"
+                    title={t('edit')}
                 >
                     <Pencil size={14} />
                 </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6">
                 {/* Meta */}
                 <div className="flex flex-wrap gap-3 mb-6 text-xs text-text-tertiary">
                     {note.date && (
@@ -91,8 +96,12 @@ const NoteDetail: React.FC<{ note: NoteEntry; onBack: () => void; onEdit: () => 
 
 // ── Main notebook panel ───────────────────────────────────────────────────────
 
-export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) => {
-    const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries } = useAppStore()
+export const NotebookPanel: React.FC<{
+    fullPage?: boolean
+    urlNotebook?: string
+    navigate?: (path: string) => void
+}> = ({ fullPage, urlNotebook, navigate }) => {
+    const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries, activeNotebook, setActiveNotebook } = useAppStore()
     const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [selectedNotebook, setSelectedNotebook] = React.useState<string | undefined>(undefined)
     const [searchQuery, setSearchQuery] = React.useState('')
@@ -102,21 +111,52 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
     const [inSearch, setInSearch] = React.useState(false)
     const searchTimeoutRef = React.useRef<number | null>(null)
     const [editing, setEditing] = React.useState<NoteEntry | null | 'new'>(null)
+    const [isMobile, setIsMobile] = React.useState(false)
 
     // Load available notebooks once
     React.useEffect(() => {
         notebookListNotebooks().then(setNotebooks).catch(() => {})
     }, [])
 
+    // Sync URL → state: activate notebook from URL param on mount
+    React.useEffect(() => {
+        if (urlNotebook && urlNotebook !== activeNotebook) {
+            setSelectedNotebook(urlNotebook)
+            setActiveNotebook(urlNotebook)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [urlNotebook])
+
+    // Sync state → URL: update URL when activeNotebook changes
+    React.useEffect(() => {
+        if (!navigate) return
+        if (activeNotebook) {
+            navigate(`/notebook/${encodeURIComponent(activeNotebook)}`)
+        } else if (urlNotebook) {
+            // Exiting workspace mode → go back to /notebook
+            navigate('/notebook')
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeNotebook])
+
+    // Track screen size for responsive layout
+    React.useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
+        handleResize() // set correct value on mount
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+    }, [])
+
     // Reload entries when selected notebook changes
     React.useEffect(() => {
+        if (activeNotebook) return // skip when in workspace mode
         setLoading(true)
         setError('')
         notebookList(selectedNotebook)
             .then((data) => setNotebookEntries(data as NoteEntry[]))
             .catch((e) => setError(String(e)))
             .finally(() => setLoading(false))
-    }, [selectedNotebook])
+    }, [selectedNotebook, activeNotebook])
 
     // Debounced search
     React.useEffect(() => {
@@ -134,6 +174,11 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                 .catch(() => setResults([]))
         }, 300)
     }, [searchQuery, selectedNotebook])
+
+    // ── Notebook workspace mode ──────────────────────────────────────────
+    if (activeNotebook) {
+        return <NotebookWorkspace notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
+    }
 
     const displayList = inSearch ? results : notebookEntries
 
@@ -174,11 +219,46 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                     <div className="w-12 h-12 rounded-2xl bg-fill flex items-center justify-center">
                         <BookOpen size={20} className="text-text-quaternary" />
                     </div>
-                    <span>选择一篇文章阅读</span>
+                    <span>{t('selectArticle')}</span>
                 </div>
             )
 
     if (fullPage) {
+        // Mobile: show list or detail, not both
+        if (isMobile) {
+            if (editing !== null) {
+                return <div className="flex flex-col h-full bg-bg-container overflow-hidden">{editorView}</div>
+            }
+            if (selectedNote) {
+                return (
+                    <div className="flex h-full bg-bg-container overflow-hidden">
+                        <NoteDetail note={selectedNote} onBack={() => setSelectedNote(null)} onEdit={() => setEditing(selectedNote)} />
+                    </div>
+                )
+            }
+            return (
+                <div className="flex flex-col h-full bg-bg-container overflow-hidden">
+                    <NotebookList
+                        notebooks={notebooks}
+                        selectedNotebook={selectedNotebook}
+                        onNotebookChange={setSelectedNotebook}
+                        entries={displayList}
+                        loading={loading}
+                        error={error}
+                        inSearch={inSearch}
+                        searchQuery={searchQuery}
+                        setSearchQuery={setSearchQuery}
+                        totalCount={notebookEntries.length}
+                        onSelect={setSelectedNote}
+                        selectedId={null}
+                        onNew={() => setEditing('new')}
+                        onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
+                    />
+                </div>
+            )
+        }
+
+        // Desktop: side-by-side
         return (
             <div className="flex h-full bg-bg-container overflow-hidden">
                 <div className="w-80 shrink-0 border-r border-border flex flex-col">
@@ -196,6 +276,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                         onSelect={setSelectedNote}
                         selectedId={selectedNote?.id ?? null}
                         onNew={() => setEditing('new')}
+                        onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
                     />
                 </div>
                 <div className="flex-1 overflow-hidden">
@@ -228,6 +309,7 @@ export const NotebookPanel: React.FC<{ fullPage?: boolean }> = ({ fullPage }) =>
                 onSelect={setSelectedNote}
                 selectedId={null}
                 onNew={() => setEditing('new')}
+                onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
             />
         </div>
     )
@@ -249,19 +331,29 @@ const NotebookList: React.FC<{
     onSelect: (note: NoteEntry) => void
     selectedId: string | null
     onNew?: () => void
-}> = ({ notebooks, selectedNotebook, onNotebookChange, entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew }) => (
+    onOpenWorkspace?: () => void
+}> = ({ notebooks, selectedNotebook, onNotebookChange, entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew, onOpenWorkspace }) => (
     <>
         {/* Header */}
         <div className="h-14 border-b border-border flex items-center gap-2 px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
              style={{ boxShadow: 'var(--shadow-soft)' }}>
             <BookOpen size={16} className="text-primary-mint shrink-0" />
-            <span className="text-sm font-semibold tracking-tight">Notebook</span>
+            <span className="text-sm font-semibold tracking-tight">{t('notebook')}</span>
             <span className="ml-auto text-xs text-text-tertiary bg-fill px-2 py-0.5 rounded-full">{totalCount}</span>
+            {onOpenWorkspace && selectedNotebook && (
+                <button
+                    onClick={onOpenWorkspace}
+                    className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-primary-mint"
+                    title="打开工作室 (NotebookLM 模式)"
+                >
+                    <Sparkles size={16} />
+                </button>
+            )}
             {onNew && (
                 <button
                     onClick={onNew}
                     className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-primary-mint"
-                    title="新建文章"
+                    title={t('newArticle')}
                 >
                     <Plus size={16} />
                 </button>
@@ -280,7 +372,7 @@ const NotebookList: React.FC<{
                             : 'text-text-secondary hover:bg-fill-secondary'
                     )}
                 >
-                    全部
+                    {t('allFilter')}
                 </button>
                 {notebooks.map((nb) => (
                     <button
@@ -307,7 +399,7 @@ const NotebookList: React.FC<{
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search notes…"
+                    placeholder={t('searchNotes')}
                     className="w-full bg-fill-secondary border border-border rounded-xl pl-9 pr-9 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all duration-200 placeholder:text-text-quaternary"
                 />
                 {searchQuery && (
@@ -339,7 +431,7 @@ const NotebookList: React.FC<{
                     <div className="w-10 h-10 rounded-xl bg-fill flex items-center justify-center">
                         <Search size={16} className="text-text-quaternary" />
                     </div>
-                    <p className="text-xs text-text-quaternary">{inSearch ? 'No results' : 'No entries'}</p>
+                    <p className="text-xs text-text-quaternary">{inSearch ? t('noResults') : t('noEntries')}</p>
                 </div>
             )}
             {entries.map((entry) => (

@@ -126,6 +126,10 @@ export interface AppState {
     theme: Theme
     setTheme: (theme: Theme) => void
 
+    // Locale
+    locale: 'en' | 'zh'
+    setLocale: (locale: 'en' | 'zh') => void
+
     // Chat
     chats: Chat[]
     activeChatId: string | null
@@ -135,6 +139,7 @@ export interface AppState {
     selectOrCreateChat: (id: string, title?: string) => void
     deleteChat: (id: string) => void
     pinChat: (id: string) => void
+    renameChat: (id: string, title: string) => void
 
     // Messages
     messages: Record<string, Message[]>
@@ -159,9 +164,104 @@ export interface AppState {
     selectedModel: string
     setSelectedModel: (model: string) => void
 
+    // Auto speak
+    autoSpeak: boolean
+    setAutoSpeak: (v: boolean) => void
+
     // Notebook
     notebookEntries: NoteEntry[]
     setNotebookEntries: (entries: NoteEntry[]) => void
     selectedNote: NoteEntry | null
     setSelectedNote: (note: NoteEntry | null) => void
+
+    // Notebook workspace (NotebookLM-style)
+    activeNotebook: string | null
+    setActiveNotebook: (name: string | null) => void
+    sources: SourceMeta[]
+    setSources: (sources: SourceMeta[]) => void
+    selectedSourceIds: string[]
+    setSelectedSourceIds: (ids: string[]) => void
+    toggleSourceSelected: (id: string) => void
+    sourceGuides: Record<string, SourceGuide | null>
+    setSourceGuide: (id: string, guide: SourceGuide | null) => void
+    notebookMessages: NotebookChatMessage[]
+    setNotebookMessages: (messages: NotebookChatMessage[]) => void
+    appendNotebookMessage: (message: NotebookChatMessage) => void
+    updateLastNotebookMessage: (partial: Partial<NotebookChatMessage>) => void
+    notebookNotes: NotebookNote[]
+    setNotebookNotes: (notes: NotebookNote[]) => void
+    notebookArtifacts: Artifact[]
+    setNotebookArtifacts: (artifacts: Artifact[]) => void
+    notebookConfig: NotebookConfig | null
+    setNotebookConfig: (config: NotebookConfig | null) => void
+}
+
+// ── Notebook workspace types ─────────────────────────────────────────────────
+
+export type SourceKind = 'text' | 'url' | 'youtube' | 'pdf' | 'audio' | 'image'
+
+export interface SourceMeta {
+    id: string          // sourceId slug (filename without .md)
+    notebook: string
+    entryId: string     // full entry id "notebooks/{nb}/{filename}"
+    title: string
+    type: SourceKind
+    source: string | null  // original URL / filename
+    date: string | null
+    author: string | null
+    summary: string | null
+    wordCount?: number
+}
+
+export interface SourceGuide {
+    summary: string
+    keyTopics: string[]
+    suggestedQuestions: string[]
+    generatedAt: string
+}
+
+export interface NotebookConfig {
+    emoji?: string
+    description?: string
+    chatStyle?: 'default' | 'study-guide' | 'custom'
+    customStyle?: string
+    answerLength?: 'short' | 'default' | 'long'
+    overview?: string
+    overviewUpdatedAt?: string
+}
+
+export interface NotebookNote {
+    id: string
+    title: string
+    content: string
+    source: 'user' | 'ai-chat' | 'ai-quick-action'
+    createdAt: string
+    updatedAt: string
+}
+
+export type ArtifactType = 'mindmap' | 'report' | 'audio'
+
+export interface Artifact {
+    id: string
+    type: ArtifactType
+    subtype?: string  // e.g. report subtype: briefing/faq/study-guide
+    title: string
+    data: Record<string, unknown>  // mindmap: { markdown }; report: { markdown }; audio: { script: [{speaker,text}] }
+    createdAt: string
+    sourceIds: string[]
+}
+
+export interface ParsedCitation {
+    n: number
+    label?: string
+}
+
+export interface NotebookChatMessage {
+    id: string
+    role: 'user' | 'assistant'
+    content: string
+    citations?: number[]     // citation numbers referenced in this message
+    citedSources?: { n: number; sourceId: string; title: string }[]  // map 【N】 → source metadata
+    timestamp: number
+    streaming?: boolean
 }

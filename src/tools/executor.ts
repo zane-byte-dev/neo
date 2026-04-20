@@ -13,7 +13,7 @@ import type { Tool, FunctionDeclaration, ToolContext } from '../llm/types.js';
  * Resolve and validate a file path stays within workDir.
  * Throws if the resolved path escapes the sandbox.
  */
-function safePath(filePath: string, workDir: string): string {
+export function safePath(filePath: string, workDir: string): string {
     const resolved = isAbsolute(filePath) ? resolve(filePath) : resolve(workDir, filePath);
     if (!resolved.startsWith(resolve(workDir))) {
         throw new Error(`Path traversal blocked: ${filePath} resolves outside workDir`);

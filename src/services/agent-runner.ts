@@ -14,6 +14,7 @@
 
 import { LLMClient } from '../llm/client.js';
 import type { StreamChunk, ToolContext } from '../llm/types.js';
+import { resolveSmartModel } from '../llm/model-router.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
 import { log } from '../utils/logger.js';
@@ -47,9 +48,13 @@ export interface AgentRunOptions {
  * Throws on unrecoverable error (AbortError is re-thrown as-is).
  */
 export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
-    const { userId, sessionId, message, model, images, signal, onChunk, onImage, onVideo, onTodo } = opts;
+    const { userId, sessionId, message, model: rawModel, images, signal, onChunk, onImage, onVideo, onTodo } = opts;
 
     const t0 = Date.now();
+
+    // Smart routing: resolve 'auto' or undefined to the best model
+    const model = resolveSmartModel({ userModel: rawModel, hasTools: true });
+
     log.info(MODULE, 'Turn start', { userId, sessionId, model, messageLen: message.length, preview: message.slice(0, 100) });
 
     const userCtx = await calcUser(userId);
