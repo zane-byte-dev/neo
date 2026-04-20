@@ -388,10 +388,18 @@ export class LLMClient {
                             });
                             const baseReason = route?.reason ?? 'scored';
                             const reason = forceFreeOnly ? `${baseReason}|budget_limited` : baseReason;
-                            // Capture the actual user prompt sent to the model
-                            const actualUserPrompt = useMessages
-                                ? messages.filter(m => m.role === 'user').map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n---\n')
-                                : prompt ?? '';
+                            // Capture the actual user prompt sent to the model.
+                            // In messages mode, extract user-role messages and join them
+                            // with '---' separators to mirror the multi-turn structure.
+                            let actualUserPrompt: string;
+                            if (useMessages) {
+                                const userParts = messages
+                                    .filter(m => m.role === 'user')
+                                    .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
+                                actualUserPrompt = userParts.join('\n---\n');
+                            } else {
+                                actualUserPrompt = prompt ?? '';
+                            }
                             void appendUsageRecord({
                                 timestamp: Date.now(),
                                 userId: context.userId,
