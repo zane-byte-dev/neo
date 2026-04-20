@@ -17,6 +17,8 @@ import type { Artifact, NotebookNote } from '../../types'
 import { MindMap } from './MindMap'
 import { AudioOverview, type AudioLine } from './AudioOverview'
 import { StudioActionModal } from './StudioActionModal'
+import { toast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
 type View = 'home' | 'overview' | 'notes' | 'artifact-view'
 type ModalAction = 'audio' | 'mindmap' | 'report' | null
@@ -167,7 +169,7 @@ const StudioOutputs: React.FC<{ notebook: string; onViewArtifact: (a: Artifact) 
 
     const remove = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation()
-        if (!confirm('删除此生成内容？')) return
+        if (!(await confirm('删除此生成内容？', { destructive: true, confirmText: '删除' }))) return
         await notebookDeleteArtifact(notebook, id)
         load()
     }
@@ -238,7 +240,7 @@ const OverviewTab: React.FC<Props> = ({ notebook }) => {
             const { overview } = await notebookGenerateOverview(notebook, selectedSourceIds.length ? selectedSourceIds : undefined)
             setNotebookConfig({ ...notebookConfig, overview, overviewUpdatedAt: new Date().toISOString() })
         } catch (e) {
-            alert(`生成失败：${(e as Error).message}`)
+            toast.error(`生成失败：${(e as Error).message}`)
         } finally { setGenerating(false) }
     }
 
@@ -299,23 +301,23 @@ const NotesTab: React.FC<Props> = ({ notebook }) => {
     const toggle = (id: string) => setSelectedIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])
 
     const runQuick = async (action: NoteQuickAction) => {
-        if (selectedIds.length === 0) { alert('请选择至少一条笔记'); return }
+        if (selectedIds.length === 0) { toast.warning('请选择至少一条笔记'); return }
         setActionLoading(true)
         try {
             await notebookNoteQuickAction(notebook, action, selectedIds)
             setSelectedIds([])
             load()
         } catch (e) {
-            alert(`失败：${(e as Error).message}`)
+            toast.error(`失败：${(e as Error).message}`)
         } finally { setActionLoading(false) }
     }
 
     const convertToSource = async (id: string) => {
-        if (!confirm('将此笔记转为来源？')) return
+        if (!(await confirm('将此笔记转为来源？', { confirmText: '转换' }))) return
         try {
             await notebookConvertNoteToSource(notebook, id)
             load()
-        } catch (e) { alert((e as Error).message) }
+        } catch (e) { toast.error((e as Error).message) }
     }
 
     if (editing !== null) {
@@ -363,7 +365,7 @@ const NotesTab: React.FC<Props> = ({ notebook }) => {
                                     <button onClick={() => convertToSource(n.id)} className="text-xs text-text-tertiary hover:text-text">→ 转为来源</button>
                                     <button
                                         onClick={async () => {
-                                            if (confirm('删除此笔记？')) { await notebookDeleteNote(notebook, n.id); load() }
+                                            if (await confirm('删除此笔记？', { destructive: true, confirmText: '删除' })) { await notebookDeleteNote(notebook, n.id); load() }
                                         }}
                                         className="text-xs text-text-tertiary hover:text-destructive ml-auto"
                                     >
@@ -390,7 +392,7 @@ const NoteEditorInline: React.FC<{ notebook: string; note: NotebookNote | null; 
         try {
             await notebookSaveNote(notebook, { id: note?.id, title: title.trim(), content, source: note?.source ?? 'user' })
             onSaved()
-        } catch (e) { alert((e as Error).message) } finally { setSaving(false) }
+        } catch (e) { toast.error((e as Error).message) } finally { setSaving(false) }
     }
 
     return (

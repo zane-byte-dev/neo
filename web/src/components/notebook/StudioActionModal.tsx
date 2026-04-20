@@ -40,6 +40,7 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
     const { selectedSourceIds, sources } = useAppStore()
     const [generating, setGenerating] = React.useState(false)
     const [error, setError] = React.useState('')
+    const [generatePhase, setGeneratePhase] = React.useState<'planning' | 'generating' | 'done' | null>(null)
 
     // Audio state
     const [audioFormat, setAudioFormat] = React.useState<AudioFormat>('deep-dive')
@@ -55,6 +56,7 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
     const reset = () => {
         setError('')
         setGenerating(false)
+        setGeneratePhase(null)
         setAudioFormat('deep-dive')
         setAudioPrompt('')
         setMindmapTopic('')
@@ -71,6 +73,7 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
     const handleGenerate = async () => {
         setGenerating(true)
         setError('')
+        setGeneratePhase('planning')
         try {
             const payload: GenerateArtifactPayload = {
                 notebook,
@@ -102,11 +105,14 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
                 }
             }
 
+            setGeneratePhase('generating')
             const artifact = await notebookGenerateArtifact(payload)
+            setGeneratePhase('done')
             onGenerated(artifact)
             handleClose()
         } catch (e) {
             setError((e as Error).message)
+            setGeneratePhase(null)
         } finally {
             setGenerating(false)
         }
@@ -240,6 +246,26 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
                     <p className="text-xs text-text-tertiary">
                         将基于 {selectedSourceIds.length || sources.length} 个来源生成
                     </p>
+
+                    {/* Generation progress */}
+                    {generating && generatePhase && (
+                        <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-xs text-text-secondary">
+                                <Loader2 size={12} className="animate-spin text-primary-mint" />
+                                <span>
+                                    {generatePhase === 'planning' && '正在分析来源内容…'}
+                                    {generatePhase === 'generating' && '正在生成内容，请稍候…'}
+                                    {generatePhase === 'done' && '完成！'}
+                                </span>
+                            </div>
+                            <div className="w-full bg-fill rounded-full h-1.5 overflow-hidden">
+                                <div
+                                    className="h-full bg-primary-mint rounded-full transition-all duration-1000 ease-out"
+                                    style={{ width: generatePhase === 'planning' ? '30%' : generatePhase === 'generating' ? '70%' : '100%' }}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {error && <p className="text-xs text-destructive">{error}</p>}
 

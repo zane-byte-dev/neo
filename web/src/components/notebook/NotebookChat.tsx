@@ -14,10 +14,15 @@ import {
 } from '../../api'
 import { CitationRenderer } from './CitationRenderer'
 import type { NotebookChatMessage } from '../../types'
+import { toast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
-interface Props { notebook: string }
+interface Props {
+    notebook: string
+    onCitationClick?: (source: { n: number; sourceId: string; title: string }) => void
+}
 
-export const NotebookChat: React.FC<Props> = ({ notebook }) => {
+export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => {
     const {
         sources,
         selectedSourceIds,
@@ -45,17 +50,30 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
     }, [notebookMessages.length])
 
-    // Gather suggested questions from first selected source guide
+    // Gather suggested questions from all selected source guides (deduplicated)
     const suggestedQuestions = React.useMemo(() => {
-        const firstSelected = sources.find((s) => selectedSourceIds.includes(s.id))
-        if (!firstSelected) return []
-        return sourceGuides[firstSelected.id]?.suggestedQuestions ?? []
-    }, [sources, selectedSourceIds, sourceGuides])
+        const questions: string[] = []
+        const seen = new Set<string>()
+        for (const sid of selectedSourceIds) {
+            const guide = sourceGuides[sid]
+            if (!guide?.suggestedQuestions) continue
+            for (const q of guide.suggestedQuestions) {
+                const key = q.trim().toLowerCase()
+                if (!seen.has(key)) {
+                    seen.add(key)
+                    questions.push(q)
+                }
+                if (questions.length >= 6) break
+            }
+            if (questions.length >= 6) break
+        }
+        return questions
+    }, [selectedSourceIds, sourceGuides])
 
     const sendMessage = async (text: string) => {
         if (!text.trim() || sending) return
         if (selectedSourceIds.length === 0) {
-            alert('请先选择至少一个来源')
+            toast.warning('请先选择至少一个来源')
             return
         }
 
@@ -114,7 +132,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
     }
 
     const clear = async () => {
-        if (!confirm('清空当前对话？')) return
+        if (!(await confirm('清空当前对话？', { destructive: true, confirmText: '清空' }))) return
         await notebookClearChat(notebook)
         setNotebookMessages([])
     }
@@ -126,9 +144,9 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
                 content: msg.content,
                 source: 'ai-chat',
             })
-            alert('已保存到笔记')
+            toast.success('已保存到笔记')
         } catch (e) {
-            alert(`保存失败：${(e as Error).message}`)
+            toast.error(`保存失败：${(e as Error).message}`)
         }
     }
 
@@ -179,7 +197,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
                                 ? <p className="text-sm whitespace-pre-wrap">{m.content}</p>
                                 : (
                                     <>
-                                        <CitationRenderer content={m.content} sources={m.citedSources} />
+                                        <CitationRenderer content={m.content} sources={m.citedSources} onCitationClick={onCitationClick} />
                                         {m.streaming && !m.content && <Loader2 size={14} className="animate-spin text-text-tertiary" />}
                                         {!m.streaming && m.content && (
                                             <div className="mt-2 pt-2 border-t border-border-secondary flex items-center gap-2">
@@ -200,6 +218,21 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
             </div>
 
             <div className="border-t border-border p-3 shrink-0">
+                {/* Suggested question chips (above input, shown when not sending and questions available) */}
+                {!sending && suggestedQuestions.length > 0 && notebookMessages.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                        {suggestedQuestions.slice(0, 4).map((q, i) => (
+                            <button
+                                key={i}
+                                onClick={() => sendMessage(q)}
+                                className="text-[11px] px-2.5 py-1.5 bg-primary-mint/8 hover:bg-primary-mint/15 text-primary-mint border border-primary-mint/20 rounded-full transition-colors truncate max-w-[200px]"
+                                title={q}
+                            >
+                                💡 {q}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <div className="flex gap-2 items-end">
                     <textarea
                         value={input}

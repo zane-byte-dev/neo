@@ -15,6 +15,8 @@ import {
     notebookRenameSource,
 } from '../../api'
 import { AddSourceModal } from './AddSourceModal'
+import { toast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
 interface Props {
     notebook: string
@@ -74,6 +76,27 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
 
     const handleStopBatch = () => { batchAbort.current = true }
 
+    const handleBatchArchive = async () => {
+        if (selectedSourceIds.length === 0) { toast.warning('请先选择来源'); return }
+        if (!(await confirm(`批量移除 ${selectedSourceIds.length} 个来源？`, {
+            description: '文件不会被删除，仅从列表中隐藏',
+            destructive: true,
+            confirmText: '批量移除',
+        }))) return
+        let archived = 0
+        for (const id of selectedSourceIds) {
+            try {
+                await notebookArchiveSource(notebook, id)
+                archived++
+            } catch { /* skip */ }
+        }
+        if (archived > 0) {
+            setSources(sources.filter((s) => !selectedSourceIds.includes(s.id)))
+            setSelectedSourceIds([])
+            toast.success(`已移除 ${archived} 个来源`)
+        }
+    }
+
     return (
         <div className="flex flex-col h-full bg-bg-container border-r border-border">
             <div className="h-14 border-b border-border flex items-center gap-2 px-4 shrink-0">
@@ -99,7 +122,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
             </div>
 
             {sources.length > 0 && (
-                <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
+                <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0 flex-wrap">
                     <button
                         onClick={toggleAll}
                         className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text"
@@ -114,7 +137,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                             onClick={handleBatchGenerate}
                             className="text-xs text-primary-mint hover:underline"
                         >
-                            批量生成摘要 ({missingGuideCount})
+                            批量摘要 ({missingGuideCount})
                         </button>
                     )}
                     {batchGenerating && (
@@ -123,6 +146,14 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                             className="text-xs text-warning hover:underline flex items-center gap-1"
                         >
                             <Loader2 size={10} className="animate-spin" /> 停止
+                        </button>
+                    )}
+                    {selectedSourceIds.length > 1 && !batchGenerating && (
+                        <button
+                            onClick={handleBatchArchive}
+                            className="text-xs text-destructive hover:underline flex items-center gap-1"
+                        >
+                            <Archive size={10} /> 批量移除
                         </button>
                     )}
                     <span className="ml-auto text-xs text-text-tertiary">已选 {selectedSourceIds.length}</span>
@@ -213,11 +244,11 @@ const SourceRow: React.FC<{
 
     const handleArchive = async () => {
         setMenuOpen(false)
-        if (!confirm(`移除来源「${source.title}」？\n（文件不会被删除，仅从列表中隐藏）`)) return
+        if (!(await confirm(`移除来源「${source.title}」？`, { description: '文件不会被删除，仅从列表中隐藏', destructive: true, confirmText: '移除' }))) return
         try {
             await notebookArchiveSource(notebook, source.id)
             setSources(sources.filter((s) => s.id !== source.id))
-        } catch (e) { alert((e as Error).message) }
+        } catch (e) { toast.error((e as Error).message) }
     }
 
     const handleStartRename = () => {
@@ -232,7 +263,7 @@ const SourceRow: React.FC<{
         try {
             const updated = await notebookRenameSource(notebook, source.id, newTitle)
             setSources(sources.map((s) => s.id === source.id ? { ...s, title: updated.title } : s))
-        } catch (e) { alert((e as Error).message) }
+        } catch (e) { toast.error((e as Error).message) }
         setRenaming(false)
     }
 

@@ -10,6 +10,8 @@ import { WaterPuzzle } from './components/WaterPuzzle'
 import { useAppStore } from './stores/useAppStore'
 import { checkAuth, type AuthResult } from './api'
 import { cn } from './lib/utils'
+import { ToastContainer } from './components/Toast'
+import { ConfirmDialogContainer } from './components/ConfirmDialog'
 
 const ResizeHandle: React.FC = () => (
     <PanelResizeHandle className="w-1 bg-transparent hover:bg-primary-mint/30 transition-all duration-200 cursor-col-resize group">
@@ -253,6 +255,8 @@ const App: React.FC = () => {
     return (
         <BrowserRouter>
             <MainLayout />
+            <ToastContainer />
+            <ConfirmDialogContainer />
         </BrowserRouter>
     )
 }

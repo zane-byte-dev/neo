@@ -25,7 +25,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     const [isMobile, setIsMobile] = React.useState(false)
     const [mobileTab, setMobileTab] = React.useState<MobileTab>('chat')
     const [viewingSource, setViewingSource] = React.useState<SourceMeta | null>(null)
-    const { selectedModel, setSelectedModel } = useAppStore()
+    const { selectedModel, setSelectedModel, sources } = useAppStore()
 
     React.useEffect(() => {
         const handle = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
@@ -33,6 +33,15 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         window.addEventListener('resize', handle)
         return () => window.removeEventListener('resize', handle)
     }, [])
+
+    // Citation click handler — navigate to SourceDetailView
+    const handleCitationClick = React.useCallback((cited: { n: number; sourceId: string; title: string }) => {
+        const found = sources.find((s) => s.id === cited.sourceId)
+        if (found) {
+            setViewingSource(found)
+            if (isMobile) setMobileTab('chat')
+        }
+    }, [sources, isMobile])
 
     if (isMobile) {
         return (
@@ -59,7 +68,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                     {mobileTab === 'sources' && <SourcePanel notebook={notebook} onSelectSource={(s) => { setViewingSource(s); setMobileTab('chat') }} />}
                     {mobileTab === 'chat' && (viewingSource
                         ? <SourceDetailView notebook={notebook} source={viewingSource} onBack={() => setViewingSource(null)} />
-                        : <NotebookChat notebook={notebook} />
+                        : <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />
                     )}
                     {mobileTab === 'studio'  && <StudioPanel notebook={notebook} />}
                 </div>
@@ -113,7 +122,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                 <div className="flex-1 overflow-hidden">
                     {viewingSource
                         ? <SourceDetailView notebook={notebook} source={viewingSource} onBack={() => setViewingSource(null)} />
-                        : <NotebookChat notebook={notebook} />
+                        : <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />
                     }
                 </div>
             </div>
