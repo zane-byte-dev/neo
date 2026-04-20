@@ -3,21 +3,28 @@
  * Source-grounded chat with 【N】 citations.
  */
 import React from 'react'
-import { Send, Trash2, Loader2, Sparkles, MessageSquare } from 'lucide-react'
+import { Send, Trash2, Loader2, Sparkles, MessageSquare, Shield, ShieldOff, GitBranch } from 'lucide-react'
 import { useAppStore } from '../../stores/useAppStore'
 import {
     streamNotebookChat,
     notebookChatHistory,
     notebookClearChat,
+    notebookForkChat,
     notebookSaveNote,
+    notebookUpdateConfig,
     type NotebookChatEvent,
 } from '../../api'
 import { CitationRenderer } from './CitationRenderer'
 import type { NotebookChatMessage } from '../../types'
+import { toast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
-interface Props { notebook: string }
+interface Props {
+    notebook: string
+    onCitationClick?: (source: { n: number; sourceId: string; title: string }) => void
+}
 
-export const NotebookChat: React.FC<Props> = ({ notebook }) => {
+export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => {
     const {
         sources,
         selectedSourceIds,
@@ -27,11 +34,23 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
         appendNotebookMessage,
         updateLastNotebookMessage,
         sourceGuides,
+        notebookConfig,
+        setNotebookConfig,
     } = useAppStore()
     const [input, setInput] = React.useState('')
     const [sending, setSending] = React.useState(false)
     const abortRef = React.useRef<AbortController | null>(null)
     const scrollRef = React.useRef<HTMLDivElement>(null)
+
+    const citationMode = notebookConfig?.citationMode ?? 'strict'
+    const toggleCitationMode = async () => {
+        const next = citationMode === 'strict' ? 'mixed' : 'strict'
+        try {
+            const updated = await notebookUpdateConfig(notebook, { citationMode: next })
+            setNotebookConfig(updated)
+            toast.info(next === 'strict' ? '已切换为严格引用模式' : '已切换为混合引用模式')
+        } catch { /* ignore */ }
+    }
 
     // Load chat history
     React.useEffect(() => {
@@ -45,17 +64,30 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
     }, [notebookMessages.length])
 
-    // Gather suggested questions from first selected source guide
+    // Gather suggested questions from all selected source guides (deduplicated)
     const suggestedQuestions = React.useMemo(() => {
-        const firstSelected = sources.find((s) => selectedSourceIds.includes(s.id))
-        if (!firstSelected) return []
-        return sourceGuides[firstSelected.id]?.suggestedQuestions ?? []
-    }, [sources, selectedSourceIds, sourceGuides])
+        const questions: string[] = []
+        const seen = new Set<string>()
+        for (const sid of selectedSourceIds) {
+            const guide = sourceGuides[sid]
+            if (!guide?.suggestedQuestions) continue
+            for (const q of guide.suggestedQuestions) {
+                const key = q.trim().toLowerCase()
+                if (!seen.has(key)) {
+                    seen.add(key)
+                    questions.push(q)
+                }
+                if (questions.length >= 4) break
+            }
+            if (questions.length >= 4) break
+        }
+        return questions
+    }, [selectedSourceIds, sourceGuides])
 
     const sendMessage = async (text: string) => {
         if (!text.trim() || sending) return
         if (selectedSourceIds.length === 0) {
-            alert('请先选择至少一个来源')
+            toast.warning('请先选择至少一个来源')
             return
         }
 
@@ -114,7 +146,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
     }
 
     const clear = async () => {
-        if (!confirm('清空当前对话？')) return
+        if (!(await confirm('清空当前对话？', { destructive: true, confirmText: '清空' }))) return
         await notebookClearChat(notebook)
         setNotebookMessages([])
     }
@@ -126,9 +158,20 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
                 content: msg.content,
                 source: 'ai-chat',
             })
-            alert('已保存到笔记')
+            toast.success('已保存到笔记')
         } catch (e) {
-            alert(`保存失败：${(e as Error).message}`)
+            toast.error(`保存失败：${(e as Error).message}`)
+        }
+    }
+
+    const forkFrom = async (msg: NotebookChatMessage) => {
+        if (!(await confirm('从此消息处分叉？此操作将移除之后的所有消息。', { confirmText: '分叉' }))) return
+        try {
+            const { messages: kept } = await notebookForkChat(notebook, msg.id)
+            setNotebookMessages(kept.map((m) => ({ ...m, id: m.id || String(m.timestamp) })))
+            toast.success('已分叉对话')
+        } catch (e) {
+            toast.error(`分叉失败：${(e as Error).message}`)
         }
     }
 
@@ -137,6 +180,18 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
             <div className="h-14 border-b border-border flex items-center gap-2 px-4 shrink-0">
                 <MessageSquare size={15} className="text-primary-mint" />
                 <span className="text-sm font-semibold flex-1">对话</span>
+                <button
+                    onClick={toggleCitationMode}
+                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ${
+                        citationMode === 'strict'
+                            ? 'bg-primary-mint/10 text-primary-mint'
+                            : 'bg-warning/10 text-warning'
+                    }`}
+                    title={citationMode === 'strict' ? '严格模式：仅基于来源回答' : '混合模式：允许常识补充'}
+                >
+                    {citationMode === 'strict' ? <Shield size={11} /> : <ShieldOff size={11} />}
+                    {citationMode === 'strict' ? '严格' : '混合'}
+                </button>
                 {notebookMessages.length > 0 && (
                     <button
                         onClick={clear}
@@ -179,7 +234,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
                                 ? <p className="text-sm whitespace-pre-wrap">{m.content}</p>
                                 : (
                                     <>
-                                        <CitationRenderer content={m.content} sources={m.citedSources} />
+                                        <CitationRenderer content={m.content} sources={m.citedSources} onCitationClick={onCitationClick} />
                                         {m.streaming && !m.content && <Loader2 size={14} className="animate-spin text-text-tertiary" />}
                                         {!m.streaming && m.content && (
                                             <div className="mt-2 pt-2 border-t border-border-secondary flex items-center gap-2">
@@ -188,6 +243,12 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
                                                     className="text-xs text-text-tertiary hover:text-primary-mint transition-colors"
                                                 >
                                                     📌 保存为笔记
+                                                </button>
+                                                <button
+                                                    onClick={() => forkFrom(m)}
+                                                    className="text-xs text-text-tertiary hover:text-primary-mint transition-colors flex items-center gap-0.5"
+                                                >
+                                                    <GitBranch size={10} /> 从此处分叉
                                                 </button>
                                             </div>
                                         )}
@@ -200,6 +261,21 @@ export const NotebookChat: React.FC<Props> = ({ notebook }) => {
             </div>
 
             <div className="border-t border-border p-3 shrink-0">
+                {/* Suggested question chips (above input, shown when not sending and questions available) */}
+                {!sending && suggestedQuestions.length > 0 && notebookMessages.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                        {suggestedQuestions.slice(0, 4).map((q, i) => (
+                            <button
+                                key={i}
+                                onClick={() => sendMessage(q)}
+                                className="text-[11px] px-2.5 py-1.5 bg-primary-mint/8 hover:bg-primary-mint/15 text-primary-mint border border-primary-mint/20 rounded-full transition-colors truncate max-w-[200px]"
+                                title={q}
+                            >
+                                💡 {q}
+                            </button>
+                        ))}
+                    </div>
+                )}
                 <div className="flex gap-2 items-end">
                     <textarea
                         value={input}

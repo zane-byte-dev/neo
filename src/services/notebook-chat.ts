@@ -177,6 +177,7 @@ function buildSystemPrompt(
     notebook: string,
     passages: ScoredPassage[],
     styleDirective: string,
+    citationMode: 'strict' | 'mixed' = 'strict',
 ): string {
     // Group passages by source for cleaner citation numbers
     const seenIds: string[] = [];
@@ -187,8 +188,13 @@ function buildSystemPrompt(
     lines.push('你是笔记本 "' + notebook + '" 的源文档研究助手。');
     lines.push('');
     lines.push('【核心规则】');
-    lines.push('1. 严格基于下方给出的来源段落回答，不得引用来源外的事实。');
-    lines.push('2. 如果来源中没有相关信息，请如实回复："来源中没有相关信息"，不要编造。');
+    if (citationMode === 'mixed') {
+        lines.push('1. 优先基于下方给出的来源段落回答。如果来源不足以完全回答问题，可以适当补充你的常识和知识，但必须明确区分。');
+        lines.push('2. 来自来源的信息使用【N】标注。补充的常识部分不加引用标记，并可以在末尾简短说明"以上部分内容基于常识补充"。');
+    } else {
+        lines.push('1. 严格基于下方给出的来源段落回答，不得引用来源外的事实。');
+        lines.push('2. 如果来源中没有相关信息，请如实回复："来源中没有相关信息"，不要编造。');
+    }
     lines.push('3. 每当你引用某条来源的信息，请在句末用形如【N】的标记标注来源编号（N 为来源的数字编号）。');
     lines.push('4. 可以在一句话末尾叠加多个标记，如"……【1】【3】"。');
     lines.push(`5. 风格与长度：${styleDirective}`);
@@ -308,7 +314,7 @@ export async function streamNotebookChat(
         ? priorHistory.map(m => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`).join('\n\n')
         : '';
 
-    const systemPrompt = buildSystemPrompt(notebook, passages, styleInstruction(config));
+    const systemPrompt = buildSystemPrompt(notebook, passages, styleInstruction(config), config.citationMode ?? 'strict');
     const fullPrompt = historyText
         ? `[之前的对话]\n${historyText}\n\n[新的问题]\n${userMessage}`
         : `[用户问题]\n${userMessage}`;

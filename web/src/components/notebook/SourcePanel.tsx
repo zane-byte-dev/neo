@@ -4,7 +4,7 @@
  * and prominent "添加来源" button opening AddSourceModal.
  */
 import React from 'react'
-import { FileText, Link as LinkIcon, Type, Plus, Trash2, Loader2, Youtube, Check, MoreVertical, Pencil, Archive } from 'lucide-react'
+import { FileText, Link as LinkIcon, Type, Plus, Trash2, Loader2, Youtube, Check, MoreVertical, Pencil, Archive, ArrowUpDown } from 'lucide-react'
 import type { SourceMeta } from '../../types'
 import { useAppStore } from '../../stores/useAppStore'
 import {
@@ -15,10 +15,23 @@ import {
     notebookRenameSource,
 } from '../../api'
 import { AddSourceModal } from './AddSourceModal'
+import { toast } from '../Toast'
+import { confirm } from '../ConfirmDialog'
 
 interface Props {
     notebook: string
     onSelectSource?: (source: SourceMeta) => void
+}
+
+type SortOption = 'default' | 'type' | 'title' | 'words-desc' | 'words-asc' | 'has-guide'
+
+const SORT_LABELS: Record<SortOption, string> = {
+    default: '默认',
+    type: '类型',
+    title: '标题',
+    'words-desc': '字数↓',
+    'words-asc': '字数↑',
+    'has-guide': '有摘要优先',
 }
 
 export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
@@ -26,6 +39,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
     const [loading, setLoading] = React.useState(false)
     const [modalOpen, setModalOpen] = React.useState(false)
     const [batchGenerating, setBatchGenerating] = React.useState(false)
+    const [sortBy, setSortBy] = React.useState<SortOption>('default')
     const batchAbort = React.useRef(false)
 
     const load = React.useCallback(async () => {
@@ -74,6 +88,56 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
 
     const handleStopBatch = () => { batchAbort.current = true }
 
+    const handleBatchArchive = async () => {
+        if (selectedSourceIds.length === 0) { toast.warning('请先选择来源'); return }
+        if (!(await confirm(`批量移除 ${selectedSourceIds.length} 个来源？`, {
+            description: '文件不会被删除，仅从列表中隐藏',
+            destructive: true,
+            confirmText: '批量移除',
+        }))) return
+        let archived = 0
+        for (const id of selectedSourceIds) {
+            try {
+                await notebookArchiveSource(notebook, id)
+                archived++
+            } catch { /* skip */ }
+        }
+        if (archived > 0) {
+            setSources(sources.filter((s) => !selectedSourceIds.includes(s.id)))
+            setSelectedSourceIds([])
+            toast.success(`已移除 ${archived} 个来源`)
+        }
+    }
+
+    // Sort sources
+    const sortedSources = React.useMemo(() => {
+        const sorted = [...sources]
+        switch (sortBy) {
+            case 'type':
+                sorted.sort((a, b) => a.type.localeCompare(b.type))
+                break
+            case 'title':
+                sorted.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+                break
+            case 'words-desc':
+                sorted.sort((a, b) => (b.wordCount ?? 0) - (a.wordCount ?? 0))
+                break
+            case 'words-asc':
+                sorted.sort((a, b) => (a.wordCount ?? 0) - (b.wordCount ?? 0))
+                break
+            case 'has-guide':
+                sorted.sort((a, b) => {
+                    const aHas = sourceGuides[a.id] ? 1 : 0
+                    const bHas = sourceGuides[b.id] ? 1 : 0
+                    return bHas - aHas
+                })
+                break
+            default: // 'default' — keep original order
+                break
+        }
+        return sorted
+    }, [sources, sortBy, sourceGuides])
+
     return (
         <div className="flex flex-col h-full bg-bg-container border-r border-border">
             <div className="h-14 border-b border-border flex items-center gap-2 px-4 shrink-0">
@@ -99,7 +163,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
             </div>
 
             {sources.length > 0 && (
-                <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
+                <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0 flex-wrap">
                     <button
                         onClick={toggleAll}
                         className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text"
@@ -107,14 +171,14 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                         <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${selectedSourceIds.length === sources.length ? 'bg-primary-mint border-primary-mint' : 'border-border'}`}>
                             {selectedSourceIds.length === sources.length && <Check size={10} className="text-white" />}
                         </span>
-                        选择全部
+                        全选
                     </button>
                     {missingGuideCount > 0 && !batchGenerating && (
                         <button
                             onClick={handleBatchGenerate}
                             className="text-xs text-primary-mint hover:underline"
                         >
-                            批量生成摘要 ({missingGuideCount})
+                            批量摘要 ({missingGuideCount})
                         </button>
                     )}
                     {batchGenerating && (
@@ -125,7 +189,28 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                             <Loader2 size={10} className="animate-spin" /> 停止
                         </button>
                     )}
-                    <span className="ml-auto text-xs text-text-tertiary">已选 {selectedSourceIds.length}</span>
+                    {selectedSourceIds.length > 1 && !batchGenerating && (
+                        <button
+                            onClick={handleBatchArchive}
+                            className="text-xs text-destructive hover:underline flex items-center gap-1"
+                        >
+                            <Archive size={10} /> 批量移除
+                        </button>
+                    )}
+                    {/* Sort dropdown */}
+                    <div className="ml-auto flex items-center gap-1">
+                        <ArrowUpDown size={10} className="text-text-quaternary" />
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value as SortOption)}
+                            className="text-[10px] bg-transparent text-text-tertiary border-none focus:outline-none cursor-pointer"
+                        >
+                            {Object.entries(SORT_LABELS).map(([k, v]) => (
+                                <option key={k} value={k}>{v}</option>
+                            ))}
+                        </select>
+                        <span className="text-[10px] text-text-quaternary">{selectedSourceIds.length}/{sources.length}</span>
+                    </div>
                 </div>
             )}
 
@@ -146,7 +231,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource }) => {
                         <p className="text-xs text-center">还没有来源。<br />点击右上 + 添加来源</p>
                     </div>
                 )}
-                {sources.map((s) => (
+                {sortedSources.map((s) => (
                     <SourceRow
                         key={s.id}
                         source={s}
@@ -213,11 +298,11 @@ const SourceRow: React.FC<{
 
     const handleArchive = async () => {
         setMenuOpen(false)
-        if (!confirm(`移除来源「${source.title}」？\n（文件不会被删除，仅从列表中隐藏）`)) return
+        if (!(await confirm(`移除来源「${source.title}」？`, { description: '文件不会被删除，仅从列表中隐藏', destructive: true, confirmText: '移除' }))) return
         try {
             await notebookArchiveSource(notebook, source.id)
             setSources(sources.filter((s) => s.id !== source.id))
-        } catch (e) { alert((e as Error).message) }
+        } catch (e) { toast.error((e as Error).message) }
     }
 
     const handleStartRename = () => {
@@ -232,7 +317,7 @@ const SourceRow: React.FC<{
         try {
             const updated = await notebookRenameSource(notebook, source.id, newTitle)
             setSources(sources.map((s) => s.id === source.id ? { ...s, title: updated.title } : s))
-        } catch (e) { alert((e as Error).message) }
+        } catch (e) { toast.error((e as Error).message) }
         setRenaming(false)
     }
 

@@ -542,6 +542,7 @@ export interface NotebookConfig {
     chatStyle?: 'default' | 'study-guide' | 'custom';
     customStyle?: string;
     answerLength?: 'short' | 'default' | 'long';
+    citationMode?: 'strict' | 'mixed';
     overview?: string;         // cached notebook-level overview
 }
 
@@ -752,5 +753,22 @@ export function nbAppendChatMessage(workDir: string, notebook: string, msg: Note
 export function nbClearChatHistory(workDir: string, notebook: string): void {
     const file = chatFilePath(workDir, notebook);
     if (existsSync(file)) unlinkSync(file);
+}
+
+/**
+ * Fork conversation: keep only messages up to (and including) the given messageId,
+ * discard everything after it.
+ */
+export function nbForkChatHistory(workDir: string, notebook: string, messageId: string): NotebookChatMessage[] {
+    const all = nbReadChatHistory(workDir, notebook);
+    const idx = all.findIndex(m => m.id === messageId);
+    if (idx === -1) return all; // message not found, no-op
+    const kept = all.slice(0, idx + 1);
+    // Rewrite the file with only the kept messages
+    const dir = join(notebookBaseDir(workDir, notebook), '.chat');
+    ensureDir(dir);
+    const file = join(dir, 'history.jsonl');
+    writeFileSync(file, kept.map(m => JSON.stringify(m)).join('\n') + '\n', 'utf8');
+    return kept;
 }
 

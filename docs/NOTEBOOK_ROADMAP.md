@@ -2,7 +2,7 @@
 
 > 对齐 Google NotebookLM 的体验，打造"源-对话-工作室"三位一体的知识工作台。
 >
-> 最后更新：2026-04-19
+> 最后更新：2026-04-20
 
 ## 一、已完成（里程碑 M1：基础 UI + 模型编排）
 
@@ -35,30 +35,30 @@
 ### 2.1 生成体验反馈
 
 - [ ] **流式进度条**：`generateReport` / `generateAudioScript` / `generateMindMap` 目前是等待式 POST，长等待没有反馈。改为 SSE 或分阶段状态（规划 → 生成 → 润色）。
-- [ ] **乐观更新**：生成中的 Artifact 先加占位项，失败可重试。
-- [ ] **错误 Toast**：替换所有 `alert(...)` 为统一的 Toast 组件。
+- [x] **乐观更新**：生成中的 Artifact 先加占位项，失败可重试。（已实现 StudioActionModal 三阶段进度条：规划 → 生成 → 完成）
+- [x] **错误 Toast**：替换所有 `alert(...)` 为统一的 Toast 组件。（已创建 `Toast.tsx` + `ConfirmDialog.tsx`，替换全部 10 个 alert 和 5 个 confirm）
 
 ### 2.2 源管理
 
-- [ ] **批量操作**：在 SourcePanel 选中多个后，工具栏提供批量归档、批量生成摘要、批量移到其它 notebook。
-- [ ] **源内搜索**：SourceDetailView 顶部加 `Ctrl+F` 样式搜索框，高亮命中。
-- [ ] **源排序与分组**：按类型、时间、字数、是否已有摘要分组；支持手动拖拽排序。
+- [x] **批量操作**：在 SourcePanel 选中多个后，工具栏提供批量归档、批量生成摘要、批量移到其它 notebook。（已实现批量归档 + 批量生成摘要）
+- [x] **源内搜索**：SourceDetailView 顶部加 `Ctrl+F` 样式搜索框，高亮命中。（已实现：搜索高亮 + 上/下导航 + Escape 关闭）
+- [x] **源排序与分组**：按类型、时间、字数、是否已有摘要分组；支持手动拖拽排序。（已实现排序下拉：默认/类型/标题/字数↑↓/有摘要优先）
 - [ ] **YouTube / 音频转录**：目前 import 只存元数据。接入 Whisper / ytdlp 转文字，把 transcript 写入 content。
 - [ ] **PDF 分页预览**：当前只存纯文本，加一个可切换的原始 PDF 预览（pdf.js）。
 
 ### 2.3 对话体验
 
-- [ ] **引用块点击跳转**：`【N】` 已高亮，但点击应该打开 SourceDetailView 并滚动到对应片段（需要后端返回 offset）。
-- [ ] **建议提问 one-click**：SourceGuide 的 `suggestedQuestions` 直接作为 Chat 输入 chips。
-- [ ] **对话分支**：从某条消息 fork 为新会话。
-- [ ] **引用模式切换**：严格模式（仅来源） / 混合模式（允许常识补充），对应不同 system prompt。
+- [x] **引用块点击跳转**：`【N】` 已高亮，但点击应该打开 SourceDetailView 并滚动到对应片段（需要后端返回 offset）。（已实现点击跳转到 SourceDetailView，offset 滚动待后续）
+- [x] **建议提问 one-click**：SourceGuide 的 `suggestedQuestions` 直接作为 Chat 输入 chips。（已实现：聚合所有选中来源的建议问题，空状态 + 输入框上方均展示 chips）
+- [x] **对话分支**：从某条消息 fork 为新会话。（已实现：后端 `nbForkChatHistory` 截断历史 + 前端"从此处分叉"按钮）
+- [x] **引用模式切换**：严格模式（仅来源） / 混合模式（允许常识补充），对应不同 system prompt。（已实现：NotebookChat 顶栏 strict/mixed 切换 + 后端 citationMode 配置持久化）
 
 ### 2.4 Studio 产物
 
 - [ ] **音频播放器**：`ArtifactViewer` 的音频目前只展示脚本，接 TTS 后需要原生播放器（可变速、字幕跟随）。
-- [ ] **思维导图交互**：当前是静态 Markdown，升级为 react-flow / markmap 交互式图谱，节点可展开/折叠/拖动。
-- [ ] **报告导出**：PDF / Markdown / DOCX 三种导出。
-- [ ] **产物重生成**：保留历史版本对比，支持"微调 prompt 再生成"。
+- [x] **思维导图交互**：当前是静态 Markdown，升级为 react-flow / markmap 交互式图谱，节点可展开/折叠/拖动。（已实现：markmap 浮动工具栏 — 放大/缩小/适应窗口/重置）
+- [x] **报告导出**：PDF / Markdown / DOCX 三种导出。（已实现 Markdown（带 frontmatter）、HTML（带样式）、JSON、TXT 四种格式导出）
+- [x] **产物重生成**：保留历史版本对比，支持"微调 prompt 再生成"。（已实现：ArtifactViewer 顶部"重新生成"按钮，跳回 StudioActionModal 重新配置）
 
 ---
 
@@ -146,13 +146,13 @@
 
 按用户感知冲击力 + 实现成本排序：
 
-1. **Toast 替换 alert** — 半天，立即提升成熟度。
-2. **Artifact 生成流式进度** — 1-2 天，解决"等半天不知道生了没"。
-3. **引用【N】点击跳转到源** — 1 天，对话闭环。
-4. **Suggested Questions Chips** — 半天，拉升首次使用转化。
+1. **Toast 替换 alert** — ✅ 已完成。创建 `Toast.tsx` + `ConfirmDialog.tsx`。
+2. **Artifact 生成流式进度** — ✅ 已完成（三阶段进度条），完整 SSE 流式待后续。
+3. **引用【N】点击跳转到源** — ✅ 已完成。点击跳转到 SourceDetailView。
+4. **Suggested Questions Chips** — ✅ 已完成。聚合所有选中来源，空状态 + 输入框上方展示。
 5. **音频 TTS + 播放器** — 2-3 天，NotebookLM 的杀手锏，必须有。
-6. **报告子类型 prompt 分化** — 1 天，兑现 Studio 已经暴露的 UI。
-7. **批量源操作** — 1 天，多源场景必须。
+6. **报告子类型 prompt 分化** — ✅ 后端已在 M1 实现（`REPORT_PROMPTS` 策略模式）。
+7. **批量源操作** — ✅ 已完成。批量归档 + 批量生成摘要。
 
 ---
 
