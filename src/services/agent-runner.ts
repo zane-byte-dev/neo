@@ -14,7 +14,7 @@
 
 import { LLMClient } from '../llm/client.js';
 import type { StreamChunk, ToolContext } from '../llm/types.js';
-import { resolveSmartModel } from '../llm/model-router.js';
+import { resolveSmartRoute } from '../llm/model-router.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
 import { log } from '../utils/logger.js';
@@ -53,9 +53,23 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
     const t0 = Date.now();
 
     // Smart routing: resolve 'auto' or undefined to the best model
-    const model = resolveSmartModel({ userModel: rawModel, hasTools: true });
+    const route = resolveSmartRoute({
+        userModel: rawModel,
+        hasTools: true,
+        message,
+    });
+    const model = route.model;
 
-    log.info(MODULE, 'Turn start', { userId, sessionId, model, messageLen: message.length, preview: message.slice(0, 100) });
+    log.info(MODULE, 'Turn start', {
+        userId,
+        sessionId,
+        model,
+        tier: route.tier,
+        score: route.score,
+        confidence: route.confidence,
+        messageLen: message.length,
+        preview: message.slice(0, 100),
+    });
 
     const userCtx = await calcUser(userId);
 
@@ -96,6 +110,7 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
             },
             signal,
             model,
+            route,
             images,
         );
     } catch (err: unknown) {

@@ -13,9 +13,11 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { setupLogger, log } from '../utils/logger.js';
 import { recordTokenUsage } from '../utils/token-tracker.js';
-import { GEMINI_API_KEY, DEEPSEEK_API_KEY, OLLAMA_BASE_URL, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
+import { DAILY_COST_LIMIT, GEMINI_API_KEY, DEEPSEEK_API_KEY, OLLAMA_BASE_URL, GEMINI_MODEL_ENV, MAX_TOOL_ITERATIONS, MAX_SUBAGENT_STEPS, MODEL_ALIASES } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
-import { isAcpAvailable, acpStream, acpGenerate, tryStartAcp } from './providers/gemini-acp.js';
+import { acpStream, acpGenerate } from './providers/gemini-acp.js';
+import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
+import type { SmartRouteDecision } from './model-router.js';
 import type {
     StreamCallback,
     Tool,
@@ -88,6 +90,46 @@ function createModel(modelId: string): LanguageModel {
     // and never reach createModel.
     const google = createGoogleGenerativeAI({ apiKey: GEMINI_API_KEY });
     return google(modelId);
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function withTimeoutSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(new Error('Request timeout')), timeoutMs);
+    if (signal) signal.addEventListener('abort', () => ctrl.abort(signal.reason), { once: true });
+    ctrl.signal.addEventListener('abort', () => clearTimeout(t), { once: true });
+    return ctrl.signal;
+}
+
+type ErrorKind = 'switch-model' | 'retry-same' | 'fatal';
+
+function classifyError(err: unknown): ErrorKind {
+    const e = err as { status?: number; code?: string; message?: string; cause?: { status?: number; code?: string } };
+    const status = e.status ?? e.cause?.status;
+    const code = String(e.code ?? e.cause?.code ?? '');
+    const msg = String(e.message ?? '').toLowerCase();
+    if (status === 400 || status === 401 || status === 403) return 'fatal';
+    if (status === 500) return 'retry-same';
+    if (status === 429 || status === 503) return 'switch-model';
+    if (code === 'ETIMEDOUT' || code === 'ECONNRESET') return 'switch-model';
+    if (msg.includes('timeout')) return 'switch-model';
+    return 'switch-model';
+}
+
+function pickAliases(
+    modelOverride: string | undefined,
+    route: SmartRouteDecision | undefined,
+    forceFreeOnly: boolean,
+): string[] {
+    const chain = route?.fallbackChain?.length
+        ? route.fallbackChain
+        : modelOverride ? [modelOverride] : [GEMINI_MODEL_ENV ?? 'flash', 'deepseek', 'gemma', 'gemini-acp'];
+    if (!forceFreeOnly) return [...new Set(chain)];
+    const freeOnly = [...new Set(chain.filter((alias) => isFreeModel(resolveModel(alias))))];
+    return freeOnly.length ? freeOnly : ['gemma'];
 }
 
 // ── System instruction helpers ────────────────────────────────────────────────
@@ -203,6 +245,7 @@ export class LLMClient {
         onChunk: StreamCallback,
         signal?: AbortSignal,
         modelOverride?: string,
+        route?: SmartRouteDecision,
         images?: string[],
     ): Promise<string | null> {
         if (!this.enabled) {
@@ -212,30 +255,12 @@ export class LLMClient {
 
         const workDir = context.workDir;
         const systemInstruction = context.systemInstruction || '';
-        const effectiveModel = modelOverride ? resolveModel(modelOverride) : this.modelId;
-
-        // ── ACP shortcut: bypass AI SDK, use Gemini CLI directly ──────────
-        if (isAcpModel(effectiveModel)) {
-            const runtimePrompt = await this.buildPrompt(message, workDir);
-            const fullPrompt = systemInstruction
-                ? `${systemInstruction}\n\n${runtimePrompt}`
-                : runtimePrompt;
-            try {
-                const text = await acpStream(
-                    fullPrompt,
-                    (chunk) => onChunk({ type: 'text', text: chunk }),
-                    (chunk) => onChunk({ type: 'thought', text: chunk }),
-                );
-                return text || null;
-            } catch (err: unknown) {
-                if (err instanceof Error && err.name === 'AbortError') throw err;
-                log.error('AgentRuntime', 'ACP stream error', { error: err instanceof Error ? err.message : String(err) });
-                throw err;
-            }
-        }
+        const dayCost = DAILY_COST_LIMIT > 0 ? await getDailyCost() : 0;
+        const forceFreeOnly = DAILY_COST_LIMIT > 0 && dayCost >= DAILY_COST_LIMIT;
+        let aliasChain = pickAliases(modelOverride, route, forceFreeOnly);
+        if (!aliasChain.length) aliasChain = ['gemma'];
 
         // ── Standard AI SDK path ──────────────────────────────────────────
-        const model = createModel(effectiveModel);
         const tools = buildAiTools(toolRegistry, workDir, context);
 
         // Build AI SDK messages array when structured history is available or images are attached
@@ -271,67 +296,130 @@ export class LLMClient {
             prompt = await this.buildPrompt(message, workDir, historyStr || undefined);
         }
 
-        try {
-            const baseOpts = {
-                model,
-                system: systemInstruction,
-                tools,
-                stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
-                abortSignal: signal,
-                temperature: 0.7,
-            };
+        const startedAt = Date.now();
+        const originalAlias = aliasChain[0];
+        let lastError: unknown = null;
 
-            const result = useMessages
-                ? streamText({ ...baseOpts, messages })
-                : streamText({ ...baseOpts, prompt: prompt! });
+        for (let i = 0; i < aliasChain.length; i++) {
+            const alias = aliasChain[i];
+            const effectiveModel = resolveModel(alias);
 
-            let fullText = '';
-
-            for await (const part of result.fullStream) {
-                switch (part.type) {
-                    case 'reasoning-delta':
-                        onChunk({ type: 'thought', text: part.text });
-                        break;
-                    case 'tool-call':
-                        onChunk({ type: 'tool_call', toolName: part.toolName, args: part.input as Record<string, unknown> });
-                        break;
-                    case 'tool-result': {
-                        const r = part.output;
-                        const s = typeof r === 'string' ? r : JSON.stringify(r);
-                        onChunk({ type: 'tool_result', toolName: part.toolName, result: s.slice(0, 500) });
-                        break;
+            // ── ACP shortcut: bypass AI SDK, use Gemini CLI directly ──────
+            if (isAcpModel(effectiveModel)) {
+                const runtimePrompt = await this.buildPrompt(message, workDir);
+                const fullPrompt = systemInstruction
+                    ? `${systemInstruction}\n\n${runtimePrompt}`
+                    : runtimePrompt;
+                try {
+                    const text = await acpStream(
+                        fullPrompt,
+                        (chunk) => onChunk({ type: 'text', text: chunk }),
+                        (chunk) => onChunk({ type: 'thought', text: chunk }),
+                    );
+                    return text || null;
+                } catch (err: unknown) {
+                    if (err instanceof Error && err.name === 'AbortError') throw err;
+                    lastError = err;
+                    if (classifyError(err) === 'fatal' || i >= aliasChain.length - 1) {
+                        log.error('AgentRuntime', 'ACP stream error', { error: err instanceof Error ? err.message : String(err) });
+                        throw err;
                     }
-                    case 'text-delta':
-                        onChunk({ type: 'text', text: part.text });
-                        fullText += part.text;
-                        break;
-                    case 'error':
-                        log.error('AgentRuntime', 'Stream error', { error: part.error instanceof Error ? part.error.message : String(part.error) });
-                        onChunk({ type: 'text', text: `\n\n🔥 Stream error: ${part.error instanceof Error ? part.error.message : String(part.error)}` });
-                        break;
+                    continue;
                 }
             }
 
-            // Record token usage (PromiseLike — wrap in Promise.resolve for .catch)
-            Promise.resolve(result.usage).then((usage) => {
-                if (usage) {
-                    recordTokenUsage({
-                        ts: new Date().toISOString(),
-                        model: effectiveModel,
-                        promptTokens: usage.inputTokens ?? 0,
-                        completionTokens: usage.outputTokens ?? 0,
-                        totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
-                        caller: 'chatWithContextStreaming',
-                    });
-                }
-            }).catch(() => { /* never crash over tracking */ });
+            try {
+                const baseOpts = {
+                    model: createModel(effectiveModel),
+                    system: systemInstruction,
+                    tools,
+                    stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
+                    abortSignal: withTimeoutSignal(signal, 30_000),
+                    temperature: 0.7,
+                };
 
-            return fullText || null;
-        } catch (err: unknown) {
-            if (err instanceof Error && err.name === 'AbortError') throw err;
-            log.error('AgentRuntime', 'LLM call error', { error: err instanceof Error ? err.message : String(err) });
-            throw err;
+                const result = useMessages
+                    ? streamText({ ...baseOpts, messages })
+                    : streamText({ ...baseOpts, prompt: prompt! });
+
+                let fullText = '';
+
+                for await (const part of result.fullStream) {
+                    switch (part.type) {
+                        case 'reasoning-delta':
+                            onChunk({ type: 'thought', text: part.text });
+                            break;
+                        case 'tool-call':
+                            onChunk({ type: 'tool_call', toolName: part.toolName, args: part.input as Record<string, unknown> });
+                            break;
+                        case 'tool-result': {
+                            const r = part.output;
+                            const s = typeof r === 'string' ? r : JSON.stringify(r);
+                            onChunk({ type: 'tool_result', toolName: part.toolName, result: s.slice(0, 500) });
+                            break;
+                        }
+                        case 'text-delta':
+                            onChunk({ type: 'text', text: part.text });
+                            fullText += part.text;
+                            break;
+                        case 'error':
+                            log.error('AgentRuntime', 'Stream error', { error: part.error instanceof Error ? part.error.message : String(part.error) });
+                            onChunk({ type: 'text', text: `\n\n🔥 Stream error: ${part.error instanceof Error ? part.error.message : String(part.error)}` });
+                            break;
+                    }
+                }
+
+                // Record token usage (PromiseLike — wrap in Promise.resolve for .catch)
+                Promise.resolve(result.usage).then((usage) => {
+                    if (usage) {
+                        const promptTokens = usage.inputTokens ?? 0;
+                        const completionTokens = usage.outputTokens ?? 0;
+                        const totalTokens = usage.totalTokens ?? (promptTokens + completionTokens);
+                        recordTokenUsage({
+                            ts: new Date().toISOString(),
+                            model: effectiveModel,
+                            promptTokens,
+                            completionTokens,
+                            totalTokens,
+                            caller: 'chatWithContextStreaming',
+                        });
+                        void appendUsageRecord({
+                            timestamp: Date.now(),
+                            userId: context.userId,
+                            model: effectiveModel,
+                            tier: route?.tier ?? 'standard',
+                            score: route?.score ?? 0,
+                            confidence: route?.confidence ?? 1,
+                            reason: route?.reason ?? (forceFreeOnly ? 'budget_limited' : 'scored'),
+                            promptTokens,
+                            completionTokens,
+                            totalTokens,
+                            estimatedCost: estimateCost(effectiveModel, promptTokens, completionTokens),
+                            durationMs: Date.now() - startedAt,
+                            fallbackUsed: alias !== originalAlias,
+                            originalModel: alias !== originalAlias ? resolveModel(originalAlias) : undefined,
+                        }).catch(() => { /* never crash over tracking */ });
+                    }
+                }).catch(() => { /* never crash over tracking */ });
+
+                return fullText || null;
+            } catch (err: unknown) {
+                if (err instanceof Error && err.name === 'AbortError') throw err;
+                lastError = err;
+                const kind = classifyError(err);
+                if (kind === 'retry-same') {
+                    await sleep(1000);
+                    i--;
+                    continue;
+                }
+                if (kind === 'fatal' || i >= aliasChain.length - 1) {
+                    log.error('AgentRuntime', 'LLM call error', { error: err instanceof Error ? err.message : String(err), model: effectiveModel });
+                    throw err;
+                }
+            }
         }
+
+        throw lastError instanceof Error ? lastError : new Error('All fallback models failed');
     }
 
     /** Non-streaming generation with tool support, used by subagent. */
@@ -375,33 +463,40 @@ export class LLMClient {
         options?: { model?: string; system?: string; temperature?: number },
     ): Promise<string | null> {
         if (!this.enabled) return null;
-        const modelId = options?.model ? resolveModel(options.model) : this.modelId;
-        if (isAcpModel(modelId)) {
-            const fullPrompt = options?.system ? `${options.system}\n\n${prompt}` : prompt;
-            try { return await acpGenerate(fullPrompt); } catch { return null; }
-        }
-        try {
-            const { text, usage } = await generateText({
-                model: createModel(modelId),
-                prompt,
-                system: options?.system,
-                temperature: options?.temperature,
-            });
-            if (usage) {
-                recordTokenUsage({
-                    ts: new Date().toISOString(),
-                    model: modelId,
-                    promptTokens: usage.inputTokens ?? 0,
-                    completionTokens: usage.outputTokens ?? 0,
-                    totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
-                    caller: 'generate',
-                });
+        const forceFreeOnly = DAILY_COST_LIMIT > 0 && (await getDailyCost()) >= DAILY_COST_LIMIT;
+        const aliases = pickAliases(options?.model, undefined, forceFreeOnly);
+        const fallbackAliases = aliases.length ? aliases : ['gemma'];
+        for (let i = 0; i < fallbackAliases.length; i++) {
+            const modelId = resolveModel(fallbackAliases[i]);
+            if (isAcpModel(modelId)) {
+                const fullPrompt = options?.system ? `${options.system}\n\n${prompt}` : prompt;
+                try { return await acpGenerate(fullPrompt); } catch { continue; }
             }
-            return text || null;
-        } catch (err) {
-            log.error('LLMClient', 'generate error', { error: err instanceof Error ? err.message : String(err) });
-            return null;
+            try {
+                const { text, usage } = await generateText({
+                    model: createModel(modelId),
+                    prompt,
+                    system: options?.system,
+                    temperature: options?.temperature,
+                    abortSignal: withTimeoutSignal(undefined, 60_000),
+                });
+                if (usage) {
+                    recordTokenUsage({
+                        ts: new Date().toISOString(),
+                        model: modelId,
+                        promptTokens: usage.inputTokens ?? 0,
+                        completionTokens: usage.outputTokens ?? 0,
+                        totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
+                        caller: 'generate',
+                    });
+                }
+                return text || null;
+            } catch (err) {
+                log.error('LLMClient', 'generate error', { error: err instanceof Error ? err.message : String(err), model: modelId });
+                if (classifyError(err) === 'fatal' || i >= fallbackAliases.length - 1) return null;
+            }
         }
+        return null;
     }
 
     /** No-op: no subprocess to terminate. */
