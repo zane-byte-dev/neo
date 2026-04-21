@@ -8,3 +8,9 @@
 {"id":"episodic:1776781216990:fa4acb","tier":"episodic","ts":"2026-04-21T14:20:16.990Z","text":"你问的是模型相关的内容。让我先查看一下当前可用的技能列表，看看是否有关于模型管理的技能。我看到有 `generate_wechat_article` 技能，但没有专门的模型管理技能。你想了解什么具体的模型信息？\n\n- 想了解当前可用的 AI 模型？\n- 需要模型性能对比？\n- 想生成关于模型技术的文章？\n- 还是其他关于模型的问题？\n\n请具体说明你的需求。","meta":{"sessionId":"1cjrrh","userId":"8094416266","role":"assistant"}}
 {"id":"episodic:1776781259141:71eb9b","tier":"episodic","ts":"2026-04-21T14:20:59.141Z","text":"都有哪些模型？","meta":{"sessionId":"1cjrrh","userId":"8094416266","role":"user"}}
 {"id":"episodic:1776781259141:2980a7","tier":"episodic","ts":"2026-04-21T14:20:59.141Z","text":"我来查看一下当前可用的模型信息。首先让我检查系统配置和可用的模型列表。让我检查一下是否有模型配置文件或 LiteLLM 配置：让我检查一下是否有环境变量或配置信息：","meta":{"sessionId":"1cjrrh","userId":"8094416266","role":"assistant"}}
+{"id":"episodic:1776785917584:d1b86c","tier":"episodic","ts":"2026-04-21T15:38:37.584Z","text":"test","meta":{"sessionId":"2v9i6","userId":"8094416266","role":"user"}}
+{"id":"episodic:1776785917584:51518b","tier":"episodic","ts":"2026-04-21T15:38:37.584Z","text":"收到测试消息。系统运行正常。","meta":{"sessionId":"2v9i6","userId":"8094416266","role":"assistant"}}
+{"id":"episodic:1776785951546:88c4b3","tier":"episodic","ts":"2026-04-21T15:39:11.546Z","text":"he l","meta":{"sessionId":"2v9i6","userId":"8094416266","role":"user"}}
+{"id":"episodic:1776785951546:960c6e","tier":"episodic","ts":"2026-04-21T15:39:11.546Z","text":"你好！我是 inkClaw，你的个人 AI 助手。有什么需要我帮你处理的吗？","meta":{"sessionId":"2v9i6","userId":"8094416266","role":"assistant"}}
+{"id":"episodic:1776785954008:cd951a","tier":"episodic","ts":"2026-04-21T15:39:14.008Z","text":"hello","meta":{"sessionId":"2v9i6","userId":"8094416266","role":"user"}}
+{"id":"episodic:1776785954009:020447","tier":"episodic","ts":"2026-04-21T15:39:14.008Z","text":"Hello! I'm inkClaw, your personal AI assistant. What can I help you with today?","meta":{"sessionId":"2v9i6","userId":"8094416266","role":"assistant"}}

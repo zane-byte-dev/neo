@@ -32,6 +32,7 @@ export class CoreServer {
         const router = new Router();
 
         app.use(_optionalBasicAuthMiddleware());
+        app.use(_requestLoggerMiddleware());
         app.use(_authMiddleware());
         app.use(bodyParser({ jsonLimit: '20mb' }));
 
@@ -65,6 +66,20 @@ export class CoreServer {
             else res();
         });
     }
+}
+
+// ── Request logger middleware ─────────────────────────────────────────────────
+
+function _requestLoggerMiddleware(): Koa.Middleware {
+    return async (ctx, next) => {
+        const start = Date.now();
+        log.info('HTTP', `→ ${ctx.method} ${ctx.path}`);
+        await next();
+        const ms = Date.now() - start;
+        // ctx.respond=false (SSE) bypasses Koa's ctx.status, use res.statusCode instead
+        const status = ctx.respond === false ? ctx.res.statusCode : ctx.status;
+        log.info('HTTP', `← ${ctx.method} ${ctx.path} ${status} ${ms}ms`);
+    };
 }
 
 // ── Auth middleware ───────────────────────────────────────────────────────────

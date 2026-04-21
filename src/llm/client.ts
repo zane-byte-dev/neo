@@ -393,7 +393,7 @@ export class LLMClient {
                     );
                     return text || null;
                 } catch (err: unknown) {
-                    if (err instanceof Error && err.name === 'AbortError') throw err;
+                    if (err instanceof Error && err.name === 'AbortError' && signal?.aborted) throw err;
                     lastError = err;
                     if (classifyError(err) === 'fatal' || i >= aliasChain.length - 1) {
                         log.error('AgentRuntime', 'ACP stream error', { error: err instanceof Error ? err.message : String(err) });
@@ -511,7 +511,10 @@ export class LLMClient {
 
                     return fullText || null;
                 } catch (err: unknown) {
-                    if (err instanceof Error && err.name === 'AbortError') throw err;
+                    // Re-throw only if the *user-provided* signal was cancelled.
+                    // Timeout aborts also surface as AbortError but should fall
+                    // through to the fallback chain instead of aborting the turn.
+                    if (err instanceof Error && err.name === 'AbortError' && signal?.aborted) throw err;
                     lastError = err;
                     const kind = classifyError(err);
                     if (kind === 'retry-same' && sameModelRetryLeft > 0) {
@@ -611,3 +614,6 @@ export class LLMClient {
     /** No-op: no subprocess to terminate. */
     close(): void {}
 }
+
+/** Shared singleton — avoids repeated initialization logs. */
+export const llmClient = new LLMClient();

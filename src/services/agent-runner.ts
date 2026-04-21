@@ -12,7 +12,7 @@
  * Callers (HTTP route, Telegram bot, …) only supply IO-specific callbacks.
  */
 
-import { LLMClient } from '../llm/client.js';
+import { llmClient } from '../llm/client.js';
 import type { StreamChunk, ToolContext } from '../llm/types.js';
 import { resolveSmartRoute } from '../llm/model-router.js';
 import { calcUser } from './user-service.js';
@@ -22,7 +22,7 @@ import { log } from '../utils/logger.js';
 
 const MODULE = 'AgentRunner';
 
-const llm = new LLMClient();
+const llm = llmClient;
 
 export interface AgentRunOptions {
     userId: string;
