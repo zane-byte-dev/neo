@@ -822,7 +822,7 @@ export const ChatArea: React.FC = () => {
     return (
         <div className="flex flex-col h-full bg-bg-container overflow-hidden relative min-w-0">
             {/* Header */}
-            <div className="h-11 sm:h-14 border-b border-border flex items-center px-4 sm:px-6 pl-14 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
+            <div className="h-11 sm:h-14 border-b border-border flex items-center px-4 sm:px-6 pl-12 md:pl-6 shrink-0 bg-bg-container/80 backdrop-blur-xl"
                  style={{ boxShadow: 'var(--shadow-soft)' }}>
                 <span className="text-sm font-semibold truncate text-text tracking-tight flex-1">
                     {activeChat?.title ?? t('welcome')}

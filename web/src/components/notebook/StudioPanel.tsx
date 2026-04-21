@@ -14,7 +14,7 @@ import { ArtifactViewer } from './studio/ArtifactViewer'
 type View = 'home' | 'overview' | 'notes' | 'artifact-view'
 type ModalAction = 'audio' | 'mindmap' | 'report' | null
 
-interface Props { notebook: string }
+interface Props { notebook: string; hideHeader?: boolean }
 
 // Card definitions for the grid
 interface StudioCard {
@@ -36,7 +36,7 @@ const CARDS: StudioCard[] = [
     { id: 'notes',   icon: StickyNote, label: '笔记',    bg: 'bg-rose-50 dark:bg-rose-950/30',     iconColor: 'text-rose-600 dark:text-rose-400',    action: 'view',  viewId: 'notes' },
 ]
 
-export const StudioPanel: React.FC<Props> = ({ notebook }) => {
+export const StudioPanel: React.FC<Props> = ({ notebook, hideHeader }) => {
     const [view, setView] = React.useState<View>('home')
     const [modalAction, setModalAction] = React.useState<ModalAction>(null)
     const [viewingArtifact, setViewingArtifact] = React.useState<Artifact | null>(null)
@@ -62,7 +62,7 @@ export const StudioPanel: React.FC<Props> = ({ notebook }) => {
 
     if (view === 'artifact-view' && viewingArtifact) {
         return (
-            <div className="flex flex-col h-full bg-bg-container border-l border-border">
+            <div className="flex flex-col h-full bg-bg-container">
                 <ArtifactViewer
                     artifact={viewingArtifact}
                     onBack={() => { setViewingArtifact(null); setView('home') }}
@@ -79,7 +79,7 @@ export const StudioPanel: React.FC<Props> = ({ notebook }) => {
     if (view === 'overview' || view === 'notes') {
         const label = view === 'overview' ? '概览' : '笔记'
         return (
-            <div className="flex flex-col h-full bg-bg-container border-l border-border">
+            <div className="flex flex-col h-full bg-bg-container">
                 <SubViewHeader label={label} onBack={() => setView('home')} />
                 <div className="flex-1 overflow-hidden">
                     {view === 'overview' && <OverviewTab notebook={notebook} />}
@@ -90,11 +90,13 @@ export const StudioPanel: React.FC<Props> = ({ notebook }) => {
     }
 
     return (
-        <div className="flex flex-col h-full bg-bg-container border-l border-border">
-            <div className="h-14 border-b border-border flex items-center gap-2 px-4 shrink-0">
-                <Sparkles size={15} className="text-primary-mint" />
-                <span className="text-sm font-semibold">Studio</span>
-            </div>
+        <div className="flex flex-col h-full bg-bg-container">
+            {!hideHeader && (
+                <div className="h-14 border-b border-border flex items-center gap-2 px-4 shrink-0">
+                    <Sparkles size={15} className="text-primary-mint" />
+                    <span className="text-sm font-semibold">Studio</span>
+                </div>
+            )}
 
             {/* Card grid */}
             <div className="p-3 grid grid-cols-2 gap-2 shrink-0">

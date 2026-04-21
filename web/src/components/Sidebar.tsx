@@ -1,9 +1,9 @@
 import React from 'react'
-import { Plus, Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, Droplets, ChevronDown, ChevronRight, LayoutGrid } from 'lucide-react'
-import { Link, useLocation } from 'react-router-dom'
+import { Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, Droplets, ChevronDown, ChevronRight, LayoutGrid, Cpu, MessageSquarePlus, PanelLeftClose } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, type MeInfo } from '../api'
+import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, type MeInfo } from '../api'
 import { useT, LOCALE_OPTIONS } from '../i18n'
 import type { Theme } from '../types'
 
@@ -17,12 +17,15 @@ const LONG_PRESS_MOVE_THRESHOLD = 10
 const CONTEXT_MENU_HEIGHT_BUFFER = 120
 const CONTEXT_MENU_WIDTH_BUFFER = 170
 
-export const Sidebar: React.FC = () => {
+export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => void }> = ({ onNavigate, onCollapse }) => {
     const { chats, activeChatId, selectChat, createChat, deleteChat, pinChat, renameChat, setTheme, theme, setChats, locale, setLocale } = useAppStore()
     const t = useT()
     const location = useLocation()
+    const navigate = useNavigate()
     const [menuOpen, setMenuOpen] = React.useState(false)
     const [appsOpen, setAppsOpen] = React.useState(false)
+    const [notebookOpen, setNotebookOpen] = React.useState(false)
+    const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
     const [me, setMe] = React.useState<MeInfo | null>(null)
     const [searchQuery, setSearchQuery] = React.useState('')
@@ -48,6 +51,12 @@ export const Sidebar: React.FC = () => {
             }))))
             .catch(() => {})
     }, [])
+
+    // Load notebooks when section is expanded
+    React.useEffect(() => {
+        if (!notebookOpen) return
+        notebookListNotebooks().then(setNotebooks).catch(() => {})
+    }, [notebookOpen])
 
     const handleDelete = (id: string) => {
         setConfirmDelete(id)
@@ -141,9 +150,23 @@ export const Sidebar: React.FC = () => {
 
     return (
         <div className="flex flex-col h-full bg-bg-sidebar border-r border-border w-full overflow-hidden select-none">
-            {/* Header */}
-            <div className="px-3 pt-4 pb-2 space-y-2">
-
+            {/* Logo + Search */}
+            <div className="px-3 pt-3.5 pb-2 space-y-2.5">
+                <div className="flex items-center gap-2 px-2">
+                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-mint to-emerald-600 flex items-center justify-center shrink-0">
+                        <span className="text-white text-[10px] font-bold leading-none">N</span>
+                    </div>
+                    <span className="text-[13px] font-bold tracking-tight text-text flex-1">Neo</span>
+                    {onCollapse && (
+                        <button
+                            onClick={onCollapse}
+                            className="p-1 rounded-md text-text-quaternary hover:text-text-secondary hover:bg-sidebar-hover transition-all duration-150"
+                            title="Collapse sidebar"
+                        >
+                            <PanelLeftClose size={14} />
+                        </button>
+                    )}
+                </div>
 
                 {/* Search box */}
                 <div className="relative">
@@ -167,28 +190,78 @@ export const Sidebar: React.FC = () => {
                 </div>
             </div>
 
-            {/* Navigation: Notebook & Apps */}
+            {/* Navigation */}
             <div className="px-3 py-1.5 space-y-0.5 border-b border-border">
                 <button
-                    onClick={createChat}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-text transition-all duration-150 text-[13px] font-medium hover:bg-sidebar-hover active:scale-[0.98] cursor-pointer"
+                    onClick={() => { createChat(); navigate('/chat'); onNavigate?.() }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150 cursor-pointer"
                 >
-                    <div className="w-5 h-5 rounded-md bg-primary-mint/15 flex items-center justify-center">
-                        <Plus size={13} strokeWidth={2.5} className="text-primary-mint" />
-                    </div>
+                    <MessageSquarePlus size={15} className="shrink-0 text-text-tertiary" />
                     <span>{t('newChat')}</span>
                 </button>
+
+                {/* Notebook collapsible */}
+                <div>
+                    <button
+                        onClick={() => setNotebookOpen(!notebookOpen)}
+                        className={cn(
+                            'w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150 cursor-pointer',
+                            location.pathname.startsWith('/notebook')
+                                ? 'bg-sidebar-active text-text font-medium'
+                                : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
+                        )}
+                    >
+                        <BookOpen size={15} className="shrink-0 text-text-tertiary" />
+                        <span className="flex-1 text-left">{t('notebook')}</span>
+                        {notebookOpen ? <ChevronDown size={13} className="text-text-quaternary" /> : <ChevronRight size={13} className="text-text-quaternary" />}
+                    </button>
+                    {notebookOpen && (
+                        <div className="ml-5 mt-0.5 space-y-0.5 border-l border-border pl-2">
+                            <Link
+                                to="/notebook"
+                                onClick={onNavigate}
+                                className={cn(
+                                    'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150',
+                                    location.pathname === '/notebook'
+                                        ? 'bg-sidebar-active text-text font-medium'
+                                        : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
+                                )}
+                            >
+                                <BookOpen size={12} className="shrink-0" />
+                                <span>{t('allNotes') ?? 'All notes'}</span>
+                            </Link>
+                            {notebooks.map((nb) => (
+                                <Link
+                                    key={nb}
+                                    to={`/notebook/${encodeURIComponent(nb)}`}
+                                    onClick={onNavigate}
+                                    className={cn(
+                                        'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150',
+                                        location.pathname === `/notebook/${encodeURIComponent(nb)}`
+                                            ? 'bg-sidebar-active text-text font-medium'
+                                            : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
+                                    )}
+                                >
+                                    <span className="w-3 h-3 shrink-0 flex items-center justify-center text-text-quaternary text-[10px]">#</span>
+                                    <span className="truncate">{nb}</span>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
                 <Link
-                    to="/notebook"
+                    to="/models"
+                    onClick={onNavigate}
                     className={cn(
                         'flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150',
-                        location.pathname.startsWith('/notebook')
+                        location.pathname === '/models'
                             ? 'bg-sidebar-active text-text font-medium'
                             : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
                     )}
                 >
-                    <BookOpen size={15} className="shrink-0 text-text-tertiary" />
-                    <span>{t('notebook')}</span>
+                    <Cpu size={15} className="shrink-0 text-text-tertiary" />
+                    <span>{t('models')}</span>
                 </Link>
                 <div>
                     <button
@@ -203,6 +276,7 @@ export const Sidebar: React.FC = () => {
                         <div className="ml-5 mt-0.5 space-y-0.5 border-l border-border pl-2">
                             <Link
                                 to="/puzzle"
+                                onClick={onNavigate}
                                 className={cn(
                                     'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150',
                                     location.pathname === '/puzzle'
@@ -253,7 +327,7 @@ export const Sidebar: React.FC = () => {
                     return filtered.map((chat) => (
                         <div
                             key={chat.id}
-                            onClick={() => selectChat(chat.id)}
+                            onClick={() => { selectChat(chat.id); navigate('/chat'); onNavigate?.() }}
                             onContextMenu={(e) => handleChatRightClick(e, chat.id)}
                             onTouchStart={(e) => handleTouchStart(e, chat.id)}
                             onTouchEnd={handleTouchEnd}

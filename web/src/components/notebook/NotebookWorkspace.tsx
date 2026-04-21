@@ -3,7 +3,7 @@
  * on mobile, switches between tabs.
  */
 import React from 'react'
-import { ArrowLeft, FileText, MessageSquare, Sparkles } from 'lucide-react'
+import { ArrowLeft, FileText, MessageSquare, Sparkles, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Link as LinkIcon, Youtube, Type, Volume2, Brain, StickyNote } from 'lucide-react'
 import { SourcePanel } from './SourcePanel'
 import { NotebookChat } from './NotebookChat'
 import { StudioPanel } from './StudioPanel'
@@ -13,6 +13,25 @@ import { cn } from '../../lib/utils'
 import type { SourceMeta } from '../../types'
 
 const MOBILE_BREAKPOINT = 1024  // lg
+
+// Source type to icon mapping (mirrors SourceRow)
+const SOURCE_TYPE_ICON: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+    url: LinkIcon,
+    youtube: Youtube,
+    pdf: FileText,
+    text: Type,
+    audio: Volume2,
+    image: FileText,
+}
+
+// Studio cards for collapsed strip
+const STUDIO_CARDS = [
+    { id: 'audio',    icon: Volume2,    label: '音频概览', iconColor: 'text-green-600 dark:text-green-400',  bg: 'hover:bg-green-50 dark:hover:bg-green-950/30' },
+    { id: 'mindmap',  icon: Brain,      label: '思维导图', iconColor: 'text-purple-600 dark:text-purple-400', bg: 'hover:bg-purple-50 dark:hover:bg-purple-950/30' },
+    { id: 'report',   icon: FileText,   label: '报告',     iconColor: 'text-blue-600 dark:text-blue-400',    bg: 'hover:bg-blue-50 dark:hover:bg-blue-950/30' },
+    { id: 'overview', icon: Sparkles,   label: '概览',     iconColor: 'text-amber-600 dark:text-amber-400',  bg: 'hover:bg-amber-50 dark:hover:bg-amber-950/30' },
+    { id: 'notes',    icon: StickyNote, label: '笔记',     iconColor: 'text-rose-600 dark:text-rose-400',    bg: 'hover:bg-rose-50 dark:hover:bg-rose-950/30' },
+]
 
 interface Props {
     notebook: string
@@ -25,7 +44,30 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     const [isMobile, setIsMobile] = React.useState(false)
     const [mobileTab, setMobileTab] = React.useState<MobileTab>('chat')
     const [viewingSource, setViewingSource] = React.useState<SourceMeta | null>(null)
+    const [sourceCollapsed, setSourceCollapsed] = React.useState(false)
+    const [studioCollapsed, setStudioCollapsed] = React.useState(false)
+    // Only animate when collapsing (shrinking), not when expanding (avoids text reflow jitter)
+    const [sourceAnimating, setSourceAnimating] = React.useState(false)
+    const [studioAnimating, setStudioAnimating] = React.useState(false)
     const { selectedModel, setSelectedModel, sources } = useAppStore()
+
+    const collapseSource = React.useCallback(() => {
+        setSourceAnimating(true)
+        setSourceCollapsed(true)
+        // Remove animation class after transition ends
+        setTimeout(() => setSourceAnimating(false), 300)
+    }, [])
+    const expandSource = React.useCallback(() => {
+        setSourceCollapsed(false)
+    }, [])
+    const collapseStudio = React.useCallback(() => {
+        setStudioAnimating(true)
+        setStudioCollapsed(true)
+        setTimeout(() => setStudioAnimating(false), 300)
+    }, [])
+    const expandStudio = React.useCallback(() => {
+        setStudioCollapsed(false)
+    }, [])
 
     React.useEffect(() => {
         const handle = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
@@ -95,17 +137,82 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         )
     }
 
+    // Desktop: 3-card layout with collapsible source & studio panels
     return (
-        <div className="flex h-full bg-bg overflow-hidden">
-            <div className="w-72 shrink-0">
-                <SourcePanel notebook={notebook} onSelectSource={setViewingSource} />
+        <div className="flex h-full bg-bg-layout gap-2 p-2 overflow-hidden">
+            {/* Source card */}
+            <div className={cn(
+                'flex flex-col bg-bg-container rounded-2xl border border-border shrink-0 overflow-hidden',
+                sourceAnimating && 'transition-all duration-300',
+                sourceCollapsed ? 'w-[52px]' : 'w-72'
+            )}>
+                {sourceCollapsed ? (
+                    /* Collapsed source: icon per source item */
+                    <div className="flex flex-col items-center h-full">
+                        {/* Toggle + Add */}
+                        <div className="flex flex-col items-center pt-2 pb-1 gap-0.5 shrink-0">
+                            <button
+                                onClick={expandSource}
+                                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-primary-mint transition-colors"
+                                title="展开来源"
+                            >
+                                <PanelLeftOpen size={15} />
+                            </button>
+                            <button
+                                onClick={expandSource}
+                                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-primary-mint transition-colors"
+                                title="添加来源"
+                            >
+                                <Plus size={15} />
+                            </button>
+                        </div>
+                        <div className="w-6 h-px bg-border shrink-0" />
+                        {/* Source icons list */}
+                        <div className="flex-1 overflow-y-auto py-1.5 flex flex-col items-center gap-0.5 custom-scrollbar w-full">
+                            {sources.map((s) => {
+                                const Icon = SOURCE_TYPE_ICON[s.type] ?? FileText
+                                return (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => setViewingSource(s)}
+                                        className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-text-secondary transition-colors shrink-0"
+                                        title={s.title}
+                                    >
+                                        <Icon size={14} />
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {/* Card header with collapse button */}
+                        <div className="h-11 border-b border-border flex items-center gap-2 px-3 shrink-0">
+                            <FileText size={14} className="text-primary-mint" />
+                            <span className="text-sm font-semibold flex-1">来源</span>
+                            <button
+                                onClick={collapseSource}
+                                className="p-1.5 rounded-lg hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors"
+                                title="收起来源"
+                            >
+                                <PanelLeftClose size={14} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <SourcePanel notebook={notebook} onSelectSource={setViewingSource} hideHeader />
+                        </div>
+                    </>
+                )}
             </div>
-            <div className="flex-1 min-w-0 flex flex-col">
-                <div className="h-12 border-b border-border flex items-center gap-2 px-3 shrink-0 bg-bg-container">
-                    <button onClick={onBack} className="p-1.5 hover:bg-fill-secondary rounded-lg" title="返回">
+
+            {/* Chat card */}
+            <div className="flex-1 min-w-0 flex flex-col bg-bg-container rounded-2xl border border-border overflow-hidden">
+                {/* Chat header */}
+                <div className="h-11 border-b border-border flex items-center gap-2 px-3 shrink-0">
+                    <button onClick={onBack} className="p-1 hover:bg-fill rounded-lg text-text-secondary transition-colors" title="返回">
                         <ArrowLeft size={15} />
                     </button>
-                    <span className="text-sm font-semibold flex-1 truncate">{notebook}</span>
+                    <span className="text-sm font-semibold flex-1 truncate text-text">{notebook}</span>
                     <select
                         value={selectedModel}
                         onChange={(e) => setSelectedModel(e.target.value as typeof selectedModel)}
@@ -126,8 +233,63 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                     }
                 </div>
             </div>
-            <div className="w-96 shrink-0">
-                <StudioPanel notebook={notebook} />
+
+            {/* Studio card */}
+            <div className={cn(
+                'flex flex-col bg-bg-container rounded-2xl border border-border shrink-0 overflow-hidden',
+                studioAnimating && 'transition-all duration-300',
+                studioCollapsed ? 'w-[52px]' : 'w-80'
+            )}>
+                {studioCollapsed ? (
+                    /* Collapsed studio: icon per studio card */
+                    <div className="flex flex-col items-center h-full">
+                        <div className="flex flex-col items-center pt-2 pb-1 shrink-0">
+                            <button
+                                onClick={expandStudio}
+                                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-primary-mint transition-colors"
+                                title="展开 Studio"
+                            >
+                                <PanelRightOpen size={15} />
+                            </button>
+                        </div>
+                        <div className="w-6 h-px bg-border shrink-0" />
+                        {/* Studio card icons */}
+                        <div className="flex-1 py-1.5 flex flex-col items-center gap-0.5 w-full">
+                            {STUDIO_CARDS.map((card) => (
+                                <button
+                                    key={card.id}
+                                    onClick={expandStudio}
+                                    className={cn(
+                                        'w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0',
+                                        card.iconColor,
+                                        card.bg
+                                    )}
+                                    title={card.label}
+                                >
+                                    <card.icon size={15} />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {/* Card header with collapse button */}
+                        <div className="h-11 border-b border-border flex items-center gap-2 px-3 shrink-0">
+                            <Sparkles size={14} className="text-primary-mint" />
+                            <span className="text-sm font-semibold flex-1">Studio</span>
+                            <button
+                                onClick={collapseStudio}
+                                className="p-1.5 rounded-lg hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors"
+                                title="收起 Studio"
+                            >
+                                <PanelRightClose size={14} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <StudioPanel notebook={notebook} hideHeader />
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     )

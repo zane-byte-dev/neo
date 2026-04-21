@@ -1,5 +1,5 @@
 import React from 'react'
-import { FileText, Link as LinkIcon, Type, Loader2, Youtube, Check, MoreVertical, Pencil, Archive } from 'lucide-react'
+import { FileText, Link as LinkIcon, Type, Loader2, Youtube, Check, MoreVertical, Pencil, Archive, Sparkles } from 'lucide-react'
 import type { SourceMeta } from '../../types'
 import { useAppStore } from '../../stores/useAppStore'
 import { notebookGenerateSourceGuide, notebookArchiveSource, notebookRenameSource } from '../../api'
@@ -41,8 +41,8 @@ export const SourceRow: React.FC<{
         return () => document.removeEventListener('mousedown', handler)
     }, [menuOpen])
 
-    const handleGenerate = async (e: React.MouseEvent) => {
-        e.stopPropagation()
+    const handleGenerate = async (e?: React.MouseEvent) => {
+        e?.stopPropagation()
         setGenerating(true)
         try {
             const guide = await notebookGenerateSourceGuide(notebook, source.id)
@@ -115,14 +115,6 @@ export const SourceRow: React.FC<{
                             <Loader2 size={10} className="animate-spin" /> 加载中…
                         </p>
                     )}
-                    {guideState === null && !generating && (
-                        <button
-                            onClick={handleGenerate}
-                            className="text-xs text-primary-mint mt-1 hover:underline"
-                        >
-                            生成摘要
-                        </button>
-                    )}
                     {generating && (
                         <p className="text-xs text-text-quaternary mt-1 italic flex items-center gap-1">
                             <Loader2 size={10} className="animate-spin" /> 正在生成摘要…
@@ -139,6 +131,14 @@ export const SourceRow: React.FC<{
                     </button>
                     {menuOpen && (
                         <div className="absolute right-0 top-full mt-1 bg-bg-container border border-border rounded-xl py-1 shadow-lg z-50 min-w-[140px] animate-slide-up">
+                            {guideState === null && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setMenuOpen(false); handleGenerate(e) }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text hover:bg-fill-secondary transition-colors"
+                                >
+                                    <Sparkles size={12} /> 生成摘要
+                                </button>
+                            )}
                             <button
                                 onClick={handleStartRename}
                                 className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text hover:bg-fill-secondary transition-colors"

@@ -1,7 +1,7 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate, NavLink, useSearchParams, useParams, useNavigate } from 'react-router-dom'
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { MessageSquare, BookOpen, Cpu, Menu, X } from 'lucide-react'
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useParams, useNavigate } from 'react-router-dom'
+import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from 'react-resizable-panels'
+import { Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NotebookPanel } from './components/NotebookPanel'
@@ -22,49 +22,9 @@ const ResizeHandle: React.FC = () => (
     </PanelResizeHandle>
 )
 
-// ── Top nav bar shared by all pages ───────────────────────────────────────
-
-const TopNav: React.FC<{ onMenuClick?: () => void; menuOpen?: boolean }> = ({ onMenuClick, menuOpen }) => (
-    <div className="h-11 md:h-12 border-b border-border bg-bg-container/80 backdrop-blur-xl flex items-center px-3 md:px-5 gap-1.5 shrink-0"
-         style={{ boxShadow: 'var(--shadow-soft)' }}>
-        {onMenuClick && (
-            <button
-                onClick={onMenuClick}
-                className="md:hidden p-1.5 rounded-lg text-text-secondary hover:bg-fill transition-colors mr-0.5"
-            >
-                {menuOpen ? <X size={16} /> : <Menu size={16} />}
-            </button>
-        )}
-        <div className="flex items-center gap-1.5 mr-2 md:mr-4">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-mint to-emerald-600 flex items-center justify-center">
-                <span className="text-white text-[10px] font-bold leading-none">N</span>
-            </div>
-            <span className="text-sm font-bold tracking-tight text-text hidden sm:inline">Neo</span>
-        </div>
-        {([
-            { to: '/chat',     icon: <MessageSquare size={14} />, label: 'Chat' },
-            { to: '/notebook', icon: <BookOpen size={14} />,      label: 'Notebook' },
-            { to: '/models',   icon: <Cpu size={14} />,           label: 'Models' },
-        ] as const).map(({ to, icon, label }) => (
-            <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) => cn(
-                    'flex items-center gap-1.5 px-3 md:px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all duration-200',
-                    isActive
-                        ? 'bg-primary-mint/12 text-text shadow-sm'
-                        : 'text-text-secondary hover:bg-fill hover:text-text'
-                )}
-            >
-                {icon}<span className="hidden sm:inline">{label}</span>
-            </NavLink>
-        ))}
-    </div>
-)
-
 // ── /chat page ──────────────────────────────────────────────────────────────────
 
-const ChatPage: React.FC<{ sidebarOpen: boolean; setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>> }> = ({ sidebarOpen, setSidebarOpen }) => {
+const ChatPage: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams()
     const { activeChatId, selectOrCreateChat, createChat } = useAppStore()
 
@@ -86,70 +46,20 @@ const ChatPage: React.FC<{ sidebarOpen: boolean; setSidebarOpen: React.Dispatch<
         }
     }, [activeChatId, setSearchParams])
 
-    // Close mobile sidebar when a chat is selected
-    React.useEffect(() => {
-        setSidebarOpen(false)
-    }, [activeChatId])
-
     // Global keyboard shortcuts
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             const isMod = e.metaKey || e.ctrlKey
-
-            // Cmd/Ctrl+N: New chat
             if (isMod && e.key === 'n') {
                 e.preventDefault()
                 createChat()
             }
-
-            // Cmd/Ctrl+B: Toggle sidebar (mobile)
-            if (isMod && e.key === 'b') {
-                e.preventDefault()
-                setSidebarOpen((prev) => !prev)
-            }
         }
-
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [createChat])
 
-    return (
-        <div className="flex-1 overflow-hidden flex relative">
-            {/* Mobile sidebar overlay */}
-            {sidebarOpen && (
-                <div
-                    className="fixed inset-0 bg-black/40 z-40 md:hidden animate-fade-in"
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
-
-            {/* Mobile sidebar drawer */}
-            <div className={cn(
-                'fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-out md:hidden pt-11',
-                sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-            )}>
-                <Sidebar />
-            </div>
-
-            {/* Desktop layout with resizable panels */}
-            <div className="w-full hidden md:flex">
-                <PanelGroup direction="horizontal" className="w-full">
-                    <Panel defaultSize={24} minSize={16} maxSize={38}>
-                        <Sidebar />
-                    </Panel>
-                    <ResizeHandle />
-                    <Panel defaultSize={76} minSize={40}>
-                        <ChatArea />
-                    </Panel>
-                </PanelGroup>
-            </div>
-
-            {/* Mobile layout (no panels) */}
-            <div className="flex-1 min-w-0 md:hidden">
-                <ChatArea />
-            </div>
-        </div>
-    )
+    return <ChatArea />
 }
 
 // ── /notebook page ───────────────────────────────────────────────────────────
@@ -169,22 +79,101 @@ const NotebookPage: React.FC = () => {
 const MainLayout: React.FC = () => {
     const { theme } = useAppStore()
     const [sidebarOpen, setSidebarOpen] = React.useState(false)
+    const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
+    const sidebarPanelRef = React.useRef<ImperativePanelHandle>(null)
+
+    const toggleSidebar = React.useCallback(() => {
+        if (sidebarCollapsed) {
+            sidebarPanelRef.current?.expand()
+        } else {
+            sidebarPanelRef.current?.collapse()
+        }
+    }, [sidebarCollapsed])
 
     React.useEffect(() => {
         document.documentElement.setAttribute('data-theme', theme)
     }, [theme])
 
     return (
-        <div className="h-screen w-screen bg-bg-layout overflow-hidden text-text flex flex-col">
-            <TopNav onMenuClick={() => setSidebarOpen((o) => !o)} menuOpen={sidebarOpen} />
-            <Routes>
-                <Route path="/chat"     element={<ChatPage sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />} />
-                <Route path="/notebook" element={<NotebookPage />} />
-                <Route path="/notebook/:notebookName" element={<NotebookPage />} />
-                <Route path="/models"   element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><ModelPanel /></div>} />
-                <Route path="/puzzle"   element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
-                <Route path="*"         element={<Navigate to="/chat" replace />} />
-            </Routes>
+        <div className="h-screen w-screen bg-bg-layout overflow-hidden text-text flex flex-row">
+            {/* Mobile sidebar overlay */}
+            {sidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/40 z-40 md:hidden animate-fade-in"
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
+
+            {/* Mobile hamburger button */}
+            <button
+                onClick={() => setSidebarOpen((o) => !o)}
+                className="fixed top-3 left-3 z-50 md:hidden p-2 rounded-lg bg-bg-container/80 backdrop-blur-xl border border-border text-text-secondary hover:bg-fill transition-colors"
+                style={{ boxShadow: 'var(--shadow-soft)' }}
+            >
+                {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
+            </button>
+
+            {/* Mobile sidebar drawer */}
+            <div className={cn(
+                'fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-out md:hidden',
+                sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            )}>
+                <Sidebar onNavigate={() => setSidebarOpen(false)} />
+            </div>
+
+            {/* Desktop: sidebar + content with resizable panels */}
+            <div className="w-full hidden md:flex">
+                <PanelGroup direction="horizontal" className="w-full">
+                    <Panel
+                        ref={sidebarPanelRef}
+                        defaultSize={20}
+                        minSize={14}
+                        maxSize={32}
+                        collapsible
+                        collapsedSize={0}
+                        onCollapse={() => setSidebarCollapsed(true)}
+                        onExpand={() => setSidebarCollapsed(false)}
+                    >
+                        <Sidebar onCollapse={toggleSidebar} />
+                    </Panel>
+                    {!sidebarCollapsed && <ResizeHandle />}
+                    <Panel defaultSize={80} minSize={50}>
+                        <div className="h-full flex flex-col overflow-hidden relative">
+                            {/* Expand button shown when sidebar is collapsed */}
+                            {sidebarCollapsed && (
+                                <button
+                                    onClick={toggleSidebar}
+                                    className="absolute top-3 left-3 z-10 p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-fill border border-border bg-bg-container/80 backdrop-blur-xl transition-all duration-150"
+                                    style={{ boxShadow: 'var(--shadow-soft)' }}
+                                    title="Expand sidebar"
+                                >
+                                    <PanelLeftOpen size={15} />
+                                </button>
+                            )}
+                            <Routes>
+                                <Route path="/chat" element={<ChatPage />} />
+                                <Route path="/notebook" element={<NotebookPage />} />
+                                <Route path="/notebook/:notebookName" element={<NotebookPage />} />
+                                <Route path="/models" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><ModelPanel /></div>} />
+                                <Route path="/puzzle" element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
+                                <Route path="*" element={<Navigate to="/chat" replace />} />
+                            </Routes>
+                        </div>
+                    </Panel>
+                </PanelGroup>
+            </div>
+
+            {/* Mobile: full-width content */}
+            <div className="flex-1 min-w-0 md:hidden flex flex-col overflow-hidden">
+                <Routes>
+                    <Route path="/chat" element={<ChatPage />} />
+                    <Route path="/notebook" element={<NotebookPage />} />
+                    <Route path="/notebook/:notebookName" element={<NotebookPage />} />
+                    <Route path="/models" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><ModelPanel /></div>} />
+                    <Route path="/puzzle" element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
+                    <Route path="*" element={<Navigate to="/chat" replace />} />
+                </Routes>
+            </div>
         </div>
     )
 }

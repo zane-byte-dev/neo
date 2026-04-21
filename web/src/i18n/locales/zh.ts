@@ -10,6 +10,7 @@ const zh: Record<TranslationKeys, string> = {
     // Sidebar
     newChat: '新对话',
     chats: '对话',
+    allNotes: '全部笔记',
     searchChats: '搜索对话…',
     noMatchingChats: '没有匹配的对话',
     noChatsYet: '暂无对话',
