@@ -54,15 +54,15 @@
 
 ### 5. 多模型支持
 
-当前状态：已支持 Google Gemini（API Key + CLI OAuth）、DeepSeek、Ollama 本地模型，内置智能路由。
+当前状态：已支持 Google Gemini（API Key + CLI OAuth）、DeepSeek、OpenAI GPT、Anthropic Claude、Ollama 本地模型，内置智能路由 + 自动 fallback + 用户偏好。
 
 - [x] **DeepSeek 接入**：通过 AI SDK 接入 DeepSeek API（deepseek-chat / deepseek-reasoner）
 - [x] **本地模型**：支持 Ollama / 本地 Gemma，适配隐私敏感场景
 - [x] **模型路由策略**：根据任务特性自动选择模型（有工具 → DeepSeek，纯对话 → Gemini ACP / flash）
 - [x] **Gemini ACP**：通过 Gemini CLI OAuth 接入，利用 Google One AI Premium 配额
-- [ ] **OpenAI / Claude 接入**：通过 AI SDK 的 provider 机制接入 OpenAI GPT、Anthropic Claude
-- [ ] **模型 fallback**：主模型失败时自动切换到备用模型
-- [ ] **用户可配置**：每个用户可在工作区配置默认模型和可用模型列表
+- [x] **OpenAI / Claude 接入**：通过 AI SDK 的 `@ai-sdk/openai` / `@ai-sdk/anthropic` 接入；设置 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 即启用，内置别名 `gpt-4o` / `gpt-4o-mini` / `gpt-5` / `claude-sonnet` / `claude-opus` / `claude-haiku`，价格表已纳入预算统计
+- [x] **模型 fallback**：`chatWithContextStreaming` 按 `fallbackChain` 顺序尝试，`switch-model`（429/503/超时）自动切换下一款，`retry-same`（5xx）原模型指数退避，`fatal`（4xx）立刻抛出；`usage.jsonl` 记录 `fallbackUsed` + `originalModel`
+- [x] **用户可配置**：每个用户可通过 `space/{userId}/preferences.json` 或 `GET/POST /api/preferences` 设置 `defaultModel` 与 `enabledModels`；未显式选择模型时自动套用 `defaultModel`
 
 ### 6. Web UI 增强
 

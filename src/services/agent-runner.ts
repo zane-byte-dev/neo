@@ -58,9 +58,17 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
 
     const t0 = Date.now();
 
+    const userCtx = await calcUser(userId);
+
+    // Resolve the user's preferred default model when the caller did not
+    // specify one (or explicitly asked for 'auto').
+    const effectiveUserModel = rawModel && rawModel !== 'auto'
+        ? rawModel
+        : userCtx.preferences.defaultModel ?? rawModel;
+
     // Smart routing: resolve 'auto' or undefined to the best model
     const route = resolveSmartRoute({
-        userModel: rawModel,
+        userModel: effectiveUserModel,
         hasTools: true,
         message,
     });
@@ -76,8 +84,6 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
         messageLen: message.length,
         preview: message.slice(0, 100),
     });
-
-    const userCtx = await calcUser(userId);
 
     let session = await sessionGet(sessionId, userId);
     if (!session) session = await sessionCreate(userId, sessionId);

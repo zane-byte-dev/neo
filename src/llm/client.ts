@@ -11,9 +11,10 @@ import { promises as fs } from 'node:fs';
 import { streamText, generateText, stepCountIs, type LanguageModel, type ModelMessage } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
+import { createAnthropic } from '@ai-sdk/anthropic';
 import { setupLogger, log } from '../utils/logger.js';
 import { recordTokenUsage } from '../utils/token-tracker.js';
-import { DAILY_COST_LIMIT, DEEPSEEK_API_KEY, GEMINI_API_KEY, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, MODEL_ALIASES, OLLAMA_BASE_URL, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
+import { ANTHROPIC_API_KEY, DAILY_COST_LIMIT, DEEPSEEK_API_KEY, GEMINI_API_KEY, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, MODEL_ALIASES, OLLAMA_BASE_URL, OPENAI_API_KEY, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
 import { acpStream, acpGenerate } from './providers/gemini-acp.js';
 import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
@@ -73,6 +74,16 @@ function isAcpModel(modelId: string): boolean {
     return modelId.startsWith('acp/');
 }
 
+/** Check if a model ID belongs to OpenAI (GPT family). */
+function isOpenAIModel(modelId: string): boolean {
+    return modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-') || modelId.startsWith('o4-');
+}
+
+/** Check if a model ID belongs to Anthropic (Claude family). */
+function isAnthropicModel(modelId: string): boolean {
+    return modelId.startsWith('claude-');
+}
+
 /** Create an AI SDK LanguageModel for a given model id. */
 function createModel(modelId: string): LanguageModel {
     if (isDeepSeekModel(modelId)) {
@@ -88,6 +99,14 @@ function createModel(modelId: string): LanguageModel {
             baseURL: OLLAMA_BASE_URL,
         });
         return ollama.chat(modelId.replace('ollama/', ''));
+    }
+    if (isOpenAIModel(modelId)) {
+        const openai = createOpenAI({ apiKey: OPENAI_API_KEY });
+        return openai.chat(modelId);
+    }
+    if (isAnthropicModel(modelId)) {
+        const anthropic = createAnthropic({ apiKey: ANTHROPIC_API_KEY });
+        return anthropic(modelId);
     }
     // ACP models are handled directly in chatWithContextStreaming / generate
     // and never reach createModel.
@@ -207,12 +226,16 @@ export class LLMClient {
     private modelId = '';
 
     constructor() {
-        if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY) {
-            log.warn('AgentRuntime', 'No cloud API key set (GEMINI_API_KEY or DEEPSEEK_API_KEY). Ollama/ACP may still work.');
+        if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY && !OPENAI_API_KEY && !ANTHROPIC_API_KEY) {
+            log.warn('AgentRuntime', 'No cloud API key set (GEMINI/DEEPSEEK/OPENAI/ANTHROPIC). Ollama/ACP may still work.');
         }
 
-        // Default: prefer Gemini API key → DeepSeek → Ollama
-        const defaultModel = GEMINI_API_KEY ? 'flash' : DEEPSEEK_API_KEY ? 'deepseek' : 'gemma';
+        // Default: prefer Gemini → DeepSeek → OpenAI → Anthropic → Ollama
+        const defaultModel = GEMINI_API_KEY ? 'flash'
+            : DEEPSEEK_API_KEY ? 'deepseek'
+            : OPENAI_API_KEY ? 'gpt-4o-mini'
+            : ANTHROPIC_API_KEY ? 'claude-haiku'
+            : 'gemma';
         this.modelId = resolveModel(GEMINI_MODEL_ENV ?? defaultModel);
         this.enabled = true;
         log.info('AgentRuntime', `Initialized (AI SDK). Model: ${this.modelId}`);

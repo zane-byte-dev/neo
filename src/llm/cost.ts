@@ -12,6 +12,15 @@ export const COST_PER_1K: Record<string, { input: number; output: number }> = {
     'deepseek-chat': { input: 0.00014, output: 0.00028 },
     'deepseek-reasoner': { input: 0.00055, output: 0.0022 },
     'ollama/gemma4:e4b': { input: 0.0, output: 0.0 },
+    // OpenAI (USD per 1K tokens, Nov 2025 pricing)
+    'gpt-4o':       { input: 0.0025,  output: 0.01   },
+    'gpt-4o-mini':  { input: 0.00015, output: 0.0006 },
+    'gpt-5':        { input: 0.00125, output: 0.01   },
+    'gpt-5-mini':   { input: 0.00025, output: 0.002  },
+    // Anthropic Claude (USD per 1K tokens)
+    'claude-opus-4-5':   { input: 0.015,  output: 0.075 },
+    'claude-sonnet-4-5': { input: 0.003,  output: 0.015 },
+    'claude-haiku-4-5':  { input: 0.0008, output: 0.004 },
 };
 
 export interface UsageRecord {

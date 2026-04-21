@@ -27,6 +27,8 @@ function resolveProvider(modelId: string): string {
     if (modelId.startsWith('acp/')) return 'gemini-acp';
     if (modelId.startsWith('deepseek')) return 'deepseek';
     if (modelId.startsWith('ollama/')) return 'ollama';
+    if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-') || modelId.startsWith('o4-')) return 'openai';
+    if (modelId.startsWith('claude-')) return 'anthropic';
     return 'unknown';
 }
 

@@ -57,5 +57,3 @@ export const codeExecTool: Tool = {
         }
     },
 };
-
-export default codeExecTool;

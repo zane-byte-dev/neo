@@ -48,6 +48,17 @@ export const MODEL_ALIASES: Record<string, string> = {
     'deepseek-reasoner': 'deepseek-reasoner',
     gemma: 'ollama/gemma4:e4b',
     'gemini-acp': 'acp/gemini',
+    // OpenAI
+    gpt:         'gpt-4o',
+    'gpt-4o':    'gpt-4o',
+    'gpt-4o-mini': 'gpt-4o-mini',
+    'gpt-5':     'gpt-5',
+    'gpt-5-mini': 'gpt-5-mini',
+    // Anthropic Claude
+    claude:          'claude-sonnet-4-5',
+    'claude-sonnet': 'claude-sonnet-4-5',
+    'claude-opus':   'claude-opus-4-5',
+    'claude-haiku':  'claude-haiku-4-5',
 };
 
 // ── File system ──────────────────────────────────────────────────────────────
@@ -72,6 +83,8 @@ export const DANGEROUS_PATTERNS = [
 
 export const GEMINI_API_KEY   = process.env.GEMINI_API_KEY ?? '';
 export const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY ?? '';
+export const OPENAI_API_KEY   = process.env.OPENAI_API_KEY ?? '';
+export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 export const OLLAMA_BASE_URL  = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/v1';
 export const GEMINI_CLI_PATH  = process.env.GEMINI_CLI_PATH ?? 'gemini';
 /** Raw GEMINI_MODEL env value; consumers apply their own default/alias. */

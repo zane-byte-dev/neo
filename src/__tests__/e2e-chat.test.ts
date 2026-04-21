@@ -44,6 +44,7 @@ vi.mock('../services/user-service.js', () => ({
         userProfile: { init: vi.fn(), read: vi.fn().mockReturnValue(''), toContextString: vi.fn().mockReturnValue('') },
         skillRegistry: new Map(),
         userTools: new Map(),
+        preferences: {},
     })),
 }));
 

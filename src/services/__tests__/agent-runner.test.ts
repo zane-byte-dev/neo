@@ -26,6 +26,7 @@ vi.mock('../../services/user-service.js', () => ({
         userProfile: {},
         skillRegistry: new Map(),
         userTools: new Map(),
+        preferences: {},
     }),
 }));
 

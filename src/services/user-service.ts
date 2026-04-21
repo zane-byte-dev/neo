@@ -8,6 +8,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { UserProfileManager } from './user-profile.js';
+import { loadUserPreferences, type UserPreferences } from './user-prefs.js';
 import { loadUserSkills } from '../skills/skill-registry.js';
 import { loadUserTools } from '../tools/user-tools/loader.js';
 import { loadMcpTools } from '../mcp/loader.js';
@@ -101,6 +102,8 @@ export interface UserContext {
     skillRegistry: SkillRegistry;
     /** Per-user tools loaded from space/{userId}/.tools/ */
     userTools: Map<string, Tool>;
+    /** Per-user runtime preferences (default model, enabled models, …) */
+    preferences: UserPreferences;
 }
 
 const _contextCache = new Map<UserId, UserContext>();
@@ -132,11 +135,12 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
 
     const workDir = resolveUserWorkspaceDir(_spaceDir, userId);
 
-    const [systemInstruction, skillRegistry, userTools, mcpTools] = await Promise.all([
+    const [systemInstruction, skillRegistry, userTools, mcpTools, preferences] = await Promise.all([
         buildTenantSystemInstruction(workDir),
         loadUserSkills(userId, _projectRoot),
         loadUserTools(workDir),
         loadMcpTools(workDir),
+        loadUserPreferences(workDir),
     ]);
 
     // Merge MCP tools into userTools (later tools win on name clash, but the
@@ -148,7 +152,7 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
     const userProfile = new UserProfileManager(workDir);
     await userProfile.init();
 
-    const ctx: UserContext = { userId, workDir, systemInstruction, userProfile, skillRegistry, userTools };
+    const ctx: UserContext = { userId, workDir, systemInstruction, userProfile, skillRegistry, userTools, preferences };
     _contextCache.set(userId, ctx);
     return ctx;
 }

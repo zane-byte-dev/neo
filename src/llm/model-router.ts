@@ -2,7 +2,7 @@
  * src/llm/model-router.ts — Config-driven smart routing.
  */
 
-import { GEMINI_API_KEY, DEEPSEEK_API_KEY } from '../config.js';
+import { GEMINI_API_KEY, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY } from '../config.js';
 import { isAcpAvailable } from './providers/gemini-acp.js';
 import { scoreRequest, type ScorerDimensions } from './scorer.js';
 import { getFallbackChain, ROUTING_CONFIG, type Tier } from './routing-config.js';
@@ -39,6 +39,8 @@ function isModelAliasAvailable(alias: string): boolean {
     if (alias === 'flash' || alias === 'pro') return Boolean(GEMINI_API_KEY);
     if (alias === 'deepseek' || alias === 'deepseek-chat' || alias === 'deepseek-reasoner') return Boolean(DEEPSEEK_API_KEY);
     if (alias === 'gemma') return true;
+    if (alias === 'gpt' || alias.startsWith('gpt-')) return Boolean(OPENAI_API_KEY);
+    if (alias === 'claude' || alias.startsWith('claude-')) return Boolean(ANTHROPIC_API_KEY);
     return true;
 }
 
