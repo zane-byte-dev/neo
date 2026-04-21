@@ -4,7 +4,25 @@
  * Source management  → notebook-source.ts
  * AI generation      → notebook-studio.ts
  * Notebook chat      → notebook-chat.ts
+ *
+ * Re-exports from sibling modules so tests and callers can import
+ * everything from one place.
  */
+
+export {
+    notebookImportSource,
+    notebookGenerateGuide,
+    notebookSourceActions,
+} from './notebook-source.js';
+export {
+    notebookOverview,
+    notebookGenerateArtifact,
+    notebookDeleteArtifact,
+} from './notebook-studio.js';
+export {
+    notebookChat,
+    notebookClearChat,
+} from './notebook-chat.js';
 import type Router from '@koa/router';
 import {
     nbListNotebooks,
@@ -22,6 +40,7 @@ import {
     nbDeleteNote,
     nbConvertNoteToSource,
     nbGetSourceEntry,
+    nbListSources,
 } from '../services/notebook-service.js';
 import { generateAndSaveSourceGuide } from '../services/notebook-ai.js';
 import { calcUser } from '../services/user-service.js';
@@ -68,6 +87,13 @@ export function notebookGet(router: Router): void {
                 const row = nbGet(workDir, id);
                 if (!row) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
                 ctx.body = row;
+                break;
+            }
+            // ── Sources ───────────────────────────────────────────────────
+            case 'sources': {
+                const nb = q.notebook?.trim();
+                if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
+                ctx.body = nbListSources(workDir, nb);
                 break;
             }
             // ── Config ────────────────────────────────────────────────────
