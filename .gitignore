@@ -41,4 +41,3 @@ logs/
 .pm2/
 
 .DS_Store
-.tmp/

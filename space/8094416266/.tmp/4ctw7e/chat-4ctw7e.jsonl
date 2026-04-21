@@ -1,0 +1,8 @@
+{"id":1,"session_id":"4ctw7e","user_id":"8094416266","role":"user","content":"test","user_name":null,"timestamp":"2026-04-20T14:02:42.669Z"}
+{"id":2,"session_id":"4ctw7e","user_id":"8094416266","role":"assistant","content":"收到。","user_name":null,"timestamp":"2026-04-20T14:02:43.823Z"}
+{"id":3,"session_id":"4ctw7e","user_id":"8094416266","role":"user","content":"你好啊","user_name":null,"timestamp":"2026-04-21T07:24:00.074Z"}
+{"id":4,"session_id":"4ctw7e","user_id":"8094416266","role":"assistant","content":"🔥 Stream error: API Key not found. Please pass a valid API key.","user_name":null,"timestamp":"2026-04-21T07:24:01.516Z"}
+{"id":5,"session_id":"4ctw7e","user_id":"8094416266","role":"user","content":"你好啊","user_name":null,"timestamp":"2026-04-21T07:24:20.576Z"}
+{"id":6,"session_id":"4ctw7e","user_id":"8094416266","role":"assistant","content":"你好。","user_name":null,"timestamp":"2026-04-21T07:24:23.029Z"}
+{"id":7,"session_id":"4ctw7e","user_id":"8094416266","role":"user","content":"你可以操作浏览器吗》？","user_name":null,"timestamp":"2026-04-21T07:36:26.162Z"}
+{"id":8,"session_id":"4ctw7e","user_id":"8094416266","role":"assistant","content":"不能直接操作浏览器。不过我可以：\n\n• 帮你写网页代码（HTML/CSS/JS）\n• 分析网页内容（通过 `fetch_url` 抓取）\n• 搜索网络信息（通过 `search_web`）\n• 生成图片或视频（通过 `generate_image` / `generate_video`）\n• 执行本地脚本（通过 `bash`）\n\n你需要什么具体操作？","user_name":null,"timestamp":"2026-04-21T07:36:30.696Z"}

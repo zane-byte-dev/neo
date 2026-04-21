@@ -13,6 +13,7 @@
 | 读取本地文件内容 | `read_file` 或 `bash` |
 | 西风视角 / 决策审计 / 利益分析 / 分析这个局 | `notebook`（先 `list notebook:"xifeng"` 浏览条目摘要，选文后 `read` 读文章，生成报告） |
 | 怎么看 / 值不值得 / 该不该 / 帮我分析 / 这个选择 / 我在考虑 / 职场问题 / 两性关系 / 投资判断 / 这样做对吗 | 考虑调用 `notebook(action: "list")` 浏览摘要，判断是否有相关文章能提供视角 |
+| 需要登录的网站 / 需要点击操作 / 填写表单 / 网页截图 / 执行网页 JS / `fetch_url` 无法访问的动态页面 | `browser_command`（先 `open <url>`，再 `snapshot -i --json` 获取元素，再交互） |
 
 `generate_wechat_article` 是 skill，通过 `run_skill(name: "generate_wechat_article")` 调用，它会自动完成「拉取真实新闻 → 生成草稿」两步，直接调用，不要先说话再调用。
 

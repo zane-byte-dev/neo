@@ -1,0 +1,5 @@
+{"id":1,"session_id":"1cjrrh","user_id":"8094416266","role":"user","content":"模型","user_name":null,"timestamp":"2026-04-21T14:17:05.775Z"}
+{"id":2,"session_id":"1cjrrh","user_id":"8094416266","role":"user","content":"模型","user_name":null,"timestamp":"2026-04-21T14:20:08.538Z"}
+{"id":3,"session_id":"1cjrrh","user_id":"8094416266","role":"assistant","content":"你问的是模型相关的内容。让我先查看一下当前可用的技能列表，看看是否有关于模型管理的技能。我看到有 `generate_wechat_article` 技能，但没有专门的模型管理技能。你想了解什么具体的模型信息？\n\n- 想了解当前可用的 AI 模型？\n- 需要模型性能对比？\n- 想生成关于模型技术的文章？\n- 还是其他关于模型的问题？\n\n请具体说明你的需求。","user_name":null,"timestamp":"2026-04-21T14:20:16.985Z"}
+{"id":4,"session_id":"1cjrrh","user_id":"8094416266","role":"user","content":"都有哪些模型？","user_name":null,"timestamp":"2026-04-21T14:20:29.096Z"}
+{"id":5,"session_id":"1cjrrh","user_id":"8094416266","role":"assistant","content":"我来查看一下当前可用的模型信息。首先让我检查系统配置和可用的模型列表。让我检查一下是否有模型配置文件或 LiteLLM 配置：让我检查一下是否有环境变量或配置信息：","user_name":null,"timestamp":"2026-04-21T14:20:59.133Z"}

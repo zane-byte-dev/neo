@@ -21,6 +21,7 @@ import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './co
 import { setToolResult, smartTruncate } from '../utils/tool-result-cache.js';
 import { generateId } from '../utils/id-generator.js';
 import { recall, renderHits } from '../memory/index.js';
+import { buildBuiltinToolsGuide } from '../tools/builtin-guide.js';
 import type { SmartRouteDecision } from './model-router.js';
 import { ROUTING_CONFIG } from './routing-config.js';
 import type {
@@ -198,8 +199,8 @@ export async function loadSystemInstruction(configDir: string, ...fallbackDirs: 
 /**
  * Build the full system instruction for a tenant, combining:
  * 1. Config files (AGENTS.md, SOUL.md, etc.)
- * 2. Workspace skills ({workDir}/config/skills/)
- * 3. Global OpenClaw skills (~/.openclaw/workspace/skills/)
+ * 2. Auto-generated built-in tools reference (from tool registry)
+ * 3. USER.md (user profile)
  */
 export async function buildTenantSystemInstruction(workDir: string): Promise<string> {
     const configDir = join(workDir, 'config');
@@ -208,6 +209,10 @@ export async function buildTenantSystemInstruction(workDir: string): Promise<str
     // Try config/ first, fall back to workspace root (where AGENTS.md etc. often live)
     const si = await loadSystemInstruction(configDir, workDir);
     if (si) parts.push(si);
+
+    // Auto-inject built-in tools reference so per-user TOOLS.md need not document them
+    const toolsGuide = buildBuiltinToolsGuide(toolRegistry);
+    parts.push(toolsGuide);
 
     // Inject USER.md into system prompt so the agent knows the user
     try {

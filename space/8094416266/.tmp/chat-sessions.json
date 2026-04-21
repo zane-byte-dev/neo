@@ -33,6 +33,15 @@
       "title": "test",
       "start_time": "2026-04-20T14:02:42.668Z",
       "end_time": "2026-04-21T07:36:30.696Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "1cjrrh": {
+      "id": "1cjrrh",
+      "user_id": "8094416266",
+      "title": "模型",
+      "start_time": "2026-04-21T14:17:05.774Z",
+      "end_time": "2026-04-21T14:20:59.133Z",
       "is_current": 1,
       "is_pinned": 0
     }
