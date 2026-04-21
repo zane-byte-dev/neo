@@ -20,6 +20,7 @@ import { acpStream, acpGenerate } from './providers/gemini-acp.js';
 import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
 import { setToolResult, smartTruncate } from '../utils/tool-result-cache.js';
 import { generateId } from '../utils/id-generator.js';
+import { recall, renderHits } from '../memory/index.js';
 import type { SmartRouteDecision } from './model-router.js';
 import { ROUTING_CONFIG } from './routing-config.js';
 import type {
@@ -221,6 +222,27 @@ export async function buildTenantSystemInstruction(workDir: string): Promise<str
 
 // ── LLMClient ─────────────────────────────────────────────────────────────────
 
+/**
+ * Keep the most useful parts of NOW.md when it overflows the prompt budget.
+ *
+ * Strategy: take the first N bytes while preferring to cut on section/line
+ * boundaries. Always keep the opening sections (Mission / Priorities) — they
+ * tend to be at the top by convention — and drop the tail.
+ */
+function excerptNowMd(text: string, budgetBytes: number): string {
+    if (Buffer.byteLength(text, 'utf8') <= budgetBytes) return text;
+    const lines = text.split('\n');
+    const out: string[] = [];
+    let used = 0;
+    for (const line of lines) {
+        const next = used + Buffer.byteLength(line + '\n', 'utf8');
+        if (next > budgetBytes) break;
+        out.push(line);
+        used = next;
+    }
+    return out.join('\n').trimEnd();
+}
+
 export class LLMClient {
     private enabled = false;
     private modelId = '';
@@ -241,19 +263,41 @@ export class LLMClient {
         log.info('AgentRuntime', `Initialized (AI SDK). Model: ${this.modelId}`);
     }
 
-    private async buildPrompt(message: string, workDir: string, history?: string): Promise<string> {
+    private async buildPrompt(message: string, workDir: string, history?: string, sessionId?: string): Promise<string> {
         const now = new Date().toLocaleString('zh-CN');
         let prompt = `[Runtime Context]\n- Current Time: ${now}\n`;
 
         try {
             const nowMdPath = join(workDir, 'memory', 'NOW.md');
             const nowMd = await fs.readFile(nowMdPath, 'utf8');
-            if (nowMd.trim()) {
+            const trimmed = nowMd.trim();
+            if (trimmed) {
+                // NOW.md is injected every turn — apply a soft size budget.
+                // 2KB is enough for a focused snapshot; anything larger likely
+                // drifted into journal territory.
+                const NOW_SOFT_BUDGET = 2048;
+                let rendered = trimmed;
+                if (Buffer.byteLength(trimmed, 'utf8') > NOW_SOFT_BUDGET) {
+                    rendered = excerptNowMd(trimmed, NOW_SOFT_BUDGET) +
+                        `\n\n…（NOW.md 被裁剪至 ${NOW_SOFT_BUDGET}B；完整版请用 save_memory 或 update_now 精简）`;
+                }
                 prompt += `\n[User Background & Long-term Goals]\n` +
                     `（以下是用户的长期目标与近况背景，仅供参考，不是本次对话的任务指令）\n` +
-                    `${nowMd.trim()}\n`;
+                    `${rendered}\n`;
             }
         } catch { /* NOW.md not found */ }
+
+        // Recall relevant memories (episodic + semantic) for this query.
+        // Best-effort: on any failure we simply skip the block.
+        try {
+            const hits = await recall(workDir, message, { topK: 5, budgetTokens: 400, sessionId });
+            if (hits.length) {
+                const rendered = renderHits(hits);
+                prompt += `\n[Recalled Memories]\n（从过往对话/事实库召回，仅供参考；若与本次无关请忽略）\n${rendered}\n`;
+            }
+        } catch (err) {
+            log.warn('AgentRuntime', 'recall failed', { err: err instanceof Error ? err.message : String(err) });
+        }
 
         if (history?.trim()) {
             prompt += `\n[Previous Conversation History]\n${history}\n`;
@@ -297,7 +341,7 @@ export class LLMClient {
 
         if (useMessages) {
             // Use structured messages — build prompt without embedded history
-            const runtimePrompt = await this.buildPrompt(message, workDir);
+            const runtimePrompt = await this.buildPrompt(message, workDir, undefined, context.sessionId);
             for (const msg of conversationHistory as Array<{ role: string; content: string }>) {
                 messages.push({
                     role: msg.role === 'assistant' ? 'assistant' : 'user',
@@ -319,7 +363,7 @@ export class LLMClient {
         } else {
             // Fallback: embed history as a string in the prompt
             const historyStr = typeof conversationHistory === 'string' ? conversationHistory : '';
-            prompt = await this.buildPrompt(message, workDir, historyStr || undefined);
+            prompt = await this.buildPrompt(message, workDir, historyStr || undefined, context.sessionId);
         }
 
         const startedAt = Date.now();
@@ -332,7 +376,7 @@ export class LLMClient {
 
             // ── ACP shortcut: bypass AI SDK, use Gemini CLI directly ──────
             if (isAcpModel(effectiveModel)) {
-                const runtimePrompt = await this.buildPrompt(message, workDir);
+                const runtimePrompt = await this.buildPrompt(message, workDir, undefined, context.sessionId);
                 const fullPrompt = systemInstruction
                     ? `${systemInstruction}\n\n${runtimePrompt}`
                     : runtimePrompt;

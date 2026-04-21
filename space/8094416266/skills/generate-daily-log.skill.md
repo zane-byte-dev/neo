@@ -39,7 +39,7 @@ tags:
 *由 inkClaw Session-to-Log 自动生成 · YYYY-MM-DD*
 ```
 
-4. 用 `write_file` 将日记写入 `memory/1-Daily/YYYY-MM-DD.md`（如果文件已存在则覆盖）
+4. 用 `save_memory(action: "write", file: "1-Daily/YYYY-MM-DD.md", content: ...)` 将日记写入 `memory/1-Daily/YYYY-MM-DD.md`
 5. 返回确认信息，包含写入路径和消息条数
 
 **注意：**

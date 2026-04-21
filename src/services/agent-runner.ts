@@ -17,6 +17,7 @@ import type { StreamChunk, ToolContext } from '../llm/types.js';
 import { resolveSmartRoute } from '../llm/model-router.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
+import { rememberTurn } from '../memory/index.js';
 import { log } from '../utils/logger.js';
 
 const MODULE = 'AgentRunner';
@@ -139,6 +140,15 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
     const output = fullResponse.trim();
     if (output) {
         await messageAdd(session.id, userId, 'assistant', output);
+        // Fire-and-forget: persist the turn as an episodic memory card.
+        // Best-effort; errors are logged inside rememberTurn and must not
+        // affect the user-visible response.
+        void rememberTurn(userCtx.workDir, {
+            sessionId: session.id,
+            userId,
+            userMsg: message,
+            assistantMsg: output,
+        });
     }
 
     log.info(MODULE, 'Turn done', { userId, sessionId, elapsed: Date.now() - t0, responseLen: output.length });

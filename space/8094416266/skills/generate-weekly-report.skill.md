@@ -40,7 +40,7 @@ tags:
 *由 inkClaw 自动生成 · 日期*
 ```
 
-5. 用 `write_file` 将周报写入 `archives/Output/week-YYYY-WWW.md`（例如 `archives/Output/week-2026-W12.md`）
+5. 用 `edit_file` (old_str 留空即可创建) 将周报写入 `archives/Output/week-YYYY-WWW.md`（例如 `archives/Output/week-2026-W12.md`）
 6. 返回完整周报内容
 
 **注意：**

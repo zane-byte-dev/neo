@@ -7,11 +7,10 @@
 | 场景关键词 | 必须调用的工具 |
 |-----------|--------------|
 | 写微信公众号文章 / AI 周报 / 科技热点文章 | `run_skill(name: "generate_wechat_article")` |
-| 查看今日/本周 AI 新闻 | `fetch_ai_news` |
+| 查看今日/本周 AI 新闻 | `search_web` + `fetch_url` |
 | 查询实时天气 | `get_weather` |
 | 搜索不确定的事实或数据 | `search_web` |
 | 读取本地文件内容 | `read_file` 或 `bash` |
-| 生成图片 / 画图 | `generate_image` |
 | 西风视角 / 决策审计 / 利益分析 / 分析这个局 | `notebook`（先 `list notebook:"xifeng"` 浏览条目摘要，选文后 `read` 读文章，生成报告） |
 | 怎么看 / 值不值得 / 该不该 / 帮我分析 / 这个选择 / 我在考虑 / 职场问题 / 两性关系 / 投资判断 / 这样做对吗 | 考虑调用 `notebook(action: "list")` 浏览摘要，判断是否有相关文章能提供视角 |
 
@@ -42,7 +41,7 @@
 
 ### B. 知识库操作（读写 WORK_DIR 下的文件）
 - 触发词：整理、归档、日记、wiki、周报
-- 规则：使用 `bash` / `read_file` / `write_file` 操作文件
+- 规则：使用 `bash` / `read_file` / `edit_file` 操作文件（新建文件用 `bash` 写 heredoc，或 `edit_file` 创建）
 - 风格：简洁，按用户要求执行
 
 ### C. 代码 / 技术问题
