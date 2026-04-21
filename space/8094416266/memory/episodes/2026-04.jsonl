@@ -1,0 +1,4 @@
+{"id":"episodic:1776756241517:84395c","tier":"episodic","ts":"2026-04-21T07:24:01.517Z","text":"你好啊","meta":{"sessionId":"4ctw7e","userId":"8094416266","role":"user"}}
+{"id":"episodic:1776756241518:6d867c","tier":"episodic","ts":"2026-04-21T07:24:01.517Z","text":"🔥 Stream error: API Key not found. Please pass a valid API key.","meta":{"sessionId":"4ctw7e","userId":"8094416266","role":"assistant"}}
+{"id":"episodic:1776756263063:860920","tier":"episodic","ts":"2026-04-21T07:24:23.063Z","text":"你好啊","meta":{"sessionId":"4ctw7e","userId":"8094416266","role":"user"}}
+{"id":"episodic:1776756263063:c90295","tier":"episodic","ts":"2026-04-21T07:24:23.063Z","text":"你好。","meta":{"sessionId":"4ctw7e","userId":"8094416266","role":"assistant"}}
