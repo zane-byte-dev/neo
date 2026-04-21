@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import type { Tool } from '../_base.js';
 
 export const updateUserProfileTool: Tool = {
-    meta: { category: 'utility', version: '1.0.0' },
+    meta: { category: 'utility', version: '1.0.0', permission: 'write' },
     declaration: {
         name: 'update_user_profile',
         description:

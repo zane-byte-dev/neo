@@ -14,7 +14,7 @@ import type { Tool, ToolContext } from '../_base.js';
 // ── run_skill ─────────────────────────────────────────────────────────────────
 
 export const runSkillTool: Tool = {
-    meta: { category: 'ai', version: '1.0.0' },
+    meta: { category: 'ai', version: '1.0.0', permission: 'dangerous' },
     declaration: {
         name: 'run_skill',
         description:
@@ -74,7 +74,7 @@ export const runSkillTool: Tool = {
 // ── list_skills ───────────────────────────────────────────────────────────────
 
 export const listSkillsTool: Tool = {
-    meta: { category: 'ai', version: '1.0.0' },
+    meta: { category: 'ai', version: '1.0.0', permission: 'read' },
     declaration: {
         name: 'list_skills',
         description:

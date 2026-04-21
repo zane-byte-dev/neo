@@ -20,6 +20,7 @@ export const useAppStore = create<AppState>()(
                 locale: state.locale,
                 selectedModel: state.selectedModel,
                 autoSpeak: state.autoSpeak,
+                confirmDangerous: state.confirmDangerous,
             }),
         }
     )

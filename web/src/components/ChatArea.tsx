@@ -1,9 +1,9 @@
 import React from 'react'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, VolumeX } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, Wrench, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, VolumeX, ShieldCheck, ShieldOff } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
-import { streamChat, fetchMessages, uploadFiles } from '../api'
+import { streamChat, fetchMessages, uploadFiles, confirmTool, fetchToolResult } from '../api'
 import { t } from '../i18n'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -125,8 +125,12 @@ const TypingIndicator: React.FC = () => (
 
 // ── Activity panel (live tool call log) ───────────────────────────────────────
 
-const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ items, isLive }) => {
+const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean; sessionId?: string | null }> = ({ items, isLive, sessionId }) => {
     const scrollRef = React.useRef<HTMLDivElement>(null)
+    const [expandedResults, setExpandedResults] = React.useState<Record<string, string>>({})
+    const [expanding, setExpanding] = React.useState<Record<string, boolean>>({})
+    const updateActivityConfirmStatus = useAppStore(s => s.updateActivityConfirmStatus)
+
     React.useEffect(() => {
         if (isLive && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -136,6 +140,30 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
     const callCount = items.filter(i => i.type === 'tool_call').length
     const summary = callCount === 1 ? t('toolCall', { n: 1 }) : t('toolCalls', { n: callCount })
 
+    const handleConfirm = async (confirmId: string, approved: boolean) => {
+        if (!sessionId) return
+        // Optimistic UI update, then call server.
+        updateActivityConfirmStatus(sessionId, confirmId, approved ? 'approved' : 'denied')
+        try {
+            await confirmTool(confirmId, approved)
+        } catch {
+            // Silently ignore — server will time out and auto-deny anyway.
+        }
+    }
+
+    const handleExpand = async (resultId: string) => {
+        if (expandedResults[resultId] || expanding[resultId]) return
+        setExpanding(s => ({ ...s, [resultId]: true }))
+        try {
+            const full = await fetchToolResult(resultId)
+            setExpandedResults(s => ({ ...s, [resultId]: full.result }))
+        } catch {
+            // Leave truncated view in place on error.
+        } finally {
+            setExpanding(s => ({ ...s, [resultId]: false }))
+        }
+    }
+
     const content = (
         <div
             ref={scrollRef}
@@ -144,10 +172,10 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
                 isLive ? 'max-h-44' : 'max-h-52 mt-2'
             )}
         >
-            {items.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-2 min-w-0 animate-activity-in py-0.5">
-                    {item.type === 'tool_call' ? (
-                        <>
+            {items.map((item, idx) => {
+                if (item.type === 'tool_call') {
+                    return (
+                        <div key={idx} className="flex items-start gap-2 min-w-0 animate-activity-in py-0.5">
                             <Wrench size={11} className="text-primary-mint shrink-0 mt-0.5" />
                             <span className="text-text-secondary shrink-0 font-medium">{item.toolName}</span>
                             {item.args && (
@@ -155,20 +183,74 @@ const ActivityPanel: React.FC<{ items: ActivityItem[]; isLive?: boolean }> = ({ 
                                     {JSON.stringify(item.args)}
                                 </span>
                             )}
-                        </>
-                    ) : (
-                        <>
-                            <span className="text-success shrink-0 mt-0.5 text-[10px]">✓</span>
-                            <span className="text-text-tertiary shrink-0">{item.toolName}</span>
-                            {item.result && (
-                                <span className="text-text-tertiary/60 truncate">
-                                    → {item.result}
-                                </span>
-                            )}
-                        </>
-                    )}
-                </div>
-            ))}
+                        </div>
+                    )
+                }
+                if (item.type === 'tool_confirm') {
+                    const status = item.confirmStatus ?? 'pending'
+                    return (
+                        <div key={idx} className="flex flex-col gap-1 min-w-0 animate-activity-in py-1">
+                            <div className="flex items-start gap-2 min-w-0">
+                                <span className="text-warning shrink-0 mt-0.5 text-[11px]">⚠</span>
+                                <span className="text-text-secondary shrink-0 font-medium">{item.toolName}</span>
+                                {item.args && (
+                                    <span className="text-text-tertiary truncate">
+                                        {JSON.stringify(item.args)}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 pl-5">
+                                {status === 'pending' ? (
+                                    <>
+                                        <button
+                                            type="button"
+                                            onClick={() => item.confirmId && handleConfirm(item.confirmId, true)}
+                                            className="px-2 py-0.5 text-[11px] rounded-md bg-primary-mint text-white hover:opacity-90 transition"
+                                        >
+                                            Approve
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => item.confirmId && handleConfirm(item.confirmId, false)}
+                                            className="px-2 py-0.5 text-[11px] rounded-md bg-fill-tertiary text-text-secondary hover:bg-fill-quaternary transition"
+                                        >
+                                            Deny
+                                        </button>
+                                    </>
+                                ) : (
+                                    <span className="text-[11px] text-text-tertiary">
+                                        {status === 'approved' ? '✓ approved' : '✗ denied'}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    )
+                }
+                // tool_result
+                const fullResult = item.resultId ? expandedResults[item.resultId] : undefined
+                const shownResult = fullResult ?? item.result
+                return (
+                    <div key={idx} className="flex items-start gap-2 min-w-0 animate-activity-in py-0.5">
+                        <span className="text-success shrink-0 mt-0.5 text-[10px]">✓</span>
+                        <span className="text-text-tertiary shrink-0">{item.toolName}</span>
+                        {shownResult && (
+                            <span className={cn('text-text-tertiary/60 min-w-0', fullResult ? 'whitespace-pre-wrap break-words' : 'truncate')}>
+                                → {shownResult}
+                            </span>
+                        )}
+                        {item.truncated && item.resultId && !fullResult && (
+                            <button
+                                type="button"
+                                onClick={() => item.resultId && handleExpand(item.resultId)}
+                                className="shrink-0 text-[10px] text-primary-mint hover:underline"
+                                disabled={!!expanding[item.resultId]}
+                            >
+                                {expanding[item.resultId] ? '…' : 'expand'}
+                            </button>
+                        )}
+                    </div>
+                )
+            })}
             {isLive && (
                 <div className="flex items-center gap-1.5 py-1">
                     <span className="typing-dot" style={{ width: 4, height: 4 }} />
@@ -301,6 +383,7 @@ const ChatInput: React.FC = () => {
         setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
         autoSpeak, setAutoSpeak,
+        confirmDangerous, setConfirmDangerous,
     } = useAppStore()
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -413,6 +496,7 @@ const ChatInput: React.FC = () => {
             for await (const chunk of streamChat(
                 text, activeChatId, controller.signal, selectedModel, images,
                 documents?.map(d => ({ filename: d.filename, text: d.text })),
+                confirmDangerous,
             )) {
                 if (chunk.type === 'done') break
                 if (chunk.type === 'error') throw new Error(chunk.text ?? 'Unknown error')
@@ -430,6 +514,17 @@ const ChatInput: React.FC = () => {
                         type: 'tool_result',
                         toolName: chunk.toolName ?? 'tool',
                         result: chunk.result,
+                        resultId: chunk.resultId,
+                        truncated: chunk.truncated,
+                        timestamp: Date.now(),
+                    })
+                } else if (chunk.type === 'tool_confirm' && chunk.confirmId) {
+                    appendToLastAssistantActivity(activeChatId, {
+                        type: 'tool_confirm',
+                        toolName: chunk.toolName ?? 'tool',
+                        args: chunk.args,
+                        confirmId: chunk.confirmId,
+                        confirmStatus: 'pending',
                         timestamp: Date.now(),
                     })
                 } else if (chunk.type === 'text' && chunk.text) {
@@ -721,6 +816,19 @@ const ChatInput: React.FC = () => {
                             >
                                 {autoSpeak ? <Volume2 size={16} /> : <VolumeX size={16} />}
                             </button>
+                            <button
+                                onClick={() => setConfirmDangerous(!confirmDangerous)}
+                                className={cn(
+                                    'p-1.5 rounded-lg transition-all duration-150 shrink-0 cursor-pointer',
+                                    confirmDangerous
+                                        ? 'text-primary-mint bg-primary-mint/10 hover:bg-primary-mint/20'
+                                        : 'text-text-tertiary hover:text-text-secondary hover:bg-fill'
+                                )}
+                                title={confirmDangerous ? '高危操作需确认：开' : '高危操作需确认：关'}
+                                type="button"
+                            >
+                                {confirmDangerous ? <ShieldCheck size={16} /> : <ShieldOff size={16} />}
+                            </button>
                             <select
                                 value={selectedModel}
                                 onChange={(e) => setSelectedModel(e.target.value as typeof selectedModel)}
@@ -902,6 +1010,7 @@ export const ChatArea: React.FC = () => {
                                         <ActivityPanel
                                             items={msg.activityLog}
                                             isLive={isGenerating && !msg.content}
+                                            sessionId={activeChatId}
                                         />
                                     )}
                                     {!msg.content && isGenerating && (!msg.activityLog || msg.activityLog.length === 0) && (

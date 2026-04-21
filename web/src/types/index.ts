@@ -38,10 +38,18 @@ export interface AgentTodoItem {
 }
 
 export interface ActivityItem {
-    type: 'tool_call' | 'tool_result'
+    type: 'tool_call' | 'tool_result' | 'tool_confirm'
     toolName: string
     args?: Record<string, unknown>
     result?: string
+    /** For tool_result: cache id, use with /api/tool-result/:id */
+    resultId?: string
+    /** For tool_result: true when `result` is a smart-truncated preview */
+    truncated?: boolean
+    /** For tool_confirm: opaque id used to POST /api/tool-confirm */
+    confirmId?: string
+    /** For tool_confirm: current decision state */
+    confirmStatus?: 'pending' | 'approved' | 'denied'
     timestamp: number
 }
 
@@ -151,6 +159,7 @@ export interface AppState {
     updateLastAssistantThinking: (sessionId: string, thinking: string) => void
     updateLastAssistantTodos: (sessionId: string, todos: AgentTodoItem[]) => void
     appendToLastAssistantActivity: (sessionId: string, item: ActivityItem) => void
+    updateActivityConfirmStatus: (sessionId: string, confirmId: string, status: 'approved' | 'denied') => void
 
     // Input
     inputValue: string
@@ -167,6 +176,10 @@ export interface AppState {
     // Auto speak
     autoSpeak: boolean
     setAutoSpeak: (v: boolean) => void
+
+    // Confirm dangerous tools
+    confirmDangerous: boolean
+    setConfirmDangerous: (v: boolean) => void
 
     // Notebook
     notebookEntries: NoteEntry[]

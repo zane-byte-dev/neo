@@ -4,10 +4,12 @@
 
 import { join, dirname, isAbsolute, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
-import { execa } from 'execa';
 import { logDangerousCommand } from '../utils/audit-logger.js';
 import { log } from '../utils/logger.js';
+import { recordToolCall, classifyOutcome } from '../utils/tool-stats.js';
+import { resolveToolPermission } from './tool-permissions.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
+import { formatSandboxResult, runInSandbox } from '../sandbox/index.js';
 import type { Tool, FunctionDeclaration, ToolContext } from '../llm/types.js';
 
 /**
@@ -109,6 +111,39 @@ export async function executeTool(
     toolRegistry: Map<string, Tool>,
     context?: ToolContext,
 ): Promise<string> {
+    // Confirmation gate for dangerous-tier tools.
+    if (context?.confirmCallback) {
+        const tool = toolRegistry.get(name) ?? context.userTools?.get(name);
+        const tier = resolveToolPermission(name, tool);
+        if (tier === 'dangerous') {
+            try {
+                const approved = await context.confirmCallback({ toolName: name, args });
+                if (!approved) {
+                    log.warn('AgentRuntime', `Tool ${name} denied by user`);
+                    recordToolCall(name, 'blocked', 0);
+                    return `[DENIED] User declined to run ${name}.`;
+                }
+            } catch (err) {
+                log.error('AgentRuntime', `confirmCallback threw for ${name}`, {
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+    }
+
+    const startedAt = Date.now();
+    const result = await executeToolInner(name, args, workDir, toolRegistry, context);
+    recordToolCall(name, classifyOutcome(result), Date.now() - startedAt);
+    return result;
+}
+
+async function executeToolInner(
+    name: string,
+    args: Record<string, unknown>,
+    workDir: string,
+    toolRegistry: Map<string, Tool>,
+    context?: ToolContext,
+): Promise<string> {
     log.info('AgentRuntime', `Tool: ${name}(${JSON.stringify(args).slice(0, 120)})`);
 
     try {
@@ -130,20 +165,27 @@ export async function executeTool(
                 }
 
                 const timeoutMs = Math.min(Number(args.timeout_ms ?? 30_000), 120_000);
-                const proc = await execa('sh', ['-c', command], {
-                    cwd: workDir,
-                    timeout: timeoutMs,
-                    reject: false,
-                    all: true,
+                const result = await runInSandbox(command, {
+                    workDir,
+                    timeoutMs,
+                    signal: context?.signal,
                 });
-                const out = [
-                    proc.stdout?.trim(),
-                    proc.stderr?.trim() ? `[stderr]\n${proc.stderr.trim()}` : '',
-                ]
-                    .filter(Boolean)
-                    .join('\n')
-                    .trim();
-                return out || '(no output)';
+                // Rich output: auto-push generated images to the chat UI.
+                if (result.artifacts?.length && context?.imageCallback) {
+                    for (const art of result.artifacts) {
+                        if (!art.mimeType?.startsWith('image/')) continue;
+                        try {
+                            const abs = join(workDir, art.path);
+                            const buf = await fs.readFile(abs);
+                            await context.imageCallback(buf.toString('base64'), art.mimeType, art.path);
+                        } catch (err) {
+                            log.warn('Sandbox', `Failed to stream artifact ${art.path}`, {
+                                error: err instanceof Error ? err.message : String(err),
+                            });
+                        }
+                    }
+                }
+                return formatSandboxResult(result);
             }
 
             case 'read_file': {

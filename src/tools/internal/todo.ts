@@ -70,7 +70,7 @@ function formatTodos(todos: TodoItem[], scope = 'session'): string {
 }
 
 export const todoTool: Tool = {
-    meta: { category: 'utility', version: '2.0.0' },
+    meta: { category: 'utility', version: '2.0.0', permission: 'write' },
     declaration: {
         name: 'todo',
         description:

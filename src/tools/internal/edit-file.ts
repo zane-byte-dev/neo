@@ -17,7 +17,7 @@ function safePath(filePath: string, workDir: string): string {
 }
 
 export const editFileTool: Tool = {
-    meta: { category: 'workspace', version: '1.0.0' },
+    meta: { category: 'workspace', version: '1.0.0', permission: 'write' },
     declaration: {
         name: 'edit_file',
         description:

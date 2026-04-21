@@ -17,6 +17,8 @@ import { DAILY_COST_LIMIT, DEEPSEEK_API_KEY, GEMINI_API_KEY, GEMINI_MODEL_ENV, G
 import { buildAiTools } from './ai-tools.js';
 import { acpStream, acpGenerate } from './providers/gemini-acp.js';
 import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
+import { setToolResult, smartTruncate } from '../utils/tool-result-cache.js';
+import { generateId } from '../utils/id-generator.js';
 import type { SmartRouteDecision } from './model-router.js';
 import { ROUTING_CONFIG } from './routing-config.js';
 import type {
@@ -358,7 +360,20 @@ export class LLMClient {
                             case 'tool-result': {
                                 const r = part.output;
                                 const s = typeof r === 'string' ? r : JSON.stringify(r);
-                                onChunk({ type: 'tool_result', toolName: part.toolName, result: s.slice(0, 500) });
+                                const resultId = generateId();
+                                setToolResult(resultId, {
+                                    userId: context.userId,
+                                    toolName: part.toolName,
+                                    result: s,
+                                });
+                                const preview = smartTruncate(s);
+                                onChunk({
+                                    type: 'tool_result',
+                                    toolName: part.toolName,
+                                    result: preview,
+                                    resultId,
+                                    truncated: preview.length < s.length,
+                                });
                                 break;
                             }
                             case 'text-delta':

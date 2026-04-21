@@ -47,6 +47,7 @@ export const enter_plan_mode: Tool = {
     meta: {
         category: 'utility',
         version: '1.0.0',
+        permission: 'read',
     },
 };
 

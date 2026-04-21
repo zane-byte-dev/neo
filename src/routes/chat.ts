@@ -5,6 +5,7 @@ import { runAgentTurn } from '../services/agent-runner.js';
 import { calcUser } from '../services/user-service.js';
 import { MAX_INPUT_LENGTH } from '../config.js';
 import { createSSEResponse } from '../utils/sse.js';
+import { createConfirm } from '../utils/pending-confirm.js';
 
 export function chatRoute(router: Router): void {
     router.post('/api/chat', async (ctx) => {
@@ -18,6 +19,7 @@ export function chatRoute(router: Router): void {
             ? (body.documents as unknown[]).filter((v): v is { filename: string; text: string } =>
                 typeof v === 'object' && v !== null && typeof (v as Record<string, unknown>).filename === 'string' && typeof (v as Record<string, unknown>).text === 'string')
             : undefined;
+        const confirmDangerous = body.confirmDangerous === true;
         if (!message && (!images || images.length === 0) && (!documents || documents.length === 0)) {
             ctx.status = 400;
             ctx.body = { error: 'message, images, or documents required' };
@@ -60,6 +62,13 @@ export function chatRoute(router: Router): void {
                 signal: sse.signal,
                 onChunk: (chunk) => sse.send(chunk as Record<string, unknown>),
                 onTodo: (todos) => sse.send({ type: 'todo_update', todos }),
+                confirmCallback: confirmDangerous
+                    ? async ({ toolName, args }) => {
+                        const { confirmId, promise } = createConfirm(userId, { signal: sse.signal });
+                        sse.send({ type: 'tool_confirm', confirmId, toolName, args });
+                        return promise;
+                    }
+                    : undefined,
                 onImage: async (data, mimeType, caption) => {
                     const ext = mimeType.includes('png') ? 'png' : 'jpg';
                     const filename = `gen_${Date.now()}.${ext}`;

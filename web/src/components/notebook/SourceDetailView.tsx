@@ -1,10 +1,10 @@
 /**
  * SourceDetailView — full-width source content viewer.
  * Shown in the middle column when a source is clicked.
- * Features: guide / raw content tabs, in-content search (Ctrl+F style).
+ * Features: collapsible guide section + raw content, in-content search (Ctrl+F style).
  */
 import React from 'react'
-import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, HelpCircle, Search, X, ChevronUp, ChevronDown } from 'lucide-react'
+import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, HelpCircle, Search, X, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react'
 import { useAppStore } from '../../stores/useAppStore'
 import { notebookGetSource, notebookGetSourceGuide, notebookGenerateSourceGuide } from '../../api'
 import type { SourceMeta, SourceGuide } from '../../types'
@@ -38,7 +38,7 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
     const [content, setContent] = React.useState<string | null>(null)
     const [loading, setLoading] = React.useState(true)
     const [guideLoading, setGuideLoading] = React.useState(false)
-    const [activeTab, setActiveTab] = React.useState<'content' | 'guide'>('guide')
+    const [guideCollapsed, setGuideCollapsed] = React.useState(false)
     const [searchOpen, setSearchOpen] = React.useState(false)
     const [searchTerm, setSearchTerm] = React.useState('')
     const [matchIndex, setMatchIndex] = React.useState(0)
@@ -51,7 +51,6 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
             if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
                 e.preventDefault()
                 setSearchOpen(true)
-                setActiveTab('content')
             }
             if (e.key === 'Escape' && searchOpen) {
                 setSearchOpen(false)
@@ -90,7 +89,7 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
         try {
             const g = await notebookGenerateSourceGuide(notebook, source.id, selectedModel === 'auto' ? undefined : selectedModel)
             setSourceGuide(source.id, g)
-            setActiveTab('guide')
+            setGuideCollapsed(false)
         } catch { /* ignore */ }
         finally { setGuideLoading(false) }
     }
@@ -134,27 +133,6 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-border shrink-0">
-                {([
-                    ['guide', BookOpen, '摘要与要点'],
-                    ['content', FileText, '原文内容'],
-                ] as const).map(([tab, TabIcon, label]) => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 ${
-                            activeTab === tab
-                                ? 'border-primary-mint text-primary-mint'
-                                : 'border-transparent text-text-tertiary hover:text-text-secondary'
-                        }`}
-                    >
-                        <TabIcon size={13} />
-                        {label}
-                    </button>
-                ))}
-            </div>
-
             {/* Search bar */}
             {searchOpen && (
                 <SearchBar
@@ -169,12 +147,34 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {/* Guide card */}
+                <div className="mx-3 mt-4 mb-2 rounded-2xl border border-border bg-bg-container shadow-sm overflow-hidden">
+                    <button
+                        onClick={() => setGuideCollapsed((v) => !v)}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-fill-secondary/50 transition-colors"
+                    >
+                        <div className="flex items-center gap-2">
+                            <BookOpen size={14} className="text-primary-mint" />
+                            <span className="text-sm font-semibold text-text">摘要要点</span>
+                        </div>
+                        {guideCollapsed ? (
+                            <ChevronRight size={15} className="text-text-quaternary" />
+                        ) : (
+                            <ChevronDown size={15} className="text-text-quaternary" />
+                        )}
+                    </button>
+                    {!guideCollapsed && (
+                        <div className="border-t border-border">
+                            <GuideView guide={guide} loading={guideLoading} onGenerate={handleGenerateGuide} />
+                        </div>
+                    )}
+                </div>
+
+                {/* Raw content */}
                 {loading ? (
                     <div className="flex items-center justify-center py-16 text-text-quaternary">
                         <Loader2 size={20} className="animate-spin" />
                     </div>
-                ) : activeTab === 'guide' ? (
-                    <GuideView guide={guide} loading={guideLoading} onGenerate={handleGenerateGuide} />
                 ) : (
                     <ContentView content={content ?? ''} searchTerm={searchTerm} matchIndex={matchIndex} />
                 )}
@@ -216,20 +216,19 @@ const GuideView: React.FC<{
     }
 
     return (
-        <div className="p-4 space-y-5">
+        <div className="p-4 space-y-4">
             {/* Summary */}
-            <section>
-                <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">摘要</h3>
+            <div className="rounded-xl bg-fill-secondary/50 px-4 py-3">
                 <p className="text-sm text-text leading-relaxed whitespace-pre-wrap">{guide.summary}</p>
-            </section>
+            </div>
 
             {/* Key topics */}
             {guide.keyTopics.length > 0 && (
                 <section>
-                    <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">关键主题</h3>
-                    <div className="flex flex-wrap gap-2">
+                    <h3 className="text-[11px] font-semibold text-text-tertiary uppercase tracking-widest mb-2">关键主题</h3>
+                    <div className="flex flex-wrap gap-1.5">
                         {guide.keyTopics.map((topic, i) => (
-                            <span key={i} className="text-xs bg-primary-mint/10 text-primary-mint px-2.5 py-1 rounded-lg">
+                            <span key={i} className="text-xs bg-primary-mint/10 text-primary-mint px-2.5 py-1 rounded-full">
                                 {topic}
                             </span>
                         ))}
@@ -240,12 +239,12 @@ const GuideView: React.FC<{
             {/* Suggested questions */}
             {guide.suggestedQuestions.length > 0 && (
                 <section>
-                    <h3 className="text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">建议提问</h3>
-                    <div className="space-y-2">
+                    <h3 className="text-[11px] font-semibold text-text-tertiary uppercase tracking-widest mb-2">建议提问</h3>
+                    <div className="space-y-1.5">
                         {guide.suggestedQuestions.map((q, i) => (
-                            <div key={i} className="flex items-start gap-2 text-sm text-text-secondary">
-                                <HelpCircle size={14} className="text-text-quaternary mt-0.5 shrink-0" />
-                                <span>{q}</span>
+                            <div key={i} className="flex items-start gap-2 text-sm text-text-secondary bg-fill-secondary/40 rounded-xl px-3 py-2">
+                                <HelpCircle size={13} className="text-primary-mint mt-0.5 shrink-0" />
+                                <span className="leading-snug">{q}</span>
                             </div>
                         ))}
                     </div>
@@ -254,7 +253,7 @@ const GuideView: React.FC<{
 
             {/* Generated at */}
             {guide.generatedAt && (
-                <p className="text-[10px] text-text-quaternary pt-2">
+                <p className="text-[10px] text-text-quaternary pt-1">
                     生成于 {new Date(guide.generatedAt).toLocaleString('zh-CN')}
                 </p>
             )}

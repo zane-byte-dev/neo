@@ -70,7 +70,7 @@ function matchesGlob(filePath: string, pattern: string): boolean {
 }
 
 export const globTool: Tool = {
-    meta: { category: 'workspace', version: '1.0.0' },
+    meta: { category: 'workspace', version: '1.0.0', permission: 'read' },
     declaration: {
         name: 'glob',
         description:

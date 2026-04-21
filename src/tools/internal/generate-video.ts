@@ -22,6 +22,7 @@ export const generateVideoTool: Tool = {
         version: '1.0.0',
         requiresEnv: ['GEMINI_API_KEY'],
         enabled: !!GEMINI_API_KEY,
+        permission: 'write',
     },
     declaration: {
         name: 'generate_video',

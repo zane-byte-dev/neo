@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { UserProfileManager } from './user-profile.js';
 import { loadUserSkills } from '../skills/skill-registry.js';
 import { loadUserTools } from '../tools/user-tools/loader.js';
+import { loadMcpTools } from '../mcp/loader.js';
 import { buildTenantSystemInstruction } from '../llm/client.js';
 import { resolveUserWorkspaceDir } from '../utils/workspace.js';
 import type { UserId } from '../types/platform.js';
@@ -131,11 +132,18 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
 
     const workDir = resolveUserWorkspaceDir(_spaceDir, userId);
 
-    const [systemInstruction, skillRegistry, userTools] = await Promise.all([
+    const [systemInstruction, skillRegistry, userTools, mcpTools] = await Promise.all([
         buildTenantSystemInstruction(workDir),
         loadUserSkills(userId, _projectRoot),
         loadUserTools(workDir),
+        loadMcpTools(workDir),
     ]);
+
+    // Merge MCP tools into userTools (later tools win on name clash, but the
+    // mcp__ prefix makes collisions extremely unlikely).
+    for (const [name, tool] of mcpTools) {
+        userTools.set(name, tool);
+    }
 
     const userProfile = new UserProfileManager(workDir);
     await userProfile.init();

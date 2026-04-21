@@ -1,4 +1,6 @@
 import type { Tool } from '../_base.js';
+import { withRetry } from '../../utils/retry.js';
+import { log } from '../../utils/logger.js';
 
 const htmlToText = (html: string): string =>
     html
@@ -20,19 +22,42 @@ const tryFetch = async (
     timeoutMs = 15_000,
 ): Promise<{ ok: boolean; text?: string; status?: number }> => {
     try {
-        const res = await fetch(targetUrl, {
-            signal: AbortSignal.timeout(timeoutMs),
-            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; inkClaw/2.0)' },
+        // Retry on transient network errors / 5xx. 4xx is not retried.
+        return await withRetry(async () => {
+            const res = await fetch(targetUrl, {
+                signal: AbortSignal.timeout(timeoutMs),
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; inkClaw/2.0)' },
+            });
+            if (!res.ok) {
+                const err: Error & { status?: number } = new Error(`HTTP ${res.status}`);
+                err.status = res.status;
+                throw err;
+            }
+            return { ok: true as const, text: htmlToText(await res.text()) };
+        }, {
+            retries: 2,
+            baseMs: 400,
+            isRetryable: (err) => {
+                const e = err as { status?: number; name?: string };
+                if (typeof e?.status === 'number') return e.status >= 500 || e.status === 429;
+                return true; // network error / timeout
+            },
+            onRetry: (err, attempt, delayMs) => {
+                log.warn('fetch_url', `retry #${attempt} in ${delayMs}ms`, {
+                    url: targetUrl,
+                    error: err instanceof Error ? err.message : String(err),
+                });
+            },
         });
-        if (!res.ok) return { ok: false, status: res.status };
-        return { ok: true, text: htmlToText(await res.text()) };
-    } catch {
+    } catch (err) {
+        const e = err as { status?: number };
+        if (typeof e?.status === 'number') return { ok: false, status: e.status };
         return { ok: false };
     }
 };
 
 export const fetchUrlTool: Tool = {
-    meta: { category: 'web', version: '1.0.0' },
+    meta: { category: 'web', version: '1.0.0', permission: 'read' },
     declaration: {
         name: 'fetch_url',
         description:

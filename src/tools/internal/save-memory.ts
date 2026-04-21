@@ -17,7 +17,7 @@ import { join, dirname, resolve } from 'node:path';
 import type { Tool } from '../_base.js';
 
 export const saveMemoryTool: Tool = {
-    meta: { category: 'utility', version: '1.0.0' },
+    meta: { category: 'utility', version: '1.0.0', permission: 'write' },
     declaration: {
         name: 'save_memory',
         description:

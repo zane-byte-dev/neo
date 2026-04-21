@@ -41,6 +41,12 @@ export interface AgentRunOptions {
     onVideo?: (url: string) => Promise<void>;
     /** Called when the todo list is updated */
     onTodo?: (todos: { id: number; title: string; status: string }[]) => void;
+    /**
+     * Confirmation hook for dangerous-tier tools. When set, the executor
+     * will call it before running any such tool; returning false cancels
+     * the call with a `[DENIED]` result.
+     */
+    confirmCallback?: (req: { toolName: string; args: Record<string, unknown> }) => Promise<boolean>;
 }
 
 /**
@@ -48,7 +54,7 @@ export interface AgentRunOptions {
  * Throws on unrecoverable error (AbortError is re-thrown as-is).
  */
 export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
-    const { userId, sessionId, message, model: rawModel, images, signal, onChunk, onImage, onVideo, onTodo } = opts;
+    const { userId, sessionId, message, model: rawModel, images, signal, onChunk, onImage, onVideo, onTodo, confirmCallback } = opts;
 
     const t0 = Date.now();
 
@@ -95,6 +101,7 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
         imageCallback: onImage,
         videoCallback: onVideo,
         todoCallback: onTodo,
+        confirmCallback,
     };
 
     let fullResponse = '';

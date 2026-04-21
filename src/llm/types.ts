@@ -7,7 +7,16 @@
 export type StreamChunk =
     | { type: 'thought'; text: string }
     | { type: 'tool_call'; toolName: string; args?: Record<string, unknown> }
-    | { type: 'tool_result'; toolName: string; result?: string }
+    | {
+          type: 'tool_result';
+          toolName: string;
+          /** Preview (smart-truncated); full payload may be fetched via `resultId`. */
+          result?: string;
+          /** Cache key — pass to `GET /api/tool-result/:id` to retrieve the full payload. */
+          resultId?: string;
+          /** True when `result` is a truncated preview rather than the full text. */
+          truncated?: boolean;
+      }
     | { type: 'text'; text: string };
 
 export type StreamCallback = (chunk: StreamChunk) => void;
@@ -43,9 +52,26 @@ export interface ToolContext {
     userTools?: Map<string, Tool>;
     /** Agent operating mode: 'plan' restricts write tools */
     mode?: 'normal' | 'plan';
+    /**
+     * Confirmation hook for dangerous-tier tools.
+     * When provided, the executor calls it before running any tool whose
+     * permission tier is 'dangerous'. If it resolves to `false`, execution
+     * is aborted and the tool returns a [DENIED] message. When omitted,
+     * dangerous tools run without prompting (legacy behaviour).
+     */
+    confirmCallback?: (req: { toolName: string; args: Record<string, unknown> }) => Promise<boolean>;
 }
 
 // ── Tool registration types ───────────────────────────────────────────────────
+
+/**
+ * Permission tier for a tool.
+ *   - read      : pure reads (files, web, listings). Allowed in plan mode.
+ *   - write     : mutates workspace (write_file, edit_file, save_memory).
+ *   - dangerous : arbitrary side-effects / code execution (bash, subagent).
+ *                 May require user confirmation.
+ */
+export type ToolPermission = 'read' | 'write' | 'dangerous';
 
 export interface ToolMeta {
     /** Logical grouping for display / dynamic loading */
@@ -56,6 +82,8 @@ export interface ToolMeta {
     enabled?: boolean;
     /** Env-var names that must be set for this tool to work, e.g. ['GEMINI_API_KEY'] */
     requiresEnv?: string[];
+    /** Permission tier — defaults to 'write' when omitted (safe default) */
+    permission?: ToolPermission;
 }
 
 export interface Tool {

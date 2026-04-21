@@ -19,24 +19,24 @@
 
 ### 2. 沙箱执行（Sandbox）
 
-当前状态：`bash` 工具直接在宿主机执行命令，存在安全风险；仅有正则黑名单做基本拦截。
+当前状态：内置 `src/sandbox/` 抽象层；`bash` 工具默认在宿主机运行（保持向后兼容），可通过 `SANDBOX_MODE=docker` 切换到 Docker 沙箱；新增 `code_exec` 工具提供持久化 Python / Node.js REPL。
 
-- [ ] **Docker 沙箱**：每次 `bash` / 代码执行在临时 Docker 容器中运行，限制资源（CPU/内存/网络/磁盘）
-- [ ] **REPL 模式**：支持 Python / Node.js 交互式执行环境，保持上下文状态
-- [ ] **代码输出可视化**：支持 matplotlib 图表、HTML 页面等富输出在 Web UI 中渲染
-- [ ] **沙箱文件系统**：容器内挂载只读工作区 + 可写临时区，执行完后可选择性保留产物
-- [ ] **超时 & 资源限制**：可配置的 CPU/内存/执行时间上限，防止资源耗尽
+- [x] **Docker 沙箱**：设置 `SANDBOX_MODE=docker` 后，每次 `bash` 调用在 `docker run --rm` 容器内执行，mount workDir→`/work`，drop-all-caps + `no-new-privileges` + `--network=none`（默认），自动回退到宿主模式当 docker 不可用
+- [x] **REPL 模式**：`code_exec` 工具支持 Python / Node 持久化会话（按 userId+sessionId+language 隔离），变量/导入/函数定义跨调用保留；driver 进程常驻，通过 JSON 行协议喂代码
+- [x] **代码输出可视化**：沙箱执行后自动扫描 `.outputs/`（可通过 `SANDBOX_OUTPUT_DIR` 配置）下的新增文件；图片类 artifact 直接通过 `imageCallback` 推送到 Web UI，其他类型以 artifact 列表附在结果中
+- [x] **沙箱文件系统**：Docker 模式下 workDir 挂载为 `/work`，支持 `SANDBOX_READONLY=1` 切换为只读；容器内 `/tmp` 为写入区
+- [x] **超时 & 资源限制**：`SANDBOX_MEMORY_MB`（默认 512）、`SANDBOX_CPUS`（默认 1）、`SANDBOX_PIDS`（默认 256）、`SANDBOX_TIMEOUT_MS`（默认 30000，硬上限 `SANDBOX_MAX_TIMEOUT_MS` 默认 300000）
 
 ### 3. 完善工具体系（Tool System）
 
-当前状态：内置 15+ 工具 + 用户自定义工具，但缺少标准化协议和权限控制。
+当前状态：内置 15+ 工具 + 用户自定义工具，已支持 MCP、权限分级和结果缓存。
 
-- [ ] **MCP 协议支持**：实现 Model Context Protocol 客户端，可接入任意 MCP Server（GitHub、数据库、Slack 等）
-- [ ] **工具权限分级**：将工具分为 read / write / dangerous 三级，plan mode 下仅允许 read 级别
-- [ ] **工具执行确认**：高危操作（写文件、执行命令、网络请求）前通过 ask_user 征求确认
-- [ ] **工具结果优化**：tool_result 目前截断到 500 字符，改为智能摘要 + 全文缓存
-- [ ] **工具重试与容错**：工具调用失败时自动重试（带退避），网络类工具增加超时配置
-- [ ] **工具使用统计**：记录每个工具的调用频率、成功率、平均耗时，供优化参考
+- [x] **MCP 协议支持**：实现 Model Context Protocol 客户端（stdio transport），通过 `{workDir}/mcp.json` 配置 MCP Server，自动加载远程工具（前缀 `mcp__<server>__<tool>`）
+- [x] **工具权限分级**：工具分为 read / write / dangerous 三级（`ToolMeta.permission`），plan mode 下仅允许 read 级别；未标注工具通过启发式推断
+- [x] **工具执行确认**：dangerous 级别工具在 `ToolContext.confirmCallback` 存在时会先征求确认，拒绝则返回 `[DENIED]`；Web UI 已接入（Chat 设置里的盾牌图标开启后，在会话中实时弹出 Approve/Deny 按钮）
+- [x] **工具结果优化**：tool_result 改为智能截断（头 500 + 尾 200 + 省略标记），完整原文写入内存 LRU 缓存，通过 `GET /api/tool-result/:id` 按需拉取
+- [x] **工具重试与容错**：新增 `withRetry` 指数退避工具；已应用于 fetch_url、search_web（仅对 5xx/429/网络错误重试）
+- [x] **工具使用统计**：记录每个工具的调用频率、成功率、平均耗时，供优化参考（`GET /api/tool-stats`）
 
 ---
 

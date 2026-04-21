@@ -99,5 +99,6 @@ export const subagent: Tool = {
     meta: {
         category: 'utility',
         version: '1.0.0',
+        permission: 'dangerous',
     },
 };

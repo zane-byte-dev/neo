@@ -1,7 +1,7 @@
 import type { Tool } from '../_base.js';
 
 export const getDatetimeTool: Tool = {
-    meta: { category: 'utility', version: '1.0.0' },
+    meta: { category: 'utility', version: '1.0.0', permission: 'read' },
     declaration: {
         name: 'get_datetime',
         description:

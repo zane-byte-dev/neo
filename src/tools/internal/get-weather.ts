@@ -15,7 +15,7 @@ const getWeatherDesc = (code: number) => {
 };
 
 export const getWeatherTool: Tool = {
-    meta: { category: 'utility', version: '3.1.0' },
+    meta: { category: 'utility', version: '3.1.0', permission: 'read' },
     declaration: {
         name: 'get_weather',
         description: '获取全球城市的天气。智能识别同名城市，优先返回主要大城市。',

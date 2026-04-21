@@ -29,11 +29,14 @@ function _post(path: string, body?: unknown): Promise<Response> {
 // ── Chat SSE stream ───────────────────────────────────────────────────────────
 
 export interface StreamChunk {
-    type: 'text' | 'thought' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'image' | 'video' | 'todo_update'
+    type: 'text' | 'thought' | 'tool_call' | 'tool_result' | 'tool_confirm' | 'done' | 'error' | 'image' | 'video' | 'todo_update'
     text?: string
     toolName?: string
     args?: Record<string, unknown>  // tool call arguments
     result?: string                 // tool result (truncated)
+    resultId?: string               // cache id for full tool_result (GET /api/tool-result/:id)
+    truncated?: boolean             // whether `result` is a preview
+    confirmId?: string              // set on 'tool_confirm' chunks
     url?: string       // image URL path (for 'image' type)
     caption?: string   // optional caption (for 'image' type)
     todos?: { id: number; title: string; status: string }[]  // todo list snapshot
@@ -83,6 +86,7 @@ export async function* streamChat(
     model?: string,
     images?: string[],
     documents?: { filename: string; text: string }[],
+    confirmDangerous?: boolean,
 ): AsyncGenerator<StreamChunk> {
     yield* createSSEStream<StreamChunk>('/api/chat', {
         message,
@@ -90,7 +94,19 @@ export async function* streamChat(
         ...(model ? { model } : {}),
         ...(images?.length ? { images } : {}),
         ...(documents?.length ? { documents } : {}),
+        ...(confirmDangerous ? { confirmDangerous: true } : {}),
     }, { signal });
+}
+
+/** Approve or deny a paused dangerous tool call. */
+export async function confirmTool(confirmId: string, approved: boolean): Promise<void> {
+    const res = await _post('/api/tool-confirm', { confirmId, approved })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+}
+
+/** Fetch the full payload of a previously streamed tool_result. */
+export async function fetchToolResult(resultId: string): Promise<{ id: string; toolName: string; result: string; createdAt: number }> {
+    return apiGet(`/api/tool-result/${encodeURIComponent(resultId)}`)
 }
 
 // ── Notebook API ──────────────────────────────────────────────────────────────

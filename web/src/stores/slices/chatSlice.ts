@@ -24,6 +24,7 @@ export interface ChatSlice {
     updateLastAssistantThinking: (sessionId: string, thinking: string) => void
     updateLastAssistantTodos: (sessionId: string, todos: AgentTodoItem[]) => void
     appendToLastAssistantActivity: (sessionId: string, item: ActivityItem) => void
+    updateActivityConfirmStatus: (sessionId: string, confirmId: string, status: 'approved' | 'denied') => void
 
     // Input
     inputValue: string
@@ -166,6 +167,20 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
                 msgs[i] = { ...msgs[i], activityLog: [...(msgs[i].activityLog ?? []), item] }
                 break
             }
+        }
+        return { messages: { ...state.messages, [sessionId]: msgs } }
+    }),
+    updateActivityConfirmStatus: (sessionId, confirmId, status) => set((state) => {
+        const msgs = [...(state.messages[sessionId] ?? [])]
+        for (let i = msgs.length - 1; i >= 0; i--) {
+            const m = msgs[i]
+            if (m.role !== 'assistant' || !m.activityLog) continue
+            const idx = m.activityLog.findIndex((a) => a.type === 'tool_confirm' && a.confirmId === confirmId)
+            if (idx < 0) continue
+            const newLog = [...m.activityLog]
+            newLog[idx] = { ...newLog[idx], confirmStatus: status }
+            msgs[i] = { ...m, activityLog: newLog }
+            break
         }
         return { messages: { ...state.messages, [sessionId]: msgs } }
     }),

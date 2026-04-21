@@ -23,7 +23,7 @@ const RESEARCH_MAX_STEPS = 15;
 const ALLOWED_TOOLS = ['search_web', 'fetch_url'];
 
 export const researchTool: Tool = {
-    meta: { category: 'web', version: '1.0.0' },
+    meta: { category: 'web', version: '1.0.0', permission: 'read' },
     declaration: {
         name: 'research',
         description:

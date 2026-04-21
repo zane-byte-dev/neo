@@ -9,6 +9,9 @@ export interface UiSlice {
     setLocale: (locale: Locale) => void
     autoSpeak: boolean
     setAutoSpeak: (v: boolean) => void
+    /** When true, dangerous-tier tools pause for user confirmation. */
+    confirmDangerous: boolean
+    setConfirmDangerous: (v: boolean) => void
 }
 
 export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
@@ -21,4 +24,6 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => (
     setLocale: (locale: Locale) => set({ locale }),
     autoSpeak: false,
     setAutoSpeak: (v: boolean) => set({ autoSpeak: v }),
+    confirmDangerous: false,
+    setConfirmDangerous: (v: boolean) => set({ confirmDangerous: v }),
 })

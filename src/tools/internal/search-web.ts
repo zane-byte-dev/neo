@@ -1,4 +1,6 @@
 import type { Tool } from '../_base.js';
+import { withRetry } from '../../utils/retry.js';
+import { log } from '../../utils/logger.js';
 
 const SEARXNG_BASE_URL = process.env.SEARXNG_BASE_URL ?? 'http://127.0.0.1:8080';
 
@@ -51,7 +53,7 @@ function normalizeSearxngResults(data: SearxngResponse, max: number): SearchResu
 }
 
 export const searchWebTool: Tool = {
-    meta: { category: 'web', version: '1.2.0' },
+    meta: { category: 'web', version: '1.2.0', permission: 'read' },
     declaration: {
         name: 'search_web',
         description:
@@ -87,14 +89,33 @@ export const searchWebTool: Tool = {
 
 async function searchViaSearxng(query: string, maxResults: number): Promise<string | null> {
     try {
-        const searxngRes = await fetch(
-            `${SEARXNG_BASE_URL}/search?q=${encodeURIComponent(query)}&format=json&categories=general`,
-            {
-                headers: { 'Accept': 'application/json' },
-                signal: AbortSignal.timeout(12_000),
+        const searxngRes = await withRetry(async () => {
+            const r = await fetch(
+                `${SEARXNG_BASE_URL}/search?q=${encodeURIComponent(query)}&format=json&categories=general`,
+                {
+                    headers: { 'Accept': 'application/json' },
+                    signal: AbortSignal.timeout(12_000),
+                },
+            );
+            if (!r.ok) {
+                const err: Error & { status?: number } = new Error(`HTTP ${r.status}`);
+                err.status = r.status;
+                throw err;
+            }
+            return r;
+        }, {
+            retries: 1,
+            baseMs: 300,
+            isRetryable: (err) => {
+                const e = err as { status?: number };
+                if (typeof e?.status === 'number') return e.status >= 500 || e.status === 429;
+                return true;
             },
-        );
-        if (!searxngRes.ok) return null;
+            onRetry: (err, attempt, delayMs) =>
+                log.warn('search_web', `searxng retry #${attempt} in ${delayMs}ms`, {
+                    error: err instanceof Error ? err.message : String(err),
+                }),
+        });
 
         const data = (await searxngRes.json()) as SearxngResponse;
         const results = normalizeSearxngResults(data, maxResults);

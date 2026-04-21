@@ -7,15 +7,16 @@
 
 import { tool, jsonSchema, type ToolSet } from 'ai';
 import { executeTool, TOOL_DECLARATIONS } from '../tools/executor.js';
+import { isAllowedInPlanMode } from '../tools/tool-permissions.js';
 import type { Tool, ToolContext } from './types.js';
-
-/** Tools that modify state — restricted in plan mode */
-const WRITE_TOOLS = new Set(['bash', 'write_file', 'edit_file', 'exit_plan_mode']);
 
 /**
  * Build an AI SDK tools record from our built-in declarations + custom tool registry.
  * All tool execution flows through the existing `executeTool()` which retains
  * security checks (dangerous command blocking, path traversal, etc.).
+ *
+ * In plan mode, only tools whose permission tier is 'read' are exposed
+ * (plus `exit_plan_mode` — see tool-permissions.ts).
  */
 export function buildAiTools(
     toolRegistry: Map<string, Tool>,
@@ -27,7 +28,7 @@ export function buildAiTools(
 
     // Built-in tools (bash, read_file, write_file, list_dir)
     for (const decl of TOOL_DECLARATIONS) {
-        if (isPlanMode && WRITE_TOOLS.has(decl.name)) continue;
+        if (isPlanMode && !isAllowedInPlanMode(decl.name)) continue;
         tools[decl.name] = tool({
             description: decl.description,
             inputSchema: jsonSchema(decl.parameters),
@@ -38,7 +39,7 @@ export function buildAiTools(
 
     // Custom tools from the registry
     for (const [name, t] of toolRegistry) {
-        if (isPlanMode && WRITE_TOOLS.has(name)) continue;
+        if (isPlanMode && !isAllowedInPlanMode(name, t)) continue;
         tools[name] = tool({
             description: t.declaration.description,
             inputSchema: jsonSchema(t.declaration.parameters),
@@ -51,6 +52,7 @@ export function buildAiTools(
     const userTools = context?.userTools;
     if (userTools) {
         for (const [name, t] of userTools) {
+            if (isPlanMode && !isAllowedInPlanMode(name, t)) continue;
             tools[name] = tool({
                 description: t.declaration.description,
                 inputSchema: jsonSchema(t.declaration.parameters),

@@ -49,7 +49,7 @@ function matchesGlob(filePath: string, pattern: string): boolean {
 }
 
 export const grepTool: Tool = {
-    meta: { category: 'workspace', version: '1.0.0' },
+    meta: { category: 'workspace', version: '1.0.0', permission: 'read' },
     declaration: {
         name: 'grep',
         description:
