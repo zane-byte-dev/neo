@@ -527,6 +527,20 @@ export function nbGetSourceGuide(workDir: string, notebook: string, sourceId: st
     try { return JSON.parse(readFileSync(file, 'utf8')) as SourceGuide; } catch { return undefined; }
 }
 
+/** List all sources along with their guides in one pass — avoids N+1 requests. */
+export function nbListSourcesWithGuides(workDir: string, notebook: string): (SourceMeta & { guide: SourceGuide | null })[] {
+    const sources = nbListSources(workDir, notebook);
+    const guideDir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
+    return sources.map((s) => {
+        const file = join(guideDir, `${safeFilename(s.id)}.json`);
+        let guide: SourceGuide | null = null;
+        if (existsSync(file)) {
+            try { guide = JSON.parse(readFileSync(file, 'utf8')) as SourceGuide; } catch { /* skip */ }
+        }
+        return { ...s, guide };
+    });
+}
+
 export function nbSaveSourceGuide(workDir: string, notebook: string, guide: SourceGuide): void {
     const dir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
     ensureDir(dir);

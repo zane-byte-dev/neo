@@ -8,7 +8,7 @@ import { FileText, Plus, Check, ArrowUpDown, Search, X } from 'lucide-react'
 import type { SourceMeta } from '../../types'
 import { useAppStore } from '../../stores/useAppStore'
 import {
-    notebookListSources,
+    notebookListSourcesWithGuides,
     notebookGetSourceGuide,
 } from '../../api'
 import { AddSourceModal } from './AddSourceModal'
@@ -32,7 +32,7 @@ const SORT_LABELS: Record<SortOption, string> = {
 }
 
 export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource, hideHeader }) => {
-    const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuide, sourceGuides } = useAppStore()
+    const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuide, setSourceGuides, sourceGuides } = useAppStore()
     const [loading, setLoading] = React.useState(false)
     const [modalOpen, setModalOpen] = React.useState(false)
     const [sortBy, setSortBy] = React.useState<SortOption>('default')
@@ -41,22 +41,20 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource, hideHea
     const load = React.useCallback(async () => {
         setLoading(true)
         try {
-            const data = await notebookListSources(notebook)
-            setSources(data)
-            // Select all by default
-            setSelectedSourceIds(data.map((s) => s.id))
-            // Prefetch guides (store null for sources with no guide yet)
-            data.forEach((s) => {
-                notebookGetSourceGuide(notebook, s.id)
-                    .then((g) => setSourceGuide(s.id, g ?? null))
-                    .catch(() => setSourceGuide(s.id, null))
-            })
+            const data = await notebookListSourcesWithGuides(notebook)
+            // Split sources and guides, populate store in one pass
+            const sourceMetas = data.map(({ guide: _g, ...s }) => s)
+            const guidesMap: Record<string, import('../../types').SourceGuide | null> = {}
+            data.forEach(({ id, guide }) => { guidesMap[id] = guide })
+            setSources(sourceMetas)
+            setSelectedSourceIds(sourceMetas.map((s) => s.id))
+            setSourceGuides(guidesMap)
         } catch (e) {
             console.warn('[SourcePanel] load failed', e)
         } finally {
             setLoading(false)
         }
-    }, [notebook, setSources, setSelectedSourceIds, setSourceGuide])
+    }, [notebook, setSources, setSelectedSourceIds, setSourceGuides])
 
     React.useEffect(() => { load() }, [load])
 

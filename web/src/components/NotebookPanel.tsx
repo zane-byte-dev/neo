@@ -100,7 +100,8 @@ export const NotebookPanel: React.FC<{
     fullPage?: boolean
     urlNotebook?: string
     navigate?: (path: string) => void
-}> = ({ fullPage, urlNotebook, navigate }) => {
+    autoNewNote?: boolean
+}> = ({ fullPage, urlNotebook, navigate, autoNewNote }) => {
     const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries, activeNotebook, setActiveNotebook } = useAppStore()
     const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [selectedNotebook, setSelectedNotebook] = React.useState<string | undefined>(undefined)
@@ -122,7 +123,10 @@ export const NotebookPanel: React.FC<{
     React.useEffect(() => {
         if (urlNotebook && urlNotebook !== activeNotebook) {
             setSelectedNotebook(urlNotebook)
-            setActiveNotebook(urlNotebook)
+            // When autoNewNote is set, stay in list mode (don't enter workspace)
+            if (!autoNewNote) {
+                setActiveNotebook(urlNotebook)
+            }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [urlNotebook])
@@ -152,6 +156,7 @@ export const NotebookPanel: React.FC<{
         if (activeNotebook) return // skip when in workspace mode
         setLoading(true)
         setError('')
+        setNotebookEntries([]) // clear stale entries immediately
         notebookList(selectedNotebook)
             .then((data) => setNotebookEntries(data as NoteEntry[]))
             .catch((e) => setError(String(e)))
@@ -175,9 +180,18 @@ export const NotebookPanel: React.FC<{
         }, 300)
     }, [searchQuery, selectedNotebook])
 
+    // Auto-open new note editor when navigated with ?newNote=1
+    const autoNewNoteHandled = React.useRef(false)
+    React.useEffect(() => {
+        if (autoNewNote && selectedNotebook && !autoNewNoteHandled.current) {
+            autoNewNoteHandled.current = true
+            setEditing('new')
+        }
+    }, [autoNewNote, selectedNotebook])
+
     // ── Notebook workspace mode ──────────────────────────────────────────
     if (activeNotebook) {
-        return <NotebookWorkspace notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
+        return <NotebookWorkspace key={activeNotebook} notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
     }
 
     const displayList = inSearch ? results : notebookEntries
@@ -251,7 +265,7 @@ export const NotebookPanel: React.FC<{
                         totalCount={notebookEntries.length}
                         onSelect={setSelectedNote}
                         selectedId={null}
-                        onNew={() => setEditing('new')}
+                        onNew={selectedNotebook && navigate ? () => navigate(`/notebook/article/new?notebook=${encodeURIComponent(selectedNotebook)}`) : () => setEditing('new')}
                         onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
                     />
                 </div>
@@ -275,7 +289,7 @@ export const NotebookPanel: React.FC<{
                         totalCount={notebookEntries.length}
                         onSelect={setSelectedNote}
                         selectedId={selectedNote?.id ?? null}
-                        onNew={() => setEditing('new')}
+                        onNew={selectedNotebook && navigate ? () => navigate(`/notebook/article/new?notebook=${encodeURIComponent(selectedNotebook)}`) : () => setEditing('new')}
                         onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
                     />
                 </div>
@@ -480,7 +494,7 @@ const NotebookList: React.FC<{
                     <p className="text-xs text-text-quaternary">{inSearch ? t('noResults') : t('noEntries')}</p>
                 </div>
             )}
-            {sortedEntries.map((entry) => (
+            {!loading && sortedEntries.map((entry) => (
                 <div
                     key={entry.id}
                     onClick={() => onSelect(entry)}

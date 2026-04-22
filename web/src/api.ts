@@ -194,6 +194,10 @@ export function notebookListSources(notebook: string): Promise<SourceMeta[]> {
     return apiGet(`/api/notebook/source?action=list&notebook=${encodeURIComponent(notebook)}`)
 }
 
+export function notebookListSourcesWithGuides(notebook: string): Promise<(SourceMeta & { guide: SourceGuide | null })[]> {
+    return apiGet(`/api/notebook/source?action=list-with-guides&notebook=${encodeURIComponent(notebook)}`)
+}
+
 export function notebookGetSource(notebook: string, sourceId: string) {
     return apiGet<{ id: string; content: string } & SourceMeta>(
         `/api/notebook/source?action=read&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`,

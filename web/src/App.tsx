@@ -1,9 +1,10 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from 'react-resizable-panels'
-import { Menu, X, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Menu, X, PanelLeftOpen } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
+import { NoteEditor } from './components/NoteEditor'
 import { NotebookPanel } from './components/NotebookPanel'
 import { Login } from './components/Login'
 import { WaterPuzzle } from './components/WaterPuzzle'
@@ -62,7 +63,7 @@ const ChatPage: React.FC = () => {
     return <ChatArea />
 }
 
-// ── /notebook page ───────────────────────────────────────────────────────────
+// ── /notebook/:notebookName page ────────────────────────────────────────────
 
 const NotebookPage: React.FC = () => {
     const { notebookName } = useParams<{ notebookName?: string }>()
@@ -74,13 +75,39 @@ const NotebookPage: React.FC = () => {
     )
 }
 
+// ── /notebook/article/new page ───────────────────────────────────────────────
+
+const NewNotePage: React.FC = () => {
+    const [searchParams] = useSearchParams()
+    const navigate = useNavigate()
+    const notebook = searchParams.get('notebook') ?? 'personal'
+
+    return (
+        <div className="flex-1 overflow-hidden">
+            <NoteEditor
+                note={null}
+                notebook={notebook}
+                onBack={() => navigate('/chat')}
+                onSaved={() => navigate('/chat')}
+            />
+        </div>
+    )
+}
+
 // ── Main shell (after auth) ──────────────────────────────────────────────────
 
 const MainLayout: React.FC = () => {
     const { theme } = useAppStore()
     const [sidebarOpen, setSidebarOpen] = React.useState(false)
     const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
+    const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 768)
     const sidebarPanelRef = React.useRef<ImperativePanelHandle>(null)
+
+    React.useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth < 768)
+        window.addEventListener('resize', onResize)
+        return () => window.removeEventListener('resize', onResize)
+    }, [])
 
     const toggleSidebar = React.useCallback(() => {
         if (sidebarCollapsed) {
@@ -94,35 +121,54 @@ const MainLayout: React.FC = () => {
         document.documentElement.setAttribute('data-theme', theme)
     }, [theme])
 
+    // Single Routes instance shared between mobile and desktop layouts
+    const pageRoutes = (
+        <Routes>
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/notebook/article/new" element={<NewNotePage />} />
+            <Route path="/notebook/:notebookName" element={<NotebookPage />} />
+            <Route path="/models" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><ModelPanel /></div>} />
+            <Route path="/puzzle" element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
+            <Route path="*" element={<Navigate to="/chat" replace />} />
+        </Routes>
+    )
+
     return (
         <div className="h-screen w-screen bg-bg-layout overflow-hidden text-text flex flex-row">
-            {/* Mobile sidebar overlay */}
-            {sidebarOpen && (
-                <div
-                    className="fixed inset-0 bg-black/40 z-40 md:hidden animate-fade-in"
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
+            {isMobile ? (
+                <>
+                    {/* Mobile sidebar overlay */}
+                    {sidebarOpen && (
+                        <div
+                            className="fixed inset-0 bg-black/40 z-40 animate-fade-in"
+                            onClick={() => setSidebarOpen(false)}
+                        />
+                    )}
 
-            {/* Mobile hamburger button */}
-            <button
-                onClick={() => setSidebarOpen((o) => !o)}
-                className="fixed top-3 left-3 z-50 md:hidden p-2 rounded-lg bg-bg-container/80 backdrop-blur-xl border border-border text-text-secondary hover:bg-fill transition-colors"
-                style={{ boxShadow: 'var(--shadow-soft)' }}
-            >
-                {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
-            </button>
+                    {/* Mobile hamburger button */}
+                    <button
+                        onClick={() => setSidebarOpen((o) => !o)}
+                        className="fixed top-3 left-3 z-50 p-2 rounded-lg bg-bg-container/80 backdrop-blur-xl border border-border text-text-secondary hover:bg-fill transition-colors"
+                        style={{ boxShadow: 'var(--shadow-soft)' }}
+                    >
+                        {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
+                    </button>
 
-            {/* Mobile sidebar drawer */}
-            <div className={cn(
-                'fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-out md:hidden',
-                sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-            )}>
-                <Sidebar onNavigate={() => setSidebarOpen(false)} />
-            </div>
+                    {/* Mobile sidebar drawer */}
+                    <div className={cn(
+                        'fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-out',
+                        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+                    )}>
+                        <Sidebar onNavigate={() => setSidebarOpen(false)} />
+                    </div>
 
-            {/* Desktop: sidebar + content with resizable panels */}
-            <div className="w-full hidden md:flex">
+                    {/* Mobile content */}
+                    <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+                        {pageRoutes}
+                    </div>
+                </>
+            ) : (
+                /* Desktop: sidebar + content with resizable panels */
                 <PanelGroup direction="horizontal" className="w-full">
                     <Panel
                         ref={sidebarPanelRef}
@@ -150,30 +196,11 @@ const MainLayout: React.FC = () => {
                                     <PanelLeftOpen size={15} />
                                 </button>
                             )}
-                            <Routes>
-                                <Route path="/chat" element={<ChatPage />} />
-                                <Route path="/notebook" element={<NotebookPage />} />
-                                <Route path="/notebook/:notebookName" element={<NotebookPage />} />
-                                <Route path="/models" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><ModelPanel /></div>} />
-                                <Route path="/puzzle" element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
-                                <Route path="*" element={<Navigate to="/chat" replace />} />
-                            </Routes>
+                            {pageRoutes}
                         </div>
                     </Panel>
                 </PanelGroup>
-            </div>
-
-            {/* Mobile: full-width content */}
-            <div className="flex-1 min-w-0 md:hidden flex flex-col overflow-hidden">
-                <Routes>
-                    <Route path="/chat" element={<ChatPage />} />
-                    <Route path="/notebook" element={<NotebookPage />} />
-                    <Route path="/notebook/:notebookName" element={<NotebookPage />} />
-                    <Route path="/models" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><ModelPanel /></div>} />
-                    <Route path="/puzzle" element={<div className="flex-1 overflow-hidden"><WaterPuzzle /></div>} />
-                    <Route path="*" element={<Navigate to="/chat" replace />} />
-                </Routes>
-            </div>
+            )}
         </div>
     )
 }

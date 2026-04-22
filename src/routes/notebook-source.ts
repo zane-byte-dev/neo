@@ -6,6 +6,7 @@
 import type Router from '@koa/router';
 import {
     nbListSources,
+    nbListSourcesWithGuides,
     nbGetSourceEntry,
     nbGetSourceGuide,
     nbImportSource,
@@ -34,6 +35,12 @@ export function notebookSourceGet(router: Router): void {
                 const nb = q.notebook?.trim();
                 if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
                 ctx.body = nbListSources(workDir, nb);
+                break;
+            }
+            case 'list-with-guides': {
+                const nb = q.notebook?.trim();
+                if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
+                ctx.body = nbListSourcesWithGuides(workDir, nb);
                 break;
             }
             case 'read': {

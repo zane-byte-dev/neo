@@ -14,6 +14,7 @@ export interface NotebookSlice {
     toggleSourceSelected: (id: string) => void
     sourceGuides: Record<string, SourceGuide | null>
     setSourceGuide: (id: string, guide: SourceGuide | null) => void
+    setSourceGuides: (guides: Record<string, SourceGuide | null>) => void
     notebookMessages: NotebookChatMessage[]
     setNotebookMessages: (messages: NotebookChatMessage[]) => void
     appendNotebookMessage: (message: NotebookChatMessage) => void
@@ -51,6 +52,7 @@ export const createNotebookSlice: StateCreator<AppState, [], [], NotebookSlice> 
     setSourceGuide: (id: string, guide: SourceGuide | null) => set((state) => ({
         sourceGuides: { ...state.sourceGuides, [id]: guide },
     })),
+    setSourceGuides: (guides: Record<string, SourceGuide | null>) => set({ sourceGuides: guides }),
     notebookMessages: [],
     setNotebookMessages: (messages: NotebookChatMessage[]) => set({ notebookMessages: messages }),
     appendNotebookMessage: (message: NotebookChatMessage) => set((state) => ({
