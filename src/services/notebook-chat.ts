@@ -330,6 +330,7 @@ export async function streamNotebookChat(
             model: model || DEFAULT_CHAT_MODEL,
             system: systemPrompt,
             temperature: 0.4,
+            workDir,
         });
         assistantText = (out ?? '').trim();
         if (signal?.aborted) throw new Error('aborted');

@@ -341,6 +341,7 @@ export class LLMClient {
                         fullPrompt,
                         (chunk) => onChunk({ type: 'text', text: chunk }),
                         (chunk) => onChunk({ type: 'thought', text: chunk }),
+                        workDir,
                     );
                     return text || null;
                 } catch (err: unknown) {
@@ -520,7 +521,7 @@ export class LLMClient {
     /** Simple text generation without streaming or tools. */
     async generate(
         prompt: string,
-        options?: { model?: string; system?: string; temperature?: number },
+        options?: { model?: string; system?: string; temperature?: number; workDir?: string },
     ): Promise<string | null> {
         if (!this.enabled) return null;
         const forceFreeOnly = DAILY_COST_LIMIT > 0 && (await getDailyCost()) >= DAILY_COST_LIMIT;
@@ -530,7 +531,7 @@ export class LLMClient {
             const modelId = resolveModel(fallbackAliases[i]);
             if (isAcpModel(modelId)) {
                 const fullPrompt = options?.system ? `${options.system}\n\n${prompt}` : prompt;
-                try { return await acpGenerate(fullPrompt); } catch { continue; }
+                try { return await acpGenerate(fullPrompt, options?.workDir); } catch { continue; }
             }
             try {
                 const { text, usage } = await generateText({
