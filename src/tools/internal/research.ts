@@ -9,12 +9,12 @@
  */
 
 import type { Tool, ToolContext } from '../_base.js';
-import { llmClient, getToolRegistry } from '../../llm/client.js';
+import { LLMClient, getToolRegistry } from '../../llm/client.js';
 import { buildAiToolSubset } from '../../llm/ai-tools.js';
 import { log } from '../../utils/logger.js';
 
 /** Shared LLMClient instance for research synthesis. */
-const llm = llmClient;
+const llm = new LLMClient();
 
 /** Default maximum number of agentic steps for research. */
 const RESEARCH_MAX_STEPS = 15;

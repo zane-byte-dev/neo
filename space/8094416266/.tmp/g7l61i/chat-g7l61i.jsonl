@@ -1,0 +1,4 @@
+{"id":1,"session_id":"g7l61i","user_id":"8094416266","role":"user","content":"你好啊","user_name":null,"timestamp":"2026-04-22T06:36:58.146Z"}
+{"id":2,"session_id":"g7l61i","user_id":"8094416266","role":"assistant","content":"你好。","user_name":null,"timestamp":"2026-04-22T06:36:59.989Z"}
+{"id":3,"session_id":"g7l61i","user_id":"8094416266","role":"user","content":"我有什么需要做的事情？","user_name":null,"timestamp":"2026-04-22T06:37:07.094Z"}
+{"id":4,"session_id":"g7l61i","user_id":"8094416266","role":"assistant","content":"我来查看一下你的待办事项列表。目前没有持久化的待办事项。根据你的背景信息，优先级任务包括：\n\n1. **算力节点落地** - M4 上完成本地 Agent 基础设施搭建（MLX/LiteLLM/向量库）\n2. **工具链收敛** - 通过 LiteLLM 统一管理 CLI 工具，明确 Air/M4 使用场景\n3. **转岗博弈** - 保持耐心，关注绩效季后的特批进展\n4. **健康管理** - 维持作息，避免高强度熬夜\n\n这些是长期目标，不是具体的待办事项。你需要我帮你创建具体的任务清单吗？还是想了解某个优先事项的进展？","user_name":null,"timestamp":"2026-04-22T06:37:19.870Z"}

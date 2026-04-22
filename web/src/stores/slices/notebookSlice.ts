@@ -25,6 +25,8 @@ export interface NotebookSlice {
     setNotebookArtifacts: (artifacts: Artifact[]) => void
     notebookConfig: NotebookConfig | null
     setNotebookConfig: (config: NotebookConfig | null) => void
+    notebookChatInput: string
+    setNotebookChatInput: (input: string) => void
 }
 
 export const createNotebookSlice: StateCreator<AppState, [], [], NotebookSlice> = (set) => ({
@@ -70,4 +72,6 @@ export const createNotebookSlice: StateCreator<AppState, [], [], NotebookSlice> 
     setNotebookArtifacts: (artifacts: Artifact[]) => set({ notebookArtifacts: artifacts }),
     notebookConfig: null,
     setNotebookConfig: (config: NotebookConfig | null) => set({ notebookConfig: config }),
+    notebookChatInput: '',
+    setNotebookChatInput: (input: string) => set({ notebookChatInput: input }),
 })

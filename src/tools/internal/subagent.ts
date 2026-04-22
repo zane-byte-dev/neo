@@ -6,13 +6,13 @@
  */
 
 import type { Tool } from '../_base.js';
-import { llmClient, getToolRegistry } from '../../llm/client.js';
+import { LLMClient, getToolRegistry } from '../../llm/client.js';
 import { buildAiToolSubset } from '../../llm/ai-tools.js';
 import { MAX_SUBAGENT_STEPS } from '../../config.js';
 import { log } from '../../utils/logger.js';
 
 /** Shared LLMClient instance for subagent calls. */
-const llm = llmClient;
+const llm = new LLMClient();
 
 /** Tools that should never be delegated to a subagent */
 const BLOCKED_TOOLS = new Set(['subagent', 'ask_user', 'enter_plan_mode', 'exit_plan_mode']);
