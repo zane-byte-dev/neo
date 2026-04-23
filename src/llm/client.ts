@@ -246,7 +246,7 @@ export class LLMClient {
         let prompt = `[Runtime Context]\n- Current Time: ${now}\n`;
 
         try {
-            const nowMdPath = join(workDir, 'memory', 'NOW.md');
+            const nowMdPath = join(workDir, '.neo', 'memory', 'NOW.md');
             const nowMd = await fs.readFile(nowMdPath, 'utf8');
             if (nowMd.trim()) {
                 prompt += `\n[User Background & Long-term Goals]\n` +

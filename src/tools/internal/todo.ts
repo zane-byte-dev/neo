@@ -3,8 +3,8 @@
  *
  * Lets the agent plan, track, and update a lightweight todo list.
  * Two scopes:
- *   - session (default): stored in {workDir}/.tmp/{sessionId}/todos.json
- *   - persistent: stored in {workDir}/memory/tasks.json — survives across sessions
+ *   - session (default): stored in {workDir}/.neo/projects/{sessionId}/todos.json
+ *   - persistent: stored in {workDir}/.neo/memory/tasks.json — survives across sessions
  */
 import { promises as fs } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -17,11 +17,11 @@ interface TodoItem {
 }
 
 function sessionTodosPath(workDir: string, sessionId: string): string {
-    return join(workDir, '.tmp', sessionId, 'todos.json');
+    return join(workDir, '.neo', 'projects', sessionId, 'todos.json');
 }
 
 function persistentTodosPath(workDir: string): string {
-    return join(workDir, 'memory', 'tasks.json');
+    return join(workDir, '.neo', 'memory', 'tasks.json');
 }
 
 function todosPath(workDir: string, sessionId: string, scope: string): string {

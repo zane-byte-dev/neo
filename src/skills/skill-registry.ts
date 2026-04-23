@@ -62,7 +62,7 @@ export async function loadUserSkills(
     projectRoot: string,
 ): Promise<SkillRegistry> {
     const registry = new SkillRegistry();
-    const skillsDir = resolve(projectRoot, 'space', userId, 'skills');
+    const skillsDir = resolve(projectRoot, 'space', userId, '.neo', 'skills');
 
     let entries: { name: string; isFile(): boolean }[];
     try {

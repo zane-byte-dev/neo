@@ -1,10 +1,10 @@
 /**
- * assets.ts — Serve per-user generated files from workspace .tmp directory.
+ * assets.ts — Serve per-user generated files from workspace .neo/projects directory.
  *
  * Route: GET /api/assets/:sessionId/:filename
  * Auth: enforced by the global _authMiddleware in server.ts (session cookie).
  *
- * Files live at: {userWorkDir}/.tmp/{sessionId}/{filename}
+ * Files live at: {userWorkDir}/.neo/projects/{sessionId}/{filename}
  */
 import { createReadStream, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
@@ -41,7 +41,7 @@ export function assetsRoute(router: Router): void {
 
         const userId = ctx.state.userId as string;
         const userCtx = await calcUser(userId);
-        const filePath = join(userCtx.workDir, '.tmp', sessionId, filename);
+        const filePath = join(userCtx.workDir, '.neo', 'projects', sessionId, filename);
 
         if (!existsSync(filePath)) {
             ctx.status = 404;

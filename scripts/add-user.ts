@@ -62,12 +62,14 @@ const tenants: string[] = tenantsRaw ? tenantsRaw.split(',').map(t => t.trim()).
 
 const _root      = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const spaceDir   = resolve(_root, 'space', workspace);
+const neoDir     = resolve(spaceDir, '.neo');
 const userMd     = resolve(spaceDir, 'USER.md');
 const agentsMd   = resolve(spaceDir, 'AGENTS.md');
 const soulMd     = resolve(spaceDir, 'SOUL.md');
 const toolsMd    = resolve(spaceDir, 'TOOLS.md');
-const memoryDir  = resolve(spaceDir, 'memory');
-const skillsDir  = resolve(spaceDir, 'skills');
+const memoryDir  = resolve(neoDir, 'memory');
+const skillsDir  = resolve(neoDir, 'skills');
+const toolsDir   = resolve(neoDir, 'tools');
 const archivesDir = resolve(spaceDir, 'archives');
 
 // ── 模板内容 ──────────────────────────────────────────────────────────────────
@@ -114,7 +116,7 @@ const TOOLS_MD = `# 工具补充说明
 // ── 核心逻辑 ─────────────────────────────────────────────────────────────────
 
 function createWorkspace() {
-    const dirs = [spaceDir, memoryDir, skillsDir, archivesDir];
+    const dirs = [spaceDir, neoDir, memoryDir, skillsDir, toolsDir, archivesDir];
     for (const dir of dirs) {
         if (existsSync(dir)) {
             console.log(`  [skip] 目录已存在: ${dir}`);

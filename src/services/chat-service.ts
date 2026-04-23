@@ -1,9 +1,9 @@
 /**
  * chat-service.ts — File-based chat session and message persistence.
  *
- * Each user's chat data lives in space/{userId}/.tmp/:
+ * Each user's chat data lives in space/{userId}/.neo/projects/:
  *   chat-sessions.json        ← session metadata index
- *   chat-{sessionId}.jsonl    ← one JSON line per message (append-only)
+ *   {sessionId}/chat-{sessionId}.jsonl  ← one JSON line per message
  *
  * Provides:
  *  - Session lifecycle: create, get current, close
@@ -20,7 +20,7 @@ const _projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..'
 const _spaceDir    = resolve(_projectRoot, 'space');
 
 function tmpDir(userId: string): string {
-    return join(_spaceDir, userId, '.tmp');
+    return join(_spaceDir, userId, '.neo', 'projects');
 }
 
 function sessionsFile(userId: string): string {

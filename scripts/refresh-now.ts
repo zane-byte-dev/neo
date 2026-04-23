@@ -131,8 +131,8 @@ async function refreshNow(currentNow: string, recentLogs: string): Promise<strin
 
 async function refreshUser(userId: string): Promise<void> {
     const workDir  = join(SPACE_DIR, userId);
-    const dailyDir = join(workDir, 'memory', 'daily');
-    const nowPath  = join(workDir, 'memory', 'NOW.md');
+    const dailyDir = join(workDir, '.neo', 'memory', 'daily');
+    const nowPath  = join(workDir, '.neo', 'memory', 'NOW.md');
 
     const dates     = recentDateStrings(DAYS_BACK);
     const logs      = await readRecentLogs(dailyDir, dates);
