@@ -1,7 +1,7 @@
 /**
  * skill-registry.ts — Per-user skill registry.
  *
- * Scans {baseDir}/space/{userId}/skills/*.skill.md,
+ * Scans {workDir}/.neo/skills/*.skill.md,
  * parses each file, and exposes:
  *   - get(name)   → SkillDefinition | undefined
  *   - list()      → SkillDefinition[]
