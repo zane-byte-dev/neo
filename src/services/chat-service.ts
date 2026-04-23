@@ -10,17 +10,16 @@
  *  - Message persistence: add, list
  */
 import { promises as fs } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { generateId } from '../utils/id-generator.js';
+import { userGetWorkDir } from './user-service.js';
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
-const _projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const _spaceDir    = resolve(_projectRoot, 'space');
-
 function tmpDir(userId: string): string {
-    return join(_spaceDir, userId, '.neo', 'projects');
+    const workDir = userGetWorkDir(userId);
+    if (!workDir) throw new Error(`No workspaceDir configured for user "${userId}"`);
+    return join(workDir, '.neo', 'projects');
 }
 
 function sessionsFile(userId: string): string {

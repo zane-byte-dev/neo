@@ -5,7 +5,6 @@
 
 import { config as loadEnv } from 'dotenv';
 loadEnv();
-import { resolve } from 'path';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +61,7 @@ export const MODEL_ALIASES: Record<string, string> = {
 };
 
 // ── File system ──────────────────────────────────────────────────────────────
+
 
 export const DB_PATH = process.env.DB_PATH || './data/neo.db';
 export const SKIP_DIRS = new Set(['.git', 'node_modules', '.tmp', '__pycache__', 'dist', '.cache']);

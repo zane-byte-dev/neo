@@ -4,7 +4,7 @@
  * POST /api/webhook/:userId
  * Body: { message: string, sessionId?: string, secret: string }
  *
- * Authenticates via a per-user webhook secret defined in space/config.json
+ * Authenticates via a per-user webhook secret defined in the USERS env var
  * (users[].webhookSecret). Triggers an agent turn asynchronously and returns
  * the result when complete.
  */
@@ -13,31 +13,10 @@ import { runAgentTurn } from '../services/agent-runner.js';
 import { generateId } from '../utils/id-generator.js';
 import { log } from '../utils/logger.js';
 import { MAX_INPUT_LENGTH } from '../config.js';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { getWebhookSecret } from '../services/user-service.js';
 import { timingSafeEqual } from 'node:crypto';
 
 const MODULE = 'Webhook';
-
-const _projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const _configPath = resolve(_projectRoot, 'space', 'config.json');
-
-interface ConfigUser {
-    id: string;
-    webhookSecret?: string;
-}
-
-function getWebhookSecret(userId: string): string | null {
-    try {
-        const raw = readFileSync(_configPath, 'utf8');
-        const data = JSON.parse(raw) as { users?: ConfigUser[] };
-        const user = (data.users ?? []).find(u => u.id === userId);
-        return user?.webhookSecret ?? null;
-    } catch {
-        return null;
-    }
-}
 
 function safeEqual(a: string, b: string): boolean {
     // Pad to same length to prevent timing side-channel leaking secret length
