@@ -281,7 +281,7 @@ export class LLMClient {
 
         const workDir = context.workDir;
         const systemInstruction = context.systemInstruction || '';
-        const dayCost = DAILY_COST_LIMIT > 0 ? await getDailyCost() : 0;
+        const dayCost = DAILY_COST_LIMIT > 0 ? await getDailyCost(workDir) : 0;
         const forceFreeOnly = DAILY_COST_LIMIT > 0 && dayCost >= DAILY_COST_LIMIT;
         let aliasChain = pickAliases(modelOverride, route, forceFreeOnly);
         if (!aliasChain.length) aliasChain = ['gemma'];
@@ -457,7 +457,7 @@ export class LLMClient {
                                 sessionId: context.sessionId,
                                 systemPrompt: systemInstruction || undefined,
                                 userPrompt: actualUserPrompt || undefined,
-                            }).catch(() => { /* never crash over tracking */ });
+                            }, context.workDir).catch(() => { /* never crash over tracking */ });
                         }
                     }).catch(() => { /* never crash over tracking */ });
 
@@ -524,7 +524,7 @@ export class LLMClient {
         options?: { model?: string; system?: string; temperature?: number; workDir?: string },
     ): Promise<string | null> {
         if (!this.enabled) return null;
-        const forceFreeOnly = DAILY_COST_LIMIT > 0 && (await getDailyCost()) >= DAILY_COST_LIMIT;
+        const forceFreeOnly = DAILY_COST_LIMIT > 0 && (await getDailyCost(options?.workDir ?? '')) >= DAILY_COST_LIMIT;
         const aliases = pickAliases(options?.model, undefined, forceFreeOnly);
         const fallbackAliases = aliases.length ? aliases : ['gemma'];
         for (let i = 0; i < fallbackAliases.length; i++) {
