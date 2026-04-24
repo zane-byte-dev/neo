@@ -1,4 +1,4 @@
-7/**
+/**
  * notebook-chat.ts — Source-grounded chat for notebooks.
  *
  * Implements the NotebookLM-style conversation loop:
@@ -333,12 +333,8 @@ export async function streamNotebookChat(
             model: model || DEFAULT_CHAT_MODEL,
             system: systemPrompt,
             temperature: 0.4,
-<<<<<<< HEAD
             userId,
             context: 'notebook-chat',
-=======
-            workDir,
->>>>>>> 3721a0bd4816e2c1bcc1e6f83683e3e29733e029
         });
         assistantText = (out?.text ?? '').trim();
         if (signal?.aborted) throw new Error('aborted');
@@ -357,9 +353,10 @@ export async function streamNotebookChat(
                 totalTokens: out.usage.totalTokens ?? ((out.usage.inputTokens ?? 0) + (out.usage.outputTokens ?? 0)),
                 estimatedCost: estimateCost(out.model ?? (model || DEFAULT_CHAT_MODEL), out.usage.inputTokens ?? 0, out.usage.outputTokens ?? 0),
                 durationMs: Date.now() - startedAt,
+                fallbackUsed: false,
                 userPrompt: userMessage,
                 systemPrompt,
-            }).catch(() => { /* never crash over tracking */ });
+            }, workDir).catch(() => { /* never crash over tracking */ });
         }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
