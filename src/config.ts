@@ -60,13 +60,6 @@ export const MODEL_ALIASES: Record<string, string> = {
     'claude-haiku':  'claude-haiku-4-5',
 };
 
-// ── File system ──────────────────────────────────────────────────────────────
-
-
-export const DB_PATH = process.env.DB_PATH || './data/neo.db';
-export const SKIP_DIRS = new Set(['.git', 'node_modules', '.tmp', '__pycache__', 'dist', '.cache']);
-export const MAX_SEARCH_DEPTH = 6;
-
 // ── Security ─────────────────────────────────────────────────────────────────
 
 export const DANGEROUS_PATTERNS = [
