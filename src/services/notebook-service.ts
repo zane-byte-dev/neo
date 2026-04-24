@@ -317,18 +317,26 @@ export function nbDelete(workDir: string, id: string): boolean {
 //
 // The functions below add source/note/artifact/config/chat primitives layered
 // on top of the existing per-notebook directory: `{workDir}/notebooks/{name}/`.
-// Sub-resources are stored under dotfile directories so they don't collide
-// with article `.md` files:
+// Sub-resources are stored under .neo/notebooks/{name}/ so they don't mix
+// with the user's own article .md files:
 //
-//   .meta/config.json                      — notebook settings (emoji, chat style)
-//   .meta/source-guides/{sourceId}.json    — AI-generated summary + topics + Qs
-//   .notes/{noteId}.md                     — user/AI notes
-//   .artifacts/{artifactId}.json           — generated artifacts (mindmap/report/audio)
-//   .chat/history.jsonl                    — notebook-scoped chat messages
+//   .neo/notebooks/{name}/.meta/config.json               — notebook settings
+//   .neo/notebooks/{name}/.meta/source-guides/{id}.json   — AI-generated summary
+//   .neo/notebooks/{name}/.notes/{noteId}.md              — user/AI notes
+//   .neo/notebooks/{name}/.artifacts/{artifactId}.json    — generated artifacts
+//   .neo/notebooks/{name}/.chat/history.jsonl             — notebook-scoped chat
+//
+// User article .md files remain at notebooks/{name}/*.md (unchanged).
 //
 // `sourceId` = filename without the `.md` extension (human-readable, stable).
 
+/** System metadata directory for a notebook (inside .neo/). */
 function notebookBaseDir(workDir: string, notebook: string): string {
+    return join(workDir, '.neo', 'notebooks', notebook);
+}
+
+/** Content directory for a notebook (where user .md files live). */
+function notebookContentDir(workDir: string, notebook: string): string {
     return join(workDir, 'notebooks', notebook);
 }
 
@@ -389,15 +397,15 @@ export interface SourceImportInput {
 
 /** List all sources in a notebook with guide-availability flag. */
 export function nbListSources(workDir: string, notebook: string): SourceMeta[] {
-    const dir = notebookBaseDir(workDir, notebook);
-    if (!existsSync(dir)) return [];
+    const contentDir = notebookContentDir(workDir, notebook);
+    if (!existsSync(contentDir)) return [];
 
-    const files = readdirSync(dir, { withFileTypes: true })
+    const files = readdirSync(contentDir, { withFileTypes: true })
         .filter(d => d.isFile() && d.name.endsWith('.md'))
         .map(d => d.name)
         .sort();
 
-    const guideDir = join(dir, '.meta', 'source-guides');
+    const guideDir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
     const existingGuides = existsSync(guideDir)
         ? new Set(readdirSync(guideDir).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, '')))
         : new Set<string>();
@@ -405,7 +413,7 @@ export function nbListSources(workDir: string, notebook: string): SourceMeta[] {
     const results: SourceMeta[] = [];
     for (const filename of files) {
         try {
-            const raw = readFileSync(join(dir, filename), 'utf8');
+            const raw = readFileSync(join(contentDir, filename), 'utf8');
             const { meta } = parseFrontmatter(raw);
             if (meta.archived) continue;  // soft-deleted
             const sourceId = filename.replace(/\.md$/, '');
@@ -487,8 +495,7 @@ export function nbRenameSource(workDir: string, notebook: string, sourceId: stri
     const updated = nbUpdate(workDir, entryId, { title: newTitle });
     if (!updated) return undefined;
 
-    const dir = notebookBaseDir(workDir, notebook);
-    const guideDir = join(dir, '.meta', 'source-guides');
+    const guideDir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
     const hasGuide = existsSync(join(guideDir, `${sourceId}.json`));
 
     let type: SourceMeta['type'] = 'text';
@@ -525,6 +532,20 @@ export function nbGetSourceGuide(workDir: string, notebook: string, sourceId: st
     const file = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides', `${safeFilename(sourceId)}.json`);
     if (!existsSync(file)) return undefined;
     try { return JSON.parse(readFileSync(file, 'utf8')) as SourceGuide; } catch { return undefined; }
+}
+
+/** List all sources along with their guides in one pass — avoids N+1 requests. */
+export function nbListSourcesWithGuides(workDir: string, notebook: string): (SourceMeta & { guide: SourceGuide | null })[] {
+    const sources = nbListSources(workDir, notebook);
+    const guideDir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
+    return sources.map((s) => {
+        const file = join(guideDir, `${safeFilename(s.id)}.json`);
+        let guide: SourceGuide | null = null;
+        if (existsSync(file)) {
+            try { guide = JSON.parse(readFileSync(file, 'utf8')) as SourceGuide; } catch { /* skip */ }
+        }
+        return { ...s, guide };
+    });
 }
 
 export function nbSaveSourceGuide(workDir: string, notebook: string, guide: SourceGuide): void {

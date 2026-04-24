@@ -64,11 +64,11 @@ function parseToolYaml(yamlText: string, toolDir: string): {
 }
 
 /**
- * Load all user tools from {workDir}/.tools/ directory.
+ * Load all user tools from {workDir}/.neo/tools/ directory.
  * Returns a Map<toolName, Tool> ready to be merged into the AI tool set.
  */
 export async function loadUserTools(workDir: string): Promise<Map<string, Tool>> {
-    const toolsDir = join(workDir, '.tools');
+    const toolsDir = join(workDir, '.neo', 'tools');
     const result = new Map<string, Tool>();
 
     let entries: import('node:fs').Dirent[];

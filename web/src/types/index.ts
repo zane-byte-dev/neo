@@ -197,6 +197,7 @@ export interface AppState {
     toggleSourceSelected: (id: string) => void
     sourceGuides: Record<string, SourceGuide | null>
     setSourceGuide: (id: string, guide: SourceGuide | null) => void
+    setSourceGuides: (guides: Record<string, SourceGuide | null>) => void
     notebookMessages: NotebookChatMessage[]
     setNotebookMessages: (messages: NotebookChatMessage[]) => void
     appendNotebookMessage: (message: NotebookChatMessage) => void

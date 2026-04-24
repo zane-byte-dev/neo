@@ -1,0 +1,6 @@
+{"id":1,"session_id":"2v9i6","user_id":"8094416266","role":"user","content":"test","user_name":null,"timestamp":"2026-04-21T15:38:35.928Z"}
+{"id":2,"session_id":"2v9i6","user_id":"8094416266","role":"assistant","content":"收到测试消息。系统运行正常。","user_name":null,"timestamp":"2026-04-21T15:38:37.583Z"}
+{"id":3,"session_id":"2v9i6","user_id":"8094416266","role":"user","content":"he l","user_name":null,"timestamp":"2026-04-21T15:39:09.649Z"}
+{"id":4,"session_id":"2v9i6","user_id":"8094416266","role":"assistant","content":"你好！我是 inkClaw，你的个人 AI 助手。有什么需要我帮你处理的吗？","user_name":null,"timestamp":"2026-04-21T15:39:11.541Z"}
+{"id":5,"session_id":"2v9i6","user_id":"8094416266","role":"user","content":"hello","user_name":null,"timestamp":"2026-04-21T15:39:11.880Z"}
+{"id":6,"session_id":"2v9i6","user_id":"8094416266","role":"assistant","content":"Hello! I'm inkClaw, your personal AI assistant. What can I help you with today?","user_name":null,"timestamp":"2026-04-21T15:39:14.005Z"}

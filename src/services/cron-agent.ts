@@ -17,18 +17,15 @@
  */
 import { schedule as cronSchedule, validate as cronValidate, type ScheduledTask as CronTask } from 'node-cron';
 import { promises as fs } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { runAgentTurn } from '../services/agent-runner.js';
 import { generateId } from '../utils/id-generator.js';
 import { log } from '../utils/logger.js';
+import { userList } from './user-service.js';
+import { refreshNowForAllUsers } from './refresh-now.js';
 import type { TelegramRuntime } from '../platforms/telegram-bot.js';
 
 const MODULE = 'CronAgent';
-
-const _projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const _spaceDir = resolve(_projectRoot, 'space');
 
 interface ScheduledTask {
     id: string;
@@ -41,22 +38,14 @@ interface ScheduledTask {
     telegramChatId?: string;
 }
 
-interface ConfigUser {
-    id: string;
-}
-
 function readAllUserIds(): string[] {
-    try {
-        const raw = readFileSync(join(_spaceDir, 'config.json'), 'utf8');
-        const data = JSON.parse(raw) as { users?: ConfigUser[] };
-        return (data.users ?? []).map(u => u.id);
-    } catch {
-        return [];
-    }
+    return userList().map(u => u.id);
 }
 
 async function readSchedule(userId: string): Promise<ScheduledTask[]> {
-    const schedulePath = join(_spaceDir, userId, 'memory', 'schedule.json');
+    const workDir = userList().find(u => u.id === userId)?.workspaceDir;
+    if (!workDir) return [];
+    const schedulePath = join(workDir, '.neo', 'memory', 'schedule.json');
     try {
         const raw = await fs.readFile(schedulePath, 'utf8');
         const tasks = JSON.parse(raw);
@@ -137,6 +126,16 @@ export async function startCronAgent(telegram?: TelegramRuntime | null): Promise
     } else {
         log.info(MODULE, 'No scheduled tasks found');
     }
+
+    // ── Built-in system tasks ────────────────────────────────────────────────
+
+    // Refresh NOW.md for all users every day at 08:00 Asia/Shanghai
+    const refreshNowJob = cronSchedule('0 8 * * *', async () => {
+        log.info(MODULE, 'Running built-in task: refresh-now');
+        await refreshNowForAllUsers();
+    }, { timezone: 'Asia/Shanghai' });
+    activeJobs.set('system:refresh-now', refreshNowJob);
+    log.info(MODULE, 'Scheduled built-in task: refresh-now (0 8 * * * Asia/Shanghai)');
 }
 
 /**

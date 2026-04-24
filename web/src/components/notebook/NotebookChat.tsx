@@ -36,11 +36,21 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
         sourceGuides,
         notebookConfig,
         setNotebookConfig,
+        notebookChatInput,
+        setNotebookChatInput,
     } = useAppStore()
     const [input, setInput] = React.useState('')
     const [sending, setSending] = React.useState(false)
     const abortRef = React.useRef<AbortController | null>(null)
     const scrollRef = React.useRef<HTMLDivElement>(null)
+
+    // Sync pending input from store (e.g. suggested question clicked in source detail)
+    React.useEffect(() => {
+        if (notebookChatInput) {
+            setInput(notebookChatInput)
+            setNotebookChatInput('')
+        }
+    }, [notebookChatInput, setNotebookChatInput])
 
     const citationMode = notebookConfig?.citationMode ?? 'strict'
     const toggleCitationMode = async () => {
@@ -281,7 +291,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
+                            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                                 e.preventDefault()
                                 sendMessage(input)
                             }

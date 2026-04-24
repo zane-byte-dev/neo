@@ -4,9 +4,6 @@
  * Also owns the per-user UserContext registry:
  *   calcUser(userId)  — build and cache the full runtime context for a user.
  */
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
 import { UserProfileManager } from './user-profile.js';
 import { loadUserPreferences, type UserPreferences } from './user-prefs.js';
 import { loadUserSkills } from '../skills/skill-registry.js';
@@ -25,6 +22,7 @@ export interface UserRow {
     workspace: string;
     tenants: string[];
     web_token: string | null;
+    workspaceDir: string | null;
 }
 
 export function userList(): UserRow[] {
@@ -34,6 +32,7 @@ export function userList(): UserRow[] {
         workspace: u.workspace,
         tenants: u.tenants ?? [],
         web_token: u.webToken ?? null,
+        workspaceDir: u.workspaceDir ?? null,
     }));
 }
 
@@ -47,14 +46,11 @@ export function userGetByTenant(tenantKey: string): UserRow | null {
         workspace: user.workspace,
         tenants: user.tenants ?? [],
         web_token: user.webToken ?? null,
+        workspaceDir: user.workspaceDir ?? null,
     };
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
-
-const _projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const _spaceDir    = resolve(_projectRoot, 'space');
-const _configPath  = resolve(_spaceDir, 'config.json');
 
 interface ConfigUser {
     id: string;
@@ -62,16 +58,28 @@ interface ConfigUser {
     workspace: string;
     tenants?: string[];
     webToken?: string | null;
+    webhookSecret?: string;
+    workspaceDir?: string;
 }
 
 function _readConfigUsers(): ConfigUser[] {
     try {
-        const raw = readFileSync(_configPath, 'utf8');
-        const data = JSON.parse(raw) as { users?: ConfigUser[] };
-        return data.users ?? [];
+        const raw = process.env.USERS;
+        if (!raw) return [];
+        return JSON.parse(raw) as ConfigUser[];
     } catch {
         return [];
     }
+}
+
+/** Get the webhook secret for a user (from USERS env var). */
+export function getWebhookSecret(userId: string): string | null {
+    return _readConfigUsers().find(u => u.id === userId)?.webhookSecret ?? null;
+}
+
+/** Get the absolute workspace directory for a user (from USERS env var). */
+export function userGetWorkDir(userId: string): string | null {
+    return _readConfigUsers().find(u => u.id === userId)?.workspaceDir ?? null;
 }
 
 /** Get a user by web token. */
@@ -85,10 +93,9 @@ export function userGetByWebToken(token: string): UserRow | null {
         workspace: u.workspace,
         tenants:   u.tenants ?? [],
         web_token: u.webToken ?? null,
+        workspaceDir: u.workspaceDir ?? null,
     };
 }
-
-// ── Per-user runtime context ──────────────────────────────────────────────────
 
 export interface UserContext {
     userId: UserId;
@@ -133,11 +140,12 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
         return _contextCache.get(userId)!;
     }
 
-    const workDir = resolveUserWorkspaceDir(_spaceDir, userId);
+    const workDir = userGetWorkDir(userId);
+    if (!workDir) throw new Error(`No workspaceDir configured for user "${userId}"`);
 
     const [systemInstruction, skillRegistry, userTools, mcpTools, preferences] = await Promise.all([
         buildTenantSystemInstruction(workDir),
-        loadUserSkills(userId, _projectRoot),
+        loadUserSkills(workDir, userId),
         loadUserTools(workDir),
         loadMcpTools(workDir),
         loadUserPreferences(workDir),

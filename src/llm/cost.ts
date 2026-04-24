@@ -3,8 +3,9 @@ import { appendFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Tier } from './routing-config.js';
 
-const USAGE_FILE = join(process.cwd(), 'data', 'usage.jsonl');
-let usageDirReady = false;
+function usageFile(workDir: string): string {
+    return join(workDir, '.neo', 'usage.jsonl');
+}
 
 export const COST_PER_1K: Record<string, { input: number; output: number }> = {
     'gemini-3-flash-preview': { input: 0.0, output: 0.0 },
@@ -45,13 +46,6 @@ export interface UsageRecord {
     userPrompt?: string;
 }
 
-function ensureUsageDir(): void {
-    if (!usageDirReady) {
-        mkdirSync(join(process.cwd(), 'data'), { recursive: true });
-        usageDirReady = true;
-    }
-}
-
 function toDateKey(ts: number): string {
     return new Date(ts).toISOString().slice(0, 10);
 }
@@ -69,15 +63,16 @@ export function isFreeModel(model: string): boolean {
     return !pricing || (pricing.input === 0 && pricing.output === 0);
 }
 
-export async function appendUsageRecord(record: UsageRecord): Promise<void> {
-    ensureUsageDir();
-    await appendFile(USAGE_FILE, `${JSON.stringify(record)}\n`, 'utf8');
+export async function appendUsageRecord(record: UsageRecord, workDir: string): Promise<void> {
+    const file = usageFile(workDir);
+    mkdirSync(join(workDir, '.neo'), { recursive: true });
+    await appendFile(file, `${JSON.stringify(record)}\n`, 'utf8');
 }
 
-export async function getDailyCost(dateKey = toDateKey(Date.now())): Promise<number> {
+export async function getDailyCost(workDir: string, dateKey = toDateKey(Date.now())): Promise<number> {
     let content = '';
     try {
-        content = await readFile(USAGE_FILE, 'utf8');
+        content = await readFile(usageFile(workDir), 'utf8');
     } catch {
         return 0;
     }

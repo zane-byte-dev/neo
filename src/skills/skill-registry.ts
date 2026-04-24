@@ -1,7 +1,7 @@
 /**
  * skill-registry.ts — Per-user skill registry.
  *
- * Scans {baseDir}/space/{userId}/skills/*.skill.md,
+ * Scans {workDir}/.neo/skills/*.skill.md,
  * parses each file, and exposes:
  *   - get(name)   → SkillDefinition | undefined
  *   - list()      → SkillDefinition[]
@@ -9,7 +9,7 @@
 
 import { readdir, stat } from 'node:fs/promises';
 import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { parseSkillFile } from './skill-parser.js';
 import type { SkillDefinition } from './skill-parser.js';
 import { log } from '../utils/logger.js';
@@ -48,21 +48,21 @@ export class SkillRegistry {
  * Scan the user's skills directory, parse all *.skill.md files, and return
  * a populated SkillRegistry instance.
  *
- * Skills directory: {projectRoot}/space/{userId}/skills/
+ * Skills directory: {workDir}/.neo/skills/
  *
  * Supports two file layouts:
  *   - Flat:  skills/brief.skill.md
  *   - Nested: skills/xifeng/skill.md  (subdirectory with skill.md)
  *
- * @param userId     The user identifier (matches space/{userId}/)
- * @param projectRoot Absolute path to the project root (passed in to avoid import.meta coupling)
+ * @param workDir Absolute path to the user's workspace directory
+ * @param userId  User identifier used for log messages
  */
 export async function loadUserSkills(
+    workDir: string,
     userId: string,
-    projectRoot: string,
 ): Promise<SkillRegistry> {
     const registry = new SkillRegistry();
-    const skillsDir = resolve(projectRoot, 'space', userId, 'skills');
+    const skillsDir = join(workDir, '.neo', 'skills');
 
     let entries: { name: string; isFile(): boolean }[];
     try {

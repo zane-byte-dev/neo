@@ -97,7 +97,7 @@ export const generateVideoTool: Tool = {
 
             // Save to disk
             const filename = `vid_${Date.now()}.mp4`;
-            const dir = join(workDir, '.tmp', sessionId);
+            const dir = join(workDir, '.neo', 'projects', sessionId);
             await fs.mkdir(dir, { recursive: true });
             const filePath = join(dir, filename);
 

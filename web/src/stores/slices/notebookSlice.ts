@@ -14,6 +14,7 @@ export interface NotebookSlice {
     toggleSourceSelected: (id: string) => void
     sourceGuides: Record<string, SourceGuide | null>
     setSourceGuide: (id: string, guide: SourceGuide | null) => void
+    setSourceGuides: (guides: Record<string, SourceGuide | null>) => void
     notebookMessages: NotebookChatMessage[]
     setNotebookMessages: (messages: NotebookChatMessage[]) => void
     appendNotebookMessage: (message: NotebookChatMessage) => void
@@ -24,6 +25,8 @@ export interface NotebookSlice {
     setNotebookArtifacts: (artifacts: Artifact[]) => void
     notebookConfig: NotebookConfig | null
     setNotebookConfig: (config: NotebookConfig | null) => void
+    notebookChatInput: string
+    setNotebookChatInput: (input: string) => void
 }
 
 export const createNotebookSlice: StateCreator<AppState, [], [], NotebookSlice> = (set) => ({
@@ -51,6 +54,7 @@ export const createNotebookSlice: StateCreator<AppState, [], [], NotebookSlice> 
     setSourceGuide: (id: string, guide: SourceGuide | null) => set((state) => ({
         sourceGuides: { ...state.sourceGuides, [id]: guide },
     })),
+    setSourceGuides: (guides: Record<string, SourceGuide | null>) => set({ sourceGuides: guides }),
     notebookMessages: [],
     setNotebookMessages: (messages: NotebookChatMessage[]) => set({ notebookMessages: messages }),
     appendNotebookMessage: (message: NotebookChatMessage) => set((state) => ({
@@ -68,4 +72,6 @@ export const createNotebookSlice: StateCreator<AppState, [], [], NotebookSlice> 
     setNotebookArtifacts: (artifacts: Artifact[]) => set({ notebookArtifacts: artifacts }),
     notebookConfig: null,
     setNotebookConfig: (config: NotebookConfig | null) => set({ notebookConfig: config }),
+    notebookChatInput: '',
+    setNotebookChatInput: (input: string) => set({ notebookChatInput: input }),
 })

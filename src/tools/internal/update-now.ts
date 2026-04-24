@@ -64,13 +64,13 @@ export const updateNowTool: Tool = {
     },
 
     handler: async (args, workDir) => {
-        const nowPath = join(workDir, 'memory', 'NOW.md');
+        const nowPath = join(workDir, '.neo', 'memory', 'NOW.md');
         const action = String(args.action ?? '').trim();
 
         if (action === 'read') {
             try {
                 const content = await fs.readFile(nowPath, 'utf8');
-                return `🗒️ memory/NOW.md:\n\n${content}`;
+                return `🗒️ .neo/memory/NOW.md:\n\n${content}`;
             } catch {
                 return '（NOW.md 尚未创建）';
             }
@@ -83,7 +83,7 @@ export const updateNowTool: Tool = {
         const content = String(args.content ?? '').trim();
         if (!content) return `[Error] ${action} 需要提供 content`;
 
-        await fs.mkdir(join(workDir, 'memory'), { recursive: true });
+        await fs.mkdir(join(workDir, '.neo', 'memory'), { recursive: true });
 
         let next: string;
         if (action === 'write') {

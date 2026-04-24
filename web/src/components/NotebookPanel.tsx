@@ -1,5 +1,5 @@
 import React from 'react'
-import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X, Plus, Pencil, Sparkles } from 'lucide-react'
+import { Search, BookOpen, ArrowLeft, Calendar, User, Tag, X, Plus, Pencil, Sparkles, ArrowUpDown } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { notebookList, notebookSearch, notebookRead, notebookListNotebooks } from '../api'
@@ -100,7 +100,8 @@ export const NotebookPanel: React.FC<{
     fullPage?: boolean
     urlNotebook?: string
     navigate?: (path: string) => void
-}> = ({ fullPage, urlNotebook, navigate }) => {
+    autoNewNote?: boolean
+}> = ({ fullPage, urlNotebook, navigate, autoNewNote }) => {
     const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries, activeNotebook, setActiveNotebook } = useAppStore()
     const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [selectedNotebook, setSelectedNotebook] = React.useState<string | undefined>(undefined)
@@ -122,7 +123,10 @@ export const NotebookPanel: React.FC<{
     React.useEffect(() => {
         if (urlNotebook && urlNotebook !== activeNotebook) {
             setSelectedNotebook(urlNotebook)
-            setActiveNotebook(urlNotebook)
+            // When autoNewNote is set, stay in list mode (don't enter workspace)
+            if (!autoNewNote) {
+                setActiveNotebook(urlNotebook)
+            }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [urlNotebook])
@@ -152,6 +156,7 @@ export const NotebookPanel: React.FC<{
         if (activeNotebook) return // skip when in workspace mode
         setLoading(true)
         setError('')
+        setNotebookEntries([]) // clear stale entries immediately
         notebookList(selectedNotebook)
             .then((data) => setNotebookEntries(data as NoteEntry[]))
             .catch((e) => setError(String(e)))
@@ -175,9 +180,18 @@ export const NotebookPanel: React.FC<{
         }, 300)
     }, [searchQuery, selectedNotebook])
 
+    // Auto-open new note editor when navigated with ?newNote=1
+    const autoNewNoteHandled = React.useRef(false)
+    React.useEffect(() => {
+        if (autoNewNote && selectedNotebook && !autoNewNoteHandled.current) {
+            autoNewNoteHandled.current = true
+            setEditing('new')
+        }
+    }, [autoNewNote, selectedNotebook])
+
     // ── Notebook workspace mode ──────────────────────────────────────────
     if (activeNotebook) {
-        return <NotebookWorkspace notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
+        return <NotebookWorkspace key={activeNotebook} notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
     }
 
     const displayList = inSearch ? results : notebookEntries
@@ -251,7 +265,7 @@ export const NotebookPanel: React.FC<{
                         totalCount={notebookEntries.length}
                         onSelect={setSelectedNote}
                         selectedId={null}
-                        onNew={() => setEditing('new')}
+                        onNew={selectedNotebook && navigate ? () => navigate(`/notebook/article/new?notebook=${encodeURIComponent(selectedNotebook)}`) : () => setEditing('new')}
                         onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
                     />
                 </div>
@@ -275,7 +289,7 @@ export const NotebookPanel: React.FC<{
                         totalCount={notebookEntries.length}
                         onSelect={setSelectedNote}
                         selectedId={selectedNote?.id ?? null}
-                        onNew={() => setEditing('new')}
+                        onNew={selectedNotebook && navigate ? () => navigate(`/notebook/article/new?notebook=${encodeURIComponent(selectedNotebook)}`) : () => setEditing('new')}
                         onOpenWorkspace={selectedNotebook ? () => setActiveNotebook(selectedNotebook) : undefined}
                     />
                 </div>
@@ -317,6 +331,14 @@ export const NotebookPanel: React.FC<{
 
 // ── Shared list UI ────────────────────────────────────────────────────────────
 
+type NoteSort = 'default' | 'date-desc' | 'date-asc' | 'title'
+const NOTE_SORT_LABELS: Record<NoteSort, string> = {
+    default: '默认',
+    'date-desc': '最新优先',
+    'date-asc': '最早优先',
+    title: '标题',
+}
+
 const NotebookList: React.FC<{
     notebooks: string[]
     selectedNotebook: string | undefined
@@ -332,7 +354,28 @@ const NotebookList: React.FC<{
     selectedId: string | null
     onNew?: () => void
     onOpenWorkspace?: () => void
-}> = ({ notebooks, selectedNotebook, onNotebookChange, entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew, onOpenWorkspace }) => (
+}> = ({ notebooks, selectedNotebook, onNotebookChange, entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew, onOpenWorkspace }) => {
+    const [sortBy, setSortBy] = React.useState<NoteSort>('default')
+
+    const sortedEntries = React.useMemo(() => {
+        const arr = [...entries]
+        switch (sortBy) {
+            case 'date-desc':
+                arr.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+                break
+            case 'date-asc':
+                arr.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+                break
+            case 'title':
+                arr.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+                break
+            default:
+                break
+        }
+        return arr
+    }, [entries, sortBy])
+
+    return (
     <>
         {/* Header */}
         <div className="h-14 border-b border-border flex items-center gap-2 px-5 shrink-0 bg-bg-container/80 backdrop-blur-xl"
@@ -413,6 +456,23 @@ const NotebookList: React.FC<{
             </div>
         </div>
 
+        {/* Sort + count row */}
+        {!inSearch && (
+            <div className="px-3 py-1.5 border-b border-border shrink-0 flex items-center gap-1.5">
+                <ArrowUpDown size={10} className="text-text-quaternary" />
+                <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as NoteSort)}
+                    className="text-[10px] bg-transparent text-text-tertiary border-none focus:outline-none cursor-pointer"
+                >
+                    {Object.entries(NOTE_SORT_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                    ))}
+                </select>
+                <span className="ml-auto text-[10px] text-text-quaternary">{entries.length} 篇</span>
+            </div>
+        )}
+
         {/* List */}
         <div className={cn('flex-1 overflow-y-auto custom-scrollbar', !entries.length && 'flex items-center justify-center')}>
             {loading && (
@@ -434,7 +494,7 @@ const NotebookList: React.FC<{
                     <p className="text-xs text-text-quaternary">{inSearch ? t('noResults') : t('noEntries')}</p>
                 </div>
             )}
-            {entries.map((entry) => (
+            {!loading && sortedEntries.map((entry) => (
                 <div
                     key={entry.id}
                     onClick={() => onSelect(entry)}
@@ -455,4 +515,5 @@ const NotebookList: React.FC<{
             ))}
         </div>
     </>
-)
+    )
+}

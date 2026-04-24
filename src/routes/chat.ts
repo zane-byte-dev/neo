@@ -72,7 +72,7 @@ export function chatRoute(router: Router): void {
                 onImage: async (data, mimeType, caption) => {
                     const ext = mimeType.includes('png') ? 'png' : 'jpg';
                     const filename = `gen_${Date.now()}.${ext}`;
-                    const dir = join(userCtx.workDir, '.tmp', sessionId);
+                    const dir = join(userCtx.workDir, '.neo', 'projects', sessionId);
                     await fs.mkdir(dir, { recursive: true });
                     await fs.writeFile(join(dir, filename), Buffer.from(data, 'base64'));
                     const url = `/api/assets/${sessionId}/${filename}`;

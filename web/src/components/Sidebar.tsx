@@ -1,5 +1,5 @@
 import React from 'react'
-import { Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, Droplets, ChevronDown, ChevronRight, LayoutGrid, Cpu, MessageSquarePlus, PanelLeftClose } from 'lucide-react'
+import { Pin, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, Droplets, ChevronDown, ChevronRight, LayoutGrid, Cpu, MessageSquarePlus, PanelLeftClose, Plus } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
@@ -26,6 +26,8 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const [appsOpen, setAppsOpen] = React.useState(false)
     const [notebookOpen, setNotebookOpen] = React.useState(false)
     const [notebooks, setNotebooks] = React.useState<string[]>([])
+    const [addingNotebook, setAddingNotebook] = React.useState(false)
+    const [newNotebookName, setNewNotebookName] = React.useState('')
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
     const [me, setMe] = React.useState<MeInfo | null>(null)
     const [searchQuery, setSearchQuery] = React.useState('')
@@ -213,39 +215,70 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                     >
                         <BookOpen size={15} className="shrink-0 text-text-tertiary" />
                         <span className="flex-1 text-left">{t('notebook')}</span>
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); setNotebookOpen(true); setAddingNotebook(true) }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setNotebookOpen(true); setAddingNotebook(true) } }}
+                            className="p-0.5 rounded hover:bg-fill transition-colors text-text-quaternary hover:text-text-secondary"
+                            title={t('addNotebook')}
+                        >
+                            <Plus size={12} />
+                        </span>
                         {notebookOpen ? <ChevronDown size={13} className="text-text-quaternary" /> : <ChevronRight size={13} className="text-text-quaternary" />}
                     </button>
                     {notebookOpen && (
                         <div className="ml-5 mt-0.5 space-y-0.5 border-l border-border pl-2">
-                            <Link
-                                to="/notebook"
-                                onClick={onNavigate}
-                                className={cn(
-                                    'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150',
-                                    location.pathname === '/notebook'
-                                        ? 'bg-sidebar-active text-text font-medium'
-                                        : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
-                                )}
-                            >
-                                <BookOpen size={12} className="shrink-0" />
-                                <span>{t('allNotes') ?? 'All notes'}</span>
-                            </Link>
                             {notebooks.map((nb) => (
-                                <Link
-                                    key={nb}
-                                    to={`/notebook/${encodeURIComponent(nb)}`}
-                                    onClick={onNavigate}
-                                    className={cn(
-                                        'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150',
-                                        location.pathname === `/notebook/${encodeURIComponent(nb)}`
-                                            ? 'bg-sidebar-active text-text font-medium'
-                                            : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
-                                    )}
-                                >
-                                    <span className="w-3 h-3 shrink-0 flex items-center justify-center text-text-quaternary text-[10px]">#</span>
-                                    <span className="truncate">{nb}</span>
-                                </Link>
+                                <div key={nb} className="group relative flex items-center">
+                                    <Link
+                                        to={`/notebook/${encodeURIComponent(nb)}`}
+                                        onClick={onNavigate}
+                                        className={cn(
+                                            'flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 min-w-0',
+                                            location.pathname === `/notebook/${encodeURIComponent(nb)}`
+                                                ? 'bg-sidebar-active text-text font-medium'
+                                                : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
+                                        )}
+                                    >
+                                        <span className="w-3 h-3 shrink-0 flex items-center justify-center text-text-quaternary text-[10px]">#</span>
+                                        <span className="truncate">{nb}</span>
+                                    </Link>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); navigate(`/notebook/article/new?notebook=${encodeURIComponent(nb)}`); onNavigate?.() }}
+                                        className="opacity-0 group-hover:opacity-100 shrink-0 mr-1 p-0.5 rounded hover:bg-fill transition-all text-text-quaternary hover:text-text-secondary"
+                                        title={t('newNote')}
+                                    >
+                                        <Plus size={12} />
+                                    </button>
+                                </div>
                             ))}
+                            {addingNotebook && (
+                                <div className="flex items-center gap-1 px-2.5 py-1">
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={newNotebookName}
+                                        onChange={(e) => setNewNotebookName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && newNotebookName.trim()) {
+                                                const name = newNotebookName.trim()
+                                                if (!notebooks.includes(name)) setNotebooks([...notebooks, name])
+                                                navigate(`/notebook/article/new?notebook=${encodeURIComponent(name)}`)
+                                                setNewNotebookName('')
+                                                setAddingNotebook(false)
+                                                onNavigate?.()
+                                            } else if (e.key === 'Escape') {
+                                                setAddingNotebook(false)
+                                                setNewNotebookName('')
+                                            }
+                                        }}
+                                        onBlur={() => { setAddingNotebook(false); setNewNotebookName('') }}
+                                        placeholder={t('notebookNamePlaceholder')}
+                                        className="flex-1 text-xs bg-transparent border-b border-primary-mint/50 focus:outline-none py-0.5 text-text placeholder:text-text-quaternary"
+                                    />
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

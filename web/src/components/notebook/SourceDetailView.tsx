@@ -4,7 +4,9 @@
  * Features: collapsible guide section + raw content, in-content search (Ctrl+F style).
  */
 import React from 'react'
-import { ArrowLeft, FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, HelpCircle, Search, X, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, Search, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { useAppStore } from '../../stores/useAppStore'
 import { notebookGetSource, notebookGetSourceGuide, notebookGenerateSourceGuide } from '../../api'
 import type { SourceMeta, SourceGuide } from '../../types'
@@ -106,9 +108,6 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
             {/* Header */}
             <div className="px-4 py-3 border-b border-border shrink-0 bg-bg-container">
                 <div className="flex items-center gap-2 mb-2">
-                    <button onClick={onBack} className="p-1 hover:bg-fill-secondary rounded-lg transition-colors" title="返回对话">
-                        <ArrowLeft size={16} />
-                    </button>
                     <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
                         <Icon size={12} />
                         <span>{TYPE_LABEL[source.type] ?? source.type}</span>
@@ -148,19 +147,19 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) 
             {/* Body */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
                 {/* Guide card */}
-                <div className="mx-3 mt-4 mb-2 rounded-2xl border border-border bg-bg-container shadow-sm overflow-hidden">
+                <div className="mx-3 mt-3 mb-2 rounded-xl border border-border bg-bg-container overflow-hidden">
                     <button
                         onClick={() => setGuideCollapsed((v) => !v)}
-                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-fill-secondary/50 transition-colors"
+                        className="w-full px-3 py-2 flex items-center justify-between hover:bg-fill-secondary/50 transition-colors"
                     >
-                        <div className="flex items-center gap-2">
-                            <BookOpen size={14} className="text-primary-mint" />
-                            <span className="text-sm font-semibold text-text">摘要要点</span>
+                        <div className="flex items-center gap-1.5">
+                            <BookOpen size={13} className="text-primary-mint" />
+                            <span className="text-xs font-semibold text-text">来源指南</span>
                         </div>
                         {guideCollapsed ? (
-                            <ChevronRight size={15} className="text-text-quaternary" />
+                            <ChevronRight size={13} className="text-text-quaternary" />
                         ) : (
-                            <ChevronDown size={15} className="text-text-quaternary" />
+                            <ChevronDown size={13} className="text-text-quaternary" />
                         )}
                     </button>
                     {!guideCollapsed && (
@@ -192,71 +191,59 @@ const GuideView: React.FC<{
 }> = ({ guide, loading, onGenerate }) => {
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-16 text-text-quaternary">
-                <Loader2 size={18} className="animate-spin mr-2" />
-                <span className="text-sm">正在生成摘要…</span>
+            <div className="flex items-center justify-center py-6 text-text-quaternary">
+                <Loader2 size={14} className="animate-spin mr-1.5" />
+                <span className="text-xs">正在生成摘要…</span>
             </div>
         )
     }
 
     if (!guide) {
         return (
-            <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                <Sparkles size={28} className="text-text-quaternary mb-3" />
-                <p className="text-sm text-text-tertiary mb-4">尚未生成摘要，AI 将分析此来源并提取关键信息。</p>
+            <div className="flex items-center justify-between px-3 py-2.5">
+                <p className="text-xs text-text-tertiary">尚未生成摘要</p>
                 <button
                     onClick={onGenerate}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary-mint text-white rounded-xl hover:bg-primary-mint/90 transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-1 text-[11px] bg-primary-mint text-white rounded-lg hover:bg-primary-mint/90 transition-colors"
                 >
-                    <Sparkles size={14} />
-                    生成摘要
+                    <Sparkles size={11} />
+                    生成
                 </button>
             </div>
         )
     }
 
     return (
-        <div className="p-4 space-y-4">
+        <div className="px-3 py-2.5 space-y-2">
             {/* Summary */}
-            <div className="rounded-xl bg-fill-secondary/50 px-4 py-3">
-                <p className="text-sm text-text leading-relaxed whitespace-pre-wrap">{guide.summary}</p>
-            </div>
-
-            {/* Key topics */}
-            {guide.keyTopics.length > 0 && (
-                <section>
-                    <h3 className="text-[11px] font-semibold text-text-tertiary uppercase tracking-widest mb-2">关键主题</h3>
-                    <div className="flex flex-wrap gap-1.5">
-                        {guide.keyTopics.map((topic, i) => (
-                            <span key={i} className="text-xs bg-primary-mint/10 text-primary-mint px-2.5 py-1 rounded-full">
-                                {topic}
-                            </span>
-                        ))}
-                    </div>
-                </section>
-            )}
+            <p className="text-[12px] text-text leading-relaxed markdown-content">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{guide.summary}</ReactMarkdown>
+            </p>
 
             {/* Suggested questions */}
             {guide.suggestedQuestions.length > 0 && (
-                <section>
-                    <h3 className="text-[11px] font-semibold text-text-tertiary uppercase tracking-widest mb-2">建议提问</h3>
-                    <div className="space-y-1.5">
-                        {guide.suggestedQuestions.map((q, i) => (
-                            <div key={i} className="flex items-start gap-2 text-sm text-text-secondary bg-fill-secondary/40 rounded-xl px-3 py-2">
-                                <HelpCircle size={13} className="text-primary-mint mt-0.5 shrink-0" />
-                                <span className="leading-snug">{q}</span>
-                            </div>
-                        ))}
-                    </div>
-                </section>
+                <SuggestedQuestions questions={guide.suggestedQuestions} />
             )}
+        </div>
+    )
+}
 
-            {/* Generated at */}
-            {guide.generatedAt && (
-                <p className="text-[10px] text-text-quaternary pt-1">
-                    生成于 {new Date(guide.generatedAt).toLocaleString('zh-CN')}
-                </p>
-            )}
+// ── Suggested questions sub-component ─────────────────────────────────────────
+
+const SuggestedQuestions: React.FC<{ questions: string[] }> = ({ questions }) => {
+    const { setNotebookChatInput } = useAppStore()
+    return (
+        <div className="flex flex-wrap gap-1">
+            {questions.map((q, i) => (
+                <button
+                    key={i}
+                    onClick={() => setNotebookChatInput(q)}
+                    className="text-[11px] text-text-secondary hover:text-primary-mint bg-fill-secondary hover:bg-primary-mint/8 border border-border rounded-full px-2.5 py-0.5 transition-colors truncate max-w-[160px]"
+                    title={q}
+                >
+                    {q}
+                </button>
+            ))}
         </div>
     )
 }
@@ -316,11 +303,19 @@ const ContentView: React.FC<{ content: string; searchTerm?: string; matchIndex?:
         )
     }
 
+    if (searchTerm) {
+        return (
+            <div className="p-4" ref={containerRef}>
+                <pre className="text-sm text-text leading-relaxed whitespace-pre-wrap font-sans break-words">
+                    {highlightText(content, searchTerm, matchIndex)}
+                </pre>
+            </div>
+        )
+    }
+
     return (
-        <div className="p-4" ref={containerRef}>
-            <pre className="text-sm text-text leading-relaxed whitespace-pre-wrap font-sans break-words">
-                {searchTerm ? highlightText(content, searchTerm, matchIndex) : content}
-            </pre>
+        <div className="p-4 markdown-content text-sm" ref={containerRef}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>
     )
 }

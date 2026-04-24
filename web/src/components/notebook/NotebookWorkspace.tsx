@@ -49,12 +49,15 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     // Only animate when collapsing (shrinking), not when expanding (avoids text reflow jitter)
     const [sourceAnimating, setSourceAnimating] = React.useState(false)
     const [studioAnimating, setStudioAnimating] = React.useState(false)
+    // Resizable panel widths (px)
+    const [sourceWidth, setSourceWidth] = React.useState(288)   // 18rem ≈ w-72
+    const [studioWidth, setStudioWidth] = React.useState(320)   // 20rem ≈ w-80
+    const dragRef = React.useRef<{ handle: 'source' | 'studio'; startX: number; startWidth: number } | null>(null)
     const { selectedModel, setSelectedModel, sources } = useAppStore()
 
     const collapseSource = React.useCallback(() => {
         setSourceAnimating(true)
         setSourceCollapsed(true)
-        // Remove animation class after transition ends
         setTimeout(() => setSourceAnimating(false), 300)
     }, [])
     const expandSource = React.useCallback(() => {
@@ -69,6 +72,37 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         setStudioCollapsed(false)
     }, [])
 
+    // Global mouse handlers for panel drag-resize
+    React.useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            const drag = dragRef.current
+            if (!drag) return
+            const delta = e.clientX - drag.startX
+            if (drag.handle === 'source') {
+                setSourceWidth(Math.max(180, Math.min(600, drag.startWidth + delta)))
+            } else {
+                setStudioWidth(Math.max(180, Math.min(600, drag.startWidth - delta)))
+            }
+        }
+        const onUp = () => { dragRef.current = null; document.body.style.cursor = '' }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+        return () => {
+            window.removeEventListener('mousemove', onMove)
+            window.removeEventListener('mouseup', onUp)
+        }
+    }, [])
+
+    const startDrag = React.useCallback((handle: 'source' | 'studio', e: React.MouseEvent) => {
+        e.preventDefault()
+        dragRef.current = {
+            handle,
+            startX: e.clientX,
+            startWidth: handle === 'source' ? sourceWidth : studioWidth,
+        }
+        document.body.style.cursor = 'col-resize'
+    }, [sourceWidth, studioWidth])
+
     React.useEffect(() => {
         const handle = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
         handle()
@@ -76,12 +110,13 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         return () => window.removeEventListener('resize', handle)
     }, [])
 
-    // Citation click handler — navigate to SourceDetailView
+    // Citation click handler — navigate to SourceDetailView (in source panel)
     const handleCitationClick = React.useCallback((cited: { n: number; sourceId: string; title: string }) => {
         const found = sources.find((s) => s.id === cited.sourceId)
         if (found) {
             setViewingSource(found)
-            if (isMobile) setMobileTab('chat')
+            if (isMobile) setMobileTab('sources')
+            else { setSourceCollapsed(false) } // expand source panel on desktop
         }
     }, [sources, isMobile])
 
@@ -107,11 +142,11 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                     </select>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                    {mobileTab === 'sources' && <SourcePanel notebook={notebook} onSelectSource={(s) => { setViewingSource(s); setMobileTab('chat') }} />}
-                    {mobileTab === 'chat' && (viewingSource
+                    {mobileTab === 'sources' && (viewingSource
                         ? <SourceDetailView notebook={notebook} source={viewingSource} onBack={() => setViewingSource(null)} />
-                        : <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />
+                        : <SourcePanel notebook={notebook} onSelectSource={(s) => { setViewingSource(s) }} />
                     )}
+                    {mobileTab === 'chat' && <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />}
                     {mobileTab === 'studio'  && <StudioPanel notebook={notebook} />}
                 </div>
                 <div className="h-14 border-t border-border flex items-center shrink-0 bg-bg-container">
@@ -139,13 +174,15 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
 
     // Desktop: 3-card layout with collapsible source & studio panels
     return (
-        <div className="flex h-full bg-bg-layout gap-2 p-2 overflow-hidden">
+        <div className="flex h-full bg-bg-layout p-2 overflow-hidden select-none">
             {/* Source card */}
-            <div className={cn(
-                'flex flex-col bg-bg-container rounded-2xl border border-border shrink-0 overflow-hidden',
-                sourceAnimating && 'transition-all duration-300',
-                sourceCollapsed ? 'w-[52px]' : 'w-72'
-            )}>
+            <div
+                className={cn(
+                    'flex flex-col bg-bg-container rounded-2xl border border-border shrink-0 overflow-hidden',
+                    sourceAnimating && 'transition-all duration-300',
+                )}
+                style={{ width: sourceCollapsed ? 52 : sourceWidth }}
+            >
                 {sourceCollapsed ? (
                     /* Collapsed source: icon per source item */
                     <div className="flex flex-col items-center h-full">
@@ -174,7 +211,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                                 return (
                                     <button
                                         key={s.id}
-                                        onClick={() => setViewingSource(s)}
+                                        onClick={() => { setViewingSource(s); expandSource() }}
                                         className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-text-secondary transition-colors shrink-0"
                                         title={s.title}
                                     >
@@ -188,22 +225,52 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                     <>
                         {/* Card header with collapse button */}
                         <div className="h-11 border-b border-border flex items-center gap-2 px-3 shrink-0">
-                            <FileText size={14} className="text-primary-mint" />
-                            <span className="text-sm font-semibold flex-1">来源</span>
-                            <button
-                                onClick={collapseSource}
-                                className="p-1.5 rounded-lg hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors"
-                                title="收起来源"
-                            >
-                                <PanelLeftClose size={14} />
-                            </button>
+                            {viewingSource ? (
+                                <>
+                                    <button
+                                        onClick={() => setViewingSource(null)}
+                                        className="p-1 hover:bg-fill rounded-lg text-text-secondary transition-colors"
+                                        title="返回来源列表"
+                                    >
+                                        <ArrowLeft size={14} />
+                                    </button>
+                                    <span className="text-sm font-semibold flex-1 truncate text-text">{viewingSource.title}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <FileText size={14} className="text-primary-mint" />
+                                    <span className="text-sm font-semibold flex-1">来源</span>
+                                    <button
+                                        onClick={collapseSource}
+                                        className="p-1.5 rounded-lg hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors"
+                                        title="收起来源"
+                                    >
+                                        <PanelLeftClose size={14} />
+                                    </button>
+                                </>
+                            )}
                         </div>
                         <div className="flex-1 overflow-hidden">
-                            <SourcePanel notebook={notebook} onSelectSource={setViewingSource} hideHeader />
+                            {viewingSource
+                                ? <SourceDetailView notebook={notebook} source={viewingSource} onBack={() => setViewingSource(null)} />
+                                : <SourcePanel notebook={notebook} onSelectSource={setViewingSource} hideHeader />
+                            }
                         </div>
                     </>
                 )}
             </div>
+
+            {/* Drag handle: source | chat */}
+            {!sourceCollapsed && (
+                <div
+                    onMouseDown={(e) => startDrag('source', e)}
+                    className="w-2 mx-0.5 shrink-0 cursor-col-resize flex items-center justify-center group self-stretch"
+                    title="拖动调整宽度"
+                >
+                    <div className="w-0.5 h-8 rounded-full bg-border group-hover:bg-primary-mint/50 transition-colors" />
+                </div>
+            )}
+            {sourceCollapsed && <div className="w-2 shrink-0" />}
 
             {/* Chat card */}
             <div className="flex-1 min-w-0 flex flex-col bg-bg-container rounded-2xl border border-border overflow-hidden">
@@ -227,19 +294,30 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                     </select>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                    {viewingSource
-                        ? <SourceDetailView notebook={notebook} source={viewingSource} onBack={() => setViewingSource(null)} />
-                        : <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />
-                    }
+                    <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />
                 </div>
             </div>
 
+            {/* Drag handle: chat | studio */}
+            {!studioCollapsed && (
+                <div
+                    onMouseDown={(e) => startDrag('studio', e)}
+                    className="w-2 mx-0.5 shrink-0 cursor-col-resize flex items-center justify-center group self-stretch"
+                    title="拖动调整宽度"
+                >
+                    <div className="w-0.5 h-8 rounded-full bg-border group-hover:bg-primary-mint/50 transition-colors" />
+                </div>
+            )}
+            {studioCollapsed && <div className="w-2 shrink-0" />}
+
             {/* Studio card */}
-            <div className={cn(
-                'flex flex-col bg-bg-container rounded-2xl border border-border shrink-0 overflow-hidden',
-                studioAnimating && 'transition-all duration-300',
-                studioCollapsed ? 'w-[52px]' : 'w-80'
-            )}>
+            <div
+                className={cn(
+                    'flex flex-col bg-bg-container rounded-2xl border border-border shrink-0 overflow-hidden',
+                    studioAnimating && 'transition-all duration-300',
+                )}
+                style={{ width: studioCollapsed ? 52 : studioWidth }}
+            >
                 {studioCollapsed ? (
                     /* Collapsed studio: icon per studio card */
                     <div className="flex flex-col items-center h-full">

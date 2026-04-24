@@ -12,11 +12,11 @@ import { join } from 'node:path';
 import type { SemanticFact } from './types.js';
 
 function storePath(workDir: string): string {
-    return join(workDir, 'memory', 'semantic.jsonl');
+    return join(workDir, '.neo', 'memory', 'semantic.jsonl');
 }
 
 export async function appendFact(workDir: string, fact: SemanticFact): Promise<void> {
-    await fs.mkdir(join(workDir, 'memory'), { recursive: true });
+    await fs.mkdir(join(workDir, '.neo', 'memory'), { recursive: true });
     await fs.appendFile(storePath(workDir), JSON.stringify(fact) + '\n', 'utf8');
 }
 

@@ -181,6 +181,7 @@ ${joined}
     const out = await getClient().generate(prompt, {
         model: model || DEFAULT_MODEL,
         temperature: 0.4,
+        workDir,
     });
     const overview = (out ?? '').trim();
 
@@ -221,6 +222,7 @@ ${joined}`;
     const out = await getClient().generate(prompt, {
         model: model || DEFAULT_MODEL,
         temperature: 0.4,
+        workDir,
     });
 
     const markdown = (out ?? '').replace(/^\s*```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
@@ -290,6 +292,7 @@ ${joined}`;
     const out = await getClient().generate(prompt, {
         model: options?.model || DEFAULT_MODEL,
         temperature: 0.5,
+        workDir,
     });
     const markdown = (out ?? '').replace(/^\s*```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
 
@@ -348,6 +351,7 @@ ${joined}`;
     const out = await getClient().generate(prompt, {
         model: model || DEFAULT_MODEL,
         temperature: 0.7,
+        workDir,
     });
 
     const parsed = tryParseJson<AudioSegment[]>(out ?? '');

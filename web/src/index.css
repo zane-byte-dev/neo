@@ -294,6 +294,24 @@
   background: var(--color-fill) !important;
 }
 
+/* Inline (document) mode: remove toolbar background, blend into page */
+.note-md-editor--inline .w-md-editor-toolbar {
+  background: transparent !important;
+  border-bottom-color: var(--color-border-secondary) !important;
+}
+.note-md-editor--inline.w-md-editor {
+  min-height: 60vh !important;
+}
+.note-md-editor--inline .w-md-editor-content {
+  padding: 0 !important;
+}
+.note-md-editor--inline .w-md-editor-text-pre,
+.note-md-editor--inline .w-md-editor-text-input,
+.note-md-editor--inline .w-md-editor-text {
+  padding: 0.75rem 4rem !important;
+  font-size: 15px !important;
+}
+
 /* ── Highlight.js dark theme overrides ───────────────────────────────────────── */
 [data-theme='dark'] .hljs,
 [data-theme='classic-dark'] .hljs {

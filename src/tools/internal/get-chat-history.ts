@@ -24,7 +24,7 @@ interface MessageRow {
 
 async function readSessionsList(workDir: string): Promise<Array<{ id: string; start_time: string }>> {
     try {
-        const raw = await fs.readFile(join(workDir, '.tmp', 'chat-sessions.json'), 'utf8');
+        const raw = await fs.readFile(join(workDir, '.neo', 'projects', 'chat-sessions.json'), 'utf8');
         const data = JSON.parse(raw) as { sessions?: Record<string, { id: string; start_time: string }> };
         return Object.values(data.sessions ?? {});
     } catch {
@@ -33,7 +33,7 @@ async function readSessionsList(workDir: string): Promise<Array<{ id: string; st
 }
 
 async function readSessionMessages(workDir: string, sessionId: string): Promise<MessageRow[]> {
-    const f = join(workDir, '.tmp', sessionId, `chat-${sessionId}.jsonl`);
+    const f = join(workDir, '.neo', 'projects', sessionId, `chat-${sessionId}.jsonl`);
     try {
         const raw = await fs.readFile(f, 'utf8');
         return raw.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as MessageRow);

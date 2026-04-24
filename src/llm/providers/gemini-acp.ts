@@ -54,15 +54,16 @@ export function isAcpAvailable(): boolean {
 /**
  * Try to start the ACP process eagerly at boot.
  * Non-blocking — failures are logged and silently ignored.
+ * Pass the user workDir so gemini-cli's cwd is set correctly from the start.
  */
-export function tryStartAcp(): void {
-    ensureAcp().catch((err) => {
+export function tryStartAcp(cwd?: string): void {
+    ensureAcp(cwd).catch((err) => {
         log.warn('GeminiACP', `Failed to start: ${err instanceof Error ? err.message : String(err)}`);
     });
 }
 
 /** Ensure the gemini --acp process is running and a session exists. */
-async function ensureAcp(): Promise<AcpState> {
+async function ensureAcp(cwd?: string): Promise<AcpState> {
     if (state) return state;
     if (initialising) return initialising;
 
@@ -140,12 +141,15 @@ async function ensureAcp(): Promise<AcpState> {
             }
         }
 
-        // Create session
+        // Create session — use the caller-supplied workDir so gemini-cli
+        // operates in the user's space directory (reads AGENTS.md, NOW.md, etc.)
+        // rather than the neo application directory.
+        const sessionCwd = cwd ?? process.cwd();
         const sessionResp = await conn.newSession({
-            cwd: process.cwd(),
+            cwd: sessionCwd,
             mcpServers: [],
         });
-        log.info('GeminiACP', `Session created: ${sessionResp.sessionId}`);
+        log.info('GeminiACP', `Session created: ${sessionResp.sessionId} (cwd=${sessionCwd})`);
 
         const s: AcpState = { child, conn, sessionId: sessionResp.sessionId };
         state = s;
@@ -160,9 +164,11 @@ async function ensureAcp(): Promise<AcpState> {
 
 /**
  * Send a prompt to Gemini CLI via ACP and collect the full response text.
+ * @param cwd  User workspace directory — passed to the session so gemini-cli
+ *             reads context files (AGENTS.md, NOW.md …) from the right place.
  */
-export async function acpGenerate(prompt: string): Promise<string> {
-    const s = await ensureAcp();
+export async function acpGenerate(prompt: string, cwd?: string): Promise<string> {
+    const s = await ensureAcp(cwd);
     const promptId = `p-${++promptSeq}`;
 
     pendingChunks.set(promptId, { texts: [], thoughts: [] });
@@ -188,13 +194,16 @@ export async function acpGenerate(prompt: string): Promise<string> {
 /**
  * Send a prompt and stream text chunks back via callback.
  * Returns the full accumulated text.
+ * @param cwd  User workspace directory — passed to the session so gemini-cli
+ *             reads context files (AGENTS.md, NOW.md …) from the right place.
  */
 export async function acpStream(
     prompt: string,
     onTextChunk: AcpChunkCallback,
     onThoughtChunk?: AcpChunkCallback,
+    cwd?: string,
 ): Promise<string> {
-    const s = await ensureAcp();
+    const s = await ensureAcp(cwd);
     const promptId = `p-${++promptSeq}`;
 
     pendingChunks.set(promptId, { texts: [], thoughts: [] });

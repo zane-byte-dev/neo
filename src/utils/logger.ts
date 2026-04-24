@@ -41,6 +41,20 @@ const LEVEL_COLOR: Record<Level, string> = {
 };
 const RESET = '\x1b[0m';
 
+// ── Local time helpers ───────────────────────────────────────────────────────
+
+function _pad(n: number): string { return String(n).padStart(2, '0'); }
+
+/** YYYY-MM-DD in local time */
+function localDateStr(d: Date): string {
+    return `${d.getFullYear()}-${_pad(d.getMonth() + 1)}-${_pad(d.getDate())}`;
+}
+
+/** YYYY-MM-DD HH:mm:ss in local time */
+function localDateTimeStr(d: Date): string {
+    return `${localDateStr(d)} ${_pad(d.getHours())}:${_pad(d.getMinutes())}:${_pad(d.getSeconds())}`;
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 function resolveMinLevel(): Level {
@@ -68,7 +82,7 @@ function writeEntry(entry: Record<string, unknown>): void {
     if (isWriting) return;
     isWriting = true;
     ensureLogDir();
-    const date = new Date().toISOString().slice(0, 10);
+    const date = localDateStr(new Date());
     appendFile(join(LOG_DIR, `${date}.jsonl`), JSON.stringify(entry) + '\n', 'utf8')
         .catch(() => { /* never crash over logging */ })
         .finally(() => { isWriting = false; });
@@ -93,7 +107,7 @@ function emit(level: Level, module: string, msg: string, data?: Record<string, u
 
     // Stderr sink (human-readable)
     const color = LEVEL_COLOR[level];
-    const prefix = `${color}[${ts.slice(0, 19).replace('T', ' ')}] [${level.padEnd(8)}] [${module}]${RESET}`;
+    const prefix = `${color}[${localDateTimeStr(new Date())}] [${level.padEnd(8)}] [${module}]${RESET}`;
     const dataSuffix = (data && Object.keys(data).length > 0)
         ? ` ${inspect(data, { depth: 4, breakLength: 160, compact: true })}`
         : '';
@@ -143,9 +157,8 @@ export function setupLogger(): void {
 
     // Local-time prefix for stdout — stays human-readable in the terminal.
     const prefix = (level: Level) => {
-        const n = new Date();
         const color = LEVEL_COLOR[level];
-        return `[${n.toISOString().slice(0, 10)} ${n.toTimeString().slice(0, 8)}] ${color}[${level}]${RESET}`;
+        return `[${localDateTimeStr(new Date())}] ${color}[${level}]${RESET}`;
     };
 
     // Write to the JSONL file only — do NOT call emit() which would also print

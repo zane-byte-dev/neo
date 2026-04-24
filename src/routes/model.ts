@@ -10,6 +10,7 @@ import { COST_PER_1K, getDailyCost, type UsageRecord } from '../llm/cost.js';
 import { ROUTING_CONFIG } from '../llm/routing-config.js';
 import { getMonthlyUsage } from '../utils/token-tracker.js';
 import { messageList } from '../services/chat-service.js';
+import { calcUser } from '../services/user-service.js';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,8 +56,8 @@ function buildModelList(): ModelInfo[] {
     return list;
 }
 
-async function loadUsageRecords(limit: number): Promise<UsageRecord[]> {
-    const filePath = join(process.cwd(), 'data', 'usage.jsonl');
+async function loadUsageRecords(workDir: string, limit: number): Promise<UsageRecord[]> {
+    const filePath = join(workDir, '.neo', 'usage.jsonl');
     let content: string;
     try {
         content = await readFile(filePath, 'utf8');
@@ -86,13 +87,15 @@ export function model(router: Router): void {
      *   limit   — max history records to return (default: 50)
      */
     router.get('/api/models', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir } = await calcUser(userId);
         const month = (ctx.query.month as string) || undefined;
         const limit = Math.min(Number(ctx.query.limit) || 50, 200);
 
         const [usage, history, dailyCost] = await Promise.all([
             getMonthlyUsage(month),
-            loadUsageRecords(limit),
-            getDailyCost(),
+            loadUsageRecords(workDir, limit),
+            getDailyCost(workDir),
         ]);
 
         ctx.body = {

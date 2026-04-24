@@ -50,7 +50,7 @@ export const saveMemoryTool: Tool = {
     },
 
     handler: async (args, workDir) => {
-        const memDir = join(workDir, 'memory');
+        const memDir = join(workDir, '.neo', 'memory');
         const action = String(args.action ?? 'append').trim();
 
         // ── LIST

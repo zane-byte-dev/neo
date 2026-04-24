@@ -4,11 +4,11 @@
  * and prominent "添加来源" button opening AddSourceModal.
  */
 import React from 'react'
-import { FileText, Plus, Check, ArrowUpDown } from 'lucide-react'
+import { FileText, Plus, Check, ArrowUpDown, Search, X } from 'lucide-react'
 import type { SourceMeta } from '../../types'
 import { useAppStore } from '../../stores/useAppStore'
 import {
-    notebookListSources,
+    notebookListSourcesWithGuides,
     notebookGetSourceGuide,
 } from '../../api'
 import { AddSourceModal } from './AddSourceModal'
@@ -32,30 +32,29 @@ const SORT_LABELS: Record<SortOption, string> = {
 }
 
 export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource, hideHeader }) => {
-    const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuide, sourceGuides } = useAppStore()
+    const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuide, setSourceGuides, sourceGuides } = useAppStore()
     const [loading, setLoading] = React.useState(false)
     const [modalOpen, setModalOpen] = React.useState(false)
     const [sortBy, setSortBy] = React.useState<SortOption>('default')
+    const [searchQuery, setSearchQuery] = React.useState('')
 
     const load = React.useCallback(async () => {
         setLoading(true)
         try {
-            const data = await notebookListSources(notebook)
-            setSources(data)
-            // Select all by default
-            setSelectedSourceIds(data.map((s) => s.id))
-            // Prefetch guides (store null for sources with no guide yet)
-            data.forEach((s) => {
-                notebookGetSourceGuide(notebook, s.id)
-                    .then((g) => setSourceGuide(s.id, g ?? null))
-                    .catch(() => setSourceGuide(s.id, null))
-            })
+            const data = await notebookListSourcesWithGuides(notebook)
+            // Split sources and guides, populate store in one pass
+            const sourceMetas = data.map(({ guide: _g, ...s }) => s)
+            const guidesMap: Record<string, import('../../types').SourceGuide | null> = {}
+            data.forEach(({ id, guide }) => { guidesMap[id] = guide })
+            setSources(sourceMetas)
+            setSelectedSourceIds(sourceMetas.map((s) => s.id))
+            setSourceGuides(guidesMap)
         } catch (e) {
             console.warn('[SourcePanel] load failed', e)
         } finally {
             setLoading(false)
         }
-    }, [notebook, setSources, setSelectedSourceIds, setSourceGuide])
+    }, [notebook, setSources, setSelectedSourceIds, setSourceGuides])
 
     React.useEffect(() => { load() }, [load])
 
@@ -66,7 +65,11 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource, hideHea
 
     // Sort sources
     const sortedSources = React.useMemo(() => {
-        const sorted = [...sources]
+        const query = searchQuery.trim().toLowerCase()
+        const filtered = query
+            ? sources.filter((s) => s.title.toLowerCase().includes(query) || (s.author ?? '').toLowerCase().includes(query))
+            : sources
+        const sorted = [...filtered]
         switch (sortBy) {
             case 'type':
                 sorted.sort((a, b) => a.type.localeCompare(b.type))
@@ -91,7 +94,7 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource, hideHea
                 break
         }
         return sorted
-    }, [sources, sortBy, sourceGuides])
+    }, [sources, sortBy, sourceGuides, searchQuery])
 
     return (
         <div className="flex flex-col h-full bg-bg-container">
@@ -118,6 +121,29 @@ export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource, hideHea
                     <Plus size={15} /> 添加来源
                 </button>
             </div>
+
+            {sources.length > 0 && (
+                <div className="px-3 pb-2 shrink-0">
+                    <div className="relative">
+                        <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="搜索来源…"
+                            className="w-full bg-fill-secondary border border-border rounded-lg pl-7 pr-7 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all placeholder:text-text-quaternary"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-fill rounded transition-colors"
+                            >
+                                <X size={10} className="text-text-tertiary" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {sources.length > 0 && (
                 <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0 flex-wrap">
