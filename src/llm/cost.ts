@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { appendFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Tier } from './routing-config.js';
+import { parseJsonLines } from '../utils/json.js';
 
 function usageFile(workDir: string): string {
     return join(workDir, '.neo', 'usage.jsonl');
@@ -77,14 +78,8 @@ export async function getDailyCost(workDir: string, dateKey = toDateKey(Date.now
         return 0;
     }
     let total = 0;
-    for (const line of content.split('\n')) {
-        if (!line.trim()) continue;
-        try {
-            const row = JSON.parse(line) as UsageRecord;
-            if (toDateKey(row.timestamp) === dateKey) total += row.estimatedCost;
-        } catch {
-            continue;
-        }
+    for (const row of parseJsonLines<UsageRecord>(content)) {
+        if (toDateKey(row.timestamp) === dateKey) total += row.estimatedCost;
     }
     return total;
 }

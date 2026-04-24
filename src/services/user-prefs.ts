@@ -7,6 +7,7 @@
 
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
 
 export interface UserPreferences {
@@ -21,7 +22,7 @@ const FILE_NAME = 'preferences.json';
 export async function loadUserPreferences(workDir: string): Promise<UserPreferences> {
     try {
         const raw = await fs.readFile(join(workDir, FILE_NAME), 'utf8');
-        const data = JSON.parse(raw) as UserPreferences;
+        const data = parseJsonOr<UserPreferences>(raw, {});
         return sanitize(data);
     } catch {
         return {};

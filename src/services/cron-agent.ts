@@ -20,6 +20,7 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { runAgentTurn } from '../services/agent-runner.js';
 import { generateId } from '../utils/id-generator.js';
+import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
 import { userList } from './user-service.js';
 import { refreshNowForAllUsers } from './refresh-now.js';
@@ -48,9 +49,9 @@ async function readSchedule(userId: string): Promise<ScheduledTask[]> {
     const schedulePath = join(workDir, '.neo', 'memory', 'schedule.json');
     try {
         const raw = await fs.readFile(schedulePath, 'utf8');
-        const tasks = JSON.parse(raw);
+        const tasks = parseJsonOr<unknown>(raw, []);
         if (!Array.isArray(tasks)) return [];
-        return tasks;
+        return tasks as ScheduledTask[];
     } catch {
         return [];
     }

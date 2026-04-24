@@ -9,6 +9,7 @@
 import { promises as fs } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { Tool, ToolContext } from '../_base.js';
+import { parseJsonOr } from '../../utils/json.js';
 
 interface TodoItem {
     id: number;
@@ -33,7 +34,7 @@ function todosPath(workDir: string, sessionId: string, scope: string): string {
 async function loadTodos(workDir: string, sessionId: string, scope = 'session'): Promise<TodoItem[]> {
     try {
         const raw = await fs.readFile(todosPath(workDir, sessionId, scope), 'utf-8');
-        return JSON.parse(raw);
+        return parseJsonOr<TodoItem[]>(raw, []);
     } catch {
         return [];
     }
@@ -133,15 +134,12 @@ export const todoTool: Tool = {
         // ── WRITE (replace entire list)
         if (action === 'write') {
             const raw = String(args.items ?? '[]');
-            let items: TodoItem[];
-            try {
-                items = JSON.parse(raw);
-                if (!Array.isArray(items)) throw new Error('not an array');
-            } catch {
+            const items = parseJsonOr<unknown>(raw, null);
+            if (!Array.isArray(items)) {
                 return '[Error] items 必须是有效的 JSON 数组';
             }
-            await saveTodos(workDir, sessionId, items, scope, context);
-            return `✅ Todo 列表已更新（${items.length} 项）\n\n${formatTodos(items, scope)}`;
+            await saveTodos(workDir, sessionId, items as TodoItem[], scope, context);
+            return `✅ Todo 列表已更新（${items.length} 项）\n\n${formatTodos(items as TodoItem[], scope)}`;
         }
 
         // ── UPDATE (single item status)

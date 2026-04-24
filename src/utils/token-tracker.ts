@@ -8,6 +8,7 @@
 import { mkdirSync } from 'node:fs';
 import { appendFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parseJsonLines } from './json.js';
 
 const LOG_DIR = join(process.cwd(), 'logs');
 let dirReady = false;
@@ -81,24 +82,20 @@ export async function getMonthlyUsage(month?: string): Promise<MonthlyUsageSumma
         return summary; // file doesn't exist yet
     }
 
-    for (const line of content.split('\n')) {
-        if (!line.trim()) continue;
-        try {
-            const entry = JSON.parse(line) as TokenUsageEntry;
-            summary.totalPromptTokens += entry.promptTokens;
-            summary.totalCompletionTokens += entry.completionTokens;
-            summary.totalTokens += entry.totalTokens;
-            summary.callCount++;
+    for (const entry of parseJsonLines<TokenUsageEntry>(content)) {
+        summary.totalPromptTokens += entry.promptTokens;
+        summary.totalCompletionTokens += entry.completionTokens;
+        summary.totalTokens += entry.totalTokens;
+        summary.callCount++;
 
-            if (!summary.byModel[entry.model]) {
-                summary.byModel[entry.model] = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
-            }
-            const m = summary.byModel[entry.model];
-            m.promptTokens += entry.promptTokens;
-            m.completionTokens += entry.completionTokens;
-            m.totalTokens += entry.totalTokens;
-            m.callCount++;
-        } catch { /* skip malformed lines */ }
+        if (!summary.byModel[entry.model]) {
+            summary.byModel[entry.model] = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+        }
+        const m = summary.byModel[entry.model];
+        m.promptTokens += entry.promptTokens;
+        m.completionTokens += entry.completionTokens;
+        m.totalTokens += entry.totalTokens;
+        m.callCount++;
     }
 
     return summary;

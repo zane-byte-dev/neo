@@ -3,21 +3,17 @@ import { message } from 'telegraf/filters';
 import { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID } from '../config.js';
 import { runAgentTurn } from '../services/agent-runner.js';
 import { userGetByTenant, userList } from '../services/user-service.js';
-import { sessionCreate, sessionDelete, sessionGet } from '../services/chat-service.js';
+import { sessionCreate, sessionDelete } from '../services/chat-service.js';
 import { log } from '../utils/logger.js';
 import { markdownToTelegramHtml, splitTelegramText } from '../utils/telegram-html.js';
 
 const MODULE = 'Telegram';
-
-const TELEGRAM_MAX_MESSAGE = 3800;
 
 export interface TelegramRuntime {
     stop(): void;
     /** Send a message to a chat/channel — used by cron-agent and webhook */
     sendMessage(chatId: string | number, text: string, parseMode?: 'HTML' | 'Markdown'): Promise<void>;
 }
-
-// ── Markdown → Telegram HTML (imported from utils/telegram-html.ts) ───────────
 
 function resolveTelegramUserId(chatId: string): string | null {
     const byTenant = userGetByTenant(`telegram:${chatId}`);
@@ -58,8 +54,7 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
 
     bot.start((ctx) => ctx.reply('Neo Telegram 已连接。发送 /new 可重置当前会话。'));
 
-    // ── Shared agent turn handler ─────────────────────────────────────────────
-    // Shared agent turn handler — accepts any Telegraf context-like object
+    // Accept any Telegraf context-like object so text/media handlers can share the same turn flow.
     async function handleAgentTurn(
         ctx: { reply: (text: string, extra?: Record<string, unknown>) => Promise<void>; replyWithPhoto: (photo: { source: Buffer }, extra?: { caption?: string }) => Promise<unknown>; sendChatAction: (action: string) => Promise<void> },
         userId: string, chatId: string, sessionId: string, userMessage: string,

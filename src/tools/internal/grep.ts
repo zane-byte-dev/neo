@@ -10,43 +10,7 @@
 import { promises as fs } from 'fs';
 import { join, isAbsolute } from 'path';
 import type { Tool } from '../_base.js';
-
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.cache', 'cache', '__pycache__', '.next']);
-
-async function* walkDir(dir: string, depth = 0, maxDepth = 10): AsyncGenerator<string> {
-    if (depth > maxDepth) return;
-    let entries;
-    try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-        return;
-    }
-    for (const e of entries) {
-        if (e.name.startsWith('.') && depth > 0) continue;
-        if (SKIP_DIRS.has(e.name)) continue;
-        const full = join(dir, e.name);
-        if (e.isDirectory()) {
-            yield* walkDir(full, depth + 1, maxDepth);
-        } else if (e.isFile()) {
-            yield full;
-        }
-    }
-}
-
-function matchesGlob(filePath: string, pattern: string): boolean {
-    // Convert glob to regex: support *, **, ?
-    const regexStr = pattern
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*\*/g, '\x00')
-        .replace(/\*/g, '[^/]*')
-        .replace(/\?/g, '[^/]')
-        .replace(/\x00/g, '.*');
-    try {
-        return new RegExp(`(^|/)${regexStr}$`).test(filePath);
-    } catch {
-        return false;
-    }
-}
+import { matchesGlob, walkDirEntries } from '../../utils/file-search.js';
 
 export const grepTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0', permission: 'read' },
@@ -125,9 +89,10 @@ export const grepTool: Tool = {
         if (stat.isFile()) {
             filesToSearch.push(searchPath);
         } else {
-            for await (const f of walkDir(searchPath)) {
-                if (globFilter && !matchesGlob(f, globFilter)) continue;
-                filesToSearch.push(f);
+            for await (const entry of walkDirEntries(searchPath, { maxDepth: 10 })) {
+                if (!entry.isFile) continue;
+                if (globFilter && !matchesGlob(entry.relPath, globFilter, { matchAnywhere: true })) continue;
+                filesToSearch.push(entry.fullPath);
             }
         }
 

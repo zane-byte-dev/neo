@@ -11,6 +11,7 @@ import { loadUserTools } from '../tools/user-tools/loader.js';
 import { loadMcpTools } from '../mcp/loader.js';
 import { buildTenantSystemInstruction } from '../llm/client.js';
 import { resolveUserWorkspaceDir } from '../utils/workspace.js';
+import { parseJsonOr } from '../utils/json.js';
 import type { UserId } from '../types/platform.js';
 import type { SkillRegistry } from '../skills/skill-registry.js';
 import type { Tool } from '../llm/types.js';
@@ -66,7 +67,7 @@ function _readConfigUsers(): ConfigUser[] {
     try {
         const raw = process.env.USERS;
         if (!raw) return [];
-        return JSON.parse(raw) as ConfigUser[];
+        return parseJsonOr<ConfigUser[]>(raw, []);
     } catch {
         return [];
     }

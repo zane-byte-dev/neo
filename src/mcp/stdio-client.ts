@@ -14,6 +14,7 @@
  */
 
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -166,23 +167,23 @@ export class StdioMcpClient {
             const line = this.buffer.slice(0, idx).trim();
             this.buffer = this.buffer.slice(idx + 1);
             if (!line) continue;
-            try {
-                const msg = JSON.parse(line) as JsonRpcResponse;
-                if (typeof msg.id !== 'number') continue; // ignore notifications
-                const waiter = this.pending.get(msg.id);
-                if (!waiter) continue;
-                this.pending.delete(msg.id);
-                clearTimeout(waiter.timer);
-                if (msg.error) {
-                    waiter.reject(new Error(`MCP error ${msg.error.code}: ${msg.error.message}`));
-                } else {
-                    waiter.resolve(msg.result);
-                }
-            } catch (err) {
+            const msg = parseJsonOr<JsonRpcResponse | null>(line, null);
+            if (!msg) {
                 log.warn('mcp', 'failed to parse server message', {
                     line: line.slice(0, 200),
-                    error: err instanceof Error ? err.message : String(err),
+                    error: 'Invalid JSON',
                 });
+                continue;
+            }
+            if (typeof msg.id !== 'number') continue; // ignore notifications
+            const waiter = this.pending.get(msg.id);
+            if (!waiter) continue;
+            this.pending.delete(msg.id);
+            clearTimeout(waiter.timer);
+            if (msg.error) {
+                waiter.reject(new Error(`MCP error ${msg.error.code}: ${msg.error.message}`));
+            } else {
+                waiter.resolve(msg.result);
             }
         }
     }

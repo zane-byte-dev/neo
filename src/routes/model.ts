@@ -8,6 +8,7 @@ import type Router from '@koa/router';
 import { MODEL_ALIASES, DAILY_COST_LIMIT } from '../config.js';
 import { COST_PER_1K, getDailyCost, type UsageRecord } from '../llm/cost.js';
 import { ROUTING_CONFIG } from '../llm/routing-config.js';
+import { parseJsonLines } from '../utils/json.js';
 import { getMonthlyUsage } from '../utils/token-tracker.js';
 import { messageList } from '../services/chat-service.js';
 import { calcUser } from '../services/user-service.js';
@@ -64,15 +65,7 @@ async function loadUsageRecords(workDir: string, limit: number): Promise<UsageRe
     } catch {
         return [];
     }
-    const lines = content.split('\n').filter((l) => l.trim());
-    // Return most recent records first
-    const records: UsageRecord[] = [];
-    for (let i = lines.length - 1; i >= 0 && records.length < limit; i--) {
-        try {
-            records.push(JSON.parse(lines[i]) as UsageRecord);
-        } catch { /* skip */ }
-    }
-    return records;
+    return parseJsonLines<UsageRecord>(content).slice(-limit).reverse();
 }
 
 // ── route ────────────────────────────────────────────────────────────────────

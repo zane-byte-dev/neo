@@ -26,6 +26,7 @@ import {
     type Artifact,
     type NotebookEntry,
 } from './notebook-service.js';
+import { parseJsonOr } from '../utils/json.js';
 
 // Default model for non-tool generation — cheap & good at structured output.
 const DEFAULT_MODEL = 'gemma';
@@ -86,25 +87,26 @@ function joinSourcesForPrompt(
 }
 
 function tryParseJson<T>(text: string): T | null {
-    // strip code fences if present
     const cleaned = text
         .replace(/^\s*```(?:json)?\s*/i, '')
         .replace(/\s*```\s*$/, '')
         .trim();
-    // find first `{` or `[` to last matching bracket
-    const firstBrace = Math.min(
-        ...['{', '['].map(c => {
-            const i = cleaned.indexOf(c);
-            return i === -1 ? Infinity : i;
-        }),
-    );
-    if (!Number.isFinite(firstBrace)) return null;
-    const body = cleaned.slice(firstBrace);
-    try { return JSON.parse(body) as T; } catch { /* fallthrough */ }
-    // try trimming to last brace
-    const lastBrace = Math.max(body.lastIndexOf('}'), body.lastIndexOf(']'));
-    if (lastBrace === -1) return null;
-    try { return JSON.parse(body.slice(0, lastBrace + 1)) as T; } catch { return null; }
+
+    const objectStart = cleaned.indexOf('{');
+    const arrayStart = cleaned.indexOf('[');
+    const startIndex = [objectStart, arrayStart]
+        .filter((index) => index !== -1)
+        .reduce((min, index) => Math.min(min, index), Number.POSITIVE_INFINITY);
+    if (!Number.isFinite(startIndex)) return null;
+
+    const body = cleaned.slice(startIndex);
+    const parsed = parseJsonOr<T | null>(body, null);
+    if (parsed !== null) return parsed;
+
+    const endIndex = Math.max(body.lastIndexOf('}'), body.lastIndexOf(']'));
+    if (endIndex === -1) return null;
+
+    return parseJsonOr<T | null>(body.slice(0, endIndex + 1), null);
 }
 
 // ── Source guide ─────────────────────────────────────────────────────────────

@@ -23,6 +23,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
 import { StdioMcpClient, type McpToolDef, type McpCallResult } from './stdio-client.js';
 import type { Tool, FunctionDeclaration } from '../llm/types.js';
@@ -87,7 +88,7 @@ export async function loadMcpTools(workDir: string): Promise<Map<string, Tool>> 
     let config: McpConfigFile;
     try {
         const raw = await readFile(configPath, 'utf8');
-        config = JSON.parse(raw) as McpConfigFile;
+        config = parseJsonOr<McpConfigFile>(raw, {});
     } catch (err) {
         const e = err as NodeJS.ErrnoException;
         if (e.code !== 'ENOENT') {

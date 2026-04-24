@@ -13,6 +13,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import type { Tool, ToolContext } from '../_base.js';
+import { parseJsonLines, parseJsonOr } from '../../utils/json.js';
 
 interface MessageRow {
     id: number;
@@ -25,7 +26,7 @@ interface MessageRow {
 async function readSessionsList(workDir: string): Promise<Array<{ id: string; start_time: string }>> {
     try {
         const raw = await fs.readFile(join(workDir, '.neo', 'projects', 'chat-sessions.json'), 'utf8');
-        const data = JSON.parse(raw) as { sessions?: Record<string, { id: string; start_time: string }> };
+        const data = parseJsonOr<{ sessions?: Record<string, { id: string; start_time: string }> }>(raw, {});
         return Object.values(data.sessions ?? {});
     } catch {
         return [];
@@ -36,7 +37,7 @@ async function readSessionMessages(workDir: string, sessionId: string): Promise<
     const f = join(workDir, '.neo', 'projects', sessionId, `chat-${sessionId}.jsonl`);
     try {
         const raw = await fs.readFile(f, 'utf8');
-        return raw.trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as MessageRow);
+        return parseJsonLines<MessageRow>(raw);
     } catch {
         return [];
     }

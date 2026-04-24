@@ -9,6 +9,7 @@
  */
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { parseJsonLines } from '../utils/json.js';
 import type { SemanticFact } from './types.js';
 
 function storePath(workDir: string): string {
@@ -23,12 +24,7 @@ export async function appendFact(workDir: string, fact: SemanticFact): Promise<v
 export async function readFacts(workDir: string): Promise<SemanticFact[]> {
     try {
         const raw = await fs.readFile(storePath(workDir), 'utf8');
-        const out: SemanticFact[] = [];
-        for (const line of raw.split('\n')) {
-            if (!line.trim()) continue;
-            try { out.push(JSON.parse(line) as SemanticFact); } catch { /* skip */ }
-        }
-        return out;
+        return parseJsonLines<SemanticFact>(raw);
     } catch {
         return [];
     }

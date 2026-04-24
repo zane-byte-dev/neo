@@ -10,64 +10,7 @@
 import { promises as fs } from 'fs';
 import { join, isAbsolute } from 'path';
 import type { Tool } from '../_base.js';
-
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.cache', 'cache', '__pycache__', '.next']);
-
-async function* walkForGlob(
-    root: string,
-    dir: string,
-    pattern: string,
-    depth = 0,
-    maxDepth = 15,
-): AsyncGenerator<string> {
-    if (depth > maxDepth) return;
-    let entries;
-    try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-    } catch {
-        return;
-    }
-    for (const e of entries) {
-        if (e.name.startsWith('.') && depth > 0) continue;
-        if (SKIP_DIRS.has(e.name)) continue;
-        const full = join(dir, e.name);
-        const rel = full.slice(root.length + 1);
-        if (matchesGlob(rel, pattern) || matchesGlob(e.name, pattern)) {
-            yield rel;
-        }
-        if (e.isDirectory()) {
-            yield* walkForGlob(root, full, pattern, depth + 1, maxDepth);
-        }
-    }
-}
-
-function expandBraces(pattern: string): string[] {
-    const match = pattern.match(/\{([^{}]+)\}/);
-    if (!match) return [pattern];
-    const prefix = pattern.slice(0, match.index);
-    const suffix = pattern.slice((match.index ?? 0) + match[0].length);
-    return match[1].split(',').flatMap(alt => expandBraces(prefix + alt + suffix));
-}
-
-function globToRegex(pattern: string): RegExp {
-    const regexStr = pattern
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*\*/g, '\x00')
-        .replace(/\*/g, '[^/]*')
-        .replace(/\?/g, '[^/]')
-        .replace(/\x00/g, '.*');
-    return new RegExp(`^${regexStr}$`);
-}
-
-function matchesGlob(filePath: string, pattern: string): boolean {
-    try {
-        // Handle brace expansion
-        const patterns = expandBraces(pattern);
-        return patterns.some(p => globToRegex(p).test(filePath));
-    } catch {
-        return false;
-    }
-}
+import { matchesGlob, walkDirEntries } from '../../utils/file-search.js';
 
 export const globTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0', permission: 'read' },
@@ -121,8 +64,9 @@ export const globTool: Tool = {
         }
 
         const results: string[] = [];
-        for await (const rel of walkForGlob(searchRoot, searchRoot, pattern)) {
-            results.push(rel);
+        for await (const entry of walkDirEntries(searchRoot, { maxDepth: 15 })) {
+            if (!matchesGlob(entry.relPath, pattern) && !matchesGlob(entry.name, pattern)) continue;
+            results.push(entry.relPath);
             if (results.length >= maxResults) break;
         }
 

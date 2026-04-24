@@ -6,6 +6,7 @@
  */
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { parseJsonLines } from '../utils/json.js';
 import type { EpisodeCard } from './types.js';
 
 function shardPath(workDir: string, iso: string): string {
@@ -35,10 +36,7 @@ export async function readRecentEpisodes(workDir: string, months = 6): Promise<E
     for (const name of picked) {
         try {
             const raw = await fs.readFile(join(dir, name), 'utf8');
-            for (const line of raw.split('\n')) {
-                if (!line.trim()) continue;
-                try { out.push(JSON.parse(line) as EpisodeCard); } catch { /* skip malformed */ }
-            }
+            out.push(...parseJsonLines<EpisodeCard>(raw));
         } catch { /* skip shard */ }
     }
     return out;

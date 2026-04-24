@@ -12,6 +12,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { generateId } from '../utils/id-generator.js';
+import { parseJsonLines, parseJsonOr } from '../utils/json.js';
 import { userGetWorkDir } from './user-service.js';
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ interface SessionsStore {
 async function readSessionsStore(userId: string): Promise<SessionsStore> {
     try {
         const raw = await fs.readFile(sessionsFile(userId), 'utf8');
-        return JSON.parse(raw) as SessionsStore;
+        return parseJsonOr<SessionsStore>(raw, { sessions: {} });
     } catch {
         return { sessions: {} };
     }
@@ -75,7 +76,7 @@ async function writeSessionsStore(userId: string, store: SessionsStore): Promise
 async function readMessages(userId: string, sessionId: string): Promise<MessageRow[]> {
     try {
         const raw = await fs.readFile(messagesFile(userId, sessionId), 'utf8');
-        return raw.trim().split('\n').filter(Boolean).map(line => JSON.parse(line) as MessageRow);
+        return parseJsonLines<MessageRow>(raw);
     } catch {
         return [];
     }
