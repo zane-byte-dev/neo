@@ -571,6 +571,13 @@ export class LLMClient {
         prompt: string,
         options?: { model?: string; system?: string; temperature?: number },
     ): Promise<string | null> {
+        return (await this.generateWithUsage(prompt, options))?.text ?? null;
+    }
+
+    async generateWithUsage(
+        prompt: string,
+        options?: { model?: string; system?: string; temperature?: number; userId?: string; context?: string },
+    ): Promise<{ text: string; model: string; usage: { inputTokens: number; outputTokens: number; totalTokens: number } } | null> {
         if (!this.enabled) return null;
         const forceFreeOnly = DAILY_COST_LIMIT > 0 && (await getDailyCost()) >= DAILY_COST_LIMIT;
         const aliases = pickAliases(options?.model, undefined, forceFreeOnly);
@@ -579,7 +586,10 @@ export class LLMClient {
             const modelId = resolveModel(fallbackAliases[i]);
             if (isAcpModel(modelId)) {
                 const fullPrompt = options?.system ? `${options.system}\n\n${prompt}` : prompt;
-                try { return await acpGenerate(fullPrompt); } catch { continue; }
+                try {
+                    const text = await acpGenerate(fullPrompt);
+                    return text ? { text, model: modelId, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } } : null;
+                } catch { continue; }
             }
             try {
                 const { text, usage } = await generateText({
@@ -596,10 +606,16 @@ export class LLMClient {
                         promptTokens: usage.inputTokens ?? 0,
                         completionTokens: usage.outputTokens ?? 0,
                         totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
-                        caller: 'generate',
+                        caller: options?.context ?? 'generate',
                     });
                 }
-                return text || null;
+                const inputTokens = usage?.inputTokens ?? 0;
+                const outputTokens = usage?.outputTokens ?? 0;
+                return {
+                    text: text || '',
+                    model: modelId,
+                    usage: { inputTokens, outputTokens, totalTokens: usage?.totalTokens ?? (inputTokens + outputTokens) },
+                };
             } catch (err) {
                 log.error('LLMClient', 'generate error', { error: err instanceof Error ? err.message : String(err), model: modelId });
                 if (classifyError(err) === 'fatal' || i >= fallbackAliases.length - 1) return null;

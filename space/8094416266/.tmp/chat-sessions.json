@@ -42,6 +42,15 @@
       "title": "模型",
       "start_time": "2026-04-21T14:17:05.774Z",
       "end_time": "2026-04-21T14:20:59.133Z",
+      "is_current": 0,
+      "is_pinned": 0
+    },
+    "asbr7h": {
+      "id": "asbr7h",
+      "user_id": "8094416266",
+      "title": "测试一下",
+      "start_time": "2026-04-21T14:27:06.933Z",
+      "end_time": "2026-04-21T14:28:04.504Z",
       "is_current": 1,
       "is_pinned": 0
     }

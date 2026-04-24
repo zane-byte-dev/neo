@@ -13,6 +13,7 @@
  */
 
 import { LLMClient } from '../llm/client.js';
+import { appendUsageRecord, estimateCost } from '../llm/cost.js';
 import {
     nbListSources,
     nbGetSourceEntry,
@@ -278,6 +279,7 @@ export async function streamNotebookChat(
     onEvent: (evt: NotebookChatStreamEvent) => void,
     signal?: AbortSignal,
     model?: string,
+    userId?: string,
 ): Promise<NotebookChatMessage> {
     // 1. Persist user message
     const userEntry: NotebookChatMessage = {
@@ -321,19 +323,40 @@ export async function streamNotebookChat(
 
     // 4. Stream LLM response
     let assistantText = '';
+    const startedAt = Date.now();
     try {
         // LLMClient.generate() is non-streaming. We simulate streaming by calling
         // generate then emitting the whole text. (A future pass can wire proper
         // streaming through a new client method that exposes fullStream for a
         // bare prompt without tools.)
-        const out = await getClient().generate(fullPrompt, {
+        const out = await getClient().generateWithUsage(fullPrompt, {
             model: model || DEFAULT_CHAT_MODEL,
             system: systemPrompt,
             temperature: 0.4,
+            userId,
+            context: 'notebook-chat',
         });
-        assistantText = (out ?? '').trim();
+        assistantText = (out?.text ?? '').trim();
         if (signal?.aborted) throw new Error('aborted');
         onEvent({ type: 'text', text: assistantText });
+        if (out?.usage && userId) {
+            void appendUsageRecord({
+                timestamp: Date.now(),
+                userId,
+                model: out.model ?? (model || DEFAULT_CHAT_MODEL),
+                tier: 'standard',
+                score: 0,
+                confidence: 1,
+                reason: 'notebook-chat',
+                promptTokens: out.usage.inputTokens ?? 0,
+                completionTokens: out.usage.outputTokens ?? 0,
+                totalTokens: out.usage.totalTokens ?? ((out.usage.inputTokens ?? 0) + (out.usage.outputTokens ?? 0)),
+                estimatedCost: estimateCost(out.model ?? (model || DEFAULT_CHAT_MODEL), out.usage.inputTokens ?? 0, out.usage.outputTokens ?? 0),
+                durationMs: Date.now() - startedAt,
+                userPrompt: userMessage,
+                systemPrompt,
+            }).catch(() => { /* never crash over tracking */ });
+        }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         onEvent({ type: 'error', error: msg });

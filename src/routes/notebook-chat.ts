@@ -47,7 +47,7 @@ export function notebookChat(router: Router): void {
         const sse = createSSEResponse(ctx);
 
         try {
-            await streamNotebookChat(workDir, notebook, message, selectedSourceIds, sse.send, sse.signal, extractModel(body));
+            await streamNotebookChat(workDir, notebook, message, selectedSourceIds, sse.send, sse.signal, extractModel(body), userId);
         } catch (err) {
             sse.send({ type: 'error', error: err instanceof Error ? err.message : String(err) });
         } finally {
