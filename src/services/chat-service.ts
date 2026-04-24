@@ -1,7 +1,7 @@
 /**
  * chat-service.ts — File-based chat session and message persistence.
  *
- * Each user's chat data lives in space/{userId}/.neo/projects/:
+ * Each user's chat data lives in workDir/.neo/projects/:
  *   chat-sessions.json        ← session metadata index
  *   {sessionId}/chat-{sessionId}.jsonl  ← one JSON line per message
  *

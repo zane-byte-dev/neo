@@ -34,6 +34,20 @@ function resolveTelegramUserId(chatId: string): string | null {
     return null;
 }
 
+const UNAUTHORIZED_MSG = '未授权：请在 space/config.json 的 users[].tenants 中配置 telegram:chatId。';
+
+async function authorize(
+    ctx: { chat: { id: number | string }; reply: (text: string) => Promise<unknown> },
+): Promise<{ chatId: string; userId: string } | null> {
+    const chatId = String(ctx.chat.id);
+    const userId = resolveTelegramUserId(chatId);
+    if (!userId) {
+        await ctx.reply(UNAUTHORIZED_MSG);
+        return null;
+    }
+    return { chatId, userId };
+}
+
 export async function startTelegramBot(): Promise<TelegramRuntime | null> {
     if (!TELEGRAM_BOT_TOKEN) {
         log.info(MODULE, 'TELEGRAM_BOT_TOKEN not set, skip startup');
@@ -85,12 +99,9 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
     }
 
     bot.command('new', async (ctx) => {
-        const chatId = String(ctx.chat.id);
-        const userId = resolveTelegramUserId(chatId);
-        if (!userId) {
-            await ctx.reply('未授权：请在 space/config.json 的 users[].tenants 中配置 telegram:chatId。');
-            return;
-        }
+        const auth = await authorize(ctx);
+        if (!auth) return;
+        const { chatId, userId } = auth;
         const sessionId = `tg-${chatId}`;
         await sessionDelete(sessionId, userId).catch(() => {});
         await sessionCreate(userId, sessionId);
@@ -98,12 +109,9 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
     });
 
     bot.on('text', async (ctx) => {
-        const chatId = String(ctx.chat.id);
-        const userId = resolveTelegramUserId(chatId);
-        if (!userId) {
-            await ctx.reply('未授权：请在 space/config.json 的 users[].tenants 中配置 telegram:chatId。');
-            return;
-        }
+        const auth = await authorize(ctx);
+        if (!auth) return;
+        const { chatId, userId } = auth;
 
         const cleanText = ctx.message.text.trim();
         if (!cleanText) return;
@@ -116,12 +124,9 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
 
     // ── Photo handler ─────────────────────────────────────────────────────────
     bot.on(message('photo'), async (ctx) => {
-        const chatId = String(ctx.chat.id);
-        const userId = resolveTelegramUserId(chatId);
-        if (!userId) {
-            await ctx.reply('未授权：请在 space/config.json 的 users[].tenants 中配置 telegram:chatId。');
-            return;
-        }
+        const auth = await authorize(ctx);
+        if (!auth) return;
+        const { chatId, userId } = auth;
 
         const sessionId = `tg-${chatId}`;
         // ctx.message is narrowed by the filter at runtime
@@ -145,12 +150,9 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
 
     // ── Document handler ──────────────────────────────────────────────────────
     bot.on(message('document'), async (ctx) => {
-        const chatId = String(ctx.chat.id);
-        const userId = resolveTelegramUserId(chatId);
-        if (!userId) {
-            await ctx.reply('未授权：请在 space/config.json 的 users[].tenants 中配置 telegram:chatId。');
-            return;
-        }
+        const auth = await authorize(ctx);
+        if (!auth) return;
+        const { chatId, userId } = auth;
 
         const sessionId = `tg-${chatId}`;
         const msg = ctx.message as unknown as { document: { file_id: string; file_name?: string }; caption?: string };
@@ -174,12 +176,9 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
 
     // ── Voice handler ─────────────────────────────────────────────────────────
     bot.on(message('voice'), async (ctx) => {
-        const chatId = String(ctx.chat.id);
-        const userId = resolveTelegramUserId(chatId);
-        if (!userId) {
-            await ctx.reply('未授权：请在 space/config.json 的 users[].tenants 中配置 telegram:chatId。');
-            return;
-        }
+        const auth = await authorize(ctx);
+        if (!auth) return;
+        const { chatId, userId } = auth;
 
         const sessionId = `tg-${chatId}`;
         const msg = ctx.message as unknown as { voice: { file_id: string; duration: number } };

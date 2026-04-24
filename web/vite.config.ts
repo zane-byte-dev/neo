@@ -9,7 +9,8 @@ export default defineConfig({
   ],
   server: {
     port: 5173,
-    allowedHosts: ['neo.moshuia.com'],
+    // allowedHosts 默认只允许 localhost。如果需要通过自定义域名访问开发服务器，
+    // 请在此处添加，或在本地直接修改。
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

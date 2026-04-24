@@ -51,8 +51,6 @@ neo/
 │       ├── stores/         # Zustand 状态管理
 │       └── api.ts          # 后端 API 客户端
 ├── extension/              # Chrome 浏览器扩展
-├── space/                  # 用户工作区 + config.json 用户注册
-│   └── <userId>/           # AGENTS.md / SOUL.md / TOOLS.md / memory / skills / .tools
 ├── logs/                   # 运行日志（JSONL 格式，按日切分）
 └── ecosystem.config.cjs    # PM2 配置
 ```
@@ -176,7 +174,7 @@ brew install caddy
 `/etc/caddy/Caddyfile`：
 
 ```
-neo.moshuia.com {
+your-domain.com {
     reverse_proxy localhost:3000
 }
 ```
@@ -191,7 +189,7 @@ brew services start caddy
 ```
 [浏览器 / Telegram]
         │
-  neo.moshuia.com
+  your-domain.com
         │  (Caddy HTTPS 反代，可选)
         ▼
   Koa Server :3000  ← PM2 守护
@@ -243,7 +241,7 @@ brew services start caddy
 | `generate_video` | 视频生成（Google Veo 3.1，4-8 秒短视频，需 GEMINI_API_KEY） |
 | `update_user_profile` | 读取/更新用户档案 USER.md（记录长期偏好与背景信息） |
 
-### 用户工具（`space/<userId>/.tools/`）
+### 用户工具（`<workspaceDir>/.tools/`）
 
 每个子目录包含 `tool.yaml`（声明）+ `run.py`/`run.sh`（执行脚本），自动发现并注册。
 
@@ -279,7 +277,7 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 
 ## Skills（技能系统）
 
-技能以 Markdown 文件形式定义，存放于 `space/<userId>/skills/` 目录。支持 YAML frontmatter 声明参数，正文作为 AI 系统指令，可通过 `{{param_name}}` 语法注入参数。
+技能以 Markdown 文件形式定义，存放于 `<workspaceDir>/skills/` 目录。支持 YAML frontmatter 声明参数，正文作为 AI 系统指令，可通过 `{{param_name}}` 语法注入参数。
 
 内置 Skills：`brief`、`summarize_text`、`generate_daily_log`、`generate_weekly_report`、`generate_wechat_article`、`js_snippet_runner`、`xifeng`（决策审计）
 
@@ -287,11 +285,16 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 
 ## 用户工作区
 
-用户注册在 `space/config.json`，每位用户在 `space/<userId>/` 下拥有独立工作区：
+用户信息通过 `.env` 文件的 `USERS` 变量配置（JSON 数组）。每个用户通过 `workspaceDir` 字段指定独立工作区目录：
+
+```dotenv
+USERS=[{"id":"your_id","name":"your_name","workspace":"your_workspace","tenants":[],"webToken":"your_web_token","workspaceDir":"/absolute/path/to/workspace"}]
+```
+
+工作区目录结构：
 
 ```
-space/config.json            # 用户列表、tenant 绑定、webToken
-space/<userId>/
+<workspaceDir>/
 ├── AGENTS.md    # 任务路由与工具调用规则
 ├── SOUL.md      # 身份与沟通风格
 ├── TOOLS.md     # 工具使用指引
@@ -304,19 +307,10 @@ space/<userId>/
 └── notebooks/   # 知识库文件
 ```
 
-Telegram 绑定在 `space/config.json` 里通过 tenants 声明：
+Telegram 绑定通过 `USERS` 中的 `tenants` 字段声明：
 
-```json
-{
-  "users": [
-    {
-      "id": "8094416266",
-      "name": "zc",
-      "tenants": ["telegram:8094416266"],
-      "webToken": "8094416266"
-    }
-  ]
-}
+```dotenv
+USERS=[{"id":"your_id","name":"your_name","workspace":"your_workspace","tenants":["telegram:your_chat_id"],"webToken":"your_web_token","workspaceDir":"/absolute/path/to/workspace"}]
 ```
 
 ---

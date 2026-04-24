@@ -105,9 +105,9 @@ export interface UserContext {
     systemInstruction: string;
     /** File-based user profile manager */
     userProfile: UserProfileManager;
-    /** Per-user skill registry, populated from space/{userId}/skills/ */
+    /** Per-user skill registry, populated from workDir/skills/ */
     skillRegistry: SkillRegistry;
-    /** Per-user tools loaded from space/{userId}/.tools/ */
+    /** Per-user tools loaded from workDir/.tools/ */
     userTools: Map<string, Tool>;
     /** Per-user runtime preferences (default model, enabled models, …) */
     preferences: UserPreferences;
@@ -133,7 +133,7 @@ export function invalidateUserCache(userId?: UserId): void {
  * Build the full runtime context for a user and cache it.
  *
  * Returns the cached instance on subsequent calls unless `force = true`.
- * The workspace is resolved from space/{userId}/ automatically.
+ * The workspace is resolved from the configured workspaceDir automatically.
  */
 export async function calcUser(userId: UserId, force = false): Promise<UserContext> {
     if (!force && _contextCache.has(userId)) {
