@@ -9,7 +9,7 @@
  *      cite them using 【N】 or 【N:title】 markers.
  *   4. We parse citation markers out of the reply and attach source metadata.
  *
- * Conversation state is persisted per-notebook in `.chat/history.jsonl`.
+ * Conversation state is persisted per-notebook in `chat/history.jsonl`.
  */
 
 import { LLMClient } from '../llm/client.js';

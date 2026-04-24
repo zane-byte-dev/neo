@@ -320,11 +320,11 @@ export function nbDelete(workDir: string, id: string): boolean {
 // Sub-resources are stored under .neo/notebooks/{name}/ so they don't mix
 // with the user's own article .md files:
 //
-//   .neo/notebooks/{name}/.meta/config.json               — notebook settings
-//   .neo/notebooks/{name}/.meta/source-guides/{id}.json   — AI-generated summary
-//   .neo/notebooks/{name}/.notes/{noteId}.md              — user/AI notes
-//   .neo/notebooks/{name}/.artifacts/{artifactId}.json    — generated artifacts
-//   .neo/notebooks/{name}/.chat/history.jsonl             — notebook-scoped chat
+//   .neo/notebooks/{name}/meta/config.json               — notebook settings
+//   .neo/notebooks/{name}/meta/source-guides/{id}.json   — AI-generated summary
+//   .neo/notebooks/{name}/notes/{noteId}.md              — user/AI notes
+//   .neo/notebooks/{name}/artifacts/{artifactId}.json    — generated artifacts
+//   .neo/notebooks/{name}/chat/history.jsonl             — notebook-scoped chat
 //
 // User article .md files remain at notebooks/{name}/*.md (unchanged).
 //
@@ -405,7 +405,7 @@ export function nbListSources(workDir: string, notebook: string): SourceMeta[] {
         .map(d => d.name)
         .sort();
 
-    const guideDir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
+    const guideDir = join(notebookBaseDir(workDir, notebook), 'meta', 'source-guides');
     const existingGuides = existsSync(guideDir)
         ? new Set(readdirSync(guideDir).filter(f => f.endsWith('.json')).map(f => f.replace(/\.json$/, '')))
         : new Set<string>();
@@ -495,7 +495,7 @@ export function nbRenameSource(workDir: string, notebook: string, sourceId: stri
     const updated = nbUpdate(workDir, entryId, { title: newTitle });
     if (!updated) return undefined;
 
-    const guideDir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
+    const guideDir = join(notebookBaseDir(workDir, notebook), 'meta', 'source-guides');
     const hasGuide = existsSync(join(guideDir, `${sourceId}.json`));
 
     let type: SourceMeta['type'] = 'text';
@@ -529,7 +529,7 @@ export interface SourceGuide {
 }
 
 export function nbGetSourceGuide(workDir: string, notebook: string, sourceId: string): SourceGuide | undefined {
-    const file = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides', `${safeFilename(sourceId)}.json`);
+    const file = join(notebookBaseDir(workDir, notebook), 'meta', 'source-guides', `${safeFilename(sourceId)}.json`);
     if (!existsSync(file)) return undefined;
     try { return JSON.parse(readFileSync(file, 'utf8')) as SourceGuide; } catch { return undefined; }
 }
@@ -537,7 +537,7 @@ export function nbGetSourceGuide(workDir: string, notebook: string, sourceId: st
 /** List all sources along with their guides in one pass — avoids N+1 requests. */
 export function nbListSourcesWithGuides(workDir: string, notebook: string): (SourceMeta & { guide: SourceGuide | null })[] {
     const sources = nbListSources(workDir, notebook);
-    const guideDir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
+    const guideDir = join(notebookBaseDir(workDir, notebook), 'meta', 'source-guides');
     return sources.map((s) => {
         const file = join(guideDir, `${safeFilename(s.id)}.json`);
         let guide: SourceGuide | null = null;
@@ -549,7 +549,7 @@ export function nbListSourcesWithGuides(workDir: string, notebook: string): (Sou
 }
 
 export function nbSaveSourceGuide(workDir: string, notebook: string, guide: SourceGuide): void {
-    const dir = join(notebookBaseDir(workDir, notebook), '.meta', 'source-guides');
+    const dir = join(notebookBaseDir(workDir, notebook), 'meta', 'source-guides');
     ensureDir(dir);
     const file = join(dir, `${safeFilename(guide.sourceId)}.json`);
     writeFileSync(file, JSON.stringify(guide, null, 2), 'utf8');
@@ -568,13 +568,13 @@ export interface NotebookConfig {
 }
 
 export function nbGetConfig(workDir: string, notebook: string): NotebookConfig {
-    const file = join(notebookBaseDir(workDir, notebook), '.meta', 'config.json');
+    const file = join(notebookBaseDir(workDir, notebook), 'meta', 'config.json');
     if (!existsSync(file)) return {};
     try { return JSON.parse(readFileSync(file, 'utf8')) as NotebookConfig; } catch { return {}; }
 }
 
 export function nbSetConfig(workDir: string, notebook: string, config: NotebookConfig): void {
-    const dir = join(notebookBaseDir(workDir, notebook), '.meta');
+    const dir = join(notebookBaseDir(workDir, notebook), 'meta');
     ensureDir(dir);
     writeFileSync(join(dir, 'config.json'), JSON.stringify(config, null, 2), 'utf8');
 }
@@ -592,7 +592,7 @@ export interface NotebookNote {
 }
 
 export function nbListNotes(workDir: string, notebook: string): NotebookNote[] {
-    const dir = join(notebookBaseDir(workDir, notebook), '.notes');
+    const dir = join(notebookBaseDir(workDir, notebook), 'notes');
     if (!existsSync(dir)) return [];
     const results: NotebookNote[] = [];
     for (const f of readdirSync(dir).filter(f => f.endsWith('.md')).sort()) {
@@ -624,7 +624,7 @@ export interface NoteSaveInput {
 }
 
 export function nbSaveNote(workDir: string, notebook: string, data: NoteSaveInput): NotebookNote {
-    const dir = join(notebookBaseDir(workDir, notebook), '.notes');
+    const dir = join(notebookBaseDir(workDir, notebook), 'notes');
     ensureDir(dir);
     const now = Date.now();
     const id = data.id || `note_${now}_${Math.random().toString(36).slice(2, 8)}`;
@@ -647,7 +647,7 @@ export function nbSaveNote(workDir: string, notebook: string, data: NoteSaveInpu
 }
 
 export function nbDeleteNote(workDir: string, notebook: string, noteId: string): boolean {
-    const dir = join(notebookBaseDir(workDir, notebook), '.notes');
+    const dir = join(notebookBaseDir(workDir, notebook), 'notes');
     const file = join(dir, `${safeFilename(noteId)}.md`);
     if (!safeWithin(dir, file)) return false;
     if (!existsSync(file)) return false;
@@ -685,7 +685,7 @@ export interface Artifact {
 }
 
 export function nbListArtifacts(workDir: string, notebook: string, type?: ArtifactType): Artifact[] {
-    const dir = join(notebookBaseDir(workDir, notebook), '.artifacts');
+    const dir = join(notebookBaseDir(workDir, notebook), 'artifacts');
     if (!existsSync(dir)) return [];
     const results: Artifact[] = [];
     for (const f of readdirSync(dir).filter(f => f.endsWith('.json'))) {
@@ -698,7 +698,7 @@ export function nbListArtifacts(workDir: string, notebook: string, type?: Artifa
 }
 
 export function nbGetArtifact(workDir: string, notebook: string, id: string): Artifact | undefined {
-    const file = join(notebookBaseDir(workDir, notebook), '.artifacts', `${safeFilename(id)}.json`);
+    const file = join(notebookBaseDir(workDir, notebook), 'artifacts', `${safeFilename(id)}.json`);
     if (!existsSync(file)) return undefined;
     try { return JSON.parse(readFileSync(file, 'utf8')) as Artifact; } catch { return undefined; }
 }
@@ -712,7 +712,7 @@ export interface ArtifactSaveInput {
 }
 
 export function nbSaveArtifact(workDir: string, notebook: string, input: ArtifactSaveInput): Artifact {
-    const dir = join(notebookBaseDir(workDir, notebook), '.artifacts');
+    const dir = join(notebookBaseDir(workDir, notebook), 'artifacts');
     ensureDir(dir);
     const now = Date.now();
     const id = input.id || `${input.type}_${now}_${Math.random().toString(36).slice(2, 8)}`;
@@ -730,7 +730,7 @@ export function nbSaveArtifact(workDir: string, notebook: string, input: Artifac
 }
 
 export function nbDeleteArtifact(workDir: string, notebook: string, id: string): boolean {
-    const file = join(notebookBaseDir(workDir, notebook), '.artifacts', `${safeFilename(id)}.json`);
+    const file = join(notebookBaseDir(workDir, notebook), 'artifacts', `${safeFilename(id)}.json`);
     if (!existsSync(file)) return false;
     unlinkSync(file);
     return true;
@@ -748,7 +748,7 @@ export interface NotebookChatMessage {
 }
 
 function chatFilePath(workDir: string, notebook: string): string {
-    return join(notebookBaseDir(workDir, notebook), '.chat', 'history.jsonl');
+    return join(notebookBaseDir(workDir, notebook), 'chat', 'history.jsonl');
 }
 
 export function nbReadChatHistory(workDir: string, notebook: string): NotebookChatMessage[] {
@@ -763,7 +763,7 @@ export function nbReadChatHistory(workDir: string, notebook: string): NotebookCh
 }
 
 export function nbAppendChatMessage(workDir: string, notebook: string, msg: NotebookChatMessage): void {
-    const dir = join(notebookBaseDir(workDir, notebook), '.chat');
+    const dir = join(notebookBaseDir(workDir, notebook), 'chat');
     ensureDir(dir);
     const file = join(dir, 'history.jsonl');
     const existing = existsSync(file) ? readFileSync(file, 'utf8') : '';
@@ -786,7 +786,7 @@ export function nbForkChatHistory(workDir: string, notebook: string, messageId: 
     if (idx === -1) return all; // message not found, no-op
     const kept = all.slice(0, idx + 1);
     // Rewrite the file with only the kept messages
-    const dir = join(notebookBaseDir(workDir, notebook), '.chat');
+    const dir = join(notebookBaseDir(workDir, notebook), 'chat');
     ensureDir(dir);
     const file = join(dir, 'history.jsonl');
     writeFileSync(file, kept.map(m => JSON.stringify(m)).join('\n') + '\n', 'utf8');
