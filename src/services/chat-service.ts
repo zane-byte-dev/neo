@@ -12,6 +12,7 @@
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { generateId } from '../utils/id-generator.js';
+import { deriveChatTitleFromMessage } from '../utils/chat-title.js';
 import { parseJsonLines, parseJsonOr } from '../utils/json.js';
 import { userGetWorkDir } from './user-service.js';
 
@@ -178,7 +179,7 @@ export async function messageAdd(
         store.sessions[sessionId].end_time = timestamp;
         // Auto-title from first user message
         if (role === 'user' && !store.sessions[sessionId].title && existing.length === 0) {
-            store.sessions[sessionId].title = content.slice(0, 40);
+            store.sessions[sessionId].title = deriveChatTitleFromMessage(content);
         }
         await writeSessionsStore(userId, store);
     }

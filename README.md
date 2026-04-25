@@ -241,17 +241,6 @@ brew services start caddy
 | `generate_video` | 视频生成（Google Veo 3.1，4-8 秒短视频，需 GEMINI_API_KEY） |
 | `update_user_profile` | 读取/更新用户档案 USER.md（记录长期偏好与背景信息） |
 
-### 用户工具（`<workspaceDir>/.tools/`）
-
-每个子目录包含 `tool.yaml`（声明）+ `run.py`/`run.sh`（执行脚本），自动发现并注册。
-
-| 工具 | 说明 |
-|------|------|
-| `generate_image` | AI 图片生成（Gemini） |
-| `fetch_ai_news` | 聚合 Reddit/HN AI 新闻 |
-| `notebook` | 文件系统知识库操作 |
-| `update_now` | 更新短期记忆（NOW.md） |
-
 ---
 
 ## 多模型支持
@@ -303,7 +292,7 @@ USERS=[{"id":"your_id","name":"your_name","workspace":"your_workspace","tenants"
 │   ├── NOW.md   # 当前关注点/近况
 │   └── daily/   # 每日日记
 ├── skills/      # 用户自定义 Skill
-├── .tools/      # 用户自定义工具（tool.yaml + run.py）
+├── tools/       # 用户自定义工具（tool.yaml + run.py）
 └── notebooks/   # 知识库文件
 ```
 

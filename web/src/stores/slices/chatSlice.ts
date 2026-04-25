@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { ActivityItem, AgentTodoItem, AppState, Chat, Message, NoteEntry } from '../../types'
+import { deriveChatTitleFromMessage } from '../../chat-title'
 import { t } from '../../i18n'
 
 export interface ChatSlice {
@@ -106,7 +107,13 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
         },
         chats: state.chats.map((c) =>
             c.id === sessionId && (c.title === 'New Chat' || c.title === '新对话') && message.role === 'user'
-                ? { ...c, title: (message.content || (message.images?.length ? '📷 Image' : '') || (message.files?.length ? `📎 ${message.files[0].filename}` : '')).slice(0, 40) }
+                ? {
+                    ...c,
+                    title: deriveChatTitleFromMessage(
+                        message.content || '',
+                        (message.images?.length ? '📷 Image' : '') || (message.files?.length ? `📎 ${message.files[0].filename}` : ''),
+                    ),
+                }
                 : c
         ),
     })),

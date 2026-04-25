@@ -16,6 +16,7 @@ import { randomBytes } from 'node:crypto';
 
 let testSpaceDir: string;
 const TEST_USER = 'testuser123';
+const ORIGINAL_USERS_ENV = process.env.USERS;
 
 // Create a unique temp space dir before mocking
 const tmpBase = join(tmpdir(), `neo-test-chat-${randomBytes(6).toString('hex')}`);
@@ -50,6 +51,14 @@ let messageList: typeof import('../chat-service.js').messageList;
 beforeEach(async () => {
     testSpaceDir = join(tmpBase, 'space');
     await fs.mkdir(join(testSpaceDir, TEST_USER, '.tmp'), { recursive: true });
+    process.env.USERS = JSON.stringify([
+        {
+            id: TEST_USER,
+            name: 'Test User',
+            workspace: 'test',
+            workspaceDir: testSpaceDir,
+        },
+    ]);
 
     // Dynamic import to pick up mocked node:url
     const mod = await import('../chat-service.js');
@@ -64,6 +73,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+    if (ORIGINAL_USERS_ENV === undefined) delete process.env.USERS;
+    else process.env.USERS = ORIGINAL_USERS_ENV;
     await fs.rm(tmpBase, { recursive: true, force: true }).catch(() => {});
 });
 
@@ -192,7 +203,15 @@ describe('Message operations', () => {
         await messageAdd('title-test', TEST_USER, 'user', 'What is the weather today?');
 
         const session = await sessionGet('title-test', TEST_USER);
-        expect(session!.title).toBe('What is the weather today?');
+        expect(session!.title).toBe('The weather today');
+    });
+
+    it('messageAdd derives a concise Chinese title from a request-style first message', async () => {
+        await sessionCreate(TEST_USER, 'title-cn-test');
+        await messageAdd('title-cn-test', TEST_USER, 'user', '帮我优化一下对话标题的生成逻辑，需要根据第一个对话内容总结获得标题。');
+
+        const session = await sessionGet('title-cn-test', TEST_USER);
+        expect(session!.title).toBe('优化对话标题的生成逻辑');
     });
 
     it('messageAdd updates session end_time', async () => {
