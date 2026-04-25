@@ -9,7 +9,6 @@ import type { SourceMeta } from '../../types'
 import { useAppStore } from '../../stores/useAppStore'
 import {
     notebookListSourcesWithGuides,
-    notebookGetSourceGuide,
 } from '../../api'
 import { AddSourceModal } from './AddSourceModal'
 import { SourceRow } from './SourceRow'
@@ -32,7 +31,7 @@ const SORT_LABELS: Record<SortOption, string> = {
 }
 
 export const SourcePanel: React.FC<Props> = ({ notebook, onSelectSource, hideHeader }) => {
-    const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuide, setSourceGuides, sourceGuides } = useAppStore()
+    const { sources, setSources, selectedSourceIds, setSelectedSourceIds, toggleSourceSelected, setSourceGuides, sourceGuides } = useAppStore()
     const [loading, setLoading] = React.useState(false)
     const [modalOpen, setModalOpen] = React.useState(false)
     const [sortBy, setSortBy] = React.useState<SortOption>('default')

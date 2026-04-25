@@ -208,6 +208,8 @@ export interface AppState {
     setNotebookArtifacts: (artifacts: Artifact[]) => void
     notebookConfig: NotebookConfig | null
     setNotebookConfig: (config: NotebookConfig | null) => void
+    notebookChatInput: string
+    setNotebookChatInput: (input: string) => void
 }
 
 // ── Notebook workspace types ─────────────────────────────────────────────────

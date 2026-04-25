@@ -16,7 +16,7 @@ describe('tools/update-now', () => {
             workDir,
         );
         expect(res).toContain('已覆写');
-        const body = await readFile(join(workDir, 'memory', 'NOW.md'), 'utf8');
+        const body = await readFile(join(workDir, '.neo', 'memory', 'NOW.md'), 'utf8');
         expect(body).toContain('# Mission');
         expect(body).toMatch(/\*Updated: \d{4}\/\d{2}\/\d{2}\*/);
     });
@@ -24,7 +24,7 @@ describe('tools/update-now', () => {
     it('patch appends before re-stamping the footer', async () => {
         await updateNowTool.handler({ action: 'write', content: '# A' }, workDir);
         await updateNowTool.handler({ action: 'patch', content: '# B' }, workDir);
-        const body = await readFile(join(workDir, 'memory', 'NOW.md'), 'utf8');
+        const body = await readFile(join(workDir, '.neo', 'memory', 'NOW.md'), 'utf8');
         // only one stamp should exist
         const stamps = body.match(/\*Updated:/g) ?? [];
         expect(stamps.length).toBe(1);

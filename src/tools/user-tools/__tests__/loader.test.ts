@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 function makeToolDir(name: string, yamlContent?: string, scriptName?: string) {
-    const toolDir = join(tmpDir, '.tools', name);
+    const toolDir = join(tmpDir, '.neo', 'tools', name);
     mkdirSync(toolDir, { recursive: true });
     if (yamlContent !== undefined) {
         writeFileSync(join(toolDir, 'tool.yaml'), yamlContent, 'utf8');
@@ -56,7 +56,7 @@ describe('loadUserTools', () => {
     });
 
     it('skips directories without tool.yaml', async () => {
-        const toolDir = join(tmpDir, '.tools', 'notool');
+        const toolDir = join(tmpDir, '.neo', 'tools', 'notool');
         mkdirSync(toolDir, { recursive: true });
         writeFileSync(join(toolDir, 'run.sh'), '#!/bin/sh\necho ok', 'utf8');
 

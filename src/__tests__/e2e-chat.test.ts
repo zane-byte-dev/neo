@@ -46,11 +46,8 @@ vi.mock('../services/user-service.js', () => ({
         userTools: new Map(),
         preferences: {},
     })),
+    userGetWorkDir: vi.fn().mockImplementation(() => tmpDir),
 }));
-
-// Use a real chat-service with the tmp directory
-// Override _spaceDir via a mock that wraps the real module
-const chatServiceModule = await import('../services/chat-service.js');
 
 import { chatRoute } from '../routes/chat.js';
 import { newSession } from '../routes/session.js';

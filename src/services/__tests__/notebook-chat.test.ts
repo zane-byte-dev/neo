@@ -10,7 +10,7 @@ const _mockGenerate = vi.fn();
 
 vi.mock('../../llm/client.js', () => ({
     LLMClient: class {
-        generate(...args: any[]) { return _mockGenerate(...args); }
+        generateWithUsage(...args: any[]) { return _mockGenerate(...args); }
     },
 }));
 
@@ -19,7 +19,15 @@ const { streamNotebookChat } = await import('../notebook-chat.js');
 let workDir: string;
 
 function mockGenerate(response: string) {
-    _mockGenerate.mockResolvedValue(response);
+    _mockGenerate.mockResolvedValue({
+        text: response,
+        usage: {
+            inputTokens: 10,
+            outputTokens: 10,
+            totalTokens: 20,
+        },
+        model: 'gemma',
+    });
 }
 
 beforeEach(async () => {

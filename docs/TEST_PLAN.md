@@ -17,6 +17,13 @@
 - 前端已使用 Vite，统一工具链降低学习成本
 - 内置 `vi.mock()` / `vi.spyOn()` 即可满足 mock 需求
 
+## 当前状态校正（2026-04）
+
+- 根目录 [package.json](../package.json) 已具备 `test`、`test:watch` 脚本，`vitest.config.ts` 已落地
+- 仓库内已有较完整的测试基线，覆盖 `utils`、`services`、`routes`、`llm`、`memory`、`sandbox`、`tools` 等模块
+- 当前主要缺口不是“从零引入测试”，而是补齐覆盖率脚本、CI 门禁，以及校正文档中已过时的测试前提
+- 目前尚未发现 `.github/workflows`、ESLint、Prettier 配置，测试与代码质量门禁仍需补齐
+
 ---
 
 ## 测试分层
@@ -125,8 +132,8 @@
 ```
 测试文件: src/services/__tests__/notebook-frontmatter.test.ts
 
-（notebook-service 的 parseFrontmatter / serializeFrontmatter 为 module-private，
-  可通过对 nbCreate → nbGet 的 round-trip 间接测试，或提取为独立 util）
+（`parseFrontmatter` / `serializeFrontmatter` / `titleFromFilename` 已从 `notebook-service.ts` 导出，
+  可直接补纯函数单测；`nbCreate → nbGet` 的 round-trip 仍可保留作为回归测试）
 
 用例:
 - parseFrontmatter: 标准 YAML frontmatter 正确解析全部字段
@@ -161,10 +168,10 @@
 ### 1.8 `src/platforms/telegram-bot.ts` — Markdown 转换
 
 ```
-测试文件: src/platforms/__tests__/telegram-bot.test.ts
+测试文件: src/utils/__tests__/telegram-html.test.ts
 
-（markdownToTelegramHtml / escapeHtml / inlineFormat / splitTelegramText 
-  目前为 module-private，建议提取为 src/utils/telegram-html.ts 以便测试）
+（`markdownToTelegramHtml` / `escapeHtml` / `inlineFormat` / `splitTelegramText`
+  已提取到 `src/utils/telegram-html.ts`；`telegram-bot.ts` 本身应聚焦授权、分段发送与接线集成测试）
 
 用例:
 - escapeHtml: & < > 正确转义
@@ -194,7 +201,9 @@
 ```
 测试文件: src/services/__tests__/chat-service.test.ts
 
-前置: 每个测试用例使用 tmp 目录作为 space 根目录（mock _spaceDir）
+前置: 每个测试用例为测试用户配置独立 `workspaceDir`，并在测试环境显式设置 `process.env.USERS`
+
+存储路径：`{workDir}/.neo/projects/chat-sessions.json` 与 `{workDir}/.neo/projects/{sessionId}/chat-{sessionId}.jsonl`
 
 用例:
 - sessionCreate: 创建会话，返回正确的 SessionRow
@@ -472,17 +481,26 @@
 
 ## 实施步骤
 
-### Step 1: 搭建测试基础设施
+### Step 1: 在现有基线上补齐测试基础设施
+
+当前仓库已具备：
+
+- 根目录 [package.json](../package.json) 中的 `test`、`test:watch`
+- [vitest.config.ts](../vitest.config.ts) 基础配置
+- `supertest` 与 `@types/supertest` 依赖
+
+建议下一步补齐：
+
+- `test:coverage` 脚本
+- `vitest.config.ts` 中的 coverage 配置
+- CI 中的 `build + test` 门禁
 
 ```bash
-# 安装依赖
-npm install -D vitest @vitest/coverage-v8
-
-# 可选：HTTP 测试
-npm install -D supertest @types/supertest
+# 若尚未安装覆盖率 provider
+npm install -D @vitest/coverage-v8
 ```
 
-在 `package.json` 添加脚本：
+在 `package.json` 补充脚本：
 
 ```json
 {
@@ -494,7 +512,7 @@ npm install -D supertest @types/supertest
 }
 ```
 
-创建 `vitest.config.ts`：
+在现有 `vitest.config.ts` 基础上补充 coverage：
 
 ```typescript
 import { defineConfig } from 'vitest/config';
@@ -503,7 +521,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/__tests__/**/*.test.ts'],
+    include: ['src/**/*.test.ts'],
+    env: {
+      SESSION_SECRET: 'test-secret-for-vitest',
+    },
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
@@ -513,7 +534,7 @@ export default defineConfig({
 });
 ```
 
-### Step 2: 按优先级实施
+### Step 2: 按优先级补齐剩余薄弱面
 
 | 阶段 | 模块数 | 预估用例数 | 优先级 | 依赖 |
 |------|--------|-----------|--------|------|
@@ -554,14 +575,14 @@ jobs:
 
 ---
 
-## 需要重构以便测试的模块
+## 仍建议调整以提升可测性
 
-以下模块存在硬编码路径或 module-private 函数，需要小幅重构后才能方便测试：
+以下模块里，部分历史阻塞已解除；剩余条目聚焦当前仍影响测试稳定性的点：
 
 | 模块 | 问题 | 建议 |
 |------|------|------|
-| `chat-service.ts` | `_spaceDir` 硬编码为项目根目录下的 `space/` | 将路径通过参数或配置注入 |
-| `notebook-service.ts` | `parseFrontmatter` / `serializeFrontmatter` 为 module-private | 提取到 `utils/frontmatter.ts` 导出 |
-| `telegram-bot.ts` | `markdownToTelegramHtml` 等为 module-private | 提取到 `utils/telegram-html.ts` 导出 |
+| `chat-service.ts` | 已迁移到用户 `workspaceDir`，但测试仍依赖 `process.env.USERS` 和测试用户配置 | 提供统一的 test helper，为测试用户注入 `workspaceDir` 和 `USERS` |
+| `notebook-service.ts` | frontmatter 相关 helper 已导出，但文档与测试计划仍按旧前提描述 | 直接补纯函数单测，并删除“需额外提取 util”的旧假设 |
+| `telegram-bot.ts` | Markdown 转换 helper 已提取，剩余测试重点是授权与消息分段行为 | 保持纯函数测试在 `src/utils/__tests__/telegram-html.test.ts`，Bot 侧只做集成行为验证 |
 | `config.ts` | 模块顶层执行 `process.exit(1)`，import 时无法拦截 | 改为抛出异常或延迟校验 |
-| `executor.ts` | `safePath` 为 module-private | 导出或提取到 utils |
+| `executor.ts` | `safePath` 已导出，但文档仍按旧前提描述 | 直接补/维护 `safePath` 单测，无需再为测试目的重构 |

@@ -46,7 +46,7 @@ describe('memory/manager', () => {
             userMsg: 'hello', assistantMsg: 'hi',
         });
         const shard = new Date().toISOString().slice(0, 7);
-        const raw = await readFile(join(workDir, 'memory', 'episodes', `${shard}.jsonl`), 'utf8');
+        const raw = await readFile(join(workDir, '.neo', 'memory', 'episodes', `${shard}.jsonl`), 'utf8');
         expect(raw).toContain('"tier":"episodic"');
         expect(raw).toContain('"role":"user"');
         expect(raw).toContain('"role":"assistant"');

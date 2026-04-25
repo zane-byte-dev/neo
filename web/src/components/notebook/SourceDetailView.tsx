@@ -6,7 +6,7 @@
 import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, Search, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, Search, X, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { useAppStore } from '../../stores/useAppStore'
 import { notebookGetSource, notebookGetSourceGuide, notebookGenerateSourceGuide } from '../../api'
 import type { SourceMeta, SourceGuide } from '../../types'
@@ -35,7 +35,7 @@ const TYPE_LABEL: Record<string, string> = {
     image: '图片',
 }
 
-export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack }) => {
+export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack: _onBack }) => {
     const { sourceGuides, setSourceGuide, selectedModel } = useAppStore()
     const [content, setContent] = React.useState<string | null>(null)
     const [loading, setLoading] = React.useState(true)
