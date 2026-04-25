@@ -430,3 +430,706 @@ B1
 - 新增执行器事件单测
 - 跑一次带工具调用的对话，确认事件文件中存在工具开始/结束与 todo/artifact 事件
 ```
+
+---
+
+## 6. B3 记录执行 checkpoint，并支持从 checkpoint 恢复 run
+
+**Title**
+
+```text
+runtime: 记录执行 checkpoint，并支持从 checkpoint 恢复 run
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, type/backend, priority/high
+```
+
+**Milestone**
+
+```text
+M2 Evented Executor
+```
+
+**Blocked by**
+
+```text
+B2
+```
+
+**Body**
+
+```markdown
+## 背景
+
+在执行器已经具备事件发射能力后，还需要引入 checkpoint，才能支撑恢复执行和中断后的继续处理。否则 run 即使有事件流，也仍然缺少明确的恢复锚点。
+
+## 目标
+
+记录执行过程中的最小 checkpoint，并提供 `resumeRun(runId)` 能力。
+
+## 范围
+
+### In scope
+
+- 在 [src/services/agent-runner.ts](../src/services/agent-runner.ts) 或 [src/runtime/executor.ts](../src/runtime/executor.ts) 中记录 `fullResponse`、history cursor、当前阶段、最近工具步骤
+- 实现 `resumeRun(runId)`
+- 约定 checkpoint 刷新时机，避免 chunk 级别频繁写盘
+
+### Out of scope
+
+- 不做启动自动扫描恢复
+- 不改前端协议
+
+## 主要改动点
+
+1. 为 `running` 和 `waiting_confirm` 的 run 提供明确的恢复点。
+2. 将恢复逻辑从 route 层剥离，归到 runtime executor。
+
+## 完成条件
+
+1. 运行中途可以读取最近 checkpoint。
+2. 对 `waiting_confirm` 或可恢复的 `running` 状态，存在明确的 resume 入口。
+
+## 验证建议
+
+- 补 checkpoint 与 resume 测试
+- 模拟中断后恢复并继续完成 run
+```
+
+---
+
+## 7. C1 将危险工具确认从内存 Map 改为持久化 pending_action
+
+**Title**
+
+```text
+runtime: 将危险工具确认从内存 Map 改为持久化 pending_action
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, area/tools, priority/high
+```
+
+**Milestone**
+
+```text
+M3 Runtime Integration
+```
+
+**Blocked by**
+
+```text
+A3, B2
+```
+
+**Body**
+
+```markdown
+## 背景
+
+当前 [src/utils/pending-confirm.ts](../src/utils/pending-confirm.ts) 仍是纯内存确认注册表，服务重启或连接中断后待确认状态会丢失。这是运行时从“函数式调用”升级为“可恢复执行”时必须先补掉的缺口。
+
+## 目标
+
+使用 `pending_action` 替换内存确认注册表，让危险工具确认具备持久化和可恢复能力。
+
+## 范围
+
+### In scope
+
+- 调整 [src/utils/pending-confirm.ts](../src/utils/pending-confirm.ts) 为 runtime-backed 实现，或由 runtime 模块取代
+- 在确认触发时写入 `confirm_requested` 事件和 `pending_action`
+- 更新 run.status 为 `waiting_confirm`
+
+### Out of scope
+
+- 不改前端确认协议
+- 不做 timeout sweep
+
+## 主要改动点
+
+1. 待确认动作不再只保存在内存中。
+2. SSE 断开或进程重启后，确认动作仍可重新读取。
+
+## 完成条件
+
+1. 未决确认不再只保存在内存 Map。
+2. 即使 SSE 断开，待确认动作仍可重新读取。
+
+## 验证建议
+
+- 补 pending_action 持久化测试
+- 模拟确认前服务重启，确认动作仍可找回
+```
+
+---
+
+## 8. C2 将 tool-confirm 从 confirmId 改为 runId/actionId 协议
+
+**Title**
+
+```text
+runtime: 将 tool-confirm 从 confirmId 改为 runId/actionId 协议
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, area/web, area/api, priority/high
+```
+
+**Milestone**
+
+```text
+M3 Runtime Integration
+```
+
+**Blocked by**
+
+```text
+C1
+```
+
+**Body**
+
+```markdown
+## 背景
+
+当确认流变成 runtime-backed 之后，现有 `confirmId` 协议已经不再适合表达持久化动作，服务端与前端都需要切换到 `runId/actionId` 作为主标识。
+
+相关锚点：
+
+- [src/routes/tool-confirm.ts](../src/routes/tool-confirm.ts)
+- [web/src/api.ts](../web/src/api.ts)
+- [web/src/components/ChatArea.tsx](../web/src/components/ChatArea.tsx)
+
+## 目标
+
+让确认接口和前端 activity log 以 `runId/actionId` 为主键，彻底摆脱内存 `confirmId`。
+
+## 范围
+
+### In scope
+
+- 改造 [src/routes/tool-confirm.ts](../src/routes/tool-confirm.ts)
+- 改造 [web/src/api.ts](../web/src/api.ts) 中的 `confirmTool()`
+- 改造 [web/src/types/index.ts](../web/src/types/index.ts) 的 `tool_confirm` 结构
+- 改造 [web/src/components/ChatArea.tsx](../web/src/components/ChatArea.tsx) 的 Approve/Deny 流程
+
+### Out of scope
+
+- 不在这一项里实现 SSE 重连
+
+## 主要改动点
+
+1. 前后端共享同一套动作标识。
+2. 前端 activity log 能稳定追踪确认动作状态。
+
+## 完成条件
+
+1. 前端 activity log 能保存 `runId`、`actionId`、确认状态。
+2. 服务端可在不依赖内存 `confirmId` 的情况下解析用户决策。
+
+## 验证建议
+
+- 补 chat route / ChatArea 的确认流测试
+- 手动验证 Approve/Deny 后 activity log 状态正确更新
+```
+
+---
+
+## 9. C3 实现 waiting_confirm 和半完成 run 的 timeout/recovery 收敛逻辑
+
+**Title**
+
+```text
+runtime: 实现 waiting_confirm 和半完成 run 的收敛逻辑
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, type/backend, priority/medium
+```
+
+**Milestone**
+
+```text
+M4 Recovery And Ops
+```
+
+**Blocked by**
+
+```text
+B3, C1
+```
+
+**Body**
+
+```markdown
+## 背景
+
+即使确认动作持久化了，如果缺少 timeout/recovery 收敛器，系统仍会留下无限期挂起的 run。运行时要可运营，必须能主动收敛异常中断或超时状态。
+
+## 目标
+
+实现 `waiting_confirm` 和异常中断 `running` run 的收敛逻辑。
+
+## 范围
+
+### In scope
+
+- 启动时扫描 `.neo/runs/`
+- 对过期 pending_action 生成 `confirm_resolved` 事件并自动拒绝
+- 对异常退出遗留的 `running` run 做失败或可恢复收敛
+
+### Out of scope
+
+- 不做新的前端 UI
+
+## 主要改动点
+
+1. 防止 run 永久悬挂。
+2. 让重启后的系统自动把脏状态收敛到确定结果。
+
+## 完成条件
+
+1. 超时确认会把 run 推进到确定状态。
+2. 服务重启后，不会留下无限期的 `waiting_confirm` 或僵尸 `running` run。
+
+## 验证建议
+
+- 增加启动恢复测试
+- 模拟过期确认和异常退出场景
+```
+
+---
+
+## 10. D1 新增 runs API：详情、事件流、列表、取消
+
+**Title**
+
+```text
+runtime: 新增 runs API（详情、事件流、列表、取消）
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, area/api, priority/high
+```
+
+**Milestone**
+
+```text
+M3 Runtime Integration
+```
+
+**Blocked by**
+
+```text
+A2, A3
+```
+
+**Body**
+
+```markdown
+## 背景
+
+运行时真正成为系统对象之前，需要一组显式的查询与控制 API。否则 route 与前端仍只能通过临时 SSE 流观察执行结果。
+
+## 目标
+
+新增 runs 相关 API：详情、事件流、列表与取消。
+
+## 范围
+
+### In scope
+
+- 新增 [src/routes/runs.ts](../src/routes/runs.ts)
+- 提供 `GET /api/runs/:id`、`GET /api/runs/:id/events`、`GET /api/runs`、`POST /api/runs/:id/cancel`
+- 复用 runtime store 与 event reader
+
+### Out of scope
+
+- 不要求本项就有完整前端页面
+
+## 主要改动点
+
+1. 提供不依赖 chat SSE 的 run 查询方式。
+2. 为后续调试面板和前端重连提供稳定 API。
+
+## 完成条件
+
+1. 可以不走聊天 SSE，直接按 runId 查看状态与事件。
+2. cancel API 能更新 run 状态并触发执行中止。
+
+## 验证建议
+
+- 增加 runs route 测试
+- 手动创建 run 后通过 API 读取详情和事件
+```
+
+---
+
+## 11. D2 将 chat route 改为“创建 run + 桥接事件到 SSE”
+
+**Title**
+
+```text
+runtime: 重构 chat route，为 runtime event SSE 桥接层
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, area/chat, area/api, priority/high
+```
+
+**Milestone**
+
+```text
+M3 Runtime Integration
+```
+
+**Blocked by**
+
+```text
+B2, D1
+```
+
+**Body**
+
+```markdown
+## 背景
+
+当前 [src/routes/chat.ts](../src/routes/chat.ts) 仍是“请求进来 -> 直接执行 -> SSE 回写”的模型。要让运行时真正成为一等对象，chat route 必须退化成“run 创建 + event 桥接”。
+
+## 目标
+
+让 chat route 从执行入口降为运行时桥接层。
+
+## 范围
+
+### In scope
+
+- 改造 [src/routes/chat.ts](../src/routes/chat.ts)
+- 复用 [src/utils/sse.ts](../src/utils/sse.ts)
+- 在创建 run 后，把运行时事件映射为现有 `text/tool_call/tool_result/tool_confirm/todo_update/done/error` SSE chunk
+
+### Out of scope
+
+- 不同时改 notebook chat
+- 第一步不要求前端协议变化
+
+## 主要改动点
+
+1. SSE 只负责消费和桥接 event stream。
+2. 客户端断线不会直接把 run 判定为失败。
+
+## 完成条件
+
+1. 前端协议在第一步可以保持兼容。
+2. SSE 断开不会自动让 run 失败。
+3. 路由层不再持有主要执行状态。
+
+## 验证建议
+
+- 补 chat route 测试
+- 模拟客户端断线，确认 run 仍继续执行或被明确中止
+```
+
+---
+
+## 12. D3 将 cron / Telegram / webhook 入口统一到 runtime run model
+
+**Title**
+
+```text
+runtime: 统一 cron、Telegram 和 webhook 到 runtime 入口
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, area/integration, priority/medium
+```
+
+**Milestone**
+
+```text
+M4 Recovery And Ops
+```
+
+**Blocked by**
+
+```text
+D2
+```
+
+**Body**
+
+```markdown
+## 背景
+
+运行时若只覆盖 Web chat，系统仍然会保留多套执行模型。要真正统一语义，cron、Telegram 和 webhook 入口都必须创建同一种 run。
+
+## 目标
+
+统一异步入口到 runtime run model，并补齐入口元数据。
+
+## 范围
+
+### In scope
+
+- 改造 [src/services/cron-agent.ts](../src/services/cron-agent.ts)
+- 改造 [src/platforms/telegram-bot.ts](../src/platforms/telegram-bot.ts)
+- 检查 [src/routes/webhook.ts](../src/routes/webhook.ts)
+- 为 run 增加 `entrypoint`、`triggerType`、`parentRunId`、`sessionId` 等元数据
+
+### Out of scope
+
+- 不要求本项提供统一 UI 面板
+
+## 主要改动点
+
+1. 所有异步入口共享同一运行模型。
+2. 后台任务、聊天任务和 webhook 任务都能在统一 run 列表中查看。
+
+## 完成条件
+
+1. cron 与 Telegram 触发的任务都能产出 run 记录。
+2. 入口层主要负责鉴权和结果消费，不再自己拼执行语义。
+
+## 验证建议
+
+- 先补 cron integration，再扩 Telegram/webhook
+- 手动触发后台任务，确认 run 记录完整
+```
+
+---
+
+## 13. E1 让 Web 前端识别 runId/actionId/cursor，并支持事件重连
+
+**Title**
+
+```text
+runtime: 让 Web 前端支持 runId/actionId/cursor 与事件重连
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, area/web, priority/high
+```
+
+**Milestone**
+
+```text
+M4 Recovery And Ops
+```
+
+**Blocked by**
+
+```text
+C2, D2
+```
+
+**Body**
+
+```markdown
+## 背景
+
+当前 Web 前端仍把自己当作“单次流式消息消费者”。一旦 chat route 和确认流都 runtime 化，前端也必须升级为“运行时事件消费者”。
+
+相关锚点：
+
+- [web/src/api.ts](../web/src/api.ts)
+- [web/src/lib/stream-transport.ts](../web/src/lib/stream-transport.ts)
+- [web/src/components/ChatArea.tsx](../web/src/components/ChatArea.tsx)
+- [web/src/stores/slices/chatSlice.ts](../web/src/stores/slices/chatSlice.ts)
+
+## 目标
+
+让 Web 前端识别 `runId`、`actionId` 和 `cursor`，并在 SSE 中断后支持事件重连。
+
+## 范围
+
+### In scope
+
+- 改造 [web/src/api.ts](../web/src/api.ts) 的 `streamChat()` 和 `confirmTool()`
+- 改造 [web/src/lib/stream-transport.ts](../web/src/lib/stream-transport.ts)
+- 改造 [web/src/components/ChatArea.tsx](../web/src/components/ChatArea.tsx)
+- 改造 [web/src/stores/slices/chatSlice.ts](../web/src/stores/slices/chatSlice.ts)
+
+### Out of scope
+
+- 不扩散到 Notebook 面板
+
+## 主要改动点
+
+1. activity log 记录的确认项能映射到具体 run/action。
+2. 前端拥有最小事件重连能力。
+
+## 完成条件
+
+1. 前端 activity log 记录的确认项可映射到具体 run/action。
+2. SSE 断开后，客户端至少具备从最新 cursor 继续追事件的能力。
+
+## 验证建议
+
+- 增加前端/路由集成测试
+- 手动断开 SSE，再验证能继续追事件
+```
+
+---
+
+## 14. E2 补齐 runtime store、resume、confirm、SSE reconnect 测试
+
+**Title**
+
+```text
+runtime: 补齐 runtime store、resume、confirm、SSE reconnect 测试
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, area/tests, priority/high
+```
+
+**Milestone**
+
+```text
+M4 Recovery And Ops
+```
+
+**Blocked by**
+
+```text
+A2, B3, C2, D2
+```
+
+**Body**
+
+```markdown
+## 背景
+
+运行时重构会把执行链从函数式流程变成状态机 + 事件流。如果不尽早补齐专门测试矩阵，后续每个阶段都会靠手动回归，风险会快速放大。
+
+## 目标
+
+补齐 runtime store、resume、confirm、SSE reconnect 等关键场景的自动化测试。
+
+## 范围
+
+### In scope
+
+- 新增 `src/runtime/__tests__/` 测试目录
+- 补 `store`、`events`、`checkpoint`、`pending-action` 单测
+- 补 [src/services/__tests__/agent-runner.test.ts](../src/services/__tests__/agent-runner.test.ts) 的 runtime 版本用例
+- 补 [src/routes/__tests__/chat.test.ts](../src/routes/__tests__/chat.test.ts) 的 SSE reconnect / confirm 路径
+
+### Out of scope
+
+- 不要求本项一开始就覆盖所有平台入口
+
+## 主要改动点
+
+1. 建立运行时回归网。
+2. 覆盖重启恢复和 SSE 重连这两类最容易回归的场景。
+
+## 完成条件
+
+1. 可验证 run 创建、事件追加、确认超时、resume、SSE 事件桥接。
+2. 至少覆盖一个“服务重启后恢复 waiting_confirm”的场景。
+
+## 验证建议
+
+- 运行完整 runtime 测试集
+- 在 CI 中纳入这些新测试
+```
+
+---
+
+## 15. E3 记录 runtime 指标并提供调试查看入口
+
+**Title**
+
+```text
+runtime: 记录运行时指标并提供调试查看入口
+```
+
+**Suggested Labels**
+
+```text
+area/runtime, area/observability, priority/medium
+```
+
+**Milestone**
+
+```text
+M4 Recovery And Ops
+```
+
+**Blocked by**
+
+```text
+D1, D2
+```
+
+**Body**
+
+```markdown
+## 背景
+
+运行时一旦上线，如果没有指标和调试入口，问题排查成本会非常高。最低限度需要记录耗时、工具调用、fallback 与等待确认时间，并能按 runId 快速定位问题。
+
+## 目标
+
+补齐最小运行时观测能力，并提供调试查看入口。
+
+## 范围
+
+### In scope
+
+- 为 run 记录总耗时、工具数、fallback 次数、等待确认耗时
+- 接入现有日志体系，如 [src/utils/logger.ts](../src/utils/logger.ts)
+- 视需要补 run 列表简易调试接口或后台页占位
+
+### Out of scope
+
+- 不强求首版就提供完整运维面板
+
+## 主要改动点
+
+1. 指标、日志和事件流三者围绕 `runId` 对齐。
+2. 最低限度做到“能查到、能看懂、能关联”。
+
+## 完成条件
+
+1. 单个 run 的关键指标可以被结构化读取。
+2. 出问题时能按 runId 从日志和事件流定位问题。
+
+## 验证建议
+
+- 手动执行一条 run，确认指标和日志包含 runId
+- 校验 API 或调试入口可以查看关键字段
+```
+
+## 完成条件
+
+1. 单次对话至少能落下：`run_created`、`run_started`、`route_resolved`、`user_message_saved`、若干 `llm_chunk`、`run_completed`。
+2. 工具调用和产物不再只存在于 SSE 瞬时流中。
+3. 异常路径会记录 `run_failed`，而不是仅抛错结束。
+
+## 验证建议
+
+- 新增执行器事件单测
+- 跑一次带工具调用的对话，确认事件文件中存在工具开始/结束与 todo/artifact 事件
+```

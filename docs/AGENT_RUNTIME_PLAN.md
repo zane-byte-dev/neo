@@ -116,6 +116,58 @@ queued -> running -> completed
 2. 断线重连、调试回放、问题追踪都统一读取事件流。
 3. 后续 Telegram、Webhook、后台 worker 也可以消费相同事件。
 
+### 3.4 最小 JSON 示例
+
+对应代码定义见 [src/runtime/types.ts](../src/runtime/types.ts)。
+
+`run.json` 最小示例：
+
+```json
+{
+  "id": "run_20260425_001",
+  "userId": "alice",
+  "status": "queued",
+  "entrypoint": "web-chat",
+  "triggerType": "user_message",
+  "createdAt": "2026-04-25T10:00:00.000Z",
+  "updatedAt": "2026-04-25T10:00:00.000Z",
+  "sessionId": "sess_123",
+  "request": {
+    "message": "帮我总结今天的工作重点",
+    "model": "auto",
+    "imageCount": 0,
+    "documentCount": 0
+  }
+}
+```
+
+`events.jsonl` 最小示例：
+
+```json
+{"id":"evt_1","runId":"run_20260425_001","index":0,"type":"run_created","ts":"2026-04-25T10:00:00.000Z","payload":{"status":"queued","entrypoint":"web-chat","triggerType":"user_message"}}
+{"id":"evt_2","runId":"run_20260425_001","index":1,"type":"route_resolved","ts":"2026-04-25T10:00:01.000Z","payload":{"model":"gemini-acp","tier":"standard","score":0.62,"confidence":0.91}}
+```
+
+`pending.json` 最小示例：
+
+```json
+{
+  "id": "action_approve_tool_1",
+  "runId": "run_20260425_001",
+  "type": "tool_confirmation",
+  "status": "pending",
+  "createdAt": "2026-04-25T10:00:03.000Z",
+  "updatedAt": "2026-04-25T10:00:03.000Z",
+  "expiresAt": "2026-04-25T10:01:03.000Z",
+  "request": {
+    "toolName": "bash",
+    "args": {
+      "command": "rm -rf /tmp/demo"
+    }
+  }
+}
+```
+
 ---
 
 ## 四、实施阶段

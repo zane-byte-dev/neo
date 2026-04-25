@@ -14,6 +14,8 @@
 
 import { LLMClient } from '../llm/client.js';
 import { appendUsageRecord, estimateCost } from '../llm/cost.js';
+import { indexNotebookSources } from '../indexing/ingest.js';
+import { searchKnowledge } from '../indexing/search.js';
 import {
     nbListSources,
     nbGetSourceEntry,
@@ -73,6 +75,9 @@ interface ScoredPassage {
     text: string;
     score: number;
     position: number; // byte offset in source
+    chunkId?: string;
+    charStart?: number;
+    charEnd?: number;
 }
 
 /** Find the most relevant passages across all provided sources. */
@@ -131,6 +136,35 @@ function retrievePassages(
     // Sort by score desc, keep top N
     passages.sort((a, b) => b.score - a.score);
     return passages.slice(0, MAX_PASSAGES);
+}
+
+function retrieveIndexedPassages(
+    workDir: string,
+    notebook: string,
+    query: string,
+    selectedSourceIds: string[] | undefined,
+): ScoredPassage[] {
+    indexNotebookSources(workDir, notebook, selectedSourceIds);
+
+    return searchKnowledge({
+        workDir,
+        query,
+        kinds: ['notebook_source'],
+        notebook,
+        sourceIds: selectedSourceIds,
+        limit: MAX_PASSAGES,
+    })
+        .filter((hit) => Boolean(hit.sourceId))
+        .map((hit) => ({
+            sourceId: hit.sourceId!,
+            title: hit.title,
+            text: hit.text,
+            score: hit.score,
+            position: hit.charStart,
+            chunkId: hit.chunkId,
+            charStart: hit.charStart,
+            charEnd: hit.charEnd,
+        }));
 }
 
 // ── Prompt assembly ──────────────────────────────────────────────────────────
@@ -227,6 +261,9 @@ export interface ParsedCitation {
     sourceId: string;
     title: string;
     snippet?: string;
+    chunkId?: string;
+    charStart?: number;
+    charEnd?: number;
 }
 
 function parseCitations(
@@ -252,6 +289,9 @@ function parseCitations(
             sourceId: sid,
             title: p.title,
             snippet: p.text.slice(0, 200).trim(),
+            chunkId: p.chunkId,
+            charStart: p.charStart ?? p.position,
+            charEnd: p.charEnd,
         });
     }
     return results;
@@ -293,7 +333,17 @@ export async function streamNotebookChat(
 
     // 2. Build retrieval context
     const sources = loadSourceContents(workDir, notebook, selectedSourceIds);
-    const passages = retrievePassages(userMessage, sources);
+    let passages: ScoredPassage[] = [];
+
+    try {
+        passages = retrieveIndexedPassages(workDir, notebook, userMessage, selectedSourceIds);
+    } catch {
+        passages = [];
+    }
+
+    if (!passages.length) {
+        passages = retrievePassages(userMessage, sources);
+    }
 
     // Emit meta (which sources/passages are in play) for UI
     const seenIds: string[] = [];
