@@ -32,6 +32,10 @@ function messagesFile(userId: string, sessionId: string): string {
     return join(tmpDir(userId), sessionId, `chat-${sessionId}.jsonl`);
 }
 
+function sessionDir(userId: string, sessionId: string): string {
+    return join(tmpDir(userId), sessionId);
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface SessionRow {
@@ -144,7 +148,7 @@ export async function sessionDelete(sessionId: string, userId: string): Promise<
     if (!store.sessions[sessionId]) return false;
     delete store.sessions[sessionId];
     await writeSessionsStore(userId, store);
-    try { await fs.unlink(messagesFile(userId, sessionId)); } catch { /* already gone */ }
+    await fs.rm(sessionDir(userId, sessionId), { recursive: true, force: true });
     return true;
 }
 

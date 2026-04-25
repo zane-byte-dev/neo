@@ -20,6 +20,8 @@ const ORIGINAL_USERS_ENV = process.env.USERS;
 
 // Create a unique temp space dir before mocking
 const tmpBase = join(tmpdir(), `neo-test-chat-${randomBytes(6).toString('hex')}`);
+const projectsDir = () => join(testSpaceDir, '.neo', 'projects');
+const chatDir = (sessionId: string) => join(projectsDir(), sessionId);
 
 vi.mock('node:url', async (importOriginal) => {
     const original = await importOriginal<typeof import('node:url')>();
@@ -180,6 +182,17 @@ describe('Session operations', () => {
 
         const check = await sessionGet('del-test', TEST_USER);
         expect(check).toBeNull();
+    });
+
+    it('sessionDelete removes the entire session directory', async () => {
+        await sessionCreate(TEST_USER, 'del-dir-test');
+        await messageAdd('del-dir-test', TEST_USER, 'user', 'hello');
+        await fs.writeFile(join(chatDir('del-dir-test'), 'artifact.txt'), 'artifact', 'utf8');
+
+        const result = await sessionDelete('del-dir-test', TEST_USER);
+        expect(result).toBe(true);
+
+        await expect(fs.access(chatDir('del-dir-test'))).rejects.toMatchObject({ code: 'ENOENT' });
     });
 
     it('sessionDelete returns false for non-existent session', async () => {
