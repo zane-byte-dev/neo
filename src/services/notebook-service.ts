@@ -221,7 +221,7 @@ export function nbSearch(workDir: string, query: string, opts?: { notebook?: str
 export function nbGet(workDir: string, id: string): NotebookEntry | undefined {
     const filePath = join(workDir, id);
     // Security: ensure path stays within workDir
-    if (!resolve(filePath).startsWith(resolve(workDir) + '/')) return undefined;
+    if (!safeWithin(workDir, filePath)) return undefined;
     if (!existsSync(filePath)) return undefined;
     try { return parseEntry(workDir, id, true); } catch { return undefined; }
 }
@@ -308,7 +308,7 @@ export function nbUpdate(workDir: string, id: string, data: NotebookUpdateInput)
 
 export function nbDelete(workDir: string, id: string): boolean {
     const filePath = join(workDir, id);
-    if (!resolve(filePath).startsWith(resolve(workDir) + '/')) return false;
+    if (!safeWithin(workDir, filePath)) return false;
     if (!existsSync(filePath)) return false;
     unlinkSync(filePath);
     return true;
@@ -381,6 +381,10 @@ function notebookContentDir(workDir: string, notebook: string): string {
 export function sourceIdFromEntryId(id: string): string {
     const parts = id.split('/');
     return parts[parts.length - 1].replace(/\.md$/, '');
+}
+
+function sourceEntryId(notebook: string, sourceId: string): string {
+    return `notebooks/${notebook}/${sourceId}.md`;
 }
 
 function ensureDir(dir: string): void {

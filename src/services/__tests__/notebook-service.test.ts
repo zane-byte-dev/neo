@@ -12,6 +12,25 @@ import {
     nbDelete,
     nbSearch,
     nbGetByTitle,
+    nbImportSource,
+    nbGetSourceEntry,
+    nbGetSourceGuide,
+    nbSaveSourceGuide,
+    nbListSourcesWithGuides,
+    nbGetConfig,
+    nbSetConfig,
+    nbSaveNote,
+    nbListNotes,
+    nbDeleteNote,
+    nbConvertNoteToSource,
+    nbSaveArtifact,
+    nbGetArtifact,
+    nbListArtifacts,
+    nbDeleteArtifact,
+    nbAppendChatMessage,
+    nbReadChatHistory,
+    nbForkChatHistory,
+    nbClearChatHistory,
 } from '../notebook-service.js';
 
 let workDir: string;
@@ -224,5 +243,155 @@ describe('nbGetByTitle', () => {
 
     it('returns undefined when no match', () => {
         expect(nbGetByTitle(workDir, 'nonexistent query')).toBeUndefined();
+    });
+});
+
+describe('source guide primitives', () => {
+    it('saves, reads, and merges guides into source listings', () => {
+        const video = nbImportSource(workDir, 'study', {
+            title: 'Video Source',
+            content: 'Video transcript',
+            source: 'https://youtube.com/watch?v=abc123',
+        });
+        const article = nbImportSource(workDir, 'study', {
+            title: 'Article Source',
+            content: 'Article body',
+            source: 'https://example.com/post',
+        });
+
+        const guide = {
+            sourceId: video.id,
+            summary: '视频摘要',
+            keyTopics: ['主题'],
+            suggestedQuestions: ['问题'],
+            generatedAt: 123,
+        };
+
+        nbSaveSourceGuide(workDir, 'study', guide);
+
+        expect(nbGetSourceGuide(workDir, 'study', video.id)).toEqual(guide);
+
+        const listed = nbListSourcesWithGuides(workDir, 'study');
+        const listedVideo = listed.find((item) => item.id === video.id);
+        const listedArticle = listed.find((item) => item.id === article.id);
+
+        expect(listedVideo?.type).toBe('youtube');
+        expect(listedVideo?.guide).toEqual(guide);
+        expect(listedArticle?.type).toBe('url');
+        expect(listedArticle?.guide).toBeNull();
+    });
+});
+
+describe('notebook config primitives', () => {
+    it('returns defaults for missing config and round-trips saved config', () => {
+        expect(nbGetConfig(workDir, 'cfg')).toEqual({});
+
+        nbSetConfig(workDir, 'cfg', {
+            emoji: '📘',
+            description: 'Study notes',
+            chatStyle: 'study-guide',
+            answerLength: 'long',
+            citationMode: 'mixed',
+        });
+
+        expect(nbGetConfig(workDir, 'cfg')).toEqual({
+            emoji: '📘',
+            description: 'Study notes',
+            chatStyle: 'study-guide',
+            answerLength: 'long',
+            citationMode: 'mixed',
+        });
+    });
+});
+
+describe('note primitives', () => {
+    it('saves, lists, and deletes notes', () => {
+        const note = nbSaveNote(workDir, 'notes-nb', {
+            title: 'Key Points',
+            content: 'A\nB',
+            source: 'ai-chat',
+        });
+
+        const notes = nbListNotes(workDir, 'notes-nb');
+        expect(notes).toHaveLength(1);
+        expect(notes[0].id).toBe(note.id);
+        expect(notes[0].title).toBe('Key Points');
+        expect(notes[0].source).toBe('ai-chat');
+
+        expect(nbDeleteNote(workDir, 'notes-nb', note.id)).toBe(true);
+        expect(nbListNotes(workDir, 'notes-nb')).toEqual([]);
+    });
+
+    it('converts a note into a source and removes the original note', () => {
+        const note = nbSaveNote(workDir, 'notes-nb', {
+            title: 'Draft Summary',
+            content: 'Draft body content',
+        });
+
+        const converted = nbConvertNoteToSource(workDir, 'notes-nb', note.id);
+        expect(converted).toBeDefined();
+        expect(converted?.title).toBe('Draft Summary');
+
+        expect(nbListNotes(workDir, 'notes-nb')).toEqual([]);
+
+        const entry = nbGetSourceEntry(workDir, 'notes-nb', converted!.id);
+        expect(entry).toBeDefined();
+        expect(entry?.content).toBe('Draft body content');
+    });
+});
+
+describe('artifact primitives', () => {
+    it('saves, reads, filters, and deletes artifacts', () => {
+        nbSaveArtifact(workDir, 'artifacts-nb', {
+            id: 'report1',
+            type: 'report',
+            title: 'Weekly Report',
+            data: { markdown: '# Weekly Report' },
+        });
+        nbSaveArtifact(workDir, 'artifacts-nb', {
+            id: 'mindmap1',
+            type: 'mindmap',
+            title: 'Mind Map',
+            data: { markdown: '# Mind Map' },
+        });
+
+        expect(nbGetArtifact(workDir, 'artifacts-nb', 'report1')?.title).toBe('Weekly Report');
+        expect(nbListArtifacts(workDir, 'artifacts-nb')).toHaveLength(2);
+        expect(nbListArtifacts(workDir, 'artifacts-nb', 'report').map((artifact) => artifact.id)).toEqual(['report1']);
+
+        expect(nbDeleteArtifact(workDir, 'artifacts-nb', 'report1')).toBe(true);
+        expect(nbGetArtifact(workDir, 'artifacts-nb', 'report1')).toBeUndefined();
+    });
+});
+
+describe('notebook chat primitives', () => {
+    it('appends, reads, forks, and clears notebook chat history', () => {
+        nbAppendChatMessage(workDir, 'chat-nb', {
+            id: 'm1',
+            role: 'user',
+            content: 'hello',
+            timestamp: 1,
+        });
+        nbAppendChatMessage(workDir, 'chat-nb', {
+            id: 'm2',
+            role: 'assistant',
+            content: 'hi',
+            timestamp: 2,
+        });
+        nbAppendChatMessage(workDir, 'chat-nb', {
+            id: 'm3',
+            role: 'user',
+            content: 'follow up',
+            timestamp: 3,
+        });
+
+        expect(nbReadChatHistory(workDir, 'chat-nb').map((msg) => msg.id)).toEqual(['m1', 'm2', 'm3']);
+
+        const kept = nbForkChatHistory(workDir, 'chat-nb', 'm2');
+        expect(kept.map((msg) => msg.id)).toEqual(['m1', 'm2']);
+        expect(nbReadChatHistory(workDir, 'chat-nb').map((msg) => msg.id)).toEqual(['m1', 'm2']);
+
+        nbClearChatHistory(workDir, 'chat-nb');
+        expect(nbReadChatHistory(workDir, 'chat-nb')).toEqual([]);
     });
 });
