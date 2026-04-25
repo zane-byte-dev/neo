@@ -37,6 +37,21 @@ export {
     loadCheckpoint,
 } from './checkpoint.js';
 export {
+    appendRunEventSafe,
+    updateRunStatusSafe,
+    saveRunCheckpointSafe,
+    bumpRunMetrics,
+    previewText,
+    startCancellationProbe,
+    type CancellationProbe,
+} from './executor.js';
+export {
+    sweepUserWorkspace,
+    sweepAllUserWorkspaces,
+    SWEEPABLE_STATUSES,
+    type SweepResult,
+} from './sweeper.js';
+export {
     savePendingAction,
     loadPendingAction,
     resolvePendingAction,

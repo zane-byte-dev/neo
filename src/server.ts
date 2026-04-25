@@ -12,6 +12,8 @@ import { log } from './utils/logger.js';
 import { setupTools } from './tools/index.js';
 import { setupRoutes } from './routes/index.js';
 import { SESSION_COOKIE } from './const/cookie.js';
+import { sweepAllUserWorkspaces } from './runtime/sweeper.js';
+import { userList } from './services/user-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,6 +28,11 @@ export class CoreServer {
 
     async start(): Promise<void> {
         await setupTools();
+
+        // Recover any runtime runs that were left in flight when the
+        // process previously exited. Fire-and-forget — sweeper failures
+        // must never block server startup.
+        void this._sweepRuntimeOnStartup();
 
         const app = new Koa();
         app.keys = [SESSION_SECRET!];
@@ -65,6 +72,32 @@ export class CoreServer {
             if (this.httpServer) this.httpServer.close(() => res());
             else res();
         });
+    }
+
+    private async _sweepRuntimeOnStartup(): Promise<void> {
+        try {
+            const users = userList()
+                .filter((u) => !!u.workspaceDir)
+                .map((u) => ({ userId: u.id, workDir: u.workspaceDir as string }));
+            if (users.length === 0) return;
+            const results = await sweepAllUserWorkspaces(users);
+            const totals = results.reduce(
+                (acc, r) => ({
+                    pending: acc.pending + r.expiredPendingActions,
+                    waiting: acc.waiting + r.expiredRuns,
+                    orphan: acc.orphan + r.orphanedRuns,
+                }),
+                { pending: 0, waiting: 0, orphan: 0 },
+            );
+            log.info('CoreServer', 'Runtime sweep complete', {
+                users: users.length,
+                ...totals,
+            });
+        } catch (err: unknown) {
+            log.warn('CoreServer', 'Runtime sweep failed', {
+                error: err instanceof Error ? err.message : String(err),
+            });
+        }
     }
 }
 

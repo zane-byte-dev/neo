@@ -94,6 +94,9 @@ export async function startCronAgent(telegram?: TelegramRuntime | null): Promise
                         userId,
                         sessionId,
                         message: task.message,
+                        entrypoint: 'cron',
+                        triggerType: 'scheduled_task',
+                        metadata: { taskId: task.id, cron: task.cron },
                     });
 
                     // Send to Telegram if configured

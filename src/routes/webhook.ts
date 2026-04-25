@@ -71,6 +71,8 @@ export function webhookRoute(router: Router): void {
                 userId,
                 sessionId,
                 message,
+                entrypoint: 'webhook',
+                triggerType: 'webhook_call',
             });
 
             ctx.body = {

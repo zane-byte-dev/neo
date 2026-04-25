@@ -6,6 +6,7 @@ import { calcUser } from '../services/user-service.js';
 import { MAX_INPUT_LENGTH } from '../config.js';
 import { createSSEResponse } from '../utils/sse.js';
 import { createConfirm } from '../utils/pending-confirm.js';
+import { newRunId } from '../runtime/store.js';
 
 export function chatRoute(router: Router): void {
     router.post('/api/chat', async (ctx) => {
@@ -53,9 +54,18 @@ export function chatRoute(router: Router): void {
                     : docContext;
             }
 
+            // Pre-allocate a runId so the client receives it on the
+            // first SSE frame and can later subscribe to events / cancel
+            // the run via the /api/runs API.
+            const runId = newRunId();
+            sse.send({ type: 'run', runId });
+
             await runAgentTurn({
                 userId,
                 sessionId,
+                runId,
+                entrypoint: 'web-chat',
+                triggerType: 'user_message',
                 message: effectiveMessage,
                 model,
                 images: images?.length ? images : undefined,
@@ -64,8 +74,13 @@ export function chatRoute(router: Router): void {
                 onTodo: (todos) => sse.send({ type: 'todo_update', todos }),
                 confirmCallback: confirmDangerous
                     ? async ({ toolName, args }) => {
-                        const { confirmId, promise } = createConfirm(userId, { signal: sse.signal });
-                        sse.send({ type: 'tool_confirm', confirmId, toolName, args });
+                        const { confirmId, promise } = createConfirm(userId, {
+                            signal: sse.signal,
+                            runId,
+                            workDir: userCtx.workDir,
+                            request: { toolName, args },
+                        });
+                        sse.send({ type: 'tool_confirm', confirmId, runId, actionId: confirmId, toolName, args });
                         return promise;
                     }
                     : undefined,

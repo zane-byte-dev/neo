@@ -68,6 +68,9 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
                     userId,
                     sessionId,
                     message: userMessage,
+                    entrypoint: 'telegram',
+                    triggerType: 'telegram_message',
+                    metadata: { chatId },
                     onImage: async (data: string, _mimeType: string, caption?: string) => {
                         const buffer = Buffer.from(data, 'base64');
                         await ctx.replyWithPhoto({ source: buffer }, caption ? { caption } : undefined);
