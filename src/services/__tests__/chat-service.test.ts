@@ -6,6 +6,8 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { promises as fs } from 'node:fs';
+import { writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
@@ -22,6 +24,19 @@ const ORIGINAL_USERS_ENV = process.env.USERS;
 const tmpBase = join(tmpdir(), `neo-test-chat-${randomBytes(6).toString('hex')}`);
 const projectsDir = () => join(testSpaceDir, '.neo', 'projects');
 const chatDir = (sessionId: string) => join(projectsDir(), sessionId);
+
+function git(...args: string[]): string {
+    return execFileSync('git', ['-C', testSpaceDir, ...args], { encoding: 'utf8' }).trim();
+}
+
+function initGitRepo(): void {
+    git('init');
+    git('config', 'user.name', 'Test User');
+    git('config', 'user.email', 'test@example.com');
+    writeFileSync(join(testSpaceDir, 'README.md'), 'seed\n', 'utf8');
+    git('add', 'README.md');
+    git('commit', '-m', 'init');
+}
 
 vi.mock('node:url', async (importOriginal) => {
     const original = await importOriginal<typeof import('node:url')>();
@@ -193,6 +208,27 @@ describe('Session operations', () => {
         expect(result).toBe(true);
 
         await expect(fs.access(chatDir('del-dir-test'))).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('chat session lifecycle auto-commits .neo changes inside a git repo', async () => {
+        initGitRepo();
+
+        await sessionCreate(TEST_USER, 'git-del-test');
+        await messageAdd('git-del-test', TEST_USER, 'user', 'hello');
+
+        expect(git('status', '--porcelain', '--untracked-files=all')).toBe('');
+
+        const commitCountBeforeDelete = Number(git('rev-list', '--count', 'HEAD'));
+        const result = await sessionDelete('git-del-test', TEST_USER);
+
+        expect(result).toBe(true);
+        expect(Number(git('rev-list', '--count', 'HEAD'))).toBe(commitCountBeforeDelete + 1);
+        expect(git('status', '--porcelain', '--untracked-files=all')).toBe('');
+        expect(git('log', '--format=%s', '-1')).toBe('chore(workspace): apply session_delete changes');
+
+        const headStat = git('show', '--stat', '--format=', 'HEAD');
+        expect(headStat).toContain('.neo/projects/chat-sessions.json');
+        expect(headStat).toContain('.neo/projects/git-del-test/chat-git-del-test.jsonl');
     });
 
     it('sessionDelete returns false for non-existent session', async () => {

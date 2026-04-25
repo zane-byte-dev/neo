@@ -13,14 +13,20 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { generateId } from '../utils/id-generator.js';
 import { deriveChatTitleFromMessage } from '../utils/chat-title.js';
+import { withGitAutoCommit } from '../utils/git-auto-commit.js';
 import { parseJsonLines, parseJsonOr } from '../utils/json.js';
 import { userGetWorkDir } from './user-service.js';
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
 
-function tmpDir(userId: string): string {
+function workDirForUser(userId: string): string {
     const workDir = userGetWorkDir(userId);
     if (!workDir) throw new Error(`No workspaceDir configured for user "${userId}"`);
+    return workDir;
+}
+
+function tmpDir(userId: string): string {
+    const workDir = workDirForUser(userId);
     return join(workDir, '.neo', 'projects');
 }
 
@@ -105,18 +111,20 @@ export async function sessionGetCurrent(userId: string): Promise<SessionRow | nu
 
 /** Create a new session and mark it as current (deactivates previous ones). */
 export async function sessionCreate(userId: string, id?: string): Promise<SessionRow> {
-    const store = await readSessionsStore(userId);
-    const now = new Date().toISOString();
-    id = id ?? generateId();
+    return withGitAutoCommit(workDirForUser(userId), 'session_create', async () => {
+        const store = await readSessionsStore(userId);
+        const now = new Date().toISOString();
+        id = id ?? generateId();
 
-    for (const s of Object.values(store.sessions)) {
-        if (s.is_current) s.is_current = 0;
-    }
+        for (const s of Object.values(store.sessions)) {
+            if (s.is_current) s.is_current = 0;
+        }
 
-    const session: SessionRow = { id, user_id: userId, title: '', start_time: now, end_time: now, is_current: 1, is_pinned: 0 };
-    store.sessions[id] = session;
-    await writeSessionsStore(userId, store);
-    return session;
+        const session: SessionRow = { id, user_id: userId, title: '', start_time: now, end_time: now, is_current: 1, is_pinned: 0 };
+        store.sessions[id] = session;
+        await writeSessionsStore(userId, store);
+        return session;
+    }, 'ChatService');
 }
 
 /** List recent sessions for a user. */
@@ -133,23 +141,27 @@ export async function sessionPatch(
     userId: string,
     patch: { title?: string; is_pinned?: number },
 ): Promise<SessionRow | null> {
-    const store = await readSessionsStore(userId);
-    const session = store.sessions[sessionId];
-    if (!session) return null;
-    if (patch.title !== undefined) session.title = patch.title;
-    if (patch.is_pinned !== undefined) session.is_pinned = patch.is_pinned;
-    await writeSessionsStore(userId, store);
-    return session;
+    return withGitAutoCommit(workDirForUser(userId), 'session_patch', async () => {
+        const store = await readSessionsStore(userId);
+        const session = store.sessions[sessionId];
+        if (!session) return null;
+        if (patch.title !== undefined) session.title = patch.title;
+        if (patch.is_pinned !== undefined) session.is_pinned = patch.is_pinned;
+        await writeSessionsStore(userId, store);
+        return session;
+    }, 'ChatService');
 }
 
 /** Delete a session and all its messages. */
 export async function sessionDelete(sessionId: string, userId: string): Promise<boolean> {
-    const store = await readSessionsStore(userId);
-    if (!store.sessions[sessionId]) return false;
-    delete store.sessions[sessionId];
-    await writeSessionsStore(userId, store);
-    await fs.rm(sessionDir(userId, sessionId), { recursive: true, force: true });
-    return true;
+    return withGitAutoCommit(workDirForUser(userId), 'session_delete', async () => {
+        const store = await readSessionsStore(userId);
+        if (!store.sessions[sessionId]) return false;
+        delete store.sessions[sessionId];
+        await writeSessionsStore(userId, store);
+        await fs.rm(sessionDir(userId, sessionId), { recursive: true, force: true });
+        return true;
+    }, 'ChatService');
 }
 
 // ── Message operations ────────────────────────────────────────────────────────
@@ -162,33 +174,35 @@ export async function messageAdd(
     content: string,
     userName?: string,
 ): Promise<MessageRow> {
-    const timestamp = new Date().toISOString();
-    const existing = await readMessages(userId, sessionId);
-    const msg: MessageRow = {
-        id: existing.length + 1,
-        session_id: sessionId,
-        user_id: userId,
-        role,
-        content,
-        user_name: userName ?? null,
-        timestamp,
-    };
+    return withGitAutoCommit(workDirForUser(userId), 'message_add', async () => {
+        const timestamp = new Date().toISOString();
+        const existing = await readMessages(userId, sessionId);
+        const msg: MessageRow = {
+            id: existing.length + 1,
+            session_id: sessionId,
+            user_id: userId,
+            role,
+            content,
+            user_name: userName ?? null,
+            timestamp,
+        };
 
-    await fs.mkdir(tmpDir(userId), { recursive: true });
-    await fs.mkdir(join(tmpDir(userId), sessionId), { recursive: true });
-    await fs.appendFile(messagesFile(userId, sessionId), JSON.stringify(msg) + '\n', 'utf8');
+        await fs.mkdir(tmpDir(userId), { recursive: true });
+        await fs.mkdir(join(tmpDir(userId), sessionId), { recursive: true });
+        await fs.appendFile(messagesFile(userId, sessionId), JSON.stringify(msg) + '\n', 'utf8');
 
-    const store = await readSessionsStore(userId);
-    if (store.sessions[sessionId]) {
-        store.sessions[sessionId].end_time = timestamp;
-        // Auto-title from first user message
-        if (role === 'user' && !store.sessions[sessionId].title && existing.length === 0) {
-            store.sessions[sessionId].title = deriveChatTitleFromMessage(content);
+        const store = await readSessionsStore(userId);
+        if (store.sessions[sessionId]) {
+            store.sessions[sessionId].end_time = timestamp;
+            // Auto-title from first user message
+            if (role === 'user' && !store.sessions[sessionId].title && existing.length === 0) {
+                store.sessions[sessionId].title = deriveChatTitleFromMessage(content);
+            }
+            await writeSessionsStore(userId, store);
         }
-        await writeSessionsStore(userId, store);
-    }
 
-    return msg;
+        return msg;
+    }, 'ChatService');
 }
 
 /** List messages for a session, oldest first. */
