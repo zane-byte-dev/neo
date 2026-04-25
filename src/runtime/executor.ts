@@ -157,6 +157,8 @@ export function previewText(text: string | undefined, maxLen = 200): string | un
 export interface CancellationProbe {
     /** Returns true once a cancel-run signal has been recorded. */
     isCancelled(): boolean;
+    /** Stop the background poll. Idempotent. Always call from a finally block. */
+    dispose(): void;
 }
 
 /**
@@ -164,6 +166,9 @@ export interface CancellationProbe {
  * (`POST /api/runs/:id/cancel`) bumps `metadata.cancelRequested` to
  * `true`; the executor calls this probe between major steps to honour
  * it without coupling the API to the executor.
+ *
+ * Always pair with `dispose()` (e.g. in a `finally` block) so the
+ * background poll does not outlive the turn.
  */
 export function startCancellationProbe(workDir: string, runId: string): CancellationProbe {
     let cancelled = false;
@@ -181,14 +186,17 @@ export function startCancellationProbe(workDir: string, runId: string): Cancella
     const handle = setInterval(() => { void tick(); }, 1_000);
     // Allow Node.js to exit even if a probe is pending.
     if (typeof handle.unref === 'function') handle.unref();
+    const dispose = () => {
+        if (stopped) return;
+        stopped = true;
+        clearInterval(handle);
+    };
     return {
         isCancelled() {
             // Stop probe once the caller observed cancellation.
-            if (cancelled && !stopped) {
-                stopped = true;
-                clearInterval(handle);
-            }
+            if (cancelled) dispose();
             return cancelled;
         },
+        dispose,
     };
 }

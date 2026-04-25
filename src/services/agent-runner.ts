@@ -328,115 +328,111 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
     let fullResponse = '';
     let lastCheckpoint = Date.now();
 
-    try {
-        await llm.chatWithContextStreaming(
-            message,
-            history,
-            toolContext,
-            (chunk) => {
-                wrappedChunk(chunk);
-                if (chunk.type === 'text') {
-                    fullResponse += chunk.text;
-                    // Throttle checkpoints to ~1/s so we do not flood the disk
-                    // with chunk-rate writes.
-                    const now = Date.now();
-                    if (now - lastCheckpoint > 1_000) {
-                        lastCheckpoint = now;
-                        void saveRunCheckpointSafe(workDir, {
-                            runId,
-                            updatedAt: new Date().toISOString(),
-                            phase: 'streaming',
-                            partialResponse: fullResponse,
-                        });
-                    }
-                }
-            },
-            effectiveSignal,
-            model,
-            route,
-            images,
-        );
-    } catch (err: unknown) {
-        const elapsed = Date.now() - t0;
-        log.error(MODULE, 'Turn error', {
-            userId, sessionId, runId, elapsed,
-            error: err instanceof Error ? err.message : String(err),
-            stack: err instanceof Error ? err.stack : undefined,
-        });
+    const cleanup = () => {
         clearInterval(cancelPoll);
+        cancelProbe.dispose();
         if (signal) signal.removeEventListener('abort', onCancel);
-        const isAbort = err instanceof Error && err.name === 'AbortError';
-        const cancelled = cancelProbe.isCancelled();
-        const isErrorObj = err instanceof Error;
-        const errorInfo = {
-            message: isErrorObj ? err.message : String(err),
-            ...(isErrorObj && err.name !== undefined && { name: err.name }),
-            ...(isErrorObj && err.stack !== undefined && { stack: err.stack }),
-        };
-        if (cancelled) {
-            await updateRunStatusSafe(workDir, runId, 'cancelled', { lastError: errorInfo });
+    };
+
+    try {
+        try {
+            await llm.chatWithContextStreaming(
+                message,
+                history,
+                toolContext,
+                (chunk) => {
+                    wrappedChunk(chunk);
+                    if (chunk.type === 'text') {
+                        fullResponse += chunk.text;
+                        // Throttle checkpoints to ~1/s so we do not flood the disk
+                        // with chunk-rate writes.
+                        const now = Date.now();
+                        if (now - lastCheckpoint > 1_000) {
+                            lastCheckpoint = now;
+                            void saveRunCheckpointSafe(workDir, {
+                                runId,
+                                updatedAt: new Date().toISOString(),
+                                phase: 'streaming',
+                                partialResponse: fullResponse,
+                            });
+                        }
+                    }
+                },
+                effectiveSignal,
+                model,
+                route,
+                images,
+            );
+        } catch (err: unknown) {
+            const elapsed = Date.now() - t0;
+            log.error(MODULE, 'Turn error', {
+                userId, sessionId, runId, elapsed,
+                error: err instanceof Error ? err.message : String(err),
+                stack: err instanceof Error ? err.stack : undefined,
+            });
+            const isAbort = err instanceof Error && err.name === 'AbortError';
+            const cancelled = cancelProbe.isCancelled();
+            const isErrorObj = err instanceof Error;
+            const errorInfo = {
+                message: isErrorObj ? err.message : String(err),
+                ...(isErrorObj && err.name !== undefined && { name: err.name }),
+                ...(isErrorObj && err.stack !== undefined && { stack: err.stack }),
+            };
+            if (cancelled || isAbort) {
+                // Caller-initiated abort (e.g. SSE disconnect) and explicit
+                // cancellation are both treated as cancellation rather than
+                // failure so the audit trail stays honest.
+                await updateRunStatusSafe(workDir, runId, 'cancelled', { lastError: errorInfo });
+            } else {
+                await updateRunStatusSafe(workDir, runId, 'failed', { lastError: errorInfo });
+            }
             await appendRunEventSafe(workDir, runId, 'run_failed', {
                 finishedAt: new Date().toISOString(),
                 error: errorInfo,
             });
-        } else if (isAbort) {
-            // Caller-initiated abort (e.g. SSE disconnect) is treated as
-            // cancellation rather than failure so the audit trail stays
-            // honest.
-            await updateRunStatusSafe(workDir, runId, 'cancelled', { lastError: errorInfo });
-            await appendRunEventSafe(workDir, runId, 'run_failed', {
-                finishedAt: new Date().toISOString(),
-                error: errorInfo,
+            await bumpRunMetrics(workDir, runId, {
+                toolCallCount,
+                totalDurationMs: elapsed,
             });
-        } else {
-            await updateRunStatusSafe(workDir, runId, 'failed', { lastError: errorInfo });
-            await appendRunEventSafe(workDir, runId, 'run_failed', {
-                finishedAt: new Date().toISOString(),
-                error: errorInfo,
+            throw err;
+        }
+
+        const output = fullResponse.trim();
+        if (output) {
+            await messageAdd(session.id, userId, 'assistant', output);
+            await appendRunEventSafe(workDir, runId, 'user_message_saved', {
+                role: 'assistant',
+                sessionId: session.id,
+                contentLength: output.length,
+                ...(previewText(output) !== undefined && { contentPreview: previewText(output)! }),
             });
         }
+
+        const elapsed = Date.now() - t0;
+        await saveRunCheckpointSafe(workDir, {
+            runId,
+            updatedAt: new Date().toISOString(),
+            phase: 'finalizing',
+            partialResponse: fullResponse,
+        });
         await bumpRunMetrics(workDir, runId, {
             toolCallCount,
             totalDurationMs: elapsed,
         });
-        throw err;
-    }
-
-    clearInterval(cancelPoll);
-    if (signal) signal.removeEventListener('abort', onCancel);
-    const output = fullResponse.trim();
-    if (output) {
-        await messageAdd(session.id, userId, 'assistant', output);
-        await appendRunEventSafe(workDir, runId, 'user_message_saved', {
-            role: 'assistant',
-            sessionId: session.id,
-            contentLength: output.length,
-            ...(previewText(output) !== undefined && { contentPreview: previewText(output)! }),
+        await updateRunStatusSafe(workDir, runId, 'completed');
+        await appendRunEventSafe(workDir, runId, 'run_completed', {
+            finishedAt: new Date().toISOString(),
+            responseLength: output.length,
+            ...(previewText(output) !== undefined && { outputPreview: previewText(output)! }),
         });
+
+        log.info(MODULE, 'Turn done', {
+            userId, sessionId, runId, elapsed,
+            responseLen: output.length,
+            toolCallCount,
+        });
+        return output;
+    } finally {
+        cleanup();
     }
-
-    const elapsed = Date.now() - t0;
-    await saveRunCheckpointSafe(workDir, {
-        runId,
-        updatedAt: new Date().toISOString(),
-        phase: 'finalizing',
-        partialResponse: fullResponse,
-    });
-    await bumpRunMetrics(workDir, runId, {
-        toolCallCount,
-        totalDurationMs: elapsed,
-    });
-    await updateRunStatusSafe(workDir, runId, 'completed');
-    await appendRunEventSafe(workDir, runId, 'run_completed', {
-        finishedAt: new Date().toISOString(),
-        responseLength: output.length,
-        ...(previewText(output) !== undefined && { outputPreview: previewText(output)! }),
-    });
-
-    log.info(MODULE, 'Turn done', {
-        userId, sessionId, runId, elapsed,
-        responseLen: output.length,
-        toolCallCount,
-    });
-    return output;
 }
