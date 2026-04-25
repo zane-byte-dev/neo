@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executeTool } from '../executor.js';
 import { mkdirSync, writeFileSync, rmSync, mkdtempSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -19,6 +20,19 @@ beforeEach(() => {
 afterEach(() => {
     rmSync(workDir, { recursive: true, force: true });
 });
+
+function git(...args: string[]): string {
+    return execFileSync('git', ['-C', workDir, ...args], { encoding: 'utf8' }).trim();
+}
+
+function initGitRepo(): void {
+    git('init');
+    git('config', 'user.name', 'Test User');
+    git('config', 'user.email', 'test@example.com');
+    writeFileSync(join(workDir, 'README.md'), 'seed\n', 'utf8');
+    git('add', 'README.md');
+    git('commit', '-m', 'init');
+}
 
 describe('executeTool', () => {
     describe('read_file', () => {
@@ -52,6 +66,52 @@ describe('executeTool', () => {
             expect(result).toContain('OK');
             const written = readFileSync(join(workDir, 'subdir/deep/file.txt'), 'utf8');
             expect(written).toBe('New content');
+        });
+
+        it('auto-commits new workspace changes inside a git repo', async () => {
+            initGitRepo();
+
+            const result = await executeTool('write_file', {
+                path: 'subdir/deep/file.txt',
+                content: 'New content',
+            }, workDir, emptyRegistry);
+
+            expect(result).toContain('OK');
+            expect(git('status', '--porcelain')).toBe('');
+            expect(git('log', '--format=%s', '-1')).toBe('chore(workspace): apply write_file changes');
+            expect(git('show', '--stat', '--format=', 'HEAD')).toContain('subdir/deep/file.txt');
+        });
+
+        it('does not auto-commit files that were already dirty before the tool ran', async () => {
+            initGitRepo();
+            writeFileSync(join(workDir, 'dirty.txt'), 'initial\n', 'utf8');
+            git('add', 'dirty.txt');
+            git('commit', '-m', 'add dirty file');
+            writeFileSync(join(workDir, 'dirty.txt'), 'user draft\n', 'utf8');
+            const commitCountBefore = git('rev-list', '--count', 'HEAD');
+
+            const result = await executeTool('write_file', {
+                path: 'dirty.txt',
+                content: 'tool change\n',
+            }, workDir, emptyRegistry);
+
+            expect(result).toContain('OK');
+            expect(git('rev-list', '--count', 'HEAD')).toBe(commitCountBefore);
+            expect(git('status', '--porcelain')).toContain('dirty.txt');
+        });
+
+        it('auto-commits .neo files when they are written through workspace tools', async () => {
+            initGitRepo();
+
+            const result = await executeTool('write_file', {
+                path: '.neo/projects/runtime.json',
+                content: '{}',
+            }, workDir, emptyRegistry);
+
+            expect(result).toContain('OK');
+            expect(git('status', '--porcelain', '--untracked-files=all')).toBe('');
+            expect(git('log', '--format=%s', '-1')).toBe('chore(workspace): apply write_file changes');
+            expect(git('show', '--stat', '--format=', 'HEAD')).toContain('.neo/projects/runtime.json');
         });
     });
 

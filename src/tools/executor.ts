@@ -4,6 +4,8 @@
 
 import { join, dirname, isAbsolute, resolve } from 'node:path';
 import { promises as fs } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { logDangerousCommand } from '../utils/audit-logger.js';
 import { log } from '../utils/logger.js';
 import { recordToolCall, classifyOutcome } from '../utils/tool-stats.js';
@@ -11,6 +13,13 @@ import { resolveToolPermission } from './tool-permissions.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
 import { formatSandboxResult, runInSandbox } from '../sandbox/index.js';
 import type { Tool, FunctionDeclaration, ToolContext } from '../llm/types.js';
+
+const execFileAsync = promisify(execFile);
+
+interface GitSnapshot {
+    repoRoot: string;
+    dirtyPaths: Set<string>;
+}
 
 /**
  * Resolve and validate a file path stays within workDir.
@@ -102,6 +111,81 @@ export function checkDangerousCommand(command: string): { blocked: boolean; reas
     return { blocked: false };
 }
 
+function parseGitStatusPaths(output: string): Set<string> {
+    const paths = new Set<string>();
+    for (const line of output.split('\n')) {
+        if (!line) continue;
+        const pathField = line.slice(3).trim();
+        if (!pathField) continue;
+        const candidates = pathField.includes(' -> ') ? pathField.split(' -> ') : [pathField];
+        for (const candidate of candidates) {
+            const normalized = candidate.trim().replace(/^"(.*)"$/, '$1');
+            if (normalized) {
+                paths.add(normalized);
+            }
+        }
+    }
+    return paths;
+}
+
+async function captureGitSnapshot(workDir: string): Promise<GitSnapshot | null> {
+    try {
+        const { stdout: repoRootStdout } = await execFileAsync('git', ['-C', workDir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8' });
+        const repoRoot = repoRootStdout.trim();
+        if (!repoRoot) return null;
+        const { stdout: statusStdout } = await execFileAsync(
+            'git',
+            ['-C', repoRoot, 'status', '--porcelain=v1', '--untracked-files=all'],
+            { encoding: 'utf8' },
+        );
+        return { repoRoot, dirtyPaths: parseGitStatusPaths(statusStdout) };
+    } catch {
+        return null;
+    }
+}
+
+function shouldSkipAutoCommit(result: string): boolean {
+    return result.startsWith('[Error]') || result.startsWith('[BLOCKED]') || result.startsWith('[DENIED]');
+}
+
+async function autoCommitWorkspaceChanges(toolName: string, before: GitSnapshot | null): Promise<void> {
+    if (!before) return;
+
+    const after = await captureGitSnapshot(before.repoRoot);
+    if (!after || after.repoRoot !== before.repoRoot) return;
+
+    const newPaths = [...after.dirtyPaths].filter((path) => !before.dirtyPaths.has(path));
+    if (newPaths.length === 0) return;
+
+    try {
+        await execFileAsync('git', ['-C', before.repoRoot, 'add', '-A', '--', ...newPaths], { encoding: 'utf8' });
+        await execFileAsync(
+            'git',
+            [
+                '-C',
+                before.repoRoot,
+                '-c',
+                'user.name=Neo',
+                '-c',
+                'user.email=neo@local',
+                'commit',
+                '-m',
+                `chore(workspace): apply ${toolName} changes`,
+                '--',
+                ...newPaths,
+            ],
+            { encoding: 'utf8' },
+        );
+        log.info('AgentRuntime', 'Auto-committed workspace changes', { toolName, paths: newPaths });
+    } catch (err) {
+        log.warn('AgentRuntime', 'Auto-commit skipped after tool execution', {
+            toolName,
+            paths: newPaths,
+            error: err instanceof Error ? err.message : String(err),
+        });
+    }
+}
+
 // ── Tool execution ────────────────────────────────────────────────────────────
 
 export async function executeTool(
@@ -111,11 +195,12 @@ export async function executeTool(
     toolRegistry: Map<string, Tool>,
     context?: ToolContext,
 ): Promise<string> {
+    const tool = toolRegistry.get(name) ?? context?.userTools?.get(name);
+    const permission = resolveToolPermission(name, tool);
+
     // Confirmation gate for dangerous-tier tools.
     if (context?.confirmCallback) {
-        const tool = toolRegistry.get(name) ?? context.userTools?.get(name);
-        const tier = resolveToolPermission(name, tool);
-        if (tier === 'dangerous') {
+        if (permission === 'dangerous') {
             try {
                 const approved = await context.confirmCallback({ toolName: name, args });
                 if (!approved) {
@@ -132,7 +217,11 @@ export async function executeTool(
     }
 
     const startedAt = Date.now();
+    const gitSnapshot = permission === 'read' ? null : await captureGitSnapshot(workDir);
     const result = await executeToolInner(name, args, workDir, toolRegistry, context);
+    if (permission !== 'read' && !shouldSkipAutoCommit(result)) {
+        await autoCommitWorkspaceChanges(name, gitSnapshot);
+    }
     recordToolCall(name, classifyOutcome(result), Date.now() - startedAt);
     return result;
 }
