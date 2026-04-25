@@ -1,4 +1,4 @@
-export type KnowledgeKind = 'notebook_source' | 'notebook_note' | 'memory_semantic';
+export type KnowledgeKind = 'notebook_source' | 'notebook_note' | 'memory_episodic' | 'memory_semantic';
 
 export type KnowledgeScope = 'notebook' | 'memory';
 
@@ -70,5 +70,6 @@ export interface KnowledgeRebuildSummary {
     notebooks: number;
     notebookSources: number;
     notebookNotes: number;
+    episodicEpisodes: number;
     semanticFacts: number;
 }

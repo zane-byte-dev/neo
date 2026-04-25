@@ -9,11 +9,12 @@ import remarkGfm from 'remark-gfm'
 import { FileText, Link as LinkIcon, Youtube, Type, Loader2, Sparkles, ExternalLink, BookOpen, Search, X, ChevronDown, ChevronRight, ChevronUp } from 'lucide-react'
 import { useAppStore } from '../../stores/useAppStore'
 import { notebookGetSource, notebookGetSourceGuide, notebookGenerateSourceGuide } from '../../api'
-import type { SourceMeta, SourceGuide } from '../../types'
+import type { ParsedCitation, SourceMeta, SourceGuide } from '../../types'
 
 interface Props {
     notebook: string
     source: SourceMeta
+    focusCitation?: ParsedCitation | null
     onBack: () => void
 }
 
@@ -35,7 +36,7 @@ const TYPE_LABEL: Record<string, string> = {
     image: '图片',
 }
 
-export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack: _onBack }) => {
+export const SourceDetailView: React.FC<Props> = ({ notebook, source, focusCitation = null, onBack: _onBack }) => {
     const { sourceGuides, setSourceGuide, selectedModel } = useAppStore()
     const [content, setContent] = React.useState<string | null>(null)
     const [loading, setLoading] = React.useState(true)
@@ -86,6 +87,13 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack: _o
         return () => { cancelled = true }
     }, [notebook, source.id])
 
+    React.useEffect(() => {
+        if (!focusCitation) return
+        setSearchOpen(false)
+        setSearchTerm('')
+        setMatchIndex(0)
+    }, [focusCitation?.chunkId, focusCitation?.charStart, focusCitation?.charEnd, focusCitation?.snippet])
+
     const handleGenerateGuide = async () => {
         setGuideLoading(true)
         try {
@@ -102,6 +110,26 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack: _o
         () => (searchTerm ? countMatches(content ?? '', searchTerm) : 0),
         [content, searchTerm],
     )
+
+    const focusRange = React.useMemo(() => {
+        if (!content || !focusCitation) return null
+
+        const snippet = focusCitation.snippet?.trim() ?? ''
+        let start = typeof focusCitation.charStart === 'number' ? focusCitation.charStart : -1
+
+        if (start < 0 && snippet) start = content.indexOf(snippet)
+        if (start < 0 || start >= content.length) return null
+
+        const fallbackLength = Math.max(Math.min(snippet.length || 80, 200), 40)
+        const endCandidate = typeof focusCitation.charEnd === 'number'
+            ? focusCitation.charEnd
+            : start + fallbackLength
+
+        return {
+            start,
+            end: Math.min(content.length, Math.max(endCandidate, start + 1)),
+        }
+    }, [content, focusCitation])
 
     return (
         <div className="flex flex-col h-full">
@@ -175,7 +203,7 @@ export const SourceDetailView: React.FC<Props> = ({ notebook, source, onBack: _o
                         <Loader2 size={20} className="animate-spin" />
                     </div>
                 ) : (
-                    <ContentView content={content ?? ''} searchTerm={searchTerm} matchIndex={matchIndex} />
+                    <ContentView content={content ?? ''} searchTerm={searchTerm} matchIndex={matchIndex} focusRange={focusRange} />
                 )}
             </div>
         </div>
@@ -285,15 +313,40 @@ function highlightText(text: string, term: string, activeIdx: number): React.Rea
     return parts
 }
 
-const ContentView: React.FC<{ content: string; searchTerm?: string; matchIndex?: number }> = ({ content, searchTerm = '', matchIndex = 0 }) => {
+function highlightRange(text: string, start: number, end: number): React.ReactNode[] {
+    const boundedStart = Math.max(0, Math.min(start, text.length))
+    const boundedEnd = Math.max(boundedStart + 1, Math.min(end, text.length))
+
+    return [
+        text.slice(0, boundedStart),
+        <mark
+            key="citation-focus"
+            className="bg-primary-mint/30 text-text rounded px-0.5"
+            data-citation-focus="true"
+        >
+            {text.slice(boundedStart, boundedEnd)}
+        </mark>,
+        text.slice(boundedEnd),
+    ]
+}
+
+const ContentView: React.FC<{
+    content: string
+    searchTerm?: string
+    matchIndex?: number
+    focusRange?: { start: number; end: number } | null
+}> = ({ content, searchTerm = '', matchIndex = 0, focusRange = null }) => {
     const containerRef = React.useRef<HTMLDivElement>(null)
 
     // Scroll active match into view
     React.useEffect(() => {
-        if (!searchTerm || !containerRef.current) return
-        const el = containerRef.current.querySelector(`[data-match-idx="${matchIndex}"]`)
+        if (!containerRef.current) return
+        const selector = searchTerm
+            ? `[data-match-idx="${matchIndex}"]`
+            : '[data-citation-focus="true"]'
+        const el = containerRef.current.querySelector(selector)
         el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-    }, [searchTerm, matchIndex])
+    }, [searchTerm, matchIndex, focusRange?.start, focusRange?.end])
 
     if (!content.trim()) {
         return (
@@ -308,6 +361,17 @@ const ContentView: React.FC<{ content: string; searchTerm?: string; matchIndex?:
             <div className="p-4" ref={containerRef}>
                 <pre className="text-sm text-text leading-relaxed whitespace-pre-wrap font-sans break-words">
                     {highlightText(content, searchTerm, matchIndex)}
+                </pre>
+            </div>
+        )
+    }
+
+    if (focusRange) {
+        return (
+            <div className="p-4" ref={containerRef}>
+                <div className="mb-2 text-[11px] font-medium text-primary-mint">已定位引用片段</div>
+                <pre className="text-sm text-text leading-relaxed whitespace-pre-wrap font-sans break-words">
+                    {highlightRange(content, focusRange.start, focusRange.end)}
                 </pre>
             </div>
         )

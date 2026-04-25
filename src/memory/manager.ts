@@ -11,7 +11,7 @@
  */
 import { randomBytes } from 'node:crypto';
 import { searchKnowledge } from '../indexing/search.js';
-import { indexSemanticFactRecord } from '../indexing/writers.js';
+import { indexEpisodeCardRecord, indexSemanticFactRecord } from '../indexing/writers.js';
 import { appendEpisode, readRecentEpisodes } from './episode-store.js';
 import { appendFact, readFacts } from './semantic-store.js';
 import { retrieve } from './retriever.js';
@@ -47,22 +47,39 @@ function trimRecallHits(hits: RecallHit[], opts: RecallOptions): RecallHit[] {
     return result;
 }
 
-function toIndexedSemanticHit(hit: ReturnType<typeof searchKnowledge>[number]): RecallHit {
+function extractRole(tagsJson: string | null): 'user' | 'assistant' | undefined {
+    if (!tagsJson) return undefined;
+    try {
+        const parsed = JSON.parse(tagsJson) as { role?: 'user' | 'assistant' };
+        return parsed.role;
+    } catch {
+        return undefined;
+    }
+}
+
+function toIndexedMemoryHit(
+    hit: ReturnType<typeof searchKnowledge>[number],
+    tier: 'episodic' | 'semantic',
+): RecallHit {
+    const role = extractRole(hit.tagsJson);
+    const tierScore = tier === 'semantic' ? 2 : 1;
     return {
         item: {
             id: hit.documentId,
-            tier: 'semantic',
+            tier,
             ts: new Date(hit.updatedAt).toISOString(),
             text: hit.text,
             meta: {
+                sessionId: hit.sessionId ?? undefined,
+                role,
                 source: hit.sourcePath,
                 weight: 1,
             },
         },
-        score: hit.score * 2,
+        score: hit.score * tierScore,
         signals: {
             indexed: hit.score,
-            tier: 2,
+            tier: tierScore,
         },
     };
 }
@@ -99,6 +116,14 @@ export async function rememberTurn(
         await appendEpisode(workDir, asstCard);
     } catch (err) {
         log.warn('Memory', 'rememberTurn failed', { err: err instanceof Error ? err.message : String(err) });
+        return;
+    }
+
+    try {
+        indexEpisodeCardRecord(workDir, userCard);
+        indexEpisodeCardRecord(workDir, asstCard);
+    } catch (err) {
+        log.warn('Memory', 'indexEpisodeCard failed', { err: err instanceof Error ? err.message : String(err) });
     }
 }
 
@@ -141,23 +166,38 @@ export async function recall(
     query: string,
     opts: RecallOptions & { sessionId?: string } = {},
 ): Promise<RecallHit[]> {
-    const nonSemanticTiers = opts.tiers?.filter((tier) => tier !== 'semantic');
-    const pool: MemoryItem[] = [];
-    try {
-        const episodes = await readRecentEpisodes(workDir, 6);
-        pool.push(...episodes);
-    } catch { /* ignore */ }
-    if (opts.sessionId) pool.push(...workingList(opts.sessionId));
-
     const hits: RecallHit[] = [];
 
-    const includeNonSemantic = !opts.tiers || (nonSemanticTiers?.length ?? 0) > 0;
-    if (includeNonSemantic) {
-        hits.push(...retrieve(query, pool, {
+    const includeWorking = !opts.tiers || opts.tiers.includes('working');
+    if (includeWorking && opts.sessionId) {
+        hits.push(...retrieve(query, workingList(opts.sessionId), {
             ...opts,
-            tiers: opts.tiers ? nonSemanticTiers : undefined,
+            tiers: ['working'],
             topK: Math.max((opts.topK ?? 10) * 2, 10),
         }));
+    }
+
+    const includeEpisodic = !opts.tiers || opts.tiers.includes('episodic');
+    if (includeEpisodic) {
+        const indexedHits = searchKnowledge({
+            workDir,
+            query,
+            kinds: ['memory_episodic'],
+            limit: Math.max((opts.topK ?? 10) * 2, 10),
+        }).map((hit) => toIndexedMemoryHit(hit, 'episodic'));
+
+        if (indexedHits.length) {
+            hits.push(...indexedHits);
+        } else {
+            try {
+                const episodes = await readRecentEpisodes(workDir, 6);
+                hits.push(...retrieve(query, episodes, {
+                    ...opts,
+                    tiers: ['episodic'],
+                    topK: Math.max((opts.topK ?? 10) * 2, 10),
+                }));
+            } catch { /* ignore */ }
+        }
     }
 
     const includeSemantic = !opts.tiers || opts.tiers.includes('semantic');
@@ -167,7 +207,7 @@ export async function recall(
             query,
             kinds: ['memory_semantic'],
             limit: Math.max((opts.topK ?? 10) * 2, 10),
-        }).map(toIndexedSemanticHit);
+        }).map((hit) => toIndexedMemoryHit(hit, 'semantic'));
 
         if (indexedHits.length) {
             hits.push(...indexedHits);

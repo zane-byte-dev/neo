@@ -10,7 +10,7 @@ import { StudioPanel } from './StudioPanel'
 import { SourceDetailView } from './SourceDetailView'
 import { useAppStore } from '../../stores/useAppStore'
 import { cn } from '../../lib/utils'
-import type { SourceMeta } from '../../types'
+import type { ParsedCitation, SourceMeta } from '../../types'
 
 const MOBILE_BREAKPOINT = 1024  // lg
 
@@ -44,6 +44,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     const [isMobile, setIsMobile] = React.useState(false)
     const [mobileTab, setMobileTab] = React.useState<MobileTab>('chat')
     const [viewingSource, setViewingSource] = React.useState<SourceMeta | null>(null)
+    const [citationTarget, setCitationTarget] = React.useState<ParsedCitation | null>(null)
     const [sourceCollapsed, setSourceCollapsed] = React.useState(false)
     const [studioCollapsed, setStudioCollapsed] = React.useState(false)
     // Only animate when collapsing (shrinking), not when expanding (avoids text reflow jitter)
@@ -111,10 +112,11 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     }, [])
 
     // Citation click handler — navigate to SourceDetailView (in source panel)
-    const handleCitationClick = React.useCallback((cited: { n: number; sourceId: string; title: string }) => {
+    const handleCitationClick = React.useCallback((cited: ParsedCitation) => {
         const found = sources.find((s) => s.id === cited.sourceId)
         if (found) {
             setViewingSource(found)
+            setCitationTarget(cited)
             if (isMobile) setMobileTab('sources')
             else { setSourceCollapsed(false) } // expand source panel on desktop
         }
@@ -143,8 +145,8 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                 </div>
                 <div className="flex-1 overflow-hidden">
                     {mobileTab === 'sources' && (viewingSource
-                        ? <SourceDetailView notebook={notebook} source={viewingSource} onBack={() => setViewingSource(null)} />
-                        : <SourcePanel notebook={notebook} onSelectSource={(s) => { setViewingSource(s) }} />
+                        ? <SourceDetailView notebook={notebook} source={viewingSource} focusCitation={citationTarget?.sourceId === viewingSource.id ? citationTarget : null} onBack={() => { setViewingSource(null); setCitationTarget(null) }} />
+                        : <SourcePanel notebook={notebook} onSelectSource={(s) => { setViewingSource(s); setCitationTarget(null) }} />
                     )}
                     {mobileTab === 'chat' && <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />}
                     {mobileTab === 'studio'  && <StudioPanel notebook={notebook} />}
@@ -228,7 +230,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                             {viewingSource ? (
                                 <>
                                     <button
-                                        onClick={() => setViewingSource(null)}
+                                        onClick={() => { setViewingSource(null); setCitationTarget(null) }}
                                         className="p-1 hover:bg-fill rounded-lg text-text-secondary transition-colors"
                                         title="返回来源列表"
                                     >
@@ -252,8 +254,8 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                         </div>
                         <div className="flex-1 overflow-hidden">
                             {viewingSource
-                                ? <SourceDetailView notebook={notebook} source={viewingSource} onBack={() => setViewingSource(null)} />
-                                : <SourcePanel notebook={notebook} onSelectSource={setViewingSource} hideHeader />
+                                ? <SourceDetailView notebook={notebook} source={viewingSource} focusCitation={citationTarget?.sourceId === viewingSource.id ? citationTarget : null} onBack={() => { setViewingSource(null); setCitationTarget(null) }} />
+                                : <SourcePanel notebook={notebook} onSelectSource={(source) => { setViewingSource(source); setCitationTarget(null) }} hideHeader />
                             }
                         </div>
                     </>

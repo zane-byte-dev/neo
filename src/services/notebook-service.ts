@@ -872,7 +872,7 @@ export interface NotebookChatMessage {
     id: string;
     role: 'user' | 'assistant';
     content: string;
-    citations?: Array<{ n: number; sourceId: string; title: string; snippet?: string }>;
+    citations?: Array<{ n: number; sourceId: string; title: string; snippet?: string; chunkId?: string; charStart?: number; charEnd?: number }>;
     selectedSources?: string[];   // snapshot of sourceIds active at send time
     timestamp: number;
 }

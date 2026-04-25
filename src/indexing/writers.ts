@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { SemanticFact } from '../memory/types.js';
+import type { EpisodeCard, SemanticFact } from '../memory/types.js';
 import { buildKnowledgeChunks } from './chunker.js';
 import { getKnowledgeDb } from './db.js';
 import type { KnowledgeChunkSeed, KnowledgeDocumentInput } from './types.js';
@@ -41,7 +41,11 @@ function noteDocumentId(notebook: string, noteId: string): string {
     return `notebook_note:${notebook}:${noteId}`;
 }
 
-function semanticDocumentId(factId: string): string {
+export function episodicDocumentId(cardId: string): string {
+    return `memory_episodic:${cardId}`;
+}
+
+export function semanticDocumentId(factId: string): string {
     return `memory_semantic:${factId}`;
 }
 
@@ -227,6 +231,36 @@ export function upsertNotebookNoteIndex(workDir: string, record: NotebookNoteInd
 
 export function removeNotebookNoteIndex(workDir: string, notebook: string, noteId: string): void {
     deleteDocumentIndex(workDir, noteDocumentId(notebook, noteId));
+}
+
+export function indexEpisodeCardRecord(workDir: string, card: EpisodeCard): boolean {
+    const checksum = checksumOf(JSON.stringify({ text: card.text, meta: card.meta }));
+    const title = card.meta.role === 'assistant'
+        ? `assistant:${card.text.slice(0, 48)}`
+        : `user:${card.text.slice(0, 48)}`;
+
+    return upsertDocumentWithChunks(
+        workDir,
+        {
+            documentId: episodicDocumentId(card.id),
+            userId: card.meta.userId ?? null,
+            kind: 'memory_episodic',
+            scope: 'memory',
+            sessionId: card.meta.sessionId,
+            sourcePath: card.meta.source ?? `.neo/memory/episodes/${card.ts.slice(0, 7)}.jsonl#${card.id}`,
+            title,
+            summary: card.text.slice(0, 200),
+            tagsJson: JSON.stringify({ role: card.meta.role }),
+            checksum,
+            createdAt: Date.parse(card.ts) || Date.now(),
+            updatedAt: Date.parse(card.ts) || Date.now(),
+        },
+        buildKnowledgeChunks({ text: card.text }),
+    );
+}
+
+export function removeEpisodicIndex(workDir: string, cardId: string): void {
+    deleteDocumentIndex(workDir, episodicDocumentId(cardId));
 }
 
 export function indexSemanticFactRecord(workDir: string, fact: SemanticFact): boolean {

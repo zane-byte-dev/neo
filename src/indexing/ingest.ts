@@ -1,3 +1,4 @@
+import { readAllEpisodes } from '../memory/episode-store.js';
 import { readFacts } from '../memory/semantic-store.js';
 import {
     nbGetSourceEntry,
@@ -11,7 +12,10 @@ import type { KnowledgeRebuildSummary } from './types.js';
 import {
     clearKnowledgeIndex,
     deleteDocumentIndex,
+    episodicDocumentId,
+    indexEpisodeCardRecord,
     indexSemanticFactRecord,
+    semanticDocumentId,
     removeNotebookSourceIndex,
     upsertNotebookNoteIndex,
     upsertNotebookSourceIndex,
@@ -19,10 +23,6 @@ import {
 
 function sourceDocumentId(notebook: string, sourceId: string): string {
     return `notebook_source:${notebook}:${sourceId}`;
-}
-
-function semanticDocumentId(factId: string): string {
-    return `memory_semantic:${factId}`;
 }
 
 export function indexNotebookSource(workDir: string, notebook: string, sourceId: string): boolean {
@@ -101,6 +101,28 @@ export function indexNotebookNotes(workDir: string, notebook: string): number {
     return indexed;
 }
 
+export async function indexEpisodicMemory(workDir: string): Promise<number> {
+    const episodes = await readAllEpisodes(workDir);
+    let indexed = 0;
+
+    for (const card of episodes) {
+        if (indexEpisodeCardRecord(workDir, card)) indexed += 1;
+    }
+
+    const db = getKnowledgeDb(workDir);
+    const knownEpisodeIds = new Set(episodes.map((card) => episodicDocumentId(card.id)));
+    const existing = db.prepare(
+        'SELECT document_id AS documentId FROM documents WHERE kind = ?',
+    ).all('memory_episodic') as Array<{ documentId: string }>;
+
+    for (const row of existing) {
+        if (knownEpisodeIds.has(row.documentId)) continue;
+        deleteDocumentIndex(workDir, row.documentId);
+    }
+
+    return indexed;
+}
+
 export async function indexSemanticMemory(workDir: string): Promise<number> {
     const facts = await readFacts(workDir);
     let indexed = 0;
@@ -131,6 +153,7 @@ export async function rebuildKnowledgeIndex(workDir: string): Promise<KnowledgeR
         notebooks: notebooks.length,
         notebookSources: 0,
         notebookNotes: 0,
+        episodicEpisodes: 0,
         semanticFacts: 0,
     };
 
@@ -139,6 +162,7 @@ export async function rebuildKnowledgeIndex(workDir: string): Promise<KnowledgeR
         summary.notebookNotes += indexNotebookNotes(workDir, notebook);
     }
 
+    summary.episodicEpisodes = await indexEpisodicMemory(workDir);
     summary.semanticFacts = await indexSemanticMemory(workDir);
     return summary;
 }

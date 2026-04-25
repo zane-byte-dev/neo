@@ -49,7 +49,7 @@ async function main(): Promise<void> {
 
     for (const target of targets) {
         const summary = await rebuildKnowledgeIndex(target.workDir);
-        console.log(`[index:rebuild] ${target.label} -> notebooks=${summary.notebooks} sources=${summary.notebookSources} notes=${summary.notebookNotes} semantic=${summary.semanticFacts}`);
+        console.log(`[index:rebuild] ${target.label} -> notebooks=${summary.notebooks} sources=${summary.notebookSources} notes=${summary.notebookNotes} episodic=${summary.episodicEpisodes} semantic=${summary.semanticFacts}`);
     }
 }
 

@@ -112,14 +112,14 @@ describe('streamNotebookChat', () => {
 
     it('parses citation markers correctly', async () => {
         nbImportSource(workDir, 'cite-nb', {
-            title: '引用来源', content: '这是包含特定信息的文档内容。', type: 'text',
+            title: '引用来源', content: '这是包含特定信息的文档内容。特定信息说明 TypeScript 支持静态类型。', type: 'text',
         });
 
-        mockGenerate('文档内容很重要【1】，值得关注【1】。');
+        mockGenerate('TypeScript 支持静态类型【1】，值得关注【1】。');
 
         const events: NotebookChatStreamEvent[] = [];
         await streamNotebookChat(
-            workDir, 'cite-nb', '总结一下', undefined,
+            workDir, 'cite-nb', 'TypeScript', undefined,
             collectEvents(events),
         );
 
@@ -128,6 +128,8 @@ describe('streamNotebookChat', () => {
         expect(citEvt!.citations!.length).toBe(1);
         expect(citEvt!.citations![0].n).toBe(1);
         expect(citEvt!.citations![0].title).toBe('引用来源');
+        expect(citEvt!.citations![0].chunkId).toBeTruthy();
+        expect(citEvt!.citations![0].charStart).toBeTypeOf('number');
     });
 
     it('handles LLM error gracefully', async () => {

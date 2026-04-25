@@ -15,13 +15,13 @@ import {
     type NotebookChatEvent,
 } from '../../api'
 import { CitationRenderer } from './CitationRenderer'
-import type { NotebookChatMessage } from '../../types'
+import type { NotebookChatMessage, ParsedCitation } from '../../types'
 import { toast } from '../Toast'
 import { confirm } from '../ConfirmDialog'
 
 interface Props {
     notebook: string
-    onCitationClick?: (source: { n: number; sourceId: string; title: string }) => void
+    onCitationClick?: (source: ParsedCitation) => void
 }
 
 export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => {
@@ -125,7 +125,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
 
         try {
             let full = ''
-            let meta: { n: number; sourceId: string; title: string }[] = []
+            let meta: ParsedCitation[] = []
             for await (const evt of streamNotebookChat(notebook, text, selectedSourceIds, controller.signal, selectedModel) as AsyncGenerator<NotebookChatEvent>) {
                 if (evt.type === 'meta' && evt.sources) {
                     meta = evt.sources
@@ -134,7 +134,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
                     full += evt.text
                     updateLastNotebookMessage({ content: full })
                 } else if (evt.type === 'citations' && evt.citations) {
-                    updateLastNotebookMessage({ citations: evt.citations })
+                    updateLastNotebookMessage({ citations: evt.citations, citedSources: evt.citations })
                 } else if (evt.type === 'error') {
                     updateLastNotebookMessage({ content: full + `\n\n**错误：** ${evt.error}`, streaming: false })
                     break
@@ -244,7 +244,7 @@ export const NotebookChat: React.FC<Props> = ({ notebook, onCitationClick }) => 
                                 ? <p className="text-sm whitespace-pre-wrap">{m.content}</p>
                                 : (
                                     <>
-                                        <CitationRenderer content={m.content} sources={m.citedSources} onCitationClick={onCitationClick} />
+                                        <CitationRenderer content={m.content} sources={m.citations ?? m.citedSources} onCitationClick={onCitationClick} />
                                         {m.streaming && !m.content && <Loader2 size={14} className="animate-spin text-text-tertiary" />}
                                         {!m.streaming && m.content && (
                                             <div className="mt-2 pt-2 border-t border-border-secondary flex items-center gap-2">

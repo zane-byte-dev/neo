@@ -270,15 +270,20 @@ export interface Artifact {
 
 export interface ParsedCitation {
     n: number
-    label?: string
+    sourceId: string
+    title: string
+    snippet?: string
+    chunkId?: string
+    charStart?: number
+    charEnd?: number
 }
 
 export interface NotebookChatMessage {
     id: string
     role: 'user' | 'assistant'
     content: string
-    citations?: number[]     // citation numbers referenced in this message
-    citedSources?: { n: number; sourceId: string; title: string }[]  // map 【N】 → source metadata
+    citations?: ParsedCitation[]
+    citedSources?: ParsedCitation[]
     timestamp: number
     streaming?: boolean
 }

@@ -5,8 +5,9 @@
 import React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import type { ParsedCitation } from '../../types'
 
-export interface CitedSource { n: number; sourceId: string; title: string }
+export type CitedSource = ParsedCitation
 
 interface Props {
     content: string

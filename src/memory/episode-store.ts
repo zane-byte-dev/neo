@@ -21,8 +21,7 @@ export async function appendEpisode(workDir: string, card: EpisodeCard): Promise
     await fs.appendFile(p, JSON.stringify(card) + '\n', 'utf8');
 }
 
-/** Read episodes within the last `months` shards (default: last 6 months). */
-export async function readRecentEpisodes(workDir: string, months = 6): Promise<EpisodeCard[]> {
+async function readEpisodeShards(workDir: string, limit?: number): Promise<EpisodeCard[]> {
     const dir = join(workDir, '.neo', 'memory', 'episodes');
     let entries: string[];
     try {
@@ -31,7 +30,7 @@ export async function readRecentEpisodes(workDir: string, months = 6): Promise<E
         return [];
     }
     entries.sort().reverse();
-    const picked = entries.slice(0, months);
+    const picked = limit === undefined ? entries : entries.slice(0, limit);
     const out: EpisodeCard[] = [];
     for (const name of picked) {
         try {
@@ -40,4 +39,13 @@ export async function readRecentEpisodes(workDir: string, months = 6): Promise<E
         } catch { /* skip shard */ }
     }
     return out;
+}
+
+/** Read episodes within the last `months` shards (default: last 6 months). */
+export async function readRecentEpisodes(workDir: string, months = 6): Promise<EpisodeCard[]> {
+    return readEpisodeShards(workDir, months);
+}
+
+export async function readAllEpisodes(workDir: string): Promise<EpisodeCard[]> {
+    return readEpisodeShards(workDir);
 }

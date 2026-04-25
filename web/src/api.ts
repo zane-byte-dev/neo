@@ -177,7 +177,7 @@ export function notebookDelete(id: string) {
 // ── Notebook workspace (NotebookLM-style) ────────────────────────────────────
 
 import type {
-    SourceMeta, SourceGuide, NotebookConfig, NotebookNote, Artifact, NotebookChatMessage, ArtifactType,
+    SourceMeta, SourceGuide, NotebookConfig, NotebookNote, Artifact, NotebookChatMessage, ArtifactType, ParsedCitation,
 } from './types'
 
 async function _jsonOrThrow<T>(r: Response): Promise<T> {
@@ -328,8 +328,8 @@ export function notebookForkChat(notebook: string, messageId: string): Promise<{
 export interface NotebookChatEvent {
     type: 'meta' | 'text' | 'citations' | 'done' | 'error'
     text?: string
-    citations?: number[]
-    sources?: { n: number; sourceId: string; title: string }[]
+    citations?: ParsedCitation[]
+    sources?: ParsedCitation[]
     error?: string
 }
 
