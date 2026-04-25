@@ -10,6 +10,8 @@
  * care about completion (memory is best-effort).
  */
 import { randomBytes } from 'node:crypto';
+import { searchKnowledge } from '../indexing/search.js';
+import { indexSemanticFactRecord } from '../indexing/writers.js';
 import { appendEpisode, readRecentEpisodes } from './episode-store.js';
 import { appendFact, readFacts } from './semantic-store.js';
 import { retrieve } from './retriever.js';
@@ -25,6 +27,44 @@ import type {
 
 function newId(tier: string): string {
     return `${tier}:${Date.now()}:${randomBytes(3).toString('hex')}`;
+}
+
+function trimRecallHits(hits: RecallHit[], opts: RecallOptions): RecallHit[] {
+    const topK = opts.topK ?? 10;
+    const budgetTokens = opts.budgetTokens;
+
+    if (!budgetTokens) return hits.slice(0, topK);
+
+    const result: RecallHit[] = [];
+    let used = 0;
+    for (const hit of hits) {
+        const cost = Math.ceil(hit.item.text.length / 2);
+        if (used + cost > budgetTokens) break;
+        result.push(hit);
+        used += cost;
+        if (result.length >= topK) break;
+    }
+    return result;
+}
+
+function toIndexedSemanticHit(hit: ReturnType<typeof searchKnowledge>[number]): RecallHit {
+    return {
+        item: {
+            id: hit.documentId,
+            tier: 'semantic',
+            ts: new Date(hit.updatedAt).toISOString(),
+            text: hit.text,
+            meta: {
+                source: hit.sourcePath,
+                weight: 1,
+            },
+        },
+        score: hit.score * 2,
+        signals: {
+            indexed: hit.score,
+            tier: 2,
+        },
+    };
 }
 
 export async function rememberTurn(
@@ -82,6 +122,13 @@ export async function rememberFact(
         await appendFact(workDir, fact);
     } catch (err) {
         log.warn('Memory', 'rememberFact failed', { err: err instanceof Error ? err.message : String(err) });
+        return;
+    }
+
+    try {
+        indexSemanticFactRecord(workDir, fact);
+    } catch (err) {
+        log.warn('Memory', 'indexSemanticFact failed', { err: err instanceof Error ? err.message : String(err) });
     }
 }
 
@@ -94,18 +141,50 @@ export async function recall(
     query: string,
     opts: RecallOptions & { sessionId?: string } = {},
 ): Promise<RecallHit[]> {
+    const nonSemanticTiers = opts.tiers?.filter((tier) => tier !== 'semantic');
     const pool: MemoryItem[] = [];
     try {
         const episodes = await readRecentEpisodes(workDir, 6);
         pool.push(...episodes);
     } catch { /* ignore */ }
-    try {
-        const facts = await readFacts(workDir);
-        pool.push(...facts);
-    } catch { /* ignore */ }
     if (opts.sessionId) pool.push(...workingList(opts.sessionId));
 
-    return retrieve(query, pool, opts);
+    const hits: RecallHit[] = [];
+
+    const includeNonSemantic = !opts.tiers || (nonSemanticTiers?.length ?? 0) > 0;
+    if (includeNonSemantic) {
+        hits.push(...retrieve(query, pool, {
+            ...opts,
+            tiers: opts.tiers ? nonSemanticTiers : undefined,
+            topK: Math.max((opts.topK ?? 10) * 2, 10),
+        }));
+    }
+
+    const includeSemantic = !opts.tiers || opts.tiers.includes('semantic');
+    if (includeSemantic) {
+        const indexedHits = searchKnowledge({
+            workDir,
+            query,
+            kinds: ['memory_semantic'],
+            limit: Math.max((opts.topK ?? 10) * 2, 10),
+        }).map(toIndexedSemanticHit);
+
+        if (indexedHits.length) {
+            hits.push(...indexedHits);
+        } else {
+            try {
+                const facts = await readFacts(workDir);
+                hits.push(...retrieve(query, facts, {
+                    ...opts,
+                    tiers: ['semantic'],
+                    topK: Math.max((opts.topK ?? 10) * 2, 10),
+                }));
+            } catch { /* ignore */ }
+        }
+    }
+
+    hits.sort((a, b) => b.score - a.score);
+    return trimRecallHits(hits, opts);
 }
 
 /** Render recall hits as a prompt-injectable string (budget in tokens). */

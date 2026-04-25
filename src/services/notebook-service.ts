@@ -10,6 +10,7 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseJsonLines, readJsonFileSyncOr } from '../utils/json.js';
+import { log } from '../utils/logger.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -257,9 +258,11 @@ export function nbCreate(workDir: string, notebook: string, data: NotebookCreate
     };
 
     writeFileSync(filePath, serializeFrontmatter(meta, data.content ?? ''), 'utf8');
+    const entryId = `notebooks/${notebook}/${filename}`;
+    scheduleNotebookSourceIndexFromEntryId(workDir, entryId);
 
     return {
-        id: `notebooks/${notebook}/${filename}`,
+        id: entryId,
         notebook,
         filename,
         title:   meta.title!,
@@ -293,6 +296,7 @@ export function nbUpdate(workDir: string, id: string, data: NotebookUpdateInput)
 
     const body = data.content !== undefined ? (data.content ?? '') : (existing.content ?? '');
     writeFileSync(filePath, serializeFrontmatter(meta, body), 'utf8');
+    scheduleNotebookSourceIndexFromEntryId(workDir, id);
 
     return {
         ...existing,
@@ -311,6 +315,8 @@ export function nbDelete(workDir: string, id: string): boolean {
     if (!safeWithin(workDir, filePath)) return false;
     if (!existsSync(filePath)) return false;
     unlinkSync(filePath);
+    const notebook = notebookFromEntryId(id);
+    if (notebook) scheduleNotebookSourceRemoval(workDir, notebook, sourceIdFromEntryId(id));
     return true;
 }
 
@@ -397,6 +403,90 @@ function safeWithin(baseDir: string, target: string): boolean {
 
 function safeFilename(name: string): string {
     return name.replace(/[<>:"/\\|?*\n\r]/g, '').replace(/\s+/g, '_').slice(0, 100);
+}
+
+function notebookFromEntryId(id: string): string {
+    const parts = id.split('/');
+    if (parts[0] === 'notebooks') return parts[1] ?? '';
+    return parts[0] ?? '';
+}
+
+function scheduleNotebookSourceIndexFromEntryId(workDir: string, entryId: string): void {
+    const notebook = notebookFromEntryId(entryId);
+    if (!notebook) return;
+
+    void import('../indexing/writers.js')
+        .then(({ upsertNotebookSourceIndex }) => {
+            const entry = nbGet(workDir, entryId);
+            if (!entry?.content) return;
+            upsertNotebookSourceIndex(workDir, {
+                notebook,
+                entryId,
+                title: entry.title,
+                source: entry.source,
+                summary: entry.summary,
+                tagsJson: entry.tags,
+                content: entry.content,
+            });
+        })
+        .catch((err) => {
+            log.warn('NotebookIndex', 'Failed to index notebook source', {
+                entryId,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        });
+}
+
+function scheduleNotebookSourceRemoval(workDir: string, notebook: string, sourceId: string): void {
+    void import('../indexing/writers.js')
+        .then(({ removeNotebookSourceIndex }) => {
+            removeNotebookSourceIndex(workDir, notebook, sourceId);
+        })
+        .catch((err) => {
+            log.warn('NotebookIndex', 'Failed to remove notebook source index', {
+                notebook,
+                sourceId,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        });
+}
+
+function scheduleNotebookNoteUpsert(
+    workDir: string,
+    notebook: string,
+    note: { id: string; title: string; content: string; createdAt: number; updatedAt: number },
+): void {
+    void import('../indexing/writers.js')
+        .then(({ upsertNotebookNoteIndex }) => {
+            upsertNotebookNoteIndex(workDir, {
+                notebook,
+                noteId: note.id,
+                title: note.title,
+                content: note.content,
+                createdAt: note.createdAt,
+                updatedAt: note.updatedAt,
+            });
+        })
+        .catch((err) => {
+            log.warn('NotebookIndex', 'Failed to index notebook notes', {
+                notebook,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        });
+}
+
+function scheduleNotebookNoteRemoval(workDir: string, notebook: string, noteId: string): void {
+    void import('../indexing/writers.js')
+        .then(({ removeNotebookNoteIndex }) => {
+            removeNotebookNoteIndex(workDir, notebook, noteId);
+        })
+        .catch((err) => {
+            log.warn('NotebookIndex', 'Failed to remove notebook note index', {
+                notebook,
+                noteId,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        });
 }
 
 function inferSourceType(source: string | null | undefined): SourceMeta['type'] {
@@ -528,6 +618,7 @@ export function nbArchiveSource(workDir: string, notebook: string, sourceId: str
     const { meta, body } = parseFrontmatter(raw);
     meta.archived = true;
     writeFileSync(filePath, serializeFrontmatter(meta, body), 'utf8');
+    scheduleNotebookSourceRemoval(workDir, notebook, sourceId);
     return true;
 }
 
@@ -668,6 +759,13 @@ export function nbSaveNote(workDir: string, notebook: string, data: NoteSaveInpu
         author: source,   // reuse author field to tag source
     };
     writeFileSync(notebookNoteFilePath(workDir, notebook, id), serializeFrontmatter(meta, data.content), 'utf8');
+    scheduleNotebookNoteUpsert(workDir, notebook, {
+        id,
+        title: data.title,
+        content: data.content,
+        createdAt: now,
+        updatedAt: now,
+    });
     return {
         id,
         notebook,
@@ -685,6 +783,7 @@ export function nbDeleteNote(workDir: string, notebook: string, noteId: string):
     if (!safeWithin(dir, file)) return false;
     if (!existsSync(file)) return false;
     unlinkSync(file);
+    scheduleNotebookNoteRemoval(workDir, notebook, noteId);
     return true;
 }
 
