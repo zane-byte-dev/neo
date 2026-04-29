@@ -324,8 +324,8 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 
 用户信息定义在 `src/config.local.ts` 的 `USERS` 数组中，每个用户拥有两个独立目录：
 
-- **`workDir`**：个人工作区，存放你自己的内容与配置（AGENTS.md / SOUL.md / notebooks / skills…）。
-- **`stateDir`**：运行态数据目录，由 Neo 自动维护（runs / secrets / usage / projects…）。
+- **`workDir`**：个人工作区，存放你自己的内容与配置（AGENTS.md / SOUL.md / notebooks…）。
+- **`stateDir`**：运行态数据目录，由 Neo 自动维护（runs / secrets / usage / projects / skills / tools…）。
 
 ```
 <workDir>/                 # 你维护，可以用 git 管理
@@ -333,9 +333,7 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 ├── SOUL.md             # 身份与沟通风格
 ├── TOOLS.md            # 工具使用指引
 ├── USER.md             # 用户基本信息与偏好
-├── notebooks/          # 知识库 Markdown 文件
-├── skills/             # 用户自定义 Skill
-└── tools/              # 用户自定义工具（tool.yaml + run.py）
+└── notebooks/          # 知识库 Markdown 文件
 
 <stateDir>/                # Neo 自动维护，勿手改
 ├── secrets.json.enc    # AES-256-GCM 加密的 API Key
@@ -343,8 +341,11 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 ├── projects/           # 会话文件与运行产物
 ├── memory/             # episodic / semantic memory
 ├── notebooks/          # 知识索引 SQLite (FTS5)
+├── skills/             # 用户自定义 Skill
+├── tools/              # 用户自定义工具（tool.yaml + run.py）
 ├── routing.json        # Models 页保存的路由覆盖
 ├── tool-approvals.json # 工具确认 session/always 放行规则
+└── usage.jsonl         # 按日调用量与成本记录
 ```
 
 > 💡 仓库内已附最小可运行的 [examples/workspace/](examples/workspace) 模板（AGENTS.md / SOUL.md / USER.md / TOOLS.md）。复制到你的 `workDir` 即可作为起点。

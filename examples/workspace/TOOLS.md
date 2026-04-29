@@ -8,7 +8,7 @@
 
 ## 用户工具示例
 
-如果你在 `<workDir>/tools/` 下添加了一个 `tool.yaml + run.py`，
+如果你在 `<stateDir>/tools/` 下添加了一个 `tool.yaml + run.py`，
 可以在这里告诉 Neo 如何使用：
 
 ### `summarize_pdf`（示例）

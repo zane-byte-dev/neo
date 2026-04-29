@@ -120,9 +120,7 @@ Each user gets two directories:
 ├── SOUL.md             # persona / communication style
 ├── TOOLS.md            # tool usage guide
 ├── USER.md             # user profile
-├── notebooks/          # knowledge base markdown
-├── skills/             # user-defined skills
-└── tools/              # user-defined tools (tool.yaml + run.py)
+└── notebooks/          # knowledge base markdown
 
 <stateDir>/                # managed by Neo — do not edit by hand
 ├── secrets.json.enc    # AES-256-GCM encrypted credentials
@@ -130,6 +128,8 @@ Each user gets two directories:
 ├── projects/           # session files and run artifacts
 ├── memory/             # episodic + semantic memory
 ├── notebooks/          # SQLite (FTS5) knowledge index
+├── skills/             # user-defined skills
+├── tools/              # user-defined tools (tool.yaml + run.py)
 ├── routing.json        # routing overrides saved from the Models page
 ├── tool-approvals.json # tool-confirmation session/always rules
 ```

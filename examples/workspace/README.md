@@ -5,15 +5,17 @@
 
 ## 文件清单
 
-| 文件 | 必需 | 作用 |
-|------|------|------|
-| `AGENTS.md` | ✅ | Agent 任务路由与工具调用规则；缺失时 Neo 会拒绝启动该用户 |
-| `SOUL.md` | 可选 | 助手的身份、语气、沟通风格 |
-| `USER.md` | 可选 | 用户基本信息与长期偏好；首次访问会自动生成模板 |
-| `TOOLS.md` | 可选 | 项目特定的工具使用指引（系统内置工具不必在此列出） |
-| `notebooks/` | 可选 | 知识库 Markdown 文件，会被自动索引（FTS5） |
-| `skills/` | 可选 | 用户自定义 Skill（带 YAML frontmatter 的 Markdown） |
-| `tools/` | 可选 | 用户自定义工具（`tool.yaml` + `run.py` / `run.sh`） |
+| 文件 | 必需 | 位置 | 作用 |
+|------|------|------|------|
+| `AGENTS.md` | ✅ | `workDir/` | Agent 任务路由与工具调用规则；缺失时 Neo 会拒绝启动该用户 |
+| `SOUL.md` | 可选 | `workDir/` | 助手的身份、语气、沟通风格 |
+| `USER.md` | 可选 | `workDir/` | 用户基本信息与长期偏好；首次访问会自动生成模板 |
+| `TOOLS.md` | 可选 | `workDir/` | 项目特定的工具使用指引（系统内置工具不必在此列出） |
+| `notebooks/` | 可选 | `workDir/` | 知识库 Markdown 文件，会被自动索引（FTS5） |
+| `skills/` | 可选 | **`stateDir/`** | 用户自定义 Skill（带 YAML frontmatter 的 Markdown） |
+| `tools/` | 可选 | **`stateDir/`** | 用户自定义工具（`tool.yaml` + `run.py` / `run.sh`） |
+
+> ⚠️ `skills/` 和 `tools/` 放在 **`stateDir`** 下（即 Neo 运行态目录），而不是 `workDir`。本模板只包含 `workDir` 部分。
 
 ## 复制方法
 
