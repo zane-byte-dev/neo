@@ -15,6 +15,7 @@ export async function runOnHost(command: string, opts: SandboxRunOptions): Promi
     const proc = await execa('sh', ['-c', command], {
         cwd: opts.workDir,
         timeout: timeoutMs,
+        forceKillAfterDelay: 500,
         reject: false,
         all: false,
         cancelSignal: opts.signal,

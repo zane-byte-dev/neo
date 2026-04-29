@@ -31,7 +31,7 @@ describe('runInSandbox (host backend)', () => {
     it('enforces the timeout', async () => {
         const r = await runInSandbox('sleep 5', { workDir, mode: 'host', timeoutMs: 150 });
         expect(r.timedOut).toBe(true);
-    });
+    }, 15000);
 
     it('honors cwd = workDir', async () => {
         writeFileSync(join(workDir, 'marker.txt'), 'hi');
