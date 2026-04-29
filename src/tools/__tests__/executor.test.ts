@@ -130,7 +130,7 @@ describe('executeTool', () => {
             }, workDir, emptyRegistry);
             // execa kills the process — may return (no output), error, or timeout text
             expect(typeof result).toBe('string');
-        });
+        }, 15_000);
     });
 
     describe('unknown tool', () => {

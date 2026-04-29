@@ -65,11 +65,18 @@ let cacheMtimeMs: number | null = null;
 let cachedKey: Buffer | null = null;
 
 function secretsPath(): string {
-    if (process.env.NEO_SECRETS_PATH) return process.env.NEO_SECRETS_PATH;
-    const stateDir = process.env.NEO_STATE_DIR?.trim();
-    if (!stateDir) {
+    const p = secretsPathOrNull();
+    if (!p) {
         throw new Error('NEO_STATE_DIR (or NEO_SECRETS_PATH) must be set to locate secrets store');
     }
+    return p;
+}
+
+/** Like {@link secretsPath} but returns null when no location is configured. */
+function secretsPathOrNull(): string | null {
+    if (process.env.NEO_SECRETS_PATH) return process.env.NEO_SECRETS_PATH;
+    const stateDir = process.env.NEO_STATE_DIR?.trim();
+    if (!stateDir) return null;
     return join(stateDir, 'secrets.json.enc');
 }
 
@@ -126,8 +133,13 @@ function sanitizeStore(raw: Record<string, unknown>): SecretStore {
 }
 
 async function readStoreFromDisk(): Promise<SecretStore> {
+    const path = secretsPathOrNull();
+    if (!path) {
+        cache = {};
+        cacheMtimeMs = null;
+        return cache;
+    }
     try {
-        const path = secretsPath();
         const stat = await fs.stat(path);
         if (cache && cacheMtimeMs === stat.mtimeMs) return cache;
         const raw = await fs.readFile(path, 'utf8');
@@ -150,8 +162,13 @@ async function readStoreFromDisk(): Promise<SecretStore> {
 /** Synchronous reader used by hot paths (LLM client, telegram). */
 function readStoreSync(): SecretStore {
     if (cache) return cache;
+    const path = secretsPathOrNull();
+    if (!path) {
+        cache = {};
+        cacheMtimeMs = null;
+        return cache;
+    }
     try {
-        const path = secretsPath();
         const stat = statSync(path);
         const raw = readFileSync(path, 'utf8');
         const blob = JSON.parse(raw) as EncryptedBlob;
