@@ -1,6 +1,6 @@
 # Neo
 
-[![CI](https://github.com/ChaoZheng/neo/actions/workflows/ci.yml/badge.svg)](https://github.com/ChaoZheng/neo/actions/workflows/ci.yml)
+[![CI](https://github.com/zane-byte-dev/neo/actions/workflows/ci.yml/badge.svg)](https://github.com/zane-byte-dev/neo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node ≥ 18](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -47,19 +47,21 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/ChaoZheng/neo.git
+git clone https://github.com/zane-byte-dev/neo.git
 cd neo
 npm install && npm run web:install
 
-cp .env.example .env
-# Edit .env: set at least GEMINI_API_KEY and change USERS[].workDir
-# to an absolute path on your machine.
+# Copy the local config template; fill in workDir / stateDir / SESSION_SECRET.
+cp src/config.local.example.ts src/config.local.ts
 
 npm run dev:bot          # backend + Telegram bot on :3000
 npm run web:dev          # frontend dev server on :5173 (separate terminal)
 ```
 
-Open http://localhost:5173 and start chatting.
+Open http://localhost:5173, then go to the **Models** page and add at least
+one provider API key (Gemini / DeepSeek / OpenAI / Anthropic). Keys are
+stored encrypted under `{stateDir}/secrets.json.enc` — they never touch the
+repository.
 
 ### Production (single Node process behind Caddy)
 
@@ -75,28 +77,62 @@ same port (default `3000`). Put it behind Caddy / Nginx / Cloudflare for HTTPS.
 
 ## Configuration
 
-All configuration is in `.env`. Required:
+All personal configuration lives in `src/config.local.ts` (gitignored — copy
+from `src/config.local.example.ts`):
 
-- `USERS` — JSON array of users; each must have a `workDir`
-  (absolute path) and a `webToken`.
-- `SESSION_SECRET` — long random string for signing session cookies.
-- At least one LLM provider key: `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`,
-  `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or a local `OLLAMA_BASE_URL`.
+```ts
+import type { LocalConfig } from './config.js';
 
-Optional: `TELEGRAM_BOT_TOKEN`, `WEB_PORT`, `LOG_LEVEL`, `DAILY_COST_LIMIT`.
-See [.env.example](.env.example) for the full list.
+const config: LocalConfig = {
+    USERS: [
+        {
+            id: 'alice',
+            name: 'Alice',
+            tenants: [],                       // e.g. ['telegram:123456789']
+            webToken: 'long-random-string',    // for web sign-in
+            workDir:  '/abs/path/to/workspace',  // your stuff (notebooks, skills, AGENTS.md…)
+            stateDir: '/abs/path/to/state',      // managed by Neo (runs, secrets, usage…)
+        },
+    ],
+    SESSION_SECRET: 'change-me-to-a-long-random-string',
+};
+
+export default config;
+```
+
+**API keys are managed in the UI**, not in config files. Open the **Models**
+page after first launch and add Gemini / DeepSeek / OpenAI / Anthropic keys
+or a Telegram bot token there — they are encrypted with AES-256-GCM under
+`{stateDir}/secrets.json.enc` (the encryption key is derived from
+`SESSION_SECRET`).
+
+A few optional environment variables are still respected when set:
+`WEB_PORT`, `LOG_LEVEL`, `DAILY_COST_LIMIT`, `OLLAMA_BASE_URL`,
+`GEMINI_CLI_PATH`. None are required for a default setup.
 
 ## Workspace Layout
 
-Each user has an independent workspace directory:
+Each user gets two directories:
 
 ```
-<workDir>/
-├── AGENTS.md          # task-routing and tool-call rules
-├── SOUL.md            # persona / communication style
-├── TOOLS.md           # tool usage guide
-├── USER.md            # user profile
-└── notebooks/         # knowledge base
+<workDir>/                 # yours — commit it to git if you like
+├── AGENTS.md           # task-routing and tool-call rules
+├── SOUL.md             # persona / communication style
+├── TOOLS.md            # tool usage guide
+├── USER.md             # user profile
+├── notebooks/          # knowledge base markdown
+├── skills/             # user-defined skills
+└── tools/              # user-defined tools (tool.yaml + run.py)
+
+<stateDir>/                # managed by Neo — do not edit by hand
+├── secrets.json.enc    # AES-256-GCM encrypted credentials
+├── runs/               # resumable agent run event streams
+├── projects/           # session files and run artifacts
+├── memory/             # episodic + semantic memory
+├── notebooks/          # SQLite (FTS5) knowledge index
+├── routing.json        # routing overrides saved from the Models page
+├── tool-approvals.json # tool-confirmation session/always rules
+└── usage.jsonl         # daily LLM call & cost log
 ```
 
 ## Project Structure
@@ -140,4 +176,4 @@ follow the disclosure process in [SECURITY.md](SECURITY.md).
 
 ## License
 
-[MIT](LICENSE) © 2026 ChaoZheng
+[MIT](LICENSE) © 2026 zane-byte-dev

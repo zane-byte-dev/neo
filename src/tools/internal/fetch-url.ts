@@ -26,7 +26,7 @@ const tryFetch = async (
         return await withRetry(async () => {
             const res = await fetch(targetUrl, {
                 signal: AbortSignal.timeout(timeoutMs),
-                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; inkClaw/2.0)' },
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; neo/2.0)' },
             });
             if (!res.ok) {
                 const err: Error & { status?: number } = new Error(`HTTP ${res.status}`);

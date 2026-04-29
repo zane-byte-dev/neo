@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Mind Extension",
+  "name": "Neo Clipper",
   "version": "2.1.0",
-  "description": "简洁的划词保存工具 - 快速保存网页内容、推文、对话到 inkClaw vault",
+  "description": "简洁的划词保存工具 - 快速保存网页内容、推文、对话到 Neo vault",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -31,7 +31,7 @@
     }
   ],
   "action": {
-    "default_title": "Mind Extension"
+    "default_title": "Neo Clipper"
   },
   "web_accessible_sources": [
     {

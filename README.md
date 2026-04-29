@@ -1,6 +1,6 @@
 # Neo
 
-[![CI](https://github.com/ChaoZheng/neo/actions/workflows/ci.yml/badge.svg)](https://github.com/ChaoZheng/neo/actions/workflows/ci.yml)
+[![CI](https://github.com/zane-byte-dev/neo/actions/workflows/ci.yml/badge.svg)](https://github.com/zane-byte-dev/neo/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node ≥ 18](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -15,18 +15,18 @@
 ## 5 分钟试一下
 
 ```bash
-git clone https://github.com/ChaoZheng/neo.git
+git clone https://github.com/zane-byte-dev/neo.git
 cd neo
 npm install && npm run web:install
 
-cp .env.example .env
-# 编辑 .env：至少设置 GEMINI_API_KEY，并把 USERS[].workDir 改成你机器上的绝对路径
+# 复制本地配置模板，填入 workDir / stateDir 与 SESSION_SECRET
+cp src/config.local.example.ts src/config.local.ts
 
 npm run dev:bot              # 后端 + Telegram bot，监听 :3000
 npm run web:dev              # 另开终端，前端开发服务器 :5173
 ```
 
-打开 http://localhost:5173 即可开始对话。生产部署见下文「生产部署」一节。
+打开 http://localhost:5173，首次进入 **Models** 页填入至少一个 LLM Provider 的 API Key（Gemini / DeepSeek / OpenAI / Anthropic 任一），即可开始对话。生产部署见下文「生产部署」一节。
 
 > 想贡献代码？请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 > 发现安全问题？请走 [SECURITY.md](SECURITY.md) 中的私密披露流程，不要开公开 issue。
@@ -50,8 +50,8 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 ## 技术栈
 
 - **运行时**：Node.js ≥ 18 (ESM) + TypeScript
-- **后端框架**：Koa 3
-- **LLM**：Google Gemini API / DeepSeek API / Ollama 本地模型（AI SDK，流式输出 + 函数调用）
+- **后端框架**：Koa 3 + better-sqlite3
+- **LLM**：Vercel AI SDK，统一接入 Google Gemini / DeepSeek / OpenAI / Anthropic / 本地 Ollama（流式 + 函数调用）
 - **Telegram**：Telegraf 4
 - **前端**：React 19 + Vite + Tailwind CSS 4
 - **进程管理**：PM2
@@ -92,7 +92,7 @@ neo/
 
 - Node.js ≥ 18
 - npm ≥ 10
-- Google Gemini API Key（或 DeepSeek API Key / 本地 Ollama）
+- 至少一个 LLM Provider：Gemini / DeepSeek / OpenAI / Anthropic API Key，或本地 Ollama，或登录后的 Gemini CLI（OAuth 配额）
 
 ### 安装依赖
 
@@ -104,42 +104,57 @@ npm install
 npm run web:install
 ```
 
-### 环境变量
+### 配置：`src/config.local.ts`
 
-在项目根目录创建 `.env` 文件：
+所有个人配置（用户、目录、Session Secret）集中在 `src/config.local.ts`，该文件已在 `.gitignore` 中，**不会被提交**。从模板复制并修改：
 
-```dotenv
-# ── 必填（至少配置一个 LLM 提供商）────────────────────────────────────
-GEMINI_API_KEY=your_gemini_api_key
+```bash
+cp src/config.local.example.ts src/config.local.ts
+```
 
-# ── Web 服务 ───────────────────────────────────────────────────────
+```ts
+// src/config.local.ts
+import type { LocalConfig } from './config.js';
+
+const config: LocalConfig = {
+    USERS: [
+        {
+            id: 'alice',
+            name: 'Alice',
+            tenants: [],                     // 例如 ['telegram:123456789']
+            webToken: 'long-random-string',  // Web 登录 token
+            workDir:  '/abs/path/to/workspace',   // 个人工作区（AGENTS.md / notebooks / skills…）
+            stateDir: '/abs/path/to/state',       // 运行态数据（runs / secrets / usage…）
+        },
+    ],
+    SESSION_SECRET: 'change-me-to-a-long-random-string', // 用于签名 Cookie 与派生 secrets 加密密钥
+};
+
+export default config;
+```
+
+> ⚠️ **关于 API Key**：Gemini / DeepSeek / OpenAI / Anthropic 等 Provider 的 API Key 与 Telegram Bot Token **不写在配置文件里**。启动后访问 Web UI **Models** 页填入即可，会以 AES-256-GCM 加密存到 `{stateDir}/secrets.json.enc`（密钥派生自 `SESSION_SECRET`）。
+
+### 可选环境变量
+
+大部分场景无需设置任何环境变量。以下仅在特殊需求时使用：
+
+```bash
+# Web 端口（默认 3000）
 WEB_PORT=3000
-SESSION_SECRET=change-me-in-production  # 用于签名 Cookie，生产环境务必修改
 
-# ── Gemini 模型 ────────────────────────────────────────────────────
-# 可选，支持别名：flash → gemini-3-flash-preview，pro → gemini-3-pro-preview
-# GEMINI_MODEL=flash
+# Gemini CLI ACP（用 Google One AI Premium 配额，无需 API Key）
+# 需先安装并 `gemini login`：https://github.com/google-gemini/gemini-cli
+GEMINI_CLI_PATH=gemini
 
-# ── Gemini CLI ACP（可选）─────────────────────────────────────────────
-# 通过 Gemini CLI 的 OAuth 配额（Google One AI Premium）使用 Gemini，无需 API Key
-# 需先安装并登录 gemini CLI：https://github.com/google-gemini/gemini-cli
-# GEMINI_CLI_PATH=gemini             # gemini CLI 可执行路径，默认 "gemini"
+# 本地 Ollama（默认值如下）
+OLLAMA_BASE_URL=http://localhost:11434/v1
 
-# ── DeepSeek（可选）───────────────────────────────────────────────────
-# 接入 DeepSeek API，支持 deepseek-chat / deepseek-reasoner 模型
-# DEEPSEEK_API_KEY=your_deepseek_key
+# 日志级别
+LOG_LEVEL=info                  # debug | info | warn | error
 
-# ── Ollama 本地模型（可选）────────────────────────────────────────────
-# 通过本地 Ollama 运行 Gemma 等开源模型，适合隐私敏感场景
-# OLLAMA_BASE_URL=http://localhost:11434/v1   # 默认值
-
-# ── Telegram（可选）──────────────────────────────────────────────────
-# TELEGRAM_BOT_TOKEN=your_bot_token
-# TELEGRAM_CHAT_ID=your_chat_id       # 兼容兜底，建议用 config.json tenants
-
-# ── 日志 ───────────────────────────────────────────────────────────
-# LOG_LEVEL=info                       # debug | info | warn | error
-# DEBUG_LLM=1                          # 等价于 LOG_LEVEL=debug
+# 每日付费 LLM 调用美元预算上限（0 = 不限）
+DAILY_COST_LIMIT=0
 ```
 
 ### 开发模式
@@ -182,7 +197,7 @@ pm2 save          # 保存当前进程列表
 ```bash
 git pull
 npm run deploy:restart
-# 等价于: tsc + npm run web:build + pm2 restart inkClaw-bot
+# 等价于: tsc + npm run web:build + pm2 restart neo-bot
 ```
 
 #### 常用运维命令
@@ -283,13 +298,17 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 | `gemini-acp` | Gemini (via CLI) | Gemini CLI OAuth | 使用 Google One AI Premium 配额，无需 API Key |
 | `deepseek` | deepseek-chat | DeepSeek API | 成本低，工具调用可靠 |
 | `deepseek-reasoner` | deepseek-reasoner | DeepSeek API | 深度推理 |
-| `gemma` | ollama/gemma4:e4b | 本地 Ollama | 离线/隐私场景 |
+| `gpt-4o` / `gpt-4o-mini` / `gpt-5` / `gpt-5-mini` | OpenAI 同名模型 | OpenAI API | 完整的 GPT 系列 |
+| `claude-sonnet` / `claude-opus` / `claude-haiku` | claude-*-4-5 | Anthropic API | Claude 4.5 系列 |
+| `gemma` | ollama/gemma4:e4b | 本地 Ollama | 离线 / 隐私场景 |
 
 **智能路由（auto 模式）**：当用户选择 `auto` 时，`model-router.ts` 会根据任务特性自动选择最优模型：
 - 需要工具调用 → DeepSeek（工具调用可靠且成本低）
-- 纯对话/分析 → Gemini ACP（质量最高，OAuth 配额）
+- 纯对话 / 分析 → Gemini ACP（质量最高，OAuth 配额）
 - ACP 不可用 → Gemini flash
 - 无云服务 Key → 本地 Gemma
+
+路由默认值可在 Web UI **Models 页 → 路由配置** 中覆盖保存。
 
 ---
 
@@ -301,34 +320,41 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 
 ---
 
-## 用户工作区
+## 用户与工作区
 
-用户信息通过 `.env` 文件的 `USERS` 变量配置（JSON 数组）。每个用户通过 `workDir` 字段指定独立工作区目录：
+用户信息定义在 `src/config.local.ts` 的 `USERS` 数组中，每个用户拥有两个独立目录：
 
-```dotenv
-USERS=[{"id":"your_id","name":"your_name","workspace":"your_workspace","tenants":[],"webToken":"your_web_token","workDir":"/absolute/path/to/workspace"}]
-```
-
-工作区目录结构：
+- **`workDir`**：个人工作区，存放你自己的内容与配置（AGENTS.md / SOUL.md / notebooks / skills…）。
+- **`stateDir`**：运行态数据目录，由 Neo 自动维护（runs / secrets / usage / projects…）。
 
 ```
-<workDir>/
-├── AGENTS.md    # 任务路由与工具调用规则
-├── SOUL.md      # 身份与沟通风格
-├── TOOLS.md     # 工具使用指引
-├── USER.md      # 用户基本信息
-├── memory/
-│   ├── NOW.md   # 当前关注点/近况
-├── skills/      # 用户自定义 Skill
-├── tools/       # 用户自定义工具（tool.yaml + run.py）
-└── notebooks/   # 知识库文件
+<workDir>/                 # 你维护，可以用 git 管理
+├── AGENTS.md           # 任务路由与工具调用规则
+├── SOUL.md             # 身份与沟通风格
+├── TOOLS.md            # 工具使用指引
+├── USER.md             # 用户基本信息与偏好
+├── notebooks/          # 知识库 Markdown 文件
+├── skills/             # 用户自定义 Skill
+└── tools/              # 用户自定义工具（tool.yaml + run.py）
+
+<stateDir>/                # Neo 自动维护，勿手改
+├── secrets.json.enc    # AES-256-GCM 加密的 API Key
+├── runs/               # 可恢复 Agent run 事件流
+├── projects/           # 会话文件与运行产物
+├── memory/             # episodic / semantic memory
+├── notebooks/          # 知识索引 SQLite (FTS5)
+├── routing.json        # Models 页保存的路由覆盖
+├── tool-approvals.json # 工具确认 session/always 放行规则
+└── usage.jsonl         # 按日调用量与成本记录
 ```
 
-Telegram 绑定通过 `USERS` 中的 `tenants` 字段声明：
+**Telegram 绑定** 通过 `tenants` 声明：
 
-```dotenv
-USERS=[{"id":"your_id","name":"your_name","workspace":"your_workspace","tenants":["telegram:your_chat_id"],"webToken":"your_web_token","workDir":"/absolute/path/to/workspace"}]
+```ts
+USERS: [{ id: 'alice', name: 'Alice', tenants: ['telegram:123456789'], /* ... */ }]
 ```
+
+Bot Token 在 Web UI **Models 页 → Credentials** 填入后，Telegram 运行时会自动重启。
 
 ---
 

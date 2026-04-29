@@ -1,35 +1,35 @@
 /**
- * Mind Extension - Background Script（精简版）
+ * Neo Clipper - Background Script（精简版）
  * 只保留文件下载功能
  */
 
 // 扩展安装或更新时
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    console.log('[Mind Extension] Extension installed');
+    console.log('[Neo Clipper] Extension installed');
   } else if (details.reason === 'update') {
-    console.log(`[Mind Extension] Extension updated to version ${chrome.runtime.getManifest().version}`);
+    console.log(`[Neo Clipper] Extension updated to version ${chrome.runtime.getManifest().version}`);
   }
 });
 
 // 消息监听
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('[Mind Extension] Received message', { action: request.action, sender: sender.tab?.id });
+  console.log('[Neo Clipper] Received message', { action: request.action, sender: sender.tab?.id });
 
-  // 处理保存到 inkClaw vault 的请求
+  // 处理保存到 Neo vault 的请求
   if (request.action === 'saveToVault') {
     const { content, filename } = request;
 
-    console.log('[Mind Extension] 开始下载:', { filename, contentLength: content?.length });
+    console.log('[Neo Clipper] 开始下载:', { filename, contentLength: content?.length });
 
     // 将内容转换为 base64 编码的 data URL
     const base64Content = btoa(unescape(encodeURIComponent(content)));
     const dataUrl = `data:text/markdown;base64,${base64Content}`;
 
-    // 下载到 Downloads/inkClaw/inbox/ 目录（与 vault 入口保持一致）
-    const downloadPath = `inkClaw/inbox/${filename}`;
+    // 下载到 Downloads/neo/inbox/ 目录（与 vault 入口保持一致）
+    const downloadPath = `neo/inbox/${filename}`;
 
-    console.log('[Mind Extension] Download path:', downloadPath);
+    console.log('[Neo Clipper] Download path:', downloadPath);
 
     chrome.downloads.download({
       url: dataUrl,
@@ -38,10 +38,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       conflictAction: 'uniquify'
     }, (downloadId) => {
       if (chrome.runtime.lastError) {
-        console.error('[Mind Extension] Download failed:', chrome.runtime.lastError);
+        console.error('[Neo Clipper] Download failed:', chrome.runtime.lastError);
         sendResponse({ success: false, error: chrome.runtime.lastError.message });
       } else {
-        console.log('[Mind Extension] Download started:', downloadId);
+        console.log('[Neo Clipper] Download started:', downloadId);
         sendResponse({ success: true, downloadId: downloadId });
       }
     });
@@ -60,4 +60,4 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   return true;
 });
 
-console.log('[Mind Extension] Background script loaded');
+console.log('[Neo Clipper] Background script loaded');

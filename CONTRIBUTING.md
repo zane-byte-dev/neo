@@ -14,10 +14,14 @@ cd neo
 npm install
 npm run web:install
 
-# 3. Configure environment
-cp .env.example .env
-# Edit .env: set USERS[].workDir to an absolute path you control,
-# and provide at least one LLM API key (GEMINI_API_KEY recommended).
+# 3. Configure local settings
+cp src/config.local.example.ts src/config.local.ts
+# Edit src/config.local.ts:
+#   - USERS[].workDir / stateDir: absolute paths you control
+#   - USERS[].webToken: any long random string for web sign-in
+#   - SESSION_SECRET: long random string
+# API keys (Gemini / DeepSeek / OpenAI / Anthropic) are added later via the
+# web UI Models page — they are stored encrypted, not in config files.
 
 # 4. Run in dev mode
 npm run dev:bot       # backend on http://localhost:3000

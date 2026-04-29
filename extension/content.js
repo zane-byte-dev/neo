@@ -1,7 +1,7 @@
 /**
- * Mind Extension - Content Script (精简版)
+ * Neo Clipper - Content Script (精简版)
  * 
- * 只保留保存到 inkClaw 的核心功能：
+ * 只保留保存到 Neo 的核心功能：
  * 1. 划词保存
  * 2. X.com 推文保存
  * 3. Gemini 对话保存
@@ -452,7 +452,7 @@
           showToast('❌ 保存失败', 'error');
         }
       } catch (error) {
-        console.error('[Mind Extension] 保存推文失败:', error);
+        console.error('[Neo Clipper] 保存推文失败:', error);
         showToast('❌ 保存失败', 'error');
       }
     },
@@ -484,7 +484,7 @@
         }
 
       } catch (error) {
-        console.error('[Mind Extension] 提取图片失败:', error);
+        console.error('[Neo Clipper] 提取图片失败:', error);
       }
 
       return images;
@@ -570,7 +570,7 @@
         });
 
       } catch (error) {
-        console.error('[Mind Extension] 提取回复失败:', error);
+        console.error('[Neo Clipper] 提取回复失败:', error);
       }
 
       return replies;
@@ -713,7 +713,7 @@
     createSaveButton() {
       const button = document.createElement('button');
       button.setAttribute('data-mind-feishu-save-btn', 'true');
-      button.setAttribute('title', '保存到 inkClaw');
+      button.setAttribute('title', '保存到 Neo');
       button.style.cssText = `
         display: inline-flex;
         align-items: center;
@@ -737,7 +737,7 @@
           <polyline points="17 21 17 13 7 13 7 21"/>
           <polyline points="7 3 7 8 15 8"/>
         </svg>
-        <span>保存到 inkClaw</span>
+        <span>保存到 Neo</span>
       `;
 
       // Hover 效果
@@ -784,7 +784,7 @@
           showToast('❌ 保存失败', 'error');
         }
       } catch (error) {
-        console.error('[Mind Extension] 保存飞书 Wiki 失败:', error);
+        console.error('[Neo Clipper] 保存飞书 Wiki 失败:', error);
         showToast('❌ 保存失败', 'error');
       }
     },
@@ -793,11 +793,11 @@
      * 通过滚动页面来加载所有动态内容，并收集所有文本块
      */
     async extractWikiContentWithScroll(container) {
-      console.log('[Mind Extension] 开始收集飞书内容...');
+      console.log('[Neo Clipper] 开始收集飞书内容...');
 
       // 查找正确的滚动容器
       const scrollContainer = this.findScrollContainer(container);
-      console.log('[Mind Extension] 找到滚动容器:', scrollContainer);
+      console.log('[Neo Clipper] 找到滚动容器:', scrollContainer);
 
       // 用于存储已收集的块（使用 data-record-id 去重）
       // 重要：立即提取内容而不是只存储元素引用，因为飞书使用虚拟滚动
@@ -810,10 +810,10 @@
       const scrollToBottom = () => {
         if (scrollContainer) {
           scrollContainer.scrollTop = scrollContainer.scrollHeight;
-          console.log('[Mind Extension] 滚动到:', scrollContainer.scrollTop, '/', scrollContainer.scrollHeight);
+          console.log('[Neo Clipper] 滚动到:', scrollContainer.scrollTop, '/', scrollContainer.scrollHeight);
         } else {
           window.scrollTo(0, document.body.scrollHeight);
-          console.log('[Mind Extension] 使用 window 滚动');
+          console.log('[Neo Clipper] 使用 window 滚动');
         }
       };
 
@@ -821,7 +821,7 @@
       const collectBlocks = () => {
         // 查找所有带 data-record-id 的文本块
         const textBlocks = document.querySelectorAll('div.block.docx-text-block[data-record-id]');
-        console.log('[Mind Extension] 当前找到的文本块数量:', textBlocks.length);
+        console.log('[Neo Clipper] 当前找到的文本块数量:', textBlocks.length);
 
         textBlocks.forEach(block => {
           const recordId = block.getAttribute('data-record-id');
@@ -837,17 +837,17 @@
               order: collectedBlocks.size // 保持顺序
             });
 
-            console.log('[Mind Extension] 新块:', recordId, '类型:', blockType, '内容长度:', content?.length || 0);
+            console.log('[Neo Clipper] 新块:', recordId, '类型:', blockType, '内容长度:', content?.length || 0);
           }
         });
 
-        console.log('[Mind Extension] 已收集块数量:', collectedBlocks.size);
+        console.log('[Neo Clipper] 已收集块数量:', collectedBlocks.size);
         return collectedBlocks.size;
       };
 
       // 初始收集
       const initialCount = collectBlocks();
-      console.log('[Mind Extension] 初始收集到', initialCount, '个块');
+      console.log('[Neo Clipper] 初始收集到', initialCount, '个块');
 
       // 滚动并收集内容
       while (noChangeCount < maxNoChangeAttempts) {
@@ -860,15 +860,15 @@
 
         if (currentBlockCount === previousBlockCount) {
           noChangeCount++;
-          console.log('[Mind Extension] 无新内容，计数:', noChangeCount);
+          console.log('[Neo Clipper] 无新内容，计数:', noChangeCount);
         } else {
           noChangeCount = 0;
           previousBlockCount = currentBlockCount;
-          console.log('[Mind Extension] 发现新内容，总计:', currentBlockCount);
+          console.log('[Neo Clipper] 发现新内容，总计:', currentBlockCount);
         }
       }
 
-      console.log('[Mind Extension] 收集完成，总共', collectedBlocks.size, '个块');
+      console.log('[Neo Clipper] 收集完成，总共', collectedBlocks.size, '个块');
 
       // 滚动回顶部
       if (scrollContainer) {
@@ -890,11 +890,11 @@
 
       // 如果提取结果为空，使用简单提取方法
       if (!markdown.trim()) {
-        console.log('[Mind Extension] 智能提取失败，使用简单提取');
+        console.log('[Neo Clipper] 智能提取失败，使用简单提取');
         return this.extractSimpleContent(container);
       }
 
-      console.log('[Mind Extension] 最终内容长度:', markdown.length, '字符');
+      console.log('[Neo Clipper] 最终内容长度:', markdown.length, '字符');
       return markdown.trim();
     },
 
@@ -915,7 +915,7 @@
       for (const selector of possibleSelectors) {
         const element = document.querySelector(selector);
         if (element && this.isScrollable(element)) {
-          console.log('[Mind Extension] 找到可滚动容器:', selector);
+          console.log('[Neo Clipper] 找到可滚动容器:', selector);
           return element;
         }
       }
@@ -924,13 +924,13 @@
       let current = startElement;
       while (current && current !== document.body) {
         if (this.isScrollable(current)) {
-          console.log('[Mind Extension] 找到父级可滚动容器');
+          console.log('[Neo Clipper] 找到父级可滚动容器');
           return current;
         }
         current = current.parentElement;
       }
 
-      console.log('[Mind Extension] 未找到自定义滚动容器，使用 window');
+      console.log('[Neo Clipper] 未找到自定义滚动容器，使用 window');
       return null;
     },
 
@@ -1277,7 +1277,7 @@
           showToast('❌ 保存失败', 'error');
         }
       } catch (error) {
-        console.error('[Mind Extension] 保存全部对话失败:', error);
+        console.error('[Neo Clipper] 保存全部对话失败:', error);
         showToast('❌ 保存失败', 'error');
       }
     },
@@ -1336,7 +1336,7 @@
           showToast('❌ 保存失败', 'error');
         }
       } catch (error) {
-        console.error('[Mind Extension] 保存单次会话失败:', error);
+        console.error('[Neo Clipper] 保存单次会话失败:', error);
         showToast('❌ 保存失败', 'error');
       }
     }
@@ -1471,11 +1471,11 @@
       if (response && response.success) {
         return true;
       } else {
-        console.error('[Mind Extension] ❌ 保存失败:', response?.error || 'No response');
+        console.error('[Neo Clipper] ❌ 保存失败:', response?.error || 'No response');
         return false;
       }
     } catch (error) {
-      console.error('[Mind Extension] 保存到 inkClaw 失败:', error);
+      console.error('[Neo Clipper] 保存到 Neo 失败:', error);
       return false;
     }
   }
