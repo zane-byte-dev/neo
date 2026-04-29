@@ -34,6 +34,10 @@ const zh: Record<TranslationKeys, string> = {
     deleteChatConfirm: '确定要删除这个对话吗？此操作无法撤销。',
     renameChat: '重命名对话',
     language: '语言',
+    initializeWorkspace: '初始化 workspace',
+    workspaceInitLoading: '正在初始化 workspace…',
+    workspaceInitSuccess: '已初始化 workspace，并补齐默认模板。',
+    workspaceInitFailed: '初始化 workspace 失败',
 
     // ChatArea
     thinking: '思考中…',

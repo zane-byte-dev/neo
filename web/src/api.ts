@@ -938,6 +938,15 @@ export function fetchMe(): Promise<MeInfo> {
     return apiGet<MeInfo>('/api/me')
 }
 
+export async function initializeWorkspace(): Promise<MeInfo & { ok: boolean }> {
+    const res = await _post('/api/me/workspace/init')
+    if (res.status === 401) {
+        throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json()
+}
+
 // ── Model / usage API ─────────────────────────────────────────────────────────
 
 export interface ModelInfo {

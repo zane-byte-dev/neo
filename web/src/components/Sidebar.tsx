@@ -3,8 +3,9 @@ import { Pin, PinOff, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, fetchUserApps, type MeInfo, type UserAppInfo } from '../api'
+import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, fetchUserApps, initializeWorkspace, type MeInfo, type UserAppInfo } from '../api'
 import { useT, LOCALE_OPTIONS } from '../i18n'
+import { toast } from './Toast'
 import type { Theme } from '../types'
 
 const THEMES: { value: Theme; labelKey: 'themeLight' | 'themeDark' | 'themeClassicDark' }[] = [
@@ -35,6 +36,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null)
     const [renamingChat, setRenamingChat] = React.useState<{ id: string; title: string } | null>(null)
     const [renameValue, setRenameValue] = React.useState('')
+    const [initializingWorkspace, setInitializingWorkspace] = React.useState(false)
     const searchRef = React.useRef<HTMLInputElement>(null)
     const renameInputRef = React.useRef<HTMLInputElement>(null)
     const longPressTimerRef = React.useRef<number | null>(null)
@@ -109,6 +111,24 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
 
     const handleLogout = () => {
         logout().finally(() => window.location.reload())
+    }
+
+    const handleInitializeWorkspace = async () => {
+        if (initializingWorkspace) return
+        setInitializingWorkspace(true)
+        try {
+            const nextMe = await initializeWorkspace()
+            setMe(nextMe)
+            const nextNotebooks = await notebookListNotebooks().catch(() => notebooks)
+            setNotebooks(nextNotebooks)
+            setNotebookOpen(true)
+            setMenuOpen(false)
+            toast.success(t('workspaceInitSuccess'))
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : t('workspaceInitFailed'))
+        } finally {
+            setInitializingWorkspace(false)
+        }
     }
 
     const handleChatRightClick = (e: React.MouseEvent, id: string) => {
@@ -478,6 +498,20 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                         </div>
 
                         <div className="border-t border-border mx-2 my-1" />
+
+                        <button
+                            onClick={handleInitializeWorkspace}
+                            disabled={initializingWorkspace || !me?.userId}
+                            className={cn(
+                                'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors rounded-lg mx-0 cursor-pointer',
+                                initializingWorkspace || !me?.userId
+                                    ? 'text-text-quaternary cursor-not-allowed opacity-60'
+                                    : 'text-text-secondary hover:bg-fill-secondary hover:text-text'
+                            )}
+                        >
+                            <Plus size={14} />
+                            {initializingWorkspace ? t('workspaceInitLoading') : t('initializeWorkspace')}
+                        </button>
 
                         <button
                             onClick={handleLogout}

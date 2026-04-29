@@ -10,6 +10,7 @@ import { loadUserSkills } from '../skills/skill-registry.js';
 import { loadUserTools } from '../tools/user-tools/loader.js';
 import { loadMcpTools } from '../mcp/loader.js';
 import { buildTenantSystemInstruction } from '../llm/client.js';
+import { ensureUserWorkspaceInitialized } from './workspace-bootstrap.js';
 import type { UserId } from '../types/platform.js';
 import type { SkillRegistry } from '../skills/skill-registry.js';
 import type { Tool } from '../llm/types.js';
@@ -141,6 +142,8 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
     if (!workDir) throw new Error(`No workDir configured for user "${userId}"`);
     const stateDir = userGetStateDir(userId);
     if (!stateDir) throw new Error(`No stateDir configured for user "${userId}"`);
+
+    await ensureUserWorkspaceInitialized(workDir, stateDir);
 
     const [systemInstruction, skillRegistry, userTools, mcpTools, preferences] = await Promise.all([
         buildTenantSystemInstruction(workDir),

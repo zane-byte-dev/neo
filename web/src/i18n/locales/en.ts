@@ -32,6 +32,10 @@ const en = {
     deleteChatConfirm: 'Are you sure you want to delete this chat? This action cannot be undone.',
     renameChat: 'Rename Chat',
     language: 'Language',
+    initializeWorkspace: 'Initialize workspace',
+    workspaceInitLoading: 'Initializing workspace…',
+    workspaceInitSuccess: 'Workspace initialized and default files are ready.',
+    workspaceInitFailed: 'Failed to initialize workspace',
 
     // ChatArea
     thinking: 'Thinking…',

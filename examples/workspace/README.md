@@ -3,6 +3,13 @@
 > 这是 Neo 的最小可用 workspace 模板。复制到你 `config.local.ts` 中
 > `USERS[].workDir` 指向的目录，然后按需修改即可。
 
+如果新用户的 `workDir` / `stateDir` 指向的是空目录，Neo 现在会在首次访问时自动：
+
+- 把这个模板补齐到 `workDir`
+- 创建 `stateDir/skills` 和 `stateDir/tools`
+
+已有文件不会被覆盖；自动初始化只会补缺。
+
 ## 文件清单
 
 | 文件 | 必需 | 位置 | 作用 |
@@ -26,6 +33,8 @@ cp -R examples/workspace/* ~/neo-workspace/
 
 # 然后在 src/config.local.ts 里把 workDir 指向 ~/neo-workspace
 ```
+
+如果你想自定义默认模板，仍然可以在首次访问前手动复制并修改这些文件。
 
 修改这些文件后，访问 `POST /api/reload` 让 Neo 重新加载缓存（或重启进程）。
 
