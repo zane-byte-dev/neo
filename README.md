@@ -19,9 +19,9 @@ git clone https://github.com/zane-byte-dev/neo.git
 cd neo
 npm install && npm run web:install
 
-# 复制本地配置模板，填入 workDir / stateDir 与 SESSION_SECRET
-cp src/config.local.example.ts src/config.local.ts
-
+# 直接启动即可：首次运行会在 ~/.neo/config.json 自动生成默认用户
+# （随机 webToken / SESSION_SECRET，工作目录默认在 ~/.neo/{workspace,state}/default）
+# 启动后控制台会打印登录 webToken，复制到浏览器登录即可。
 npm run dev:bot              # 后端 + Telegram bot，监听 :3000
 npm run web:dev              # 另开终端，前端开发服务器 :5173
 ```
@@ -104,9 +104,11 @@ npm install
 npm run web:install
 ```
 
-### 配置：`src/config.local.ts`
+### 配置：`~/.neo/config.json` 或 `src/config.local.ts`
 
-所有个人配置（用户、目录、Session Secret）集中在 `src/config.local.ts`，该文件已在 `.gitignore` 中，**不会被提交**。从模板复制并修改：
+首次启动时若两者都不存在，会在 `~/.neo/config.json` 自动生成单用户默认配置（随机 `webToken` / `SESSION_SECRET`，`workDir`/`stateDir` 落到 `~/.neo/{workspace,state}/default`），并把 webToken 打印到控制台。
+
+如需自定义（多用户、自定义路径、托管在仓库内等），仍可手动复制模板，`config.local.ts` 优先级高于 `~/.neo/config.json`：
 
 ```bash
 cp src/config.local.example.ts src/config.local.ts

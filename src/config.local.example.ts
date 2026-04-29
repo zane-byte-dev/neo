@@ -1,10 +1,17 @@
 /**
  * src/config.local.example.ts — Template for local configuration.
  *
- * Copy this file to src/config.local.ts and customize for your environment.
+ * You usually do NOT need to copy this file. On first run, if neither
+ * src/config.local.ts nor the USERS env var is set, Neo will auto-generate
+ * ~/.neo/config.json with a single default user (and random webToken /
+ * SESSION_SECRET) and print the login token to the console.
+ *
+ * Use this template only if you want the config tracked alongside the repo or
+ * need multiple users. Steps:
  *   cp src/config.local.example.ts src/config.local.ts
  *
- * config.local.ts is gitignored — your secrets stay local.
+ * config.local.ts is gitignored — your secrets stay local. Values here take
+ * precedence over ~/.neo/config.json.
  *
  * API keys (Gemini / DeepSeek / OpenAI / Anthropic) and Telegram tokens are
  * managed in the UI (Models page → Credentials) and stored encrypted under

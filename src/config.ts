@@ -7,6 +7,7 @@
  */
 
 import { getSecret } from './services/secrets.js';
+import { loadOrBootstrapHomeConfig, printBootstrapBanner } from './services/bootstrap-config.js';
 
 // ── Local config (gitignored) ────────────────────────────────────────────────
 
@@ -35,6 +36,20 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
         localConfig = (mod.default ?? mod) as LocalConfig;
     } catch {
         // No local config file — fall back to process.env.
+    }
+
+    // If neither config.local.ts nor process.env provided a user, fall back to
+    // ~/.neo/config.json (creating it on first run with a random web token).
+    const hasUsers = Array.isArray(localConfig.USERS) && localConfig.USERS.length > 0;
+    if (!hasUsers && !process.env.USERS) {
+        const { config: homeConfig, bootstrapped } = loadOrBootstrapHomeConfig();
+        localConfig = { ...homeConfig, ...localConfig };
+        // Preserve home-config SESSION_SECRET when src/config.local.ts didn't supply one.
+        if (!localConfig.SESSION_SECRET) localConfig.SESSION_SECRET = homeConfig.SESSION_SECRET;
+        if (!Array.isArray(localConfig.USERS) || localConfig.USERS.length === 0) {
+            localConfig.USERS = homeConfig.USERS;
+        }
+        if (bootstrapped) printBootstrapBanner(homeConfig);
     }
 }
 
