@@ -1,0 +1,54 @@
+import React from 'react'
+import { Sparkles, BookOpen, MessageSquare } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useAppStore } from '../stores/useAppStore'
+import { useT } from '../i18n'
+
+export const WelcomeScreen: React.FC = () => {
+    const createChat = useAppStore((s) => s.createChat)
+    const navigate = useNavigate()
+    const t = useT()
+    return (
+        <div className="flex flex-col items-center text-center px-1 py-4 sm:py-10 animate-fade-in">
+            {/* Glow icon */}
+            <div className="relative mb-3 sm:mb-8">
+                <div className="absolute inset-0 bg-primary-mint/20 rounded-full blur-2xl scale-150" />
+                <div className="relative w-14 sm:w-20 h-14 sm:h-20 bg-gradient-to-br from-primary-mint/15 to-primary-mint/5 rounded-2xl sm:rounded-3xl flex items-center justify-center border border-primary-mint/20"
+                     style={{ boxShadow: '0 0 32px rgba(52, 211, 153, 0.15)' }}>
+                    <Sparkles size={26} className="text-primary-mint sm:hidden" fill="currentColor" />
+                    <Sparkles size={36} className="text-primary-mint hidden sm:block" fill="currentColor" />
+                </div>
+            </div>
+
+            <h1 className="text-xl sm:text-3xl font-bold mb-1.5 sm:mb-3 tracking-tight text-text">{t('neoTitle')}</h1>
+            <p className="text-text-secondary max-w-md mb-5 sm:mb-12 text-sm sm:text-[15px] leading-relaxed">
+                {t('welcomeSubtitle')}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4 max-w-sm w-full">
+                <button
+                    onClick={createChat}
+                    className="group flex flex-col items-start p-3.5 sm:p-5 bg-bg-container border border-border rounded-2xl hover:border-primary-mint/40 transition-all duration-200 text-left hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ boxShadow: 'var(--shadow-soft)' }}
+                >
+                    <div className="w-9 h-9 rounded-xl bg-primary-mint/10 flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-primary-mint/15 transition-colors">
+                        <MessageSquare size={18} className="text-primary-mint" />
+                    </div>
+                    <span className="text-sm font-semibold">{t('newChat')}</span>
+                    <span className="text-xs text-text-tertiary mt-0.5">{t('startConversation')}</span>
+                </button>
+                <button
+                    onClick={() => navigate('/notebook')}
+                    className="group flex flex-col items-start p-3.5 sm:p-5 bg-bg-container border border-border rounded-2xl hover:border-accent-indigo/40 transition-all duration-200 text-left hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ boxShadow: 'var(--shadow-soft)' }}
+                >
+                    <div className="w-9 h-9 rounded-xl bg-accent-indigo/10 flex items-center justify-center mb-2 sm:mb-3 group-hover:bg-accent-indigo/15 transition-colors">
+                        <BookOpen size={18} className="text-accent-indigo" />
+                    </div>
+                    <span className="text-sm font-semibold">{t('notebook')}</span>
+                    <span className="text-xs text-text-tertiary mt-0.5">{t('browseKnowledgeBase')}</span>
+                </button>
+            </div>
+        </div>
+    )
+}
