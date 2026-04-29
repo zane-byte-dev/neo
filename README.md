@@ -345,8 +345,9 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 ├── notebooks/          # 知识索引 SQLite (FTS5)
 ├── routing.json        # Models 页保存的路由覆盖
 ├── tool-approvals.json # 工具确认 session/always 放行规则
-└── usage.jsonl         # 按日调用量与成本记录
 ```
+
+> 💡 仓库内已附最小可运行的 [examples/workspace/](examples/workspace) 模板（AGENTS.md / SOUL.md / USER.md / TOOLS.md）。复制到你的 `workDir` 即可作为起点。
 
 **Telegram 绑定** 通过 `tenants` 声明：
 

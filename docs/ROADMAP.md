@@ -125,14 +125,14 @@
 
 ### 11. 测试与工程质量
 
-当前状态：已接入 Vitest，覆盖 runtime、indexing、Notebook chat、routes 和基础 E2E smoke test；CI/CD 与更系统化的质量门禁仍未完成。
+当前状态：已接入 Vitest（约 45 个测试文件），覆盖 runtime、indexing、Notebook chat、routes 和基础 E2E smoke test；GitHub Actions CI 已落地；ESLint / Prettier / strict mode 仍未引入。
 
 - [x] **自动化测试底座**：已建立 Vitest 测试配置与覆盖率统计，runtime / indexing / Notebook chat / runs API 等路径已有回归测试
 - [x] **基础端到端测试**：已具备 chat HTTP API 的 smoke test，覆盖完整 SSE 对话主链路
+- [x] **CI/CD**：GitHub Actions 已自动跑 build + test + web build（`.github/workflows/ci.yml`）
 
-- [ ] **单元测试**：为核心模块（tool executor、chat service、notebook service）编写测试
+- [ ] **单元测试**：为核心模块（tool executor、chat service、notebook service）补齐测试
 - [ ] **集成测试**：模拟完整对话流程的端到端测试
-- [ ] **CI/CD**：GitHub Actions 自动化构建、测试、lint
 - [ ] **代码质量**：引入 ESLint + Prettier 统一代码风格
 - [ ] **TypeScript strict mode**：启用更严格的类型检查
 

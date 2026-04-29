@@ -132,8 +132,10 @@ Each user gets two directories:
 ├── notebooks/          # SQLite (FTS5) knowledge index
 ├── routing.json        # routing overrides saved from the Models page
 ├── tool-approvals.json # tool-confirmation session/always rules
-└── usage.jsonl         # daily LLM call & cost log
 ```
+
+> 💡 A minimal runnable template lives at [examples/workspace/](examples/workspace)
+> (AGENTS.md / SOUL.md / USER.md / TOOLS.md). Copy it to your `workDir` to get started.
 
 ## Project Structure
 
