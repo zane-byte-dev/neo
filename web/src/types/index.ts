@@ -5,6 +5,8 @@ export interface Chat {
     title: string
     isPinned: boolean
     createdAt: number
+    /** Per-session project root override (absolute path), null/undefined = use user.workDir. */
+    projectRoot?: string | null
 }
 
 export interface Message {

@@ -53,6 +53,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                 title: r.title,
                 isPinned: r.isPinned,
                 createdAt: r.createdAt,
+                projectRoot: r.projectRoot ?? null,
             }))))
             .catch(() => {})
     }, [])

@@ -1,4 +1,6 @@
 import type Router from '@koa/router';
+import { promises as fs } from 'node:fs';
+import { resolve } from 'node:path';
 import { sessionCreate, sessionList, sessionPatch, sessionDelete, messageList } from '../services/chat-service.js';
 import { calcUser } from '../services/user-service.js';
 import { listRunIds, loadRun } from '../runtime/store.js';
@@ -52,7 +54,23 @@ export function newSession(router: Router): void {
     router.post('/api/session/clear', async (ctx: import('koa').Context) => {
         const reqUserId: string | undefined = ctx.state.userId;
         if (reqUserId) {
-            await sessionCreate(reqUserId);
+            const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+            let projectRoot: string | undefined;
+            if (typeof body.projectRoot === 'string' && body.projectRoot.trim()) {
+                const abs = resolve(body.projectRoot.trim());
+                try {
+                    const stat = await fs.stat(abs);
+                    if (!stat.isDirectory()) {
+                        ctx.status = 400; ctx.body = { error: 'projectRoot is not a directory' }; return;
+                    }
+                    projectRoot = abs;
+                } catch {
+                    ctx.status = 400; ctx.body = { error: `projectRoot does not exist: ${abs}` }; return;
+                }
+            }
+            const session = await sessionCreate(reqUserId, undefined, projectRoot ? { projectRoot } : undefined);
+            ctx.body = { ok: true, session: { id: session.id, projectRoot: session.project_root ?? null } };
+            return;
         }
         ctx.body = { ok: true };
     });
@@ -66,6 +84,7 @@ export function newSession(router: Router): void {
             title: s.title || 'New Chat',
             isPinned: s.is_pinned === 1,
             createdAt: new Date(s.start_time).getTime(),
+            projectRoot: s.project_root ?? null,
         }));
     });
 
@@ -74,12 +93,32 @@ export function newSession(router: Router): void {
         if (!userId) { ctx.status = 401; ctx.body = { error: 'Unauthorized' }; return; }
         const { id } = ctx.params;
         const body = ctx.request.body as Record<string, unknown>;
-        const patch: { title?: string; is_pinned?: number } = {};
+        const patch: { title?: string; is_pinned?: number; project_root?: string | null } = {};
         if (typeof body.title === 'string') patch.title = body.title;
         if (typeof body.isPinned === 'boolean') patch.is_pinned = body.isPinned ? 1 : 0;
+        if (body.projectRoot === null || body.projectRoot === '') {
+            patch.project_root = null;
+        } else if (typeof body.projectRoot === 'string') {
+            const abs = resolve(body.projectRoot.trim());
+            try {
+                const stat = await fs.stat(abs);
+                if (!stat.isDirectory()) { ctx.status = 400; ctx.body = { error: 'projectRoot is not a directory' }; return; }
+            } catch {
+                ctx.status = 400; ctx.body = { error: `projectRoot does not exist: ${abs}` }; return;
+            }
+            patch.project_root = abs;
+        }
         const updated = await sessionPatch(id, userId, patch);
         if (!updated) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
-        ctx.body = { ok: true };
+        ctx.body = {
+            ok: true,
+            session: {
+                id: updated.id,
+                title: updated.title,
+                isPinned: updated.is_pinned === 1,
+                projectRoot: updated.project_root ?? null,
+            },
+        };
     });
 
     router.delete('/api/sessions/:id', async (ctx: import('koa').Context) => {

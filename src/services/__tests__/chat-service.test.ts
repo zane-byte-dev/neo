@@ -190,6 +190,21 @@ describe('Session operations', () => {
         expect(result).toBeNull();
     });
 
+    it('sessionCreate with projectRoot persists project_root', async () => {
+        const session = await sessionCreate(TEST_USER, 'pr-create', { projectRoot: '/tmp/some-proj' });
+        expect(session.project_root).toBe('/tmp/some-proj');
+        const reread = await sessionGet('pr-create', TEST_USER);
+        expect(reread!.project_root).toBe('/tmp/some-proj');
+    });
+
+    it('sessionPatch can set and clear project_root', async () => {
+        await sessionCreate(TEST_USER, 'pr-patch');
+        const set = await sessionPatch('pr-patch', TEST_USER, { project_root: '/tmp/x' });
+        expect(set!.project_root).toBe('/tmp/x');
+        const cleared = await sessionPatch('pr-patch', TEST_USER, { project_root: null });
+        expect(cleared!.project_root).toBeUndefined();
+    });
+
     it('sessionDelete removes a session', async () => {
         await sessionCreate(TEST_USER, 'del-test');
         const result = await sessionDelete('del-test', TEST_USER);

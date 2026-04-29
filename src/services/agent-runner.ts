@@ -20,6 +20,9 @@ import type { StreamChunk, ToolContext } from '../llm/types.js';
 import { resolveSmartRoute } from '../llm/model-router.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
+import { touchProject } from './project-registry.js';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import { log } from '../utils/logger.js';
 import { createRun, loadRun, newRunId } from '../runtime/store.js';
 import { loadCheckpoint } from '../runtime/checkpoint.js';
@@ -162,6 +165,10 @@ interface PreparedTurnContext {
     model: string;
     session: SessionRecord;
     history: ChatHistoryItem[];
+    /** Effective project root for tool cwd (session.project_root || userCtx.workDir). */
+    projectRoot: string;
+    /** System instruction with optional {projectRoot}/.neo/AGENTS.md appended. */
+    systemInstruction: string;
 }
 
 function normalizeRunOptions(opts: AgentRunOptions): NormalizedRunOptions {
@@ -285,6 +292,27 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         });
     }
 
+    // Resolve effective project root for this turn. Defaults to the user's
+    // home workDir; sessions may override it via SessionRow.project_root.
+    const projectRoot = session.project_root && session.project_root.trim()
+        ? session.project_root.trim()
+        : userCtx.workDir;
+
+    let systemInstruction = userCtx.systemInstruction || '';
+    if (projectRoot !== userCtx.workDir) {
+        try {
+            const projAgents = await fs.readFile(join(projectRoot, '.neo', 'AGENTS.md'), 'utf8');
+            const trimmed = projAgents.trim();
+            if (trimmed) {
+                systemInstruction = systemInstruction
+                    ? `${systemInstruction}\n\n[Project Instructions @ ${projectRoot}]\n${trimmed}`
+                    : `[Project Instructions @ ${projectRoot}]\n${trimmed}`;
+            }
+        } catch { /* no project-level AGENTS.md, ignore */ }
+        // Best-effort recent-list bump.
+        void touchProject(userId, projectRoot).catch(() => { /* non-fatal */ });
+    }
+
     return {
         t0,
         options,
@@ -295,6 +323,8 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         model,
         session,
         history,
+        projectRoot,
+        systemInstruction,
     };
 }
 
@@ -309,6 +339,8 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         model,
         session,
         history,
+        projectRoot,
+        systemInstruction,
     } = prepared;
     const {
         userId,
@@ -452,9 +484,10 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
     const toolContext: ToolContext = {
         userId,
         sessionId,
-        workDir: userCtx.workDir ?? userCtx.workDir,
+        workDir: projectRoot,
+        homeWorkDir: userCtx.workDir,
         stateDir: userCtx.stateDir ?? userCtx.workDir,
-        systemInstruction: userCtx.systemInstruction,
+        systemInstruction,
         signal: effectiveSignal,
         skillRegistry: userCtx.skillRegistry,
         userTools: userCtx.userTools,

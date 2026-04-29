@@ -38,8 +38,14 @@ export interface FunctionDeclaration {
 export interface ToolContext {
     userId: string;
     sessionId: string;
-    /** Project root exposed to general file/search/shell tools. */
+    /** Project root exposed to general file/search/shell tools (may differ from homeWorkDir per session). */
     workDir: string;
+    /**
+     * The user's configured home/default workDir. Equals `workDir` unless the
+     * session has overridden the project root. Used to gate auto-commit so
+     * external project paths are not silently committed.
+     */
+    homeWorkDir?: string;
     /** Runtime state root for chat history, runs, memory, usage, etc. */
     stateDir: string;
     systemInstruction: string;

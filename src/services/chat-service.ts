@@ -52,6 +52,8 @@ export interface SessionRow {
     end_time: string;
     is_current: number;
     is_pinned: number;
+    /** Optional absolute path overriding the per-user workDir for this session's tool runs. */
+    project_root?: string;
 }
 
 export interface MessageRow {
@@ -110,7 +112,11 @@ export async function sessionGetCurrent(userId: string): Promise<SessionRow | nu
 }
 
 /** Create a new session and mark it as current (deactivates previous ones). */
-export async function sessionCreate(userId: string, id?: string): Promise<SessionRow> {
+export async function sessionCreate(
+    userId: string,
+    id?: string,
+    opts?: { projectRoot?: string },
+): Promise<SessionRow> {
     return withGitAutoCommit(stateDirForUser(userId), 'session_create', async () => {
         const store = await readSessionsStore(userId);
         const now = new Date().toISOString();
@@ -121,6 +127,7 @@ export async function sessionCreate(userId: string, id?: string): Promise<Sessio
         }
 
         const session: SessionRow = { id, user_id: userId, title: '', start_time: now, end_time: now, is_current: 1, is_pinned: 0 };
+        if (opts?.projectRoot) session.project_root = opts.projectRoot;
         store.sessions[id] = session;
         await writeSessionsStore(userId, store);
         return session;
@@ -139,7 +146,7 @@ export async function sessionList(userId: string, limit = 20): Promise<SessionRo
 export async function sessionPatch(
     sessionId: string,
     userId: string,
-    patch: { title?: string; is_pinned?: number },
+    patch: { title?: string; is_pinned?: number; project_root?: string | null },
 ): Promise<SessionRow | null> {
     return withGitAutoCommit(stateDirForUser(userId), 'session_patch', async () => {
         const store = await readSessionsStore(userId);
@@ -147,6 +154,10 @@ export async function sessionPatch(
         if (!session) return null;
         if (patch.title !== undefined) session.title = patch.title;
         if (patch.is_pinned !== undefined) session.is_pinned = patch.is_pinned;
+        if (patch.project_root !== undefined) {
+            if (patch.project_root === null || patch.project_root === '') delete session.project_root;
+            else session.project_root = patch.project_root;
+        }
         await writeSessionsStore(userId, store);
         return session;
     }, 'ChatService');

@@ -750,8 +750,11 @@ export function sessionNew(sessionId: string, title: string) {
     return _post('/api/session/new', { sessionId, title })
 }
 
-export function sessionClear(sessionId: string) {
-    return _post('/api/session/clear', { sessionId })
+export function sessionClear(sessionId: string, projectRoot?: string | null) {
+    return _post('/api/session/clear', {
+        sessionId,
+        ...(projectRoot ? { projectRoot } : {}),
+    })
 }
 
 export function sessionList() {
@@ -759,10 +762,10 @@ export function sessionList() {
 }
 
 export function fetchSessions() {
-    return apiGet<Array<{ id: string; title: string; isPinned: boolean; createdAt: number }>>('/api/sessions')
+    return apiGet<Array<{ id: string; title: string; isPinned: boolean; createdAt: number; projectRoot: string | null }>>('/api/sessions')
 }
 
-export function patchSession(id: string, patch: { title?: string; isPinned?: boolean }) {
+export function patchSession(id: string, patch: { title?: string; isPinned?: boolean; projectRoot?: string | null }) {
     return fetch(`/api/sessions/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         credentials: 'include',
@@ -782,6 +785,33 @@ export function fetchMessages(sessionId: string) {
     return apiGet<MessageHistoryRow[]>(
         `/api/messages?sessionId=${encodeURIComponent(sessionId)}`
     )
+}
+
+// ── Project (recent project directories) API ─────────────────────────────────
+
+export interface ProjectEntry {
+    id: string
+    name: string
+    path: string
+    lastUsedAt: string
+}
+
+export function fetchProjects() {
+    return apiGet<{ projects: ProjectEntry[] }>('/api/projects')
+}
+
+export function registerProjectApi(path: string, name?: string) {
+    return _post('/api/projects', { path, ...(name ? { name } : {}) }).then((r) => {
+        if (!r.ok) return r.json().then((e) => Promise.reject(e))
+        return r.json() as Promise<ProjectEntry>
+    })
+}
+
+export function deleteProjectApi(id: string) {
+    return fetch(`/api/projects/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    })
 }
 
 // ── Todo API ──────────────────────────────────────────────────────────────────

@@ -26,6 +26,7 @@ import { CodeBlock, InlineCode } from './CodeBlock'
 import { MermaidBlock } from './MermaidBlock'
 import { toast } from './Toast'
 import { confirm as confirmDialog } from './ConfirmDialog'
+import { ProjectPicker } from './ProjectPicker'
 
 function activityPreviewText(item: ActivityItem): string {
     if (typeof item.args?.command === 'string') return item.args.command
@@ -1453,6 +1454,11 @@ export const ChatArea: React.FC = () => {
                     >
                         <Download size={14} />
                     </button>
+                )}
+                {activeChat && (
+                    <div className="ml-auto">
+                        <ProjectPicker sessionId={activeChat.id} projectRoot={activeChat.projectRoot ?? null} />
+                    </div>
                 )}
             </div>
 

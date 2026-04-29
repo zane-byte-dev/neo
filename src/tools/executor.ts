@@ -148,9 +148,14 @@ export async function executeTool(
     }
 
     const startedAt = Date.now();
-    const gitSnapshot = permission === 'read' ? null : await captureGitSnapshot(workDir);
+    // Only auto-commit when the active workDir is the user's home/default
+    // workDir. External per-session project roots are left untouched so the
+    // user owns their own commit cadence there.
+    const homeWorkDir = context?.homeWorkDir ?? workDir;
+    const isHome = homeWorkDir === workDir;
+    const gitSnapshot = permission === 'read' || !isHome ? null : await captureGitSnapshot(workDir);
     const result = await executeToolInner(name, args, workDir, toolRegistry, context);
-    if (permission !== 'read' && !shouldSkipAutoCommit(result)) {
+    if (permission !== 'read' && isHome && !shouldSkipAutoCommit(result)) {
         await autoCommitWorkspaceChanges(name, gitSnapshot, 'AgentRuntime');
     }
     recordToolCall(name, classifyOutcome(result), Date.now() - startedAt);
