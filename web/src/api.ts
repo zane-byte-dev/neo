@@ -32,7 +32,7 @@ export type ConfirmStatus = 'pending' | 'approved' | 'denied' | 'submitted' | 'c
 export type ApprovalScope = 'once' | 'session' | 'always'
 
 export interface StreamChunk {
-    type: 'run' | 'text' | 'thought' | 'tool_call' | 'tool_result' | 'tool_confirm' | 'confirm_resolved' | 'done' | 'error' | 'image' | 'video' | 'todo_update'
+    type: 'run' | 'session' | 'text' | 'thought' | 'tool_call' | 'tool_result' | 'tool_confirm' | 'confirm_resolved' | 'citations' | 'done' | 'error' | 'image' | 'video' | 'todo_update'
     text?: string
     toolName?: string
     args?: Record<string, unknown>  // tool call arguments
@@ -48,6 +48,10 @@ export interface StreamChunk {
     url?: string       // image URL path (for 'image' type)
     caption?: string   // optional caption (for 'image' type)
     todos?: { id: number; title: string; status: string }[]  // todo list snapshot
+    /** For 'session' type — server-resolved session id (e.g. notebook auto-bind). */
+    sessionId?: string
+    /** For 'citations' type — final notebook 【N】 citation map for the assistant message. */
+    citations?: import('./types').ParsedCitation[]
 }
 
 type RuntimeRunStatus = 'queued' | 'running' | 'waiting_confirm' | 'waiting_input' | 'completed' | 'failed' | 'cancelled' | 'expired'
@@ -193,6 +197,13 @@ function mapRunEventToStreamChunk(
                 approvalScope: toApprovalScope(event.payload.approvalScope),
                 cursor: event.index,
             }
+        case 'notebook_citations': {
+            const citations = Array.isArray(event.payload.citations)
+                ? event.payload.citations as import('./types').ParsedCitation[]
+                : []
+            if (citations.length === 0) return null
+            return { type: 'citations', citations, cursor: event.index }
+        }
         case 'run_completed':
             return { type: 'done', cursor: event.index }
         case 'run_failed': {
@@ -281,6 +292,7 @@ export interface MessageHistoryRow {
     timestamp: number
     activityLog?: MessageActivityItem[]
     parts?: MessageHistoryPart[]
+    citations?: import('./types').ParsedCitation[]
 }
 
 export function fetchPreferences(): Promise<PreferencesResponse> {
@@ -378,6 +390,8 @@ export async function* streamChat(
     images?: string[],
     documents?: { filename: string; text: string }[],
     confirmDangerous?: boolean,
+    notebookId?: string,
+    sourceIds?: string[],
 ): AsyncGenerator<StreamChunk> {
     const requestBody = {
         message,
@@ -386,6 +400,8 @@ export async function* streamChat(
         ...(images?.length ? { images } : {}),
         ...(documents?.length ? { documents } : {}),
         ...(confirmDangerous ? { confirmDangerous: true } : {}),
+        ...(notebookId ? { notebookId } : {}),
+        ...(sourceIds && sourceIds.length > 0 ? { sourceIds } : {}),
     }
     let runId: string | undefined
     let lastCursor = -1
@@ -572,7 +588,7 @@ export function notebookDelete(id: string) {
 // ── Notebook workspace (NotebookLM-style) ────────────────────────────────────
 
 import type {
-    SourceMeta, SourceGuide, NotebookConfig, NotebookNote, Artifact, NotebookChatMessage, ArtifactType, ParsedCitation,
+    SourceMeta, SourceGuide, NotebookConfig, NotebookNote, Artifact, ArtifactType,
 } from './types'
 
 async function _jsonOrThrow<T>(r: Response): Promise<T> {
@@ -705,43 +721,9 @@ export function notebookDeleteArtifact(notebook: string, id: string) {
     }).then((r) => _jsonOrThrow<{ ok: true }>(r))
 }
 
-// Chat
-export function notebookChatHistory(notebook: string): Promise<NotebookChatMessage[]> {
-    return apiGet(`/api/notebook/chat?notebook=${encodeURIComponent(notebook)}`)
-}
-
-export function notebookClearChat(notebook: string) {
-    return fetch(`/api/notebook/chat?notebook=${encodeURIComponent(notebook)}`, {
-        method: 'DELETE', credentials: 'include',
-    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
-}
-
-export function notebookForkChat(notebook: string, messageId: string): Promise<{ messages: NotebookChatMessage[] }> {
-    return _post('/api/notebook/chat/fork', { notebook, messageId }).then((r) => _jsonOrThrow<{ messages: NotebookChatMessage[] }>(r))
-}
-
-export interface NotebookChatEvent {
-    type: 'meta' | 'text' | 'citations' | 'done' | 'error'
-    text?: string
-    citations?: ParsedCitation[]
-    sources?: ParsedCitation[]
-    error?: string
-}
-
-export async function* streamNotebookChat(
-    notebook: string,
-    message: string,
-    sourceIds?: string[],
-    signal?: AbortSignal,
-    model?: string,
-): AsyncGenerator<NotebookChatEvent> {
-    yield* createSSEStream<NotebookChatEvent>('/api/notebook/chat', {
-        notebook,
-        message,
-        ...(sourceIds ? { sourceIds } : {}),
-        ...(model ? { model } : {}),
-    }, { signal });
-}
+// Chat (notebook chat is now unified with the regular chat session API; legacy
+// /api/notebook/chat endpoints remain for backwards compatibility but are no
+// longer consumed by the web client.)
 
 
 // ── Session API ───────────────────────────────────────────────────────────────
@@ -762,10 +744,30 @@ export function sessionList() {
 }
 
 export function fetchSessions() {
-    return apiGet<Array<{ id: string; title: string; isPinned: boolean; createdAt: number; projectRoot: string | null }>>('/api/sessions')
+    return apiGet<Array<{
+        id: string;
+        title: string;
+        isPinned: boolean;
+        isArchived?: boolean;
+        createdAt: number;
+        updatedAt?: number;
+        projectRoot: string | null;
+        mode?: 'general' | 'notebook';
+        notebookId?: string;
+        sourceIds?: string[];
+    }>>('/api/sessions')
 }
 
-export function patchSession(id: string, patch: { title?: string; isPinned?: boolean; projectRoot?: string | null }) {
+export function patchSession(
+    id: string,
+    patch: {
+        title?: string;
+        isPinned?: boolean;
+        isArchived?: boolean;
+        projectRoot?: string | null;
+        sourceIds?: string[] | null;
+    },
+) {
     return fetch(`/api/sessions/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         credentials: 'include',
@@ -779,6 +781,35 @@ export function deleteSessionApi(id: string) {
         method: 'DELETE',
         credentials: 'include',
     })
+}
+
+export interface NotebookSessionRow {
+    id: string
+    title: string
+    isPinned: boolean
+    isArchived?: boolean
+    createdAt: number
+    updatedAt?: number
+    projectRoot: string | null
+    mode: 'notebook'
+    notebookId: string
+    sourceIds?: string[]
+}
+
+/** Find or create the (single) chat session bound to a notebook. */
+export async function openNotebookSession(notebookId: string, sourceIds?: string[]): Promise<NotebookSessionRow> {
+    const res = await fetch('/api/sessions/notebook', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notebookId, ...(sourceIds && sourceIds.length > 0 ? { sourceIds } : {}) }),
+    })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error((body as Record<string, string>).error ?? `HTTP ${res.status}`)
+    }
+    const data = await res.json() as { session: NotebookSessionRow }
+    return data.session
 }
 
 export function fetchMessages(sessionId: string) {

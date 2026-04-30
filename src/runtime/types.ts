@@ -117,6 +117,7 @@ export const RUN_EVENT_TYPE_VALUES = [
     'artifact_created',
     'confirm_requested',
     'confirm_resolved',
+    'notebook_citations',
     'run_completed',
     'run_failed',
 ] as const;
@@ -291,6 +292,20 @@ export type ConfirmResolvedEvent = RunEventBase<'confirm_resolved', {
     approvalScope?: ToolApprovalScope;
 }>;
 
+export interface NotebookCitationPayload {
+    n: number;
+    sourceId: string;
+    title: string;
+    snippet?: string;
+    chunkId?: string;
+    charStart?: number;
+    charEnd?: number;
+}
+
+export type NotebookCitationsEvent = RunEventBase<'notebook_citations', {
+    citations: NotebookCitationPayload[];
+}>;
+
 export type RunCompletedEvent = RunEventBase<'run_completed', {
     finishedAt: string;
     responseLength?: number;
@@ -314,5 +329,6 @@ export type RunEvent =
     | ArtifactCreatedEvent
     | ConfirmRequestedEvent
     | ConfirmResolvedEvent
+    | NotebookCitationsEvent
     | RunCompletedEvent
     | RunFailedEvent;

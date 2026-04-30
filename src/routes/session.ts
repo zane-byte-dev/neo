@@ -1,7 +1,7 @@
 import type Router from '@koa/router';
 import { promises as fs } from 'node:fs';
 import { resolve } from 'node:path';
-import { sessionCreate, sessionList, sessionPatch, sessionDelete, messageList } from '../services/chat-service.js';
+import { sessionCreate, sessionList, sessionPatch, sessionDelete, sessionGetByNotebook, messageList } from '../services/chat-service.js';
 import { calcUser } from '../services/user-service.js';
 import { listRunIds, loadRun } from '../runtime/store.js';
 import { listRunEvents } from '../runtime/events.js';
@@ -41,6 +41,15 @@ interface SessionMessageResponse {
     timestamp: number;
     activityLog?: ActivityItemResponse[];
     parts?: MessagePartResponse[];
+    citations?: Array<{
+        n: number;
+        sourceId: string;
+        title: string;
+        snippet?: string;
+        chunkId?: string;
+        charStart?: number;
+        charEnd?: number;
+    }>;
 }
 
 interface SessionRunActivity {
@@ -83,9 +92,56 @@ export function newSession(router: Router): void {
             id: s.id,
             title: s.title || 'New Chat',
             isPinned: s.is_pinned === 1,
+            isArchived: s.is_archived === 1,
             createdAt: new Date(s.start_time).getTime(),
+            updatedAt: new Date(s.end_time || s.start_time).getTime(),
             projectRoot: s.project_root ?? null,
+            mode: s.mode ?? 'general',
+            ...(s.notebook_id !== undefined && { notebookId: s.notebook_id }),
+            ...(s.source_ids !== undefined && { sourceIds: s.source_ids }),
         }));
+    });
+
+    /**
+     * Find or create the (single) chat session bound to a notebook.
+     * Body: { notebookId: string, sourceIds?: string[] }
+     */
+    router.post('/api/sessions/notebook', async (ctx: import('koa').Context) => {
+        const userId: string | undefined = ctx.state.userId;
+        if (!userId) { ctx.status = 401; ctx.body = { error: 'Unauthorized' }; return; }
+        const body = ctx.request.body as Record<string, unknown>;
+        const notebookId = typeof body.notebookId === 'string' && body.notebookId.trim() ? body.notebookId.trim() : '';
+        if (!notebookId) { ctx.status = 400; ctx.body = { error: 'notebookId required' }; return; }
+        const rawSourceIds = Array.isArray(body.sourceIds)
+            ? (body.sourceIds as unknown[]).filter((v): v is string => typeof v === 'string' && v.length > 0)
+            : undefined;
+
+        let session = await sessionGetByNotebook(userId, notebookId);
+        if (!session) {
+            session = await sessionCreate(userId, undefined, {
+                mode: 'notebook',
+                notebookId,
+                title: `Notebook: ${notebookId}`,
+                ...(rawSourceIds && rawSourceIds.length > 0 ? { sourceIds: rawSourceIds } : {}),
+            });
+        } else if (rawSourceIds !== undefined) {
+            await sessionPatch(session.id, userId, { source_ids: rawSourceIds });
+            session = { ...session, source_ids: rawSourceIds.length > 0 ? rawSourceIds : undefined };
+        }
+        ctx.body = {
+            session: {
+                id: session.id,
+                title: session.title || `Notebook: ${notebookId}`,
+                isPinned: session.is_pinned === 1,
+                isArchived: session.is_archived === 1,
+                createdAt: new Date(session.start_time).getTime(),
+                updatedAt: new Date(session.end_time || session.start_time).getTime(),
+                projectRoot: session.project_root ?? null,
+                mode: 'notebook' as const,
+                notebookId,
+                ...(session.source_ids !== undefined && { sourceIds: session.source_ids }),
+            },
+        };
     });
 
     router.patch('/api/sessions/:id', async (ctx: import('koa').Context) => {
@@ -93,9 +149,15 @@ export function newSession(router: Router): void {
         if (!userId) { ctx.status = 401; ctx.body = { error: 'Unauthorized' }; return; }
         const { id } = ctx.params;
         const body = ctx.request.body as Record<string, unknown>;
-        const patch: { title?: string; is_pinned?: number; project_root?: string | null } = {};
+        const patch: { title?: string; is_pinned?: number; is_archived?: number; project_root?: string | null; source_ids?: string[] | null } = {};
         if (typeof body.title === 'string') patch.title = body.title;
         if (typeof body.isPinned === 'boolean') patch.is_pinned = body.isPinned ? 1 : 0;
+        if (typeof body.isArchived === 'boolean') patch.is_archived = body.isArchived ? 1 : 0;
+        if (body.sourceIds === null) {
+            patch.source_ids = null;
+        } else if (Array.isArray(body.sourceIds)) {
+            patch.source_ids = (body.sourceIds as unknown[]).filter((v): v is string => typeof v === 'string' && v.length > 0);
+        }
         if (body.projectRoot === null || body.projectRoot === '') {
             patch.project_root = null;
         } else if (typeof body.projectRoot === 'string') {
@@ -116,7 +178,11 @@ export function newSession(router: Router): void {
                 id: updated.id,
                 title: updated.title,
                 isPinned: updated.is_pinned === 1,
+                isArchived: updated.is_archived === 1,
                 projectRoot: updated.project_root ?? null,
+                mode: updated.mode ?? 'general',
+                ...(updated.notebook_id !== undefined && { notebookId: updated.notebook_id }),
+                ...(updated.source_ids !== undefined && { sourceIds: updated.source_ids }),
             },
         };
     });
@@ -162,6 +228,7 @@ async function buildSessionMessagesResponse(
             content: row.content,
             timestamp: new Date(row.timestamp).getTime(),
         };
+        if (row.citations && row.citations.length > 0) base.citations = row.citations;
         if (base.role !== 'assistant') return base;
 
         const matched = takeMatchingRunActivity(base, unmatchedActivities);

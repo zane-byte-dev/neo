@@ -20,6 +20,7 @@ import type { StreamChunk, ToolContext } from '../llm/types.js';
 import { resolveSmartRoute } from '../llm/model-router.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
+import { citationsFromText, disposeRegistry } from './notebook-citation-registry.js';
 import { touchProject } from './project-registry.js';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
@@ -313,6 +314,22 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         void touchProject(userId, projectRoot).catch(() => { /* non-fatal */ });
     }
 
+    // Notebook-mode session: append source-grounding rules + bind to notebook tools.
+    if (session.mode === 'notebook' && session.notebook_id) {
+        const notebookRules = [
+            `[Notebook Mode — "${session.notebook_id}"]`,
+            '你当前绑定于 notebook 「' + session.notebook_id + '」。回答问题时必须遵守以下规则：',
+            '1. 遇到事实性 / 内容性问题时，先调用 `notebook_search` 检索相关来源段落。',
+            '2. 仅基于检索返回的来源事实回答；若来源中没有相关信息，请如实说明「来源中未找到相关内容」，不要编造。',
+            '3. 在引用来源信息的句末使用【N】标记，N 为工具返回的来源编号；可叠加多个，如「…【１】【３】」。',
+            '4. 不要输出「根据来源 N」之类的前缀——直接用【N】脚注即可。',
+            '5. 不要使用任何写入类工具（编辑、写文件、安装、运行命令等）；notebook 模式下仅可读取与检索。',
+        ].join('\n');
+        systemInstruction = systemInstruction
+            ? `${systemInstruction}\n\n${notebookRules}`
+            : notebookRules;
+    }
+
     return {
         t0,
         options,
@@ -481,6 +498,8 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         }
         : undefined;
 
+    const isNotebookSession = session.mode === 'notebook' && !!session.notebook_id;
+
     const toolContext: ToolContext = {
         userId,
         sessionId,
@@ -491,6 +510,10 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         signal: effectiveSignal,
         skillRegistry: userCtx.skillRegistry,
         userTools: userCtx.userTools,
+        runId,
+        ...(isNotebookSession && { mode: 'notebook' as const }),
+        ...(isNotebookSession && session.notebook_id !== undefined && { notebookId: session.notebook_id }),
+        ...(isNotebookSession && session.source_ids && session.source_ids.length > 0 && { sourceIds: session.source_ids }),
         ...(wrappedImage && { imageCallback: wrappedImage }),
         ...(wrappedVideo && { videoCallback: wrappedVideo }),
         ...(wrappedTodo && { todoCallback: wrappedTodo }),
@@ -505,6 +528,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         clearInterval(cancelPoll);
         cancelProbe.dispose();
         if (signal) signal.removeEventListener('abort', onCancel);
+        disposeRegistry(runId);
     };
 
     try {
@@ -573,14 +597,25 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         }
 
         const output = fullResponse.trim();
+        const citations = isNotebookSession ? citationsFromText(runId, output) : [];
         if (output) {
-            await messageAdd(session.id, userId, 'assistant', output);
+            await messageAdd(
+                session.id,
+                userId,
+                'assistant',
+                output,
+                undefined,
+                citations.length > 0 ? { citations } : undefined,
+            );
             await appendRunEventSafe(stateDir, runId, 'user_message_saved', {
                 role: 'assistant',
                 sessionId: session.id,
                 contentLength: output.length,
                 ...(previewText(output) !== undefined && { contentPreview: previewText(output)! }),
             });
+        }
+        if (citations.length > 0) {
+            await appendRunEventSafe(stateDir, runId, 'notebook_citations', { citations });
         }
 
         const elapsed = Date.now() - t0;

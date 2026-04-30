@@ -4,9 +4,18 @@ export interface Chat {
     id: string
     title: string
     isPinned: boolean
+    isArchived?: boolean
     createdAt: number
+    /** Last activity timestamp (server end_time, or last local message). */
+    updatedAt?: number
     /** Per-session project root override (absolute path), null/undefined = use user.workDir. */
     projectRoot?: string | null
+    /** 'general' (default) or 'notebook'. Notebook chats are bound to a notebook + source selection. */
+    mode?: 'general' | 'notebook'
+    /** When mode === 'notebook', the bound notebook id. */
+    notebookId?: string
+    /** When mode === 'notebook', the selected source ids that ground the chat. */
+    sourceIds?: string[]
 }
 
 export interface Message {
@@ -20,6 +29,8 @@ export interface Message {
     todos?: AgentTodoItem[]  // agent task tracker
     activityLog?: ActivityItem[]  // real-time tool call log
     parts?: MessagePart[]
+    /** Notebook 【N】 citations — only present on assistant messages in notebook-mode chats. */
+    citations?: ParsedCitation[]
     timestamp: number
 }
 
@@ -162,6 +173,7 @@ export interface AppState {
     selectOrCreateChat: (id: string, title?: string) => void
     deleteChat: (id: string) => void
     pinChat: (id: string) => void
+    archiveChat: (id: string, archived: boolean) => void
     renameChat: (id: string, title: string) => void
 
     // Messages
@@ -173,6 +185,9 @@ export interface AppState {
     addVideoToLastAssistantMessage: (sessionId: string, url: string) => void
     updateLastAssistantThinking: (sessionId: string, thinking: string) => void
     updateLastAssistantTodos: (sessionId: string, todos: AgentTodoItem[]) => void
+    setLastAssistantCitations: (sessionId: string, citations: ParsedCitation[]) => void
+    openOrCreateNotebookChat: (notebookId: string, sourceIds?: string[]) => Promise<string>
+    setChatSourceIds: (chatId: string, sourceIds: string[]) => Promise<void>
     appendToLastAssistantActivity: (sessionId: string, item: ActivityItem) => void
     updateActivityConfirmStatus: (sessionId: string, confirmId: string, status: NonNullable<ActivityItem['confirmStatus']>, approvalScope?: ApprovalScope) => void
 
@@ -181,14 +196,14 @@ export interface AppState {
     setInputValue: (value: string) => void
     pendingQuickReply: string | null
     setPendingQuickReply: (text: string | null) => void
-    isGenerating: boolean
-    setIsGenerating: (v: boolean) => void
-    currentRunId: string | null
-    setCurrentRunId: (runId: string | null) => void
-    abortController: AbortController | null
-    setAbortController: (c: AbortController | null) => void
-    thinkingStatus: string
-    setThinkingStatus: (s: string) => void
+    generatingBySession: Record<string, boolean>
+    setIsGenerating: (sessionId: string, v: boolean) => void
+    currentRunIdBySession: Record<string, string | null>
+    setCurrentRunId: (sessionId: string, runId: string | null) => void
+    abortControllerBySession: Record<string, AbortController | null>
+    setAbortController: (sessionId: string, c: AbortController | null) => void
+    thinkingStatusBySession: Record<string, string>
+    setThinkingStatus: (sessionId: string, s: string) => void
     selectedModel: string
     setSelectedModel: (model: string) => void
 

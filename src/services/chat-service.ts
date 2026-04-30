@@ -52,8 +52,25 @@ export interface SessionRow {
     end_time: string;
     is_current: number;
     is_pinned: number;
+    is_archived?: number;
     /** Optional absolute path overriding the per-user workDir for this session's tool runs. */
     project_root?: string;
+    /** 'general' (default) or 'notebook'. Determines tool whitelist + citation behaviour. */
+    mode?: 'general' | 'notebook';
+    /** When mode==='notebook', the bound notebook name. */
+    notebook_id?: string;
+    /** When mode==='notebook', currently selected source ids that ground the chat. */
+    source_ids?: string[];
+}
+
+export interface MessageCitation {
+    n: number;
+    sourceId: string;
+    title: string;
+    snippet?: string;
+    chunkId?: string;
+    charStart?: number;
+    charEnd?: number;
 }
 
 export interface MessageRow {
@@ -64,6 +81,8 @@ export interface MessageRow {
     content: string;
     user_name: string | null;
     timestamp: string;
+    /** Notebook 【N】 citations attached to assistant messages. */
+    citations?: MessageCitation[];
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -115,7 +134,13 @@ export async function sessionGetCurrent(userId: string): Promise<SessionRow | nu
 export async function sessionCreate(
     userId: string,
     id?: string,
-    opts?: { projectRoot?: string },
+    opts?: {
+        projectRoot?: string;
+        mode?: 'general' | 'notebook';
+        notebookId?: string;
+        sourceIds?: string[];
+        title?: string;
+    },
 ): Promise<SessionRow> {
     return withGitAutoCommit(stateDirForUser(userId), 'session_create', async () => {
         const store = await readSessionsStore(userId);
@@ -126,27 +151,48 @@ export async function sessionCreate(
             if (s.is_current) s.is_current = 0;
         }
 
-        const session: SessionRow = { id, user_id: userId, title: '', start_time: now, end_time: now, is_current: 1, is_pinned: 0 };
+        const session: SessionRow = { id, user_id: userId, title: opts?.title ?? '', start_time: now, end_time: now, is_current: 1, is_pinned: 0 };
         if (opts?.projectRoot) session.project_root = opts.projectRoot;
+        if (opts?.mode && opts.mode !== 'general') session.mode = opts.mode;
+        if (opts?.notebookId) session.notebook_id = opts.notebookId;
+        if (opts?.sourceIds && opts.sourceIds.length > 0) session.source_ids = [...opts.sourceIds];
         store.sessions[id] = session;
         await writeSessionsStore(userId, store);
         return session;
     }, 'ChatService');
 }
 
-/** List recent sessions for a user. */
-export async function sessionList(userId: string, limit = 20): Promise<SessionRow[]> {
+/**
+ * Look up a notebook-bound session by notebook id. Returns the most recently
+ * active one if multiple exist (we currently create only one per notebook).
+ */
+export async function sessionGetByNotebook(userId: string, notebookId: string): Promise<SessionRow | null> {
+    const store = await readSessionsStore(userId);
+    const all = Object.values(store.sessions)
+        .filter(s => s.mode === 'notebook' && s.notebook_id === notebookId)
+        .sort((a, b) => (b.end_time || b.start_time).localeCompare(a.end_time || a.start_time));
+    return all[0] ?? null;
+}
+
+/** List recent sessions for a user, ordered by latest activity (end_time desc). */
+export async function sessionList(userId: string, limit = 100): Promise<SessionRow[]> {
     const store = await readSessionsStore(userId);
     return Object.values(store.sessions)
-        .sort((a, b) => b.start_time.localeCompare(a.start_time))
+        .sort((a, b) => (b.end_time || b.start_time).localeCompare(a.end_time || a.start_time))
         .slice(0, limit);
 }
 
-/** Patch a session's title and/or is_pinned. */
+/** Patch a session's title, pin, archive, project_root, and/or notebook source selection. */
 export async function sessionPatch(
     sessionId: string,
     userId: string,
-    patch: { title?: string; is_pinned?: number; project_root?: string | null },
+    patch: {
+        title?: string;
+        is_pinned?: number;
+        is_archived?: number;
+        project_root?: string | null;
+        source_ids?: string[] | null;
+    },
 ): Promise<SessionRow | null> {
     return withGitAutoCommit(stateDirForUser(userId), 'session_patch', async () => {
         const store = await readSessionsStore(userId);
@@ -154,9 +200,17 @@ export async function sessionPatch(
         if (!session) return null;
         if (patch.title !== undefined) session.title = patch.title;
         if (patch.is_pinned !== undefined) session.is_pinned = patch.is_pinned;
+        if (patch.is_archived !== undefined) {
+            if (patch.is_archived) session.is_archived = 1;
+            else delete session.is_archived;
+        }
         if (patch.project_root !== undefined) {
             if (patch.project_root === null || patch.project_root === '') delete session.project_root;
             else session.project_root = patch.project_root;
+        }
+        if (patch.source_ids !== undefined) {
+            if (patch.source_ids === null || patch.source_ids.length === 0) delete session.source_ids;
+            else session.source_ids = [...patch.source_ids];
         }
         await writeSessionsStore(userId, store);
         return session;
@@ -184,6 +238,7 @@ export async function messageAdd(
     role: 'user' | 'assistant' | 'model',
     content: string,
     userName?: string,
+    extras?: { citations?: MessageCitation[] },
 ): Promise<MessageRow> {
     return withGitAutoCommit(stateDirForUser(userId), 'message_add', async () => {
         const timestamp = new Date().toISOString();
@@ -197,6 +252,7 @@ export async function messageAdd(
             user_name: userName ?? null,
             timestamp,
         };
+        if (extras?.citations && extras.citations.length > 0) msg.citations = extras.citations;
 
         await fs.mkdir(tmpDir(userId), { recursive: true });
         await fs.mkdir(join(tmpDir(userId), sessionId), { recursive: true });

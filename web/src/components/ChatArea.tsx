@@ -29,6 +29,7 @@ import { MermaidBlock } from './MermaidBlock'
 import { toast } from './Toast'
 import { confirm as confirmDialog } from './ConfirmDialog'
 import { ProjectPicker } from './ProjectPicker'
+import { CitationRenderer } from './notebook/CitationRenderer'
 
 function activityPreviewText(item: ActivityItem): string {
     if (typeof item.args?.command === 'string') return item.args.command
@@ -357,7 +358,8 @@ const TypingIndicator: React.FC = () => (
 
 const AskUserCard: React.FC<{ item: ActivityItem }> = ({ item }) => {
     const setPendingQuickReply = useAppStore(s => s.setPendingQuickReply)
-    const isGenerating = useAppStore(s => s.isGenerating)
+    const activeChatId = useAppStore(s => s.activeChatId)
+    const isGenerating = useAppStore(s => activeChatId ? !!s.generatingBySession[activeChatId] : false)
 
     const question = typeof item.args?.question === 'string' ? item.args.question : ''
     const context = typeof item.args?.context === 'string' ? item.args.context : ''
@@ -1141,14 +1143,17 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
     const {
         inputValue, setInputValue,
         pendingQuickReply, setPendingQuickReply,
-        isGenerating, setIsGenerating,
         activeChatId, addMessage, updateLastAssistantMessage, addImageToLastAssistantMessage,
         addVideoToLastAssistantMessage,
         updateLastAssistantThinking, updateLastAssistantTodos, appendToLastAssistantActivity, updateActivityConfirmStatus,
-        currentRunId, setCurrentRunId, setAbortController, setThinkingStatus,
+        setLastAssistantCitations,
+        chats,
+        setIsGenerating,
+        setCurrentRunId, setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
         confirmDangerous, setConfirmDangerous,
     } = useAppStore()
+    const isGenerating = useAppStore(s => activeChatId ? !!s.generatingBySession[activeChatId] : false)
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)
     const docInputRef = React.useRef<HTMLInputElement>(null)
@@ -1247,6 +1252,7 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
     const handleSend = async (overrideText?: string) => {
         const text = overrideText ?? inputValue.trim()
         if ((!text && !pendingImages.length && !pendingDocs.length) || !activeChatId || isGenerating) return
+        const sid = activeChatId
         // Cancel any ongoing speech when user sends a new message
         window.speechSynthesis?.cancel()
         const images = pendingImages.length ? [...pendingImages] : undefined
@@ -1263,7 +1269,7 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
             })) ?? []),
         ]
 
-        addMessage(activeChatId, {
+        addMessage(sid, {
             id: Math.random().toString(36).substring(7),
             role: 'user',
             content: text,
@@ -1274,11 +1280,11 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
         setInputValue('')
         setPendingImages([])
         setPendingDocs([])
-        setIsGenerating(true)
-        setThinkingStatus(t('thinking'))
+        setIsGenerating(sid, true)
+        setThinkingStatus(sid, t('thinking'))
 
         // Placeholder for assistant
-        addMessage(activeChatId, {
+        addMessage(sid, {
             id: Math.random().toString(36).substring(7),
             role: 'assistant',
             content: '',
@@ -1286,18 +1292,31 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
         })
 
         const controller = new AbortController()
-        setAbortController(controller)
+        setAbortController(sid, controller)
         let accumulated = ''
         let thinkingAccum = ''
 
         try {
+            const activeChat = chats.find((c) => c.id === sid)
+            const notebookId = activeChat?.mode === 'notebook' ? activeChat.notebookId : undefined
+            const sourceIds = activeChat?.mode === 'notebook' ? activeChat.sourceIds : undefined
             for await (const chunk of streamChat(
-                text, activeChatId, controller.signal, selectedModel, images,
+                text, sid, controller.signal, selectedModel, images,
                 documents?.map(d => ({ filename: d.filename, text: d.text })),
                 confirmDangerous,
+                notebookId, sourceIds,
             )) {
                 if (chunk.type === 'run' && chunk.runId) {
-                    setCurrentRunId(chunk.runId)
+                    setCurrentRunId(sid, chunk.runId)
+                    continue
+                }
+                if (chunk.type === 'session') {
+                    // Notebook auto-bind: server resolved/created the real session id; ignore for now since
+                    // chatSlice.openOrCreateNotebookChat already resolved it before sending.
+                    continue
+                }
+                if (chunk.type === 'citations' && chunk.citations) {
+                    setLastAssistantCitations(sid, chunk.citations)
                     continue
                 }
                 if (chunk.type === 'done') break
@@ -1305,14 +1324,14 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
                 if (chunk.type === 'thought') {
                     thinkingAccum += chunk.text ?? ''
                 } else if (chunk.type === 'tool_call') {
-                    appendToLastAssistantActivity(activeChatId, {
+                    appendToLastAssistantActivity(sid, {
                         type: 'tool_call',
                         toolName: chunk.toolName ?? 'tool',
                         args: chunk.args,
                         timestamp: Date.now(),
                     })
                 } else if (chunk.type === 'tool_result') {
-                    appendToLastAssistantActivity(activeChatId, {
+                    appendToLastAssistantActivity(sid, {
                         type: 'tool_result',
                         toolName: chunk.toolName ?? 'tool',
                         result: chunk.result,
@@ -1321,7 +1340,7 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
                         timestamp: Date.now(),
                     })
                 } else if (chunk.type === 'tool_confirm' && chunk.confirmId) {
-                    appendToLastAssistantActivity(activeChatId, {
+                    appendToLastAssistantActivity(sid, {
                         type: 'tool_confirm',
                         toolName: chunk.toolName ?? 'tool',
                         args: chunk.args,
@@ -1332,47 +1351,50 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
                         timestamp: Date.now(),
                     })
                 } else if (chunk.type === 'confirm_resolved' && chunk.confirmId && chunk.confirmStatus) {
-                    updateActivityConfirmStatus(activeChatId, chunk.confirmId, chunk.confirmStatus, chunk.approvalScope)
+                    updateActivityConfirmStatus(sid, chunk.confirmId, chunk.confirmStatus, chunk.approvalScope)
                 } else if (chunk.type === 'text' && chunk.text) {
-                    if (!accumulated) setThinkingStatus('')
+                    if (!accumulated) setThinkingStatus(sid, '')
                     accumulated += chunk.text
-                    updateLastAssistantMessage(activeChatId, accumulated)
+                    updateLastAssistantMessage(sid, accumulated)
                 } else if (chunk.type === 'image' && chunk.url) {
-                    setThinkingStatus('')
-                    addImageToLastAssistantMessage(activeChatId, chunk.url)
+                    setThinkingStatus(sid, '')
+                    addImageToLastAssistantMessage(sid, chunk.url)
                 } else if (chunk.type === 'video' && chunk.url) {
-                    setThinkingStatus('')
-                    addVideoToLastAssistantMessage(activeChatId, chunk.url)
+                    setThinkingStatus(sid, '')
+                    addVideoToLastAssistantMessage(sid, chunk.url)
                 } else if (chunk.type === 'todo_update' && chunk.todos) {
-                    updateLastAssistantTodos(activeChatId, chunk.todos as AgentTodoItem[])
+                    updateLastAssistantTodos(sid, chunk.todos as AgentTodoItem[])
                 }
             }
         } catch (err: unknown) {
             const name = err instanceof Error ? err.name : ''
             if (name !== 'AbortError' && !accumulated) {
-                updateLastAssistantMessage(activeChatId, `⚠️ ${err instanceof Error ? err.message : t('requestFailed')}`)
+                updateLastAssistantMessage(sid, `⚠️ ${err instanceof Error ? err.message : t('requestFailed')}`)
             }
         } finally {
             if (thinkingAccum) {
-                updateLastAssistantThinking(activeChatId, thinkingAccum)
+                updateLastAssistantThinking(sid, thinkingAccum)
             }
-            setIsGenerating(false)
-            setCurrentRunId(null)
-            setThinkingStatus('')
-            setAbortController(null)
+            setIsGenerating(sid, false)
+            setCurrentRunId(sid, null)
+            setThinkingStatus(sid, '')
+            setAbortController(sid, null)
         }
     }
 
     const handleStop = async () => {
-        if (currentRunId) {
+        if (!activeChatId) return
+        const sid = activeChatId
+        const runId = useAppStore.getState().currentRunIdBySession[sid]
+        if (runId) {
             try {
-                await cancelRun(currentRunId)
+                await cancelRun(runId)
                 return
             } catch {
                 // Fall back to local abort when cancel API is unavailable.
             }
         }
-        useAppStore.getState().abortController?.abort()
+        useAppStore.getState().abortControllerBySession[sid]?.abort()
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -1692,7 +1714,9 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
 // ── Chat area ─────────────────────────────────────────────────────────────────
 
 export const ChatArea: React.FC = () => {
-    const { chats, activeChatId, messages, isGenerating, thinkingStatus, setMessages } = useAppStore()
+    const { chats, activeChatId, messages, setMessages } = useAppStore()
+    const isGenerating = useAppStore(s => activeChatId ? !!s.generatingBySession[activeChatId] : false)
+    const thinkingStatus = useAppStore(s => activeChatId ? (s.thinkingStatusBySession[activeChatId] ?? '') : '')
     const activeChat = chats.find((c) => c.id === activeChatId)
     const chatMessages = messages[activeChatId ?? ''] ?? []
     const scrollRef = React.useRef<HTMLDivElement>(null)
@@ -1827,7 +1851,11 @@ export const ChatArea: React.FC = () => {
                                         <div>
                                             {mergeMessageParts(msg.parts).map((part, idx) => part.type === 'text' ? (
                                                 <div key={`${msg.id}-text-${idx}`} className="mb-3 last:mb-0">
-                                                    <MD content={part.content} />
+                                                    {activeChat?.mode === 'notebook' ? (
+                                                        <CitationRenderer content={part.content} sources={msg.citations} />
+                                                    ) : (
+                                                        <MD content={part.content} />
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <ActivityItemCard
@@ -1853,7 +1881,11 @@ export const ChatArea: React.FC = () => {
                                                 <TypingIndicator />
                                             )}
                                             {msg.content ? (
-                                                <MD content={msg.content} />
+                                                activeChat?.mode === 'notebook' ? (
+                                                    <CitationRenderer content={msg.content} sources={msg.citations} />
+                                                ) : (
+                                                    <MD content={msg.content} />
+                                                )
                                             ) : isGenerating ? null : (
                                                 <MessageSkeleton />
                                             )}

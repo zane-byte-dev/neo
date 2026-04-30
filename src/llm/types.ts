@@ -59,8 +59,14 @@ export interface ToolContext {
     skillRegistry?: import('../skills/skill-registry.js').SkillRegistry;
     /** Per-user tools loaded from .tools/ directory */
     userTools?: Map<string, Tool>;
-    /** Agent operating mode: 'plan' restricts write tools */
-    mode?: 'normal' | 'plan';
+    /** Agent operating mode: 'plan' restricts write tools; 'notebook' restricts to read-only + grounds answers in notebook sources. */
+    mode?: 'normal' | 'plan' | 'notebook';
+    /** Current run id (used by notebook citation registry to scope 【N】 mappings). */
+    runId?: string;
+    /** Notebook id when context.mode === 'notebook'. */
+    notebookId?: string;
+    /** Currently-selected notebook source ids (subset of notebook's sources) for grounded retrieval. */
+    sourceIds?: string[];
     /**
      * Confirmation hook for dangerous-tier tools.
      * When provided, the executor calls it before running any tool whose

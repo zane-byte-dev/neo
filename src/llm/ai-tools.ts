@@ -26,6 +26,8 @@ export function buildAiTools(
 ): ToolSet {
     const tools: ToolSet = {};
     const isPlanMode = context?.mode === 'plan';
+    const isNotebookMode = context?.mode === 'notebook';
+    const isReadOnlyMode = isPlanMode || isNotebookMode;
     const guard = createToolLoopGuard();
 
     const wrapExecute = (
@@ -41,7 +43,7 @@ export function buildAiTools(
 
     // Built-in tools (bash, read_file, write_file, list_dir)
     for (const decl of TOOL_DECLARATIONS) {
-        if (isPlanMode && !isAllowedInPlanMode(decl.name)) continue;
+        if (isReadOnlyMode && !isAllowedInPlanMode(decl.name)) continue;
         tools[decl.name] = tool({
             description: decl.description,
             inputSchema: jsonSchema(decl.parameters),
@@ -53,7 +55,7 @@ export function buildAiTools(
 
     // Custom tools from the registry
     for (const [name, t] of toolRegistry) {
-        if (isPlanMode && !isAllowedInPlanMode(name, t)) continue;
+        if (isReadOnlyMode && !isAllowedInPlanMode(name, t)) continue;
         tools[name] = tool({
             description: t.declaration.description,
             inputSchema: jsonSchema(t.declaration.parameters),
@@ -67,7 +69,7 @@ export function buildAiTools(
     const userTools = context?.userTools;
     if (userTools) {
         for (const [name, t] of userTools) {
-            if (isPlanMode && !isAllowedInPlanMode(name, t)) continue;
+            if (isReadOnlyMode && !isAllowedInPlanMode(name, t)) continue;
             tools[name] = tool({
                 description: t.declaration.description,
                 inputSchema: jsonSchema(t.declaration.parameters),

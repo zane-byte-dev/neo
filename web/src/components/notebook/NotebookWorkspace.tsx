@@ -5,9 +5,9 @@
 import React from 'react'
 import { ArrowLeft, FileText, MessageSquare, Sparkles, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Link as LinkIcon, Youtube, Type, Volume2, Brain, StickyNote } from 'lucide-react'
 import { SourcePanel } from './SourcePanel'
-import { NotebookChat } from './NotebookChat'
 import { StudioPanel } from './StudioPanel'
 import { SourceDetailView } from './SourceDetailView'
+import { ChatArea } from '../ChatArea'
 import { useAppStore } from '../../stores/useAppStore'
 import { cn } from '../../lib/utils'
 import type { ParsedCitation, SourceMeta } from '../../types'
@@ -54,7 +54,28 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     const [sourceWidth, setSourceWidth] = React.useState(288)   // 18rem ≈ w-72
     const [studioWidth, setStudioWidth] = React.useState(320)   // 20rem ≈ w-80
     const dragRef = React.useRef<{ handle: 'source' | 'studio'; startX: number; startWidth: number } | null>(null)
-    const { selectedModel, setSelectedModel, sources } = useAppStore()
+    const { selectedModel, setSelectedModel, sources, selectedSourceIds, openOrCreateNotebookChat, setChatSourceIds, activeChatId } = useAppStore()
+
+    // Bind notebook to a chat session on mount / notebook change
+    React.useEffect(() => {
+        let cancelled = false
+        openOrCreateNotebookChat(notebook).catch((err) => {
+            if (!cancelled) console.error('[notebook] failed to open chat session', err)
+        })
+        return () => { cancelled = true }
+    }, [notebook, openOrCreateNotebookChat])
+
+    // Sync source selection to the bound chat session
+    React.useEffect(() => {
+        if (!activeChatId) return
+        // Only sync when the active chat is the notebook's session
+        const chat = useAppStore.getState().chats.find((c) => c.id === activeChatId)
+        if (!chat || chat.mode !== 'notebook' || chat.notebookId !== notebook) return
+        const current = chat.sourceIds ?? []
+        const next = selectedSourceIds
+        if (current.length === next.length && current.every((v, i) => v === next[i])) return
+        setChatSourceIds(activeChatId, next).catch((err) => console.error('[notebook] sync sources failed', err))
+    }, [selectedSourceIds, activeChatId, notebook, setChatSourceIds])
 
     const collapseSource = React.useCallback(() => {
         setSourceAnimating(true)
@@ -111,16 +132,10 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         return () => window.removeEventListener('resize', handle)
     }, [])
 
-    // Citation click handler — navigate to SourceDetailView (in source panel)
-    const handleCitationClick = React.useCallback((cited: ParsedCitation) => {
-        const found = sources.find((s) => s.id === cited.sourceId)
-        if (found) {
-            setViewingSource(found)
-            setCitationTarget(cited)
-            if (isMobile) setMobileTab('sources')
-            else { setSourceCollapsed(false) } // expand source panel on desktop
-        }
-    }, [sources, isMobile])
+    // Citation click handler — navigate to SourceDetailView (in source panel).
+    // TODO: wire up via store/event so ChatArea's CitationRenderer can trigger it.
+    // For now, citation buttons are still clickable but no panel navigation.
+    void sources
 
     if (isMobile) {
         return (
@@ -148,7 +163,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                         ? <SourceDetailView notebook={notebook} source={viewingSource} focusCitation={citationTarget?.sourceId === viewingSource.id ? citationTarget : null} onBack={() => { setViewingSource(null); setCitationTarget(null) }} />
                         : <SourcePanel notebook={notebook} onSelectSource={(s) => { setViewingSource(s); setCitationTarget(null) }} />
                     )}
-                    {mobileTab === 'chat' && <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />}
+                    {mobileTab === 'chat' && <ChatArea />}
                     {mobileTab === 'studio'  && <StudioPanel notebook={notebook} />}
                 </div>
                 <div className="h-14 border-t border-border flex items-center shrink-0 bg-bg-container">
@@ -296,7 +311,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                     </select>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                    <NotebookChat notebook={notebook} onCitationClick={handleCitationClick} />
+                    <ChatArea />
                 </div>
             </div>
 

@@ -1,7 +1,8 @@
 import type { StateCreator } from 'zustand'
-import type { ActivityItem, AgentTodoItem, AppState, ApprovalScope, Chat, Message, MessagePart, NoteEntry } from '../../types'
+import type { ActivityItem, AgentTodoItem, AppState, ApprovalScope, Chat, Message, MessagePart, NoteEntry, ParsedCitation } from '../../types'
 import { deriveChatTitleFromMessage } from '../../chat-title'
 import { t } from '../../i18n'
+import { openNotebookSession, patchSession } from '../../api'
 
 function appendTextToParts(parts: MessagePart[] | undefined, content: string): MessagePart[] | undefined {
     if (!content) return parts
@@ -56,6 +57,7 @@ export interface ChatSlice {
     selectOrCreateChat: (id: string, title?: string) => void
     deleteChat: (id: string) => void
     pinChat: (id: string) => void
+    archiveChat: (id: string, archived: boolean) => void
     renameChat: (id: string, title: string) => void
 
     // Messages
@@ -67,6 +69,11 @@ export interface ChatSlice {
     addVideoToLastAssistantMessage: (sessionId: string, url: string) => void
     updateLastAssistantThinking: (sessionId: string, thinking: string) => void
     updateLastAssistantTodos: (sessionId: string, todos: AgentTodoItem[]) => void
+    setLastAssistantCitations: (sessionId: string, citations: ParsedCitation[]) => void
+    /** Find or create the chat session bound to a notebook. Returns the chat id. */
+    openOrCreateNotebookChat: (notebookId: string, sourceIds?: string[]) => Promise<string>
+    /** Update sourceIds for a chat (notebook mode) and persist to server. */
+    setChatSourceIds: (chatId: string, sourceIds: string[]) => Promise<void>
     appendToLastAssistantActivity: (sessionId: string, item: ActivityItem) => void
     updateActivityConfirmStatus: (sessionId: string, confirmId: string, status: NonNullable<ActivityItem['confirmStatus']>, approvalScope?: ApprovalScope) => void
 
@@ -75,14 +82,15 @@ export interface ChatSlice {
     setInputValue: (value: string) => void
     pendingQuickReply: string | null
     setPendingQuickReply: (text: string | null) => void
-    isGenerating: boolean
-    setIsGenerating: (v: boolean) => void
-    currentRunId: string | null
-    setCurrentRunId: (runId: string | null) => void
-    abortController: AbortController | null
-    setAbortController: (c: AbortController | null) => void
-    thinkingStatus: string
-    setThinkingStatus: (s: string) => void
+    // Per-session generation state (keyed by sessionId so multiple chats can stream concurrently)
+    generatingBySession: Record<string, boolean>
+    setIsGenerating: (sessionId: string, v: boolean) => void
+    currentRunIdBySession: Record<string, string | null>
+    setCurrentRunId: (sessionId: string, runId: string | null) => void
+    abortControllerBySession: Record<string, AbortController | null>
+    setAbortController: (sessionId: string, c: AbortController | null) => void
+    thinkingStatusBySession: Record<string, string>
+    setThinkingStatus: (sessionId: string, s: string) => void
     selectedModel: string
     setSelectedModel: (model: string) => void
 
@@ -99,11 +107,13 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
     activeChatId: null,
     setChats: (chats: Chat[]) => set({ chats }),
     createChat: () => {
+        const now = Date.now()
         const newChat: Chat = {
             id: Math.random().toString(36).substring(7),
             title: t('newChat'),
             isPinned: false,
-            createdAt: Date.now(),
+            createdAt: now,
+            updatedAt: now,
         }
         set((state) => ({
             chats: [newChat, ...state.chats],
@@ -115,29 +125,44 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
     selectOrCreateChat: (id: string, title?: string) => set((state) => {
         const exists = state.chats.some((c) => c.id === id)
         if (exists) return { activeChatId: id, selectedNote: null }
+        const now = Date.now()
         const newChat: Chat = {
             id,
             title: title ?? id,
             isPinned: false,
-            createdAt: Date.now(),
+            createdAt: now,
+            updatedAt: now,
         }
         return { chats: [newChat, ...state.chats], activeChatId: id, selectedNote: null }
     }),
     deleteChat: (id: string) => set((state) => {
         const newChats = state.chats.filter((c) => c.id !== id)
+        // Abort any in-flight stream for the deleted chat and clear its per-session state.
+        try { state.abortControllerBySession[id]?.abort() } catch { /* ignore */ }
+        const generatingBySession = { ...state.generatingBySession }; delete generatingBySession[id]
+        const currentRunIdBySession = { ...state.currentRunIdBySession }; delete currentRunIdBySession[id]
+        const abortControllerBySession = { ...state.abortControllerBySession }; delete abortControllerBySession[id]
+        const thinkingStatusBySession = { ...state.thinkingStatusBySession }; delete thinkingStatusBySession[id]
+        const messages = { ...state.messages }; delete messages[id]
         return {
             chats: newChats,
             activeChatId: state.activeChatId === id ? (newChats[0]?.id ?? null) : state.activeChatId,
+            generatingBySession,
+            currentRunIdBySession,
+            abortControllerBySession,
+            thinkingStatusBySession,
+            messages,
         }
     }),
     pinChat: (id: string) => set((state) => {
         const updated = state.chats.map((c) =>
             c.id === id ? { ...c, isPinned: !c.isPinned } : c
         )
-        const pinned = updated.filter((c) => c.isPinned).sort((a, b) => b.createdAt - a.createdAt)
-        const others = updated.filter((c) => !c.isPinned).sort((a, b) => b.createdAt - a.createdAt)
-        return { chats: [...pinned, ...others] }
+        return { chats: updated }
     }),
+    archiveChat: (id: string, archived: boolean) => set((state) => ({
+        chats: state.chats.map((c) => c.id === id ? { ...c, isArchived: archived } : c),
+    })),
     renameChat: (id: string, title: string) => set((state) => ({
         chats: state.chats.map((c) => c.id === id ? { ...c, title } : c),
     })),
@@ -153,13 +178,16 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
             [sessionId]: [...(state.messages[sessionId] ?? []), message],
         },
         chats: state.chats.map((c) =>
-            c.id === sessionId && (c.title === 'New Chat' || c.title === '新对话') && message.role === 'user'
+            c.id === sessionId
                 ? {
                     ...c,
-                    title: deriveChatTitleFromMessage(
-                        message.content || '',
-                        (message.images?.length ? '📷 Image' : '') || (message.files?.length ? `📎 ${message.files[0].filename}` : ''),
-                    ),
+                    updatedAt: message.timestamp ?? Date.now(),
+                    title: (c.title === 'New Chat' || c.title === '新对话') && message.role === 'user'
+                        ? deriveChatTitleFromMessage(
+                            message.content || '',
+                            (message.images?.length ? '📷 Image' : '') || (message.files?.length ? `📎 ${message.files[0].filename}` : ''),
+                        )
+                        : c.title,
                 }
                 : c
         ),
@@ -215,6 +243,45 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
         }
         return { messages: { ...state.messages, [sessionId]: msgs } }
     }),
+    setLastAssistantCitations: (sessionId: string, citations: ParsedCitation[]) => set((state) => {
+        const msgs = [...(state.messages[sessionId] ?? [])]
+        for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].role === 'assistant') {
+                msgs[i] = { ...msgs[i], citations }
+                break
+            }
+        }
+        return { messages: { ...state.messages, [sessionId]: msgs } }
+    }),
+    openOrCreateNotebookChat: async (notebookId: string, sourceIds?: string[]) => {
+        const session = await openNotebookSession(notebookId, sourceIds)
+        const incoming: Chat = {
+            id: session.id,
+            title: session.title,
+            isPinned: session.isPinned,
+            isArchived: session.isArchived ?? false,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt ?? session.createdAt,
+            projectRoot: session.projectRoot ?? null,
+            mode: 'notebook',
+            notebookId: session.notebookId,
+            ...(session.sourceIds ? { sourceIds: session.sourceIds } : {}),
+        }
+        set((state) => {
+            const exists = state.chats.some((c) => c.id === incoming.id)
+            const chats = exists
+                ? state.chats.map((c) => c.id === incoming.id ? { ...c, ...incoming } : c)
+                : [incoming, ...state.chats]
+            return { chats, activeChatId: incoming.id }
+        })
+        return incoming.id
+    },
+    setChatSourceIds: async (chatId: string, sourceIds: string[]) => {
+        await patchSession(chatId, { sourceIds })
+        set((state) => ({
+            chats: state.chats.map((c) => c.id === chatId ? { ...c, sourceIds } : c),
+        }))
+    },
     appendToLastAssistantActivity: (sessionId: string, item: ActivityItem) => set((state) => {
         const msgs = [...(state.messages[sessionId] ?? [])]
         for (let i = msgs.length - 1; i >= 0; i--) {
@@ -275,14 +342,34 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
     setInputValue: (value: string) => set({ inputValue: value }),
     pendingQuickReply: null,
     setPendingQuickReply: (text: string | null) => set({ pendingQuickReply: text }),
-    isGenerating: false,
-    setIsGenerating: (v: boolean) => set({ isGenerating: v }),
-    currentRunId: null,
-    setCurrentRunId: (runId: string | null) => set({ currentRunId: runId }),
-    abortController: null,
-    setAbortController: (c: AbortController | null) => set({ abortController: c }),
-    thinkingStatus: '',
-    setThinkingStatus: (s: string) => set({ thinkingStatus: s }),
+    generatingBySession: {},
+    setIsGenerating: (sessionId: string, v: boolean) => set((state) => {
+        const next = { ...state.generatingBySession }
+        if (v) next[sessionId] = true
+        else delete next[sessionId]
+        return { generatingBySession: next }
+    }),
+    currentRunIdBySession: {},
+    setCurrentRunId: (sessionId: string, runId: string | null) => set((state) => {
+        const next = { ...state.currentRunIdBySession }
+        if (runId) next[sessionId] = runId
+        else delete next[sessionId]
+        return { currentRunIdBySession: next }
+    }),
+    abortControllerBySession: {},
+    setAbortController: (sessionId: string, c: AbortController | null) => set((state) => {
+        const next = { ...state.abortControllerBySession }
+        if (c) next[sessionId] = c
+        else delete next[sessionId]
+        return { abortControllerBySession: next }
+    }),
+    thinkingStatusBySession: {},
+    setThinkingStatus: (sessionId: string, s: string) => set((state) => {
+        const next = { ...state.thinkingStatusBySession }
+        if (s) next[sessionId] = s
+        else delete next[sessionId]
+        return { thinkingStatusBySession: next }
+    }),
     selectedModel: 'auto',
     setSelectedModel: (model: string) => set({ selectedModel: model }),
 
