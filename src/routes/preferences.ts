@@ -11,6 +11,7 @@ import { calcUser, invalidateUserCache } from '../services/user-service.js';
 import { saveUserPreferences, type UserPreferences } from '../services/user-prefs.js';
 import { ensureTelegramBotStarted, getTelegramRuntimeState, syncTelegramBotState } from '../services/telegram-runtime.js';
 import { MODEL_ALIASES } from '../config.js';
+import { isModelAliasAvailable } from '../llm/model-router.js';
 
 function sanitizeIncoming(body: unknown): UserPreferences {
     const out: UserPreferences = {};
@@ -48,7 +49,7 @@ export function preferences(router: Router): void {
         const userCtx = await calcUser(userId);
         ctx.body = {
             preferences: userCtx.preferences,
-            availableModels: Object.keys(MODEL_ALIASES),
+            availableModels: Object.keys(MODEL_ALIASES).filter((alias) => isModelAliasAvailable(alias)),
             telegram: getTelegramRuntimeState(),
         };
     });

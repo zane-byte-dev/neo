@@ -42,9 +42,15 @@
   --spacing-header: 3.5rem;     /* 56px — panel header height */
 
   /* Border-radius tokens */
-  --radius-sm: 0.5rem;          /* 8px — buttons, inputs, tags */
-  --radius-md: 0.75rem;         /* 12px — cards, panels, dropdowns */
-  --radius-lg: 1rem;            /* 16px — modals, overlays */
+  --radius: 3px;
+  --radius-xs: 3px;
+  --radius-sm: 3px;
+  --radius-md: 3px;
+  --radius-lg: 3px;
+  --radius-xl: 3px;
+  --radius-2xl: 3px;
+  --radius-3xl: 3px;
+  --radius-4xl: 3px;
   --radius-full: 9999px;        /* pill buttons, avatars */
 
   /* Shadows */
@@ -187,7 +193,7 @@
   );
   background-size: 200% 100%;
   animation: shimmer 1.8s ease-in-out infinite;
-  border-radius: 8px;
+  border-radius: 3px;
 }
 
 /* ── Typing indicator dots ───────────────────────────────────────────────────── */
@@ -220,7 +226,7 @@
 .markdown-content code {
   background-color: var(--color-fill);
   padding: 0.2rem 0.45rem;
-  border-radius: 6px;
+  border-radius: 3px;
   font-size: 0.85em;
   font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
   border: 1px solid var(--color-border-secondary);
@@ -230,7 +236,7 @@
   background-color: var(--color-fill-secondary);
   border: 1px solid var(--color-border);
   padding: 1.125rem 1.25rem;
-  border-radius: 12px;
+  border-radius: 3px;
   overflow-x: auto;
   margin-bottom: 1.25rem;
   font-size: 0.875rem;
@@ -248,7 +254,7 @@
   color: var(--color-text-secondary);
   margin: 1rem 0;
   background: color-mix(in srgb, var(--color-primary-mint) 5%, transparent);
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 3px 3px 0;
 }
 .markdown-content a {
   color: var(--color-info);
@@ -260,7 +266,7 @@
   border-bottom-color: var(--color-info);
 }
 .markdown-content hr { border-color: var(--color-border); margin: 1.5rem 0; }
-.markdown-content table { border-collapse: collapse; width: 100%; margin-bottom: 1.25rem; border-radius: 8px; overflow: hidden; }
+.markdown-content table { border-collapse: collapse; width: 100%; margin-bottom: 1.25rem; border-radius: 3px; overflow: hidden; }
 .markdown-content th, .markdown-content td {
   border: 1px solid var(--color-border);
   padding: 0.625rem 0.875rem;
@@ -358,7 +364,7 @@
   .markdown-content pre {
     font-size: 0.8125rem;
     padding: 0.875rem 1rem;
-    border-radius: 10px;
+    border-radius: 3px;
   }
   .markdown-content p {
     font-size: 0.9375rem;

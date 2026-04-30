@@ -10,6 +10,7 @@ const saveUserPreferencesMock = vi.fn();
 const ensureTelegramBotStartedMock = vi.fn();
 const getTelegramRuntimeStateMock = vi.fn();
 const syncTelegramBotStateMock = vi.fn();
+const isModelAliasAvailableMock = vi.fn();
 
 vi.mock('../../services/user-service.js', () => ({
     calcUser: calcUserMock,
@@ -24,6 +25,10 @@ vi.mock('../../services/telegram-runtime.js', () => ({
     ensureTelegramBotStarted: ensureTelegramBotStartedMock,
     getTelegramRuntimeState: getTelegramRuntimeStateMock,
     syncTelegramBotState: syncTelegramBotStateMock,
+}));
+
+vi.mock('../../llm/model-router.js', () => ({
+    isModelAliasAvailable: isModelAliasAvailableMock,
 }));
 
 vi.mock('../../config.js', async () => {
@@ -44,6 +49,7 @@ beforeEach(() => {
     getTelegramRuntimeStateMock.mockReturnValue({ active: false, reason: 'not_started' });
     syncTelegramBotStateMock.mockResolvedValue({ active: false, reason: 'not_started' });
     ensureTelegramBotStartedMock.mockResolvedValue({ active: true, reason: 'ok' });
+    isModelAliasAvailableMock.mockImplementation((alias: string) => alias === 'flash' || alias === 'pro');
 });
 
 describe('/api/preferences', () => {
@@ -55,7 +61,7 @@ describe('/api/preferences', () => {
         expect(res.status).toBe(401);
     });
 
-    it('GET returns user preferences and available models', async () => {
+    it('GET returns user preferences and only runtime-available models', async () => {
         const { preferences } = await import('../preferences.js');
         const { app, router, mount } = createTestApp();
         preferences(router); mount();
@@ -64,7 +70,7 @@ describe('/api/preferences', () => {
             .set('Cookie', signedCookie('u1'));
         expect(res.status).toBe(200);
         expect(res.body.preferences.defaultModel).toBe('flash');
-        expect(res.body.availableModels).toEqual(expect.arrayContaining(['flash', 'pro']));
+        expect(res.body.availableModels).toEqual(['flash', 'pro']);
     });
 
     it('POST sanitizes incoming preferences and saves them', async () => {

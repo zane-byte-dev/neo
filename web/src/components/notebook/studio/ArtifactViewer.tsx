@@ -90,7 +90,7 @@ export const ArtifactViewer: React.FC<{
             content = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>${safeTitle}</title>
-<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#1a1a1a}h1,h2,h3{margin-top:1.5em}blockquote{border-left:3px solid #34d399;padding-left:1em;color:#555}code{background:#f5f5f5;padding:2px 6px;border-radius:3px;font-size:0.9em}pre{background:#f5f5f5;padding:1em;border-radius:8px;overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9f9f9}.meta{color:#888;font-size:0.85em;margin-bottom:2em}ul{padding-left:1.5em}</style>
+<style>body{font-family:system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem;line-height:1.7;color:#1a1a1a}h1,h2,h3{margin-top:1.5em}blockquote{border-left:3px solid #34d399;padding-left:1em;color:#555}code{background:#f5f5f5;padding:2px 6px;border-radius:3px;font-size:0.9em}pre{background:#f5f5f5;padding:1em;border-radius:3px;overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f9f9f9}.meta{color:#888;font-size:0.85em;margin-bottom:2em}ul{padding-left:1.5em}</style>
 </head>
 <body>
 <div class="meta">来源：Neo Notebook · ${safeType} · ${new Date(artifact.createdAt).toLocaleString('zh-CN')}</div>
