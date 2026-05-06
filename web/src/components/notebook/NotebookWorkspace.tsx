@@ -6,14 +6,15 @@
  * 移动端：底部 tab 切换
  */
 import React from 'react'
-import { ArrowLeft, BookOpen, MessageSquare, Plus, Pencil, Calendar, User, Tag, Search, X, ArrowUpDown, PanelLeftOpen } from 'lucide-react'
+import { ArrowLeft, BookOpen, MessageSquare, Plus, Pencil, Calendar, User, Tag, Search, X, ArrowUpDown, PanelLeftOpen, MoreHorizontal } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { NotebookChatDrawer } from './NotebookChatDrawer'
 import { NoteEditor } from '../NoteEditor'
 import { useAppStore } from '../../stores/useAppStore'
 import { cn } from '../../lib/utils'
-import { notebookList, notebookRead, notebookSearch } from '../../api'
+import { notebookList, notebookRead, notebookSearch, notebookDelete } from '../../api'
+import { confirm } from '../ConfirmDialog'
 import type { NoteEntry } from '../../types'
 
 const MOBILE_BREAKPOINT = 1024
@@ -166,6 +167,16 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
 
     // ── Sub-views ──────────────────────────────────────────────────────────
 
+    const handleDeleteEntry = async (entry: NoteEntry) => {
+        const ok = await confirm(`删除「${entry.title}」？`, { destructive: true, confirmText: '删除' })
+        if (!ok) return
+        try {
+            await notebookDelete(entry.id)
+            setEntries((prev) => prev.filter((e) => e.id !== entry.id))
+            if (selectedNote?.id === entry.id) setSelectedNote(null)
+        } catch { /* silent */ }
+    }
+
     const articleList = (
         <ArticleList
             notebook={notebook}
@@ -180,6 +191,8 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
             totalCount={entries.length}
             selectedId={selectedNote?.id ?? null}
             onSelect={selectNote}
+            onEdit={(entry) => { setEditing(entry); if (isMobile) setMobileTab('detail') }}
+            onDelete={handleDeleteEntry}
             onNew={() => { setEditing('new'); if (isMobile) setMobileTab('detail') }}
             onBack={onBack}
             chatOpen={chatOpen}
@@ -201,6 +214,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
             fullContent={fullContent}
             loading={contentLoading}
             onEdit={() => setEditing(selectedNote)}
+            onDelete={() => handleDeleteEntry(selectedNote)}
         />
     ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-text-quaternary gap-3 bg-white dark:bg-[#191919]">
@@ -335,11 +349,13 @@ const ArticleList: React.FC<{
     totalCount: number
     selectedId: string | null
     onSelect: (note: NoteEntry) => void
+    onEdit: (note: NoteEntry) => void
+    onDelete: (note: NoteEntry) => void
     onNew?: () => void
     onBack: () => void
     chatOpen: boolean
     onToggleChat: () => void
-}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, selectedId, onSelect, onNew, onBack, chatOpen, onToggleChat }) => (
+}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, selectedId, onSelect, onEdit, onDelete, onNew, onBack, chatOpen, onToggleChat }) => (
     <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
         <div className="h-11 border-b border-border flex items-center gap-1 px-2 shrink-0 shrink-0">
@@ -365,22 +381,22 @@ const ArticleList: React.FC<{
         </div>
         {/* Search */}
         <div className="px-2.5 py-2 border-b border-border shrink-0">
-            <div className="relative">
-                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
-                <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="搜索文章…"
-                    className="w-full bg-fill-secondary border border-border rounded-lg pl-7 pr-7 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-mint/40 placeholder:text-text-quaternary transition-all"
-                />
-                {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2">
-                        <X size={11} className="text-text-tertiary" />
-                    </button>
-                )}
+                <div className="relative">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="搜索文章…"
+                        className="w-full bg-fill-secondary border border-border rounded-lg pl-7 pr-7 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-mint/40 placeholder:text-text-quaternary transition-all"
+                    />
+                    {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2">
+                            <X size={11} className="text-text-tertiary" />
+                        </button>
+                    )}
+                </div>
             </div>
-        </div>
         {/* Sort */}
         {!inSearch && (
             <div className="px-3 py-1 border-b border-border shrink-0 flex items-center gap-1">
@@ -409,28 +425,88 @@ const ArticleList: React.FC<{
                     <p className="text-xs">{inSearch ? '无搜索结果' : '暂无文章'}</p>
                 </div>
             )}
-            {/* Entries: stale entries shown with reduced opacity while new notebook loads */}
             {entries.map((entry) => (
-                <div
+                <ArticleListItem
                     key={entry.id}
-                    onClick={() => !stale && onSelect(entry)}
-                    className={cn(
-                        'mx-1 px-2.5 py-1.5 rounded-md cursor-pointer transition-all duration-200',
-                        stale ? 'opacity-40 pointer-events-none' : '',
-                        selectedId === entry.id
-                            ? 'bg-fill text-text'
-                            : 'text-text-secondary hover:bg-fill-secondary/70 hover:text-text',
-                    )}
-                >
-                    <div className={cn('text-[13px] truncate leading-snug', selectedId === entry.id ? 'font-medium' : '')}>{entry.title}</div>
-                    {entry.date && (
-                        <div className="text-[10px] text-text-quaternary mt-0.5">{entry.date}</div>
-                    )}
-                </div>
+                    entry={entry}
+                    selected={selectedId === entry.id}
+                    stale={!!stale}
+                    onSelect={onSelect}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                />
             ))}
         </div>
     </div>
 )
+
+// ── Article list item ─────────────────────────────────────────────────────────
+
+const ArticleListItem: React.FC<{
+    entry: NoteEntry
+    selected: boolean
+    stale: boolean
+    onSelect: (e: NoteEntry) => void
+    onEdit: (e: NoteEntry) => void
+    onDelete: (e: NoteEntry) => void
+}> = ({ entry, selected, stale, onSelect, onEdit, onDelete }) => {
+    const [menuOpen, setMenuOpen] = React.useState(false)
+    const menuRef = React.useRef<HTMLDivElement>(null)
+
+    React.useEffect(() => {
+        if (!menuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
+    return (
+        <div
+            onClick={() => !stale && onSelect(entry)}
+            className={cn(
+                'group mx-1 px-2.5 py-1.5 rounded-md cursor-pointer transition-all duration-200 relative',
+                stale ? 'opacity-40 pointer-events-none' : '',
+                selected ? 'bg-fill text-text' : 'text-text-secondary hover:bg-fill-secondary/70 hover:text-text',
+            )}
+        >
+            <div className="flex items-center gap-1">
+                <span className={cn('text-[13px] truncate leading-snug flex-1', selected ? 'font-medium' : '')}>{entry.title}</span>
+                <button
+                    onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-fill transition-opacity"
+                >
+                    <MoreHorizontal size={13} />
+                </button>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+                {entry.date && <span className="text-[10px] text-text-quaternary">{entry.date}</span>}
+                {entry.source === 'ai-chat' && <span className="text-[9px] px-1 py-0.5 rounded bg-primary-mint/15 text-primary-mint">AI 对话</span>}
+            </div>
+            {menuOpen && (
+                <div
+                    ref={menuRef}
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-full mt-0.5 z-50 bg-bg-container border border-border rounded-lg shadow-lg py-0.5 min-w-[110px]"
+                >
+                    <button
+                        onClick={() => { setMenuOpen(false); onEdit(entry) }}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-fill-secondary transition-colors"
+                    >
+                        编辑
+                    </button>
+                    <button
+                        onClick={() => { setMenuOpen(false); onDelete(entry) }}
+                        className="w-full text-left px-3 py-1.5 text-xs text-destructive hover:bg-fill-secondary transition-colors"
+                    >
+                        删除
+                    </button>
+                </div>
+            )}
+        </div>
+    )
+}
 
 // ── Article detail view ───────────────────────────────────────────────────────
 
@@ -439,7 +515,20 @@ const ArticleDetail: React.FC<{
     fullContent: string
     loading: boolean
     onEdit: () => void
-}> = ({ note, fullContent, loading, onEdit }) => (
+    onDelete: () => void
+}> = ({ note, fullContent, loading, onEdit, onDelete }) => {
+    const [menuOpen, setMenuOpen] = React.useState(false)
+    const menuRef = React.useRef<HTMLDivElement>(null)
+    React.useEffect(() => {
+        if (!menuOpen) return
+        const handler = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [menuOpen])
+
+    return (
     <div className="flex flex-col h-full bg-white dark:bg-[#191919] relative">
         {/* Thin top progress bar during content loading — no layout shift */}
         <div className={cn(
@@ -449,15 +538,32 @@ const ArticleDetail: React.FC<{
         <div className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="max-w-[720px] mx-auto px-14 py-12">
                 {/* Title row */}
-                <div className="flex items-start gap-3 mb-3 group">
+                <div className="flex items-start gap-3 mb-3">
                     <h1 className="text-[28px] font-bold text-[#1a1a1a] dark:text-[#e8e8e8] flex-1 leading-tight tracking-tight">{note.title}</h1>
-                    <button
-                        onClick={onEdit}
-                        className="mt-1.5 p-1.5 rounded-lg text-transparent group-hover:text-text-quaternary hover:!text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 transition-all shrink-0"
-                        title="编辑"
-                    >
-                        <Pencil size={14} />
-                    </button>
+                    <div className="relative mt-1.5 shrink-0" ref={menuRef}>
+                        <button
+                            onClick={() => setMenuOpen((v) => !v)}
+                            className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                        >
+                            <MoreHorizontal size={16} />
+                        </button>
+                        {menuOpen && (
+                            <div className="absolute right-0 top-full mt-0.5 z-50 bg-bg-container border border-border rounded-lg shadow-lg py-0.5 min-w-[110px]">
+                                <button
+                                    onClick={() => { setMenuOpen(false); onEdit() }}
+                                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-fill-secondary transition-colors"
+                                >
+                                    编辑
+                                </button>
+                                <button
+                                    onClick={() => { setMenuOpen(false); onDelete() }}
+                                    className="w-full text-left px-3 py-1.5 text-xs text-destructive hover:bg-fill-secondary transition-colors"
+                                >
+                                    删除
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 {/* Meta */}
                 {(note.date || note.author || note.tags) && (
@@ -493,5 +599,5 @@ const ArticleDetail: React.FC<{
             </div>
         </div>
     </div>
-)
-
+    )
+}

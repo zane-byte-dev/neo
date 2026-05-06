@@ -17,7 +17,7 @@ import {
     patchSession,
     deleteSessionApi,
     notebookListNotebooks,
-    notebookSaveNote,
+    notebookImportSource,
     type ToolApprovalRule,
 } from '../api'
 import { t } from '../i18n'
@@ -1906,7 +1906,9 @@ const ChatActionsMenu: React.FC<{
             const md = messages
                 .map((m) => `### ${m.role === 'user' ? t('you') : t('neo')}\n\n${m.content}`)
                 .join('\n\n---\n\n')
-            await notebookSaveNote(notebook, {
+            await notebookImportSource({
+                notebook,
+                kind: 'text',
                 title: chat.title,
                 content: md,
                 source: 'ai-chat',

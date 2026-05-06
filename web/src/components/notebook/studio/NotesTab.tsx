@@ -1,5 +1,7 @@
 import React from 'react'
-import { StickyNote, Plus, Trash2, Loader2 } from 'lucide-react'
+import { StickyNote, Plus, Trash2, Loader2, ArrowLeft } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAppStore } from '../../../stores/useAppStore'
 import {
     notebookListNotes, notebookSaveNote, notebookDeleteNote, notebookConvertNoteToSource, notebookNoteQuickAction,
@@ -15,6 +17,7 @@ export const NotesTab: React.FC<Props> = ({ notebook }) => {
     const { notebookNotes, setNotebookNotes } = useAppStore()
     const [loading, setLoading] = React.useState(false)
     const [editing, setEditing] = React.useState<NotebookNote | 'new' | null>(null)
+    const [viewing, setViewing] = React.useState<NotebookNote | null>(null)
     const [selectedIds, setSelectedIds] = React.useState<string[]>([])
     const [actionLoading, setActionLoading] = React.useState(false)
 
@@ -49,6 +52,10 @@ export const NotesTab: React.FC<Props> = ({ notebook }) => {
 
     if (editing !== null) {
         return <NoteEditorInline notebook={notebook} note={editing === 'new' ? null : editing} onSaved={() => { setEditing(null); load() }} onCancel={() => setEditing(null)} />
+    }
+
+    if (viewing !== null) {
+        return <NoteDetailView note={viewing} onEdit={() => { setEditing(viewing); setViewing(null) }} onBack={() => setViewing(null)} />
     }
 
     return (
@@ -88,6 +95,7 @@ export const NotesTab: React.FC<Props> = ({ notebook }) => {
                                 </div>
                                 <p className="text-xs text-text-tertiary mt-1 line-clamp-2">{n.content}</p>
                                 <div className="flex items-center gap-2 mt-2">
+                                    <button onClick={() => setViewing(n)} className="text-xs text-text-tertiary hover:text-text">查看</button>
                                     <button onClick={() => setEditing(n)} className="text-xs text-primary-mint hover:underline">编辑</button>
                                     <button onClick={() => convertToSource(n.id)} className="text-xs text-text-tertiary hover:text-text">→ 转为来源</button>
                                     <button
@@ -133,6 +141,23 @@ const NoteEditorInline: React.FC<{ notebook: string; note: NotebookNote | null; 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="标题" className="w-full bg-fill-secondary border border-border rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-mint/30" />
                 <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="内容 (Markdown)" rows={20} className="w-full bg-fill-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-mint/30 resize-none font-mono" />
+            </div>
+        </div>
+    )
+}
+
+const NoteDetailView: React.FC<{ note: NotebookNote; onEdit: () => void; onBack: () => void }> = ({ note, onEdit, onBack }) => {
+    return (
+        <div className="flex flex-col h-full">
+            <div className="p-3 border-b border-border flex items-center gap-2 shrink-0">
+                <button onClick={onBack} className="flex items-center gap-1 text-xs text-text-tertiary hover:text-text">
+                    <ArrowLeft size={12} /> 返回
+                </button>
+                <span className="flex-1 text-xs font-medium truncate">{note.title}</span>
+                <button onClick={onEdit} className="text-xs px-2.5 py-1.5 bg-fill-secondary hover:bg-fill rounded-lg">编辑</button>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 prose prose-sm prose-invert max-w-none text-text">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
             </div>
         </div>
     )
