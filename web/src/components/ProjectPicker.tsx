@@ -24,26 +24,43 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({ sessionId, project
     const [newPath, setNewPath] = React.useState('')
     const [newName, setNewName] = React.useState('')
     const [busy, setBusy] = React.useState(false)
+    const [panelStyle, setPanelStyle] = React.useState<React.CSSProperties>({})
     const setChats = useAppStore((s) => s.setChats)
     const chats = useAppStore((s) => s.chats)
-    const ref = React.useRef<HTMLDivElement>(null)
+    const triggerRef = React.useRef<HTMLButtonElement>(null)
+    const panelRef = React.useRef<HTMLDivElement>(null)
+
+    const updatePanelPosition = React.useCallback(() => {
+        const rect = triggerRef.current?.getBoundingClientRect()
+        if (!rect) return
+        const panelWidth = 320
+        const left = Math.min(Math.max(8, rect.left), window.innerWidth - panelWidth - 8)
+        const bottom = Math.max(10, window.innerHeight - rect.top + 6)
+        setPanelStyle({ position: 'fixed', left, bottom, width: panelWidth })
+    }, [])
 
     const reload = React.useCallback(() => {
         fetchProjects().then((r) => setProjects(r.projects ?? [])).catch(() => setProjects([]))
     }, [])
+
+    React.useLayoutEffect(() => {
+        if (!open) return
+        updatePanelPosition()
+    }, [open, updatePanelPosition])
 
     React.useEffect(() => {
         if (open) reload()
     }, [open, reload])
 
     React.useEffect(() => {
+        if (!open) return
         const onClick = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) {
-                setOpen(false)
-                setAdding(false)
-            }
+            const target = e.target as Node
+            if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return
+            setOpen(false)
+            setAdding(false)
         }
-        if (open) document.addEventListener('mousedown', onClick)
+        document.addEventListener('mousedown', onClick)
         return () => document.removeEventListener('mousedown', onClick)
     }, [open])
 
@@ -97,8 +114,9 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({ sessionId, project
         : '默认目录'
 
     return (
-        <div ref={ref} className="relative shrink-0">
+        <div className="relative shrink-0">
             <button
+                ref={triggerRef}
                 onClick={() => setOpen((v) => !v)}
                 className={cn(
                     'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs',
@@ -111,7 +129,11 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({ sessionId, project
                 <span className="max-w-[160px] truncate">{label}</span>
             </button>
             {open && (
-                <div className="absolute right-0 top-full mt-1 w-80 rounded-lg border border-border bg-bg-container shadow-lg z-50 py-1 text-sm">
+                <div
+                    ref={panelRef}
+                    style={panelStyle}
+                    className="rounded-lg border border-border bg-bg-container shadow-lg z-[200] py-1 text-sm"
+                >
                     <button
                         disabled={busy}
                         onClick={() => switchTo(null)}

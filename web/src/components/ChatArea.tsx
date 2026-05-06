@@ -317,7 +317,7 @@ const markdownComponents: import('react-markdown').Components = {
 }
 
 const MD: React.FC<{ content: string }> = ({ content }) => (
-    <div className="markdown-content max-w-none">
+    <div className="markdown-content max-w-none break-words">
         <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath]}
             rehypePlugins={[rehypeHighlight, rehypeKatex]}
