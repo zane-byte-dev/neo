@@ -58,12 +58,12 @@ function formatCost(usd: number, t: T): string {
     return `$${usd.toFixed(2)}`
 }
 
-function timeAgo(ts: number): string {
+function timeAgo(ts: number, t: T): string {
     const sec = Math.floor((Date.now() - ts) / 1000)
-    if (sec < 60) return `${sec}s ago`
-    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
-    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
-    return `${Math.floor(sec / 86400)}d ago`
+    if (sec < 60) return t('timeAgoSeconds', { n: sec })
+    if (sec < 3600) return t('timeAgoMinutes', { n: Math.floor(sec / 60) })
+    if (sec < 86400) return t('timeAgoHours', { n: Math.floor(sec / 3600) })
+    return t('timeAgoDays', { n: Math.floor(sec / 86400) })
 }
 
 // ── Model Card ───────────────────────────────────────────────────────────────
@@ -469,7 +469,7 @@ const HistoryTable: React.FC<{ records: UsageRecord[]; t: T; onViewDetail: (r: U
                     <tbody>
                         {records.map((r, i) => (
                             <tr key={i} className="border-b border-border-secondary last:border-0 hover:bg-fill-secondary/50 transition-colors">
-                                <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{timeAgo(r.timestamp)}</td>
+                                <td className="px-3 py-2 text-text-secondary whitespace-nowrap">{timeAgo(r.timestamp, t)}</td>
                                 <td className="px-3 py-2 font-mono text-text-secondary">
                                     {r.model}
                                     {r.fallbackUsed && r.originalModel && (

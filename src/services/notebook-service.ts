@@ -7,7 +7,7 @@
  * Files may contain optional YAML frontmatter (title, date, author, tags, summary).
  * IDs are "{notebookName}/{filename}" strings — no SQLite dependency.
  */
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, rmSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseJsonLines, readJsonFileSyncOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
@@ -525,6 +525,34 @@ export function nbListNotebooksProper(workDir: string): string[] {
         .filter(d => d.isDirectory() && !d.name.startsWith('.') && !d.name.endsWith('.tmp'))
         .map(d => d.name)
         .sort();
+}
+
+/** Delete an entire notebook folder (workDir + stateDir metadata). */
+export function nbDeleteNotebook(workDir: string, stateDir: string, name: string): boolean {
+    if (!name || name.startsWith('.') || name.includes('/') || name.includes('\\')) return false;
+    const contentDir = join(workDir, 'notebooks', name);
+    const metaDir = join(stateDir, 'notebooks', name);
+    if (!existsSync(contentDir)) return false;
+    rmSync(contentDir, { recursive: true, force: true });
+    if (existsSync(metaDir)) rmSync(metaDir, { recursive: true, force: true });
+    return true;
+}
+
+/** Rename a notebook folder (workDir + stateDir metadata). */
+export function nbRenameNotebook(workDir: string, stateDir: string, name: string, newName: string): boolean {
+    if (!name || !newName) return false;
+    for (const n of [name, newName]) {
+        if (n.startsWith('.') || n.includes('/') || n.includes('\\')) return false;
+    }
+    const contentDir = join(workDir, 'notebooks', name);
+    const newContentDir = join(workDir, 'notebooks', newName);
+    if (!existsSync(contentDir)) return false;
+    if (existsSync(newContentDir)) return false;
+    renameSync(contentDir, newContentDir);
+    const metaDir = join(stateDir, 'notebooks', name);
+    const newMetaDir = join(stateDir, 'notebooks', newName);
+    if (existsSync(metaDir)) renameSync(metaDir, newMetaDir);
+    return true;
 }
 
 // ── Source management ────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { Folder, FolderOpen, Plus, Check, X, Trash2 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { fetchProjects, registerProjectApi, deleteProjectApi, patchSession, type ProjectEntry } from '../api'
@@ -128,7 +129,7 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({ sessionId, project
                 {projectRoot ? <FolderOpen size={13} /> : <Folder size={13} />}
                 <span className="max-w-[160px] truncate">{label}</span>
             </button>
-            {open && (
+            {open && typeof document !== 'undefined' && createPortal(
                 <div
                     ref={panelRef}
                     style={panelStyle}
@@ -214,7 +215,8 @@ export const ProjectPicker: React.FC<ProjectPickerProps> = ({ sessionId, project
                             </div>
                         </div>
                     )}
-                </div>
+                </div>,
+                document.body,
             )}
         </div>
     )

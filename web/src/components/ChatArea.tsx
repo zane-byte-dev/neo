@@ -1743,7 +1743,7 @@ const ChatInput: React.FC<{
                                             ? 'bg-fill text-text-secondary'
                                             : 'text-text-tertiary hover:text-text-secondary hover:bg-fill'
                                     )}
-                                    title="添加附件"
+                                    title={t('addAttachment')}
                                     type="button"
                                 >
                                     <Plus size={16} />
@@ -1756,7 +1756,7 @@ const ChatInput: React.FC<{
                                             type="button"
                                         >
                                             <ImagePlus size={14} className="text-text-tertiary shrink-0" />
-                                            <span>图片</span>
+                                            <span>{t('attachImage')}</span>
                                         </button>
                                         <button
                                             onClick={() => { docInputRef.current?.click(); setAttachMenuOpen(false) }}
@@ -1765,7 +1765,7 @@ const ChatInput: React.FC<{
                                             disabled={isUploading}
                                         >
                                             <Paperclip size={14} className="text-text-tertiary shrink-0" />
-                                            <span>文件</span>
+                                            <span>{t('attachDocument')}</span>
                                         </button>
                                     </div>
                                 )}
@@ -1825,11 +1825,11 @@ const ChatInput: React.FC<{
                                 ? 'text-primary-mint bg-primary-mint/10 hover:bg-primary-mint/20'
                                 : 'text-text-tertiary hover:text-text-secondary hover:bg-fill'
                         )}
-                        title={confirmDangerous ? '高危操作需确认：开' : '高危操作需确认：关'}
+                        title={confirmDangerous ? t('safeConfirmTitleOn') : t('safeConfirmTitleOff')}
                         type="button"
                     >
                         {confirmDangerous ? <ShieldCheck size={12} /> : <ShieldOff size={12} />}
-                        <span className="ml-0.5">{confirmDangerous ? '安全确认：开' : '安全确认：关'}</span>
+                        <span className="ml-0.5">{confirmDangerous ? t('safeConfirmOn') : t('safeConfirmOff')}</span>
                     </button>
                     <button
                         onClick={onOpenToolApprovals}

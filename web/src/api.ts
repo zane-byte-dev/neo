@@ -651,6 +651,28 @@ export function notebookDelete(id: string) {
     })
 }
 
+export function notebookDeleteFolder(name: string): Promise<{ ok: true }> {
+    return fetch(`/api/notebook/folder?name=${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    }).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+    })
+}
+
+export function notebookRenameFolder(name: string, newName: string): Promise<{ ok: true; name: string }> {
+    return fetch('/api/notebook/folder', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, newName }),
+    }).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+    })
+}
+
 // ── Notebook workspace (NotebookLM-style) ────────────────────────────────────
 
 import type {

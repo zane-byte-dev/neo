@@ -37,6 +37,8 @@ import {
     nbConvertNoteToSource,
     nbGetSourceEntry,
     nbListSources,
+    nbDeleteNotebook,
+    nbRenameNotebook,
 } from '../services/notebook-service.js';
 import { generateAndSaveSourceGuide } from '../services/notebook-ai.js';
 import { calcUser } from '../services/user-service.js';
@@ -258,5 +260,38 @@ export function notebookNoteConvertToSource(router: Router): void {
             generateAndSaveSourceGuide(workDir, notebook, entry, undefined, stateDir).catch(() => { /* ignore */ });
         }
         ctx.body = imported;
+    });
+}
+
+// ── DELETE /api/notebook/folder — Delete an entire notebook ─────────────────
+
+export function notebookFolderDelete(router: Router): void {
+    router.delete('/api/notebook/folder', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir, stateDir } = await calcUser(userId);
+        const q = ctx.query as Record<string, string>;
+        const name = q.name?.trim();
+        if (!name) { ctx.status = 400; ctx.body = { error: 'name required' }; return; }
+        if (!nbDeleteNotebook(workDir, stateDir, name)) {
+            ctx.status = 404; ctx.body = { error: 'Notebook not found or invalid name' }; return;
+        }
+        ctx.body = { ok: true };
+    });
+}
+
+// ── PATCH /api/notebook/folder — Rename a notebook ──────────────────────────
+
+export function notebookFolderRename(router: Router): void {
+    router.patch('/api/notebook/folder', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir, stateDir } = await calcUser(userId);
+        const body = ctx.request.body as Record<string, unknown>;
+        const name = typeof body.name === 'string' ? body.name.trim() : '';
+        const newName = typeof body.newName === 'string' ? body.newName.trim() : '';
+        if (!name || !newName) { ctx.status = 400; ctx.body = { error: 'name + newName required' }; return; }
+        if (!nbRenameNotebook(workDir, stateDir, name, newName)) {
+            ctx.status = 409; ctx.body = { error: 'Rename failed: source not found or target already exists' }; return;
+        }
+        ctx.body = { ok: true, name: newName };
     });
 }

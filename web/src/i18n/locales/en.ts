@@ -305,6 +305,31 @@ const en = {
     skillDisableAction: 'Disable skill',
     skillEnabledGroup: 'Enabled',
     skillDisabledGroup: 'Disabled',
+
+    // timeAgo
+    timeAgoSeconds: '{n}s ago',
+    timeAgoMinutes: '{n}m ago',
+    timeAgoHours: '{n}h ago',
+    timeAgoDays: '{n}d ago',
+
+    // ChatInput hardcoded strings
+    addAttachment: 'Add attachment',
+    attachImage: 'Image',
+    attachDocument: 'Document',
+    safeConfirmOn: 'Safe mode: on',
+    safeConfirmOff: 'Safe mode: off',
+    safeConfirmTitleOn: 'High-risk ops require confirmation: on',
+    safeConfirmTitleOff: 'High-risk ops require confirmation: off',
+
+    // Notebook folder management
+    deleteNotebook: 'Delete notebook',
+    deleteNotebookConfirm: 'Delete this notebook and all its contents? This cannot be undone.',
+    renameNotebook: 'Rename notebook',
+    notebookDeleted: 'Notebook deleted',
+    notebookDeleteFailed: 'Failed to delete notebook',
+    notebookRenamed: 'Notebook renamed',
+    notebookRenameFailed: 'Failed to rename notebook',
+    notebookNewNamePlaceholder: 'New notebook name…',
 } as const
 
 export default en

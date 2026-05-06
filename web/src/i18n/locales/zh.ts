@@ -307,6 +307,31 @@ const zh: Record<TranslationKeys, string> = {
     skillDisableAction: '禁用技能',
     skillEnabledGroup: '已启用',
     skillDisabledGroup: '已禁用',
+
+    // timeAgo
+    timeAgoSeconds: '{n}秒前',
+    timeAgoMinutes: '{n}分钟前',
+    timeAgoHours: '{n}小时前',
+    timeAgoDays: '{n}天前',
+
+    // ChatInput hardcoded strings
+    addAttachment: '添加附件',
+    attachImage: '图片',
+    attachDocument: '文件',
+    safeConfirmOn: '安全确认：开',
+    safeConfirmOff: '安全确认：关',
+    safeConfirmTitleOn: '高危操作需确认：开',
+    safeConfirmTitleOff: '高危操作需确认：关',
+
+    // Notebook folder management
+    deleteNotebook: '删除笔记本',
+    deleteNotebookConfirm: '确定要删除这个笔记本及其所有内容吗？此操作无法撤销。',
+    renameNotebook: '重命名笔记本',
+    notebookDeleted: '笔记本已删除',
+    notebookDeleteFailed: '删除笔记本失败',
+    notebookRenamed: '笔记本已重命名',
+    notebookRenameFailed: '重命名笔记本失败',
+    notebookNewNamePlaceholder: '新笔记本名称…',
 }
 
 export default zh

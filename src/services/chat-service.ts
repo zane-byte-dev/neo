@@ -261,9 +261,21 @@ export async function messageAdd(
         const store = await readSessionsStore(userId);
         if (store.sessions[sessionId]) {
             store.sessions[sessionId].end_time = timestamp;
-            // Auto-title from first user message
+            // Auto-title from first user message (with deduplication)
             if (role === 'user' && !store.sessions[sessionId].title && existing.length === 0) {
-                store.sessions[sessionId].title = deriveChatTitleFromMessage(content);
+                const baseTitle = deriveChatTitleFromMessage(content);
+                const existingTitles = new Set(
+                    Object.values(store.sessions)
+                        .filter(s => s.id !== sessionId)
+                        .map(s => s.title)
+                );
+                let candidate = baseTitle;
+                if (existingTitles.has(candidate)) {
+                    let n = 2;
+                    while (existingTitles.has(`${baseTitle} (${n})`)) n++;
+                    candidate = `${baseTitle} (${n})`;
+                }
+                store.sessions[sessionId].title = candidate;
             }
             await writeSessionsStore(userId, store);
         }

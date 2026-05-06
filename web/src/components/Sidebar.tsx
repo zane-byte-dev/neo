@@ -3,7 +3,7 @@ import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, M
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, initializeWorkspace, type MeInfo } from '../api'
+import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, notebookDeleteFolder, notebookRenameFolder, initializeWorkspace, type MeInfo } from '../api'
 import { useT, LOCALE_OPTIONS } from '../i18n'
 import { toast } from './Toast'
 import type { Theme } from '../types'
@@ -30,6 +30,10 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [addingNotebook, setAddingNotebook] = React.useState(false)
     const [newNotebookName, setNewNotebookName] = React.useState('')
+    const [notebookContextMenu, setNotebookContextMenu] = React.useState<{ name: string; x: number; y: number } | null>(null)
+    const [confirmDeleteNotebook, setConfirmDeleteNotebook] = React.useState<string | null>(null)
+    const [renamingNotebook, setRenamingNotebook] = React.useState<string | null>(null)
+    const [notebookRenameValue, setNotebookRenameValue] = React.useState('')
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
     const [me, setMe] = React.useState<MeInfo | null>(null)
     const [searchQuery, setSearchQuery] = React.useState('')
@@ -158,6 +162,58 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
         setContextMenu({ id, x: e.clientX, y: e.clientY })
     }
 
+    const handleNotebookContextMenu = (e: React.MouseEvent, name: string) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setNotebookContextMenu({ name, x: e.clientX, y: e.clientY })
+    }
+
+    const confirmDeleteNotebookAction = async () => {
+        if (!confirmDeleteNotebook) return
+        try {
+            await notebookDeleteFolder(confirmDeleteNotebook)
+            setNotebooks(prev => prev.filter(n => n !== confirmDeleteNotebook))
+            if (location.pathname === `/notebook/${encodeURIComponent(confirmDeleteNotebook)}`) navigate('/chat')
+            toast.success(t('notebookDeleted'))
+        } catch {
+            toast.error(t('notebookDeleteFailed'))
+        } finally {
+            setConfirmDeleteNotebook(null)
+        }
+    }
+
+    const confirmRenameNotebook = async () => {
+        if (!renamingNotebook || !notebookRenameValue.trim()) return
+        const newName = notebookRenameValue.trim()
+        try {
+            await notebookRenameFolder(renamingNotebook, newName)
+            setNotebooks(prev => prev.map(n => n === renamingNotebook ? newName : n))
+            if (location.pathname === `/notebook/${encodeURIComponent(renamingNotebook)}`) {
+                navigate(`/notebook/${encodeURIComponent(newName)}`)
+            }
+            toast.success(t('notebookRenamed'))
+        } catch {
+            toast.error(t('notebookRenameFailed'))
+        } finally {
+            setRenamingNotebook(null)
+            setNotebookRenameValue('')
+        }
+    }
+
+    // Close notebook context menu on outside click
+    React.useEffect(() => {
+        if (!notebookContextMenu) return
+        const close = () => setNotebookContextMenu(null)
+        window.addEventListener('click', close)
+        return () => window.removeEventListener('click', close)
+    }, [notebookContextMenu])
+
+    // Focus notebook rename input when dialog opens
+    const notebookRenameInputRef = React.useRef<HTMLInputElement>(null)
+    React.useEffect(() => {
+        if (renamingNotebook) setTimeout(() => notebookRenameInputRef.current?.select(), 50)
+    }, [renamingNotebook])
+
     // Long-press support for mobile context menu
     const touchStartPos = React.useRef<{ x: number; y: number } | null>(null)
 
@@ -279,7 +335,8 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                     {notebookOpen && (
                         <div className="ml-5 mt-0.5 space-y-0.5 border-l border-border pl-2">
                             {notebooks.map((nb) => (
-                                <div key={nb} className="group relative flex items-center">
+                                <div key={nb} className="group relative flex items-center"
+                                    onContextMenu={(e) => handleNotebookContextMenu(e, nb)}>
                                     <Link
                                         to={`/notebook/${encodeURIComponent(nb)}`}
                                         onClick={onNavigate}
@@ -295,10 +352,17 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                                     </Link>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); navigate(`/notebook/article/new?notebook=${encodeURIComponent(nb)}`); onNavigate?.() }}
-                                        className="opacity-0 group-hover:opacity-100 shrink-0 mr-1 p-0.5 rounded hover:bg-fill transition-all text-text-quaternary hover:text-text-secondary"
+                                        className="opacity-0 group-hover:opacity-100 shrink-0 p-0.5 rounded hover:bg-fill transition-all text-text-quaternary hover:text-text-secondary"
                                         title={t('newNote')}
                                     >
                                         <Plus size={12} />
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleNotebookContextMenu(e, nb) }}
+                                        className="opacity-0 group-hover:opacity-100 shrink-0 mr-0.5 p-0.5 rounded hover:bg-fill transition-all text-text-quaternary hover:text-text-secondary"
+                                        title={t('rename') + ' / ' + t('deleteNotebook')}
+                                    >
+                                        <MoreHorizontal size={12} />
                                     </button>
                                 </div>
                             ))}
@@ -701,6 +765,94 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                             </button>
                             <button
                                 onClick={confirmRename}
+                                className="px-3.5 py-1.5 text-xs rounded-lg bg-primary-mint text-white hover:bg-primary-mint/90 transition-colors cursor-pointer"
+                            >
+                                {t('save')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Notebook context menu */}
+            {notebookContextMenu && (
+                <div
+                    className="fixed z-[200] w-40 rounded-xl border border-border bg-bg-container shadow-lg py-1 overflow-hidden text-[12px]"
+                    style={{ top: notebookContextMenu.y, left: notebookContextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        onClick={() => { setRenamingNotebook(notebookContextMenu.name); setNotebookRenameValue(notebookContextMenu.name); setNotebookContextMenu(null) }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-fill-secondary transition-colors text-left text-text"
+                    >
+                        <Pencil size={12} className="text-text-tertiary" />{t('renameNotebook')}
+                    </button>
+                    <button
+                        onClick={() => { setConfirmDeleteNotebook(notebookContextMenu.name); setNotebookContextMenu(null) }}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-fill-secondary transition-colors text-left text-destructive"
+                    >
+                        <Trash2 size={12} />{t('deleteNotebook')}
+                    </button>
+                </div>
+            )}
+
+            {/* Notebook delete confirmation dialog */}
+            {confirmDeleteNotebook && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setConfirmDeleteNotebook(null)}>
+                    <div
+                        className="glass border border-border rounded-2xl p-5 w-[320px] animate-slide-up"
+                        style={{ boxShadow: 'var(--shadow-float)' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-sm font-semibold mb-2">{t('deleteNotebook')}</h3>
+                        <p className="text-xs text-text-secondary mb-5 leading-relaxed">
+                            {t('deleteNotebookConfirm')}
+                        </p>
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                onClick={() => setConfirmDeleteNotebook(null)}
+                                className="px-3.5 py-1.5 text-xs rounded-lg border border-border hover:bg-fill-secondary transition-colors cursor-pointer"
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button
+                                onClick={confirmDeleteNotebookAction}
+                                className="px-3.5 py-1.5 text-xs rounded-lg bg-destructive text-white hover:bg-destructive/90 transition-colors cursor-pointer"
+                            >
+                                {t('delete')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Notebook rename dialog */}
+            {renamingNotebook && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40" onClick={() => setRenamingNotebook(null)}>
+                    <div
+                        className="glass border border-border rounded-2xl p-5 w-[320px] animate-slide-up"
+                        style={{ boxShadow: 'var(--shadow-float)' }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3 className="text-sm font-semibold mb-3">{t('renameNotebook')}</h3>
+                        <input
+                            ref={notebookRenameInputRef}
+                            type="text"
+                            value={notebookRenameValue}
+                            onChange={(e) => setNotebookRenameValue(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) confirmRenameNotebook(); if (e.key === 'Escape') setRenamingNotebook(null) }}
+                            placeholder={t('notebookNewNamePlaceholder')}
+                            className="w-full bg-fill-secondary border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all mb-4 select-text"
+                        />
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                onClick={() => setRenamingNotebook(null)}
+                                className="px-3.5 py-1.5 text-xs rounded-lg border border-border hover:bg-fill-secondary transition-colors cursor-pointer"
+                            >
+                                {t('cancel')}
+                            </button>
+                            <button
+                                onClick={confirmRenameNotebook}
                                 className="px-3.5 py-1.5 text-xs rounded-lg bg-primary-mint text-white hover:bg-primary-mint/90 transition-colors cursor-pointer"
                             >
                                 {t('save')}
