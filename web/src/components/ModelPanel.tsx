@@ -840,6 +840,14 @@ const ProviderStatusCard: React.FC<{
 
 const TIERS: RoutingTier[] = ['simple', 'standard', 'complex']
 
+const ROUTING_PRESETS = {
+    conservative: { simpleMax: -0.08, standardMax: 0.18, fallbackThreshold: 0.24 },
+    balanced: { simpleMax: -0.05, standardMax: 0.25, fallbackThreshold: 0.2 },
+    aggressive: { simpleMax: 0.02, standardMax: 0.34, fallbackThreshold: 0.16 },
+} as const
+
+type RoutingPresetId = keyof typeof ROUTING_PRESETS
+
 const RoutingEditor: React.FC<{
     routing: RoutingConfigData
     onSaved: (next: RoutingConfigData) => void
@@ -872,6 +880,22 @@ const RoutingEditor: React.FC<{
 
     const updateFloor = (which: 'toolFloor' | 'largeContextFloor', value: RoutingTier) => {
         setDraft((d) => ({ ...d, overrides: { ...d.overrides, [which]: value } }))
+    }
+
+    const applyPreset = (presetId: RoutingPresetId) => {
+        const preset = ROUTING_PRESETS[presetId]
+        setDraft((d) => ({
+            ...d,
+            boundaries: {
+                ...d.boundaries,
+                simpleMax: preset.simpleMax,
+                standardMax: preset.standardMax,
+            },
+            confidence: {
+                ...d.confidence,
+                fallbackThreshold: preset.fallbackThreshold,
+            },
+        }))
     }
 
     const submit = async () => {
@@ -936,6 +960,27 @@ const RoutingEditor: React.FC<{
                 <p className="text-xs text-text-tertiary mt-1 leading-relaxed">{t('routingEditorSubtitle')}</p>
                 {error && <p className="text-[11px] text-destructive mt-2">{error}</p>}
                 {savedFlash && <p className="text-[11px] text-emerald-600 mt-2">{t('routingSaved')}</p>}
+            </div>
+
+            <div className="rounded-lg border border-border bg-fill/30 p-3">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <div className="flex-1">
+                        <p className="text-[11px] font-medium text-text-secondary">{t('routingPresets')}</p>
+                        <p className="text-[11px] text-text-tertiary mt-0.5">{t('routingPresetsHint')}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                        {(Object.keys(ROUTING_PRESETS) as RoutingPresetId[]).map((id) => (
+                            <button
+                                key={id}
+                                type="button"
+                                onClick={() => applyPreset(id)}
+                                className="px-2.5 py-1 rounded-lg border border-border bg-bg-container text-[11px] text-text-secondary hover:bg-fill-secondary transition-colors"
+                            >
+                                {t(`routingPreset${id[0].toUpperCase()}${id.slice(1)}` as Parameters<T>[0])}
+                            </button>
+                        ))}
+                    </div>
+                </div>
             </div>
 
             {/* Tier chains */}

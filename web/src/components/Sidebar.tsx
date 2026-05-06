@@ -1,12 +1,51 @@
 import React from 'react'
-import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings, CheckSquare, Square } from 'lucide-react'
+import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings, CheckSquare, Square, Upload } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, notebookDeleteFolder, notebookRenameFolder, initializeWorkspace, type MeInfo } from '../api'
+import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, notebookDeleteFolder, notebookRenameFolder, initializeWorkspace, importChatApi, type MeInfo } from '../api'
 import { useT, LOCALE_OPTIONS } from '../i18n'
 import { toast } from './Toast'
 import type { Theme } from '../types'
+
+function parseImportedChat(raw: string, filename: string): { title: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
+    try {
+        const data = JSON.parse(raw) as Record<string, unknown>
+        const title = typeof data.title === 'string' && data.title.trim() ? data.title.trim() : filename.replace(/\.[^.]+$/, '')
+        const messages = Array.isArray(data.messages)
+            ? data.messages.map((item) => typeof item === 'object' && item !== null ? item as Record<string, unknown> : null)
+                .filter((item): item is Record<string, unknown> => item !== null)
+                .map((item) => ({
+                    role: item.role === 'assistant' || item.role === 'model' ? 'assistant' as const : 'user' as const,
+                    content: typeof item.content === 'string' ? item.content : '',
+                }))
+                .filter((item) => item.content.trim())
+            : []
+        if (messages.length > 0) return { title, messages }
+    } catch { /* parse markdown below */ }
+
+    const lines = raw.replace(/\r/g, '').split('\n')
+    const titleLine = lines.find((line) => line.startsWith('# '))
+    const title = titleLine?.replace(/^#\s+/, '').trim() || filename.replace(/\.[^.]+$/, '')
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = []
+    let current: { role: 'user' | 'assistant'; content: string[] } | null = null
+    for (const line of lines) {
+        const heading = line.match(/^###\s+(.*)$/)
+        if (heading) {
+            if (current && current.content.join('\n').trim()) {
+                messages.push({ role: current.role, content: current.content.join('\n').trim() })
+            }
+            const label = heading[1].toLowerCase()
+            current = { role: label.includes('neo') || label.includes('assistant') ? 'assistant' : 'user', content: [] }
+            continue
+        }
+        if (current) current.content.push(line)
+    }
+    if (current && current.content.join('\n').trim()) {
+        messages.push({ role: current.role, content: current.content.join('\n').trim() })
+    }
+    return { title, messages }
+}
 
 const THEMES: { value: Theme; labelKey: 'themeLight' | 'themeDark' | 'themeClassicDark' }[] = [
     { value: 'light', labelKey: 'themeLight' },
@@ -43,6 +82,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const [initializingWorkspace, setInitializingWorkspace] = React.useState(false)
     const searchRef = React.useRef<HTMLInputElement>(null)
     const renameInputRef = React.useRef<HTMLInputElement>(null)
+    const importInputRef = React.useRef<HTMLInputElement>(null)
     const longPressTimerRef = React.useRef<number | null>(null)
 
     // Multi-select state
@@ -203,6 +243,33 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
             toast.error(error instanceof Error ? error.message : t('workspaceInitFailed'))
         } finally {
             setInitializingWorkspace(false)
+        }
+    }
+
+    const handleImportChat = async (file: File | undefined) => {
+        if (!file) return
+        try {
+            const parsed = parseImportedChat(await file.text(), file.name)
+            if (parsed.messages.length === 0) throw new Error(t('importChatNoMessages'))
+            const res = await importChatApi(parsed.title, parsed.messages)
+            setChats([{
+                id: res.session.id,
+                title: res.session.title,
+                isPinned: res.session.isPinned,
+                isArchived: res.session.isArchived ?? false,
+                createdAt: res.session.createdAt,
+                updatedAt: res.session.updatedAt ?? res.session.createdAt,
+                projectRoot: res.session.projectRoot,
+                mode: res.session.mode ?? 'general',
+            }, ...chats])
+            selectChat(res.session.id)
+            navigate('/chat')
+            setMenuOpen(false)
+            toast.success(t('importChatSuccess'))
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t('importChatFailed'))
+        } finally {
+            if (importInputRef.current) importInputRef.current.value = ''
         }
     }
 
@@ -446,11 +513,11 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                 </div>
 
                 <Link
-                    to="/settings"
+                    to="/settings/models"
                     onClick={onNavigate}
                     className={cn(
                         'flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150',
-                        location.pathname === '/settings'
+                        location.pathname.startsWith('/settings')
                             ? 'bg-sidebar-active text-text font-medium'
                             : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
                     )}
@@ -756,6 +823,21 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                         </div>
 
                         <div className="border-t border-border mx-2 my-1" />
+
+                        <input
+                            ref={importInputRef}
+                            type="file"
+                            accept=".md,.markdown,.json,text/markdown,application/json"
+                            className="hidden"
+                            onChange={(e) => void handleImportChat(e.target.files?.[0])}
+                        />
+                        <button
+                            onClick={() => importInputRef.current?.click()}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text-secondary hover:bg-fill-secondary hover:text-text transition-colors rounded-lg mx-0 cursor-pointer"
+                        >
+                            <Upload size={14} />
+                            {t('importChat')}
+                        </button>
 
                         <button
                             onClick={handleInitializeWorkspace}

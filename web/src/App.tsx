@@ -127,6 +127,7 @@ const MainLayout: React.FC = () => {
             <Route path="/notebook/article/new" element={<NewNotePage />} />
             <Route path="/notebook/:notebookName" element={<NotebookPage />} />
             <Route path="/settings" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><SettingsPanel /></div>} />
+            <Route path="/settings/:tab" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><SettingsPanel /></div>} />
             <Route path="*" element={<Navigate to="/chat" replace />} />
         </Routes>
     )

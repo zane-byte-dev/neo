@@ -4,6 +4,9 @@ const en = {
     save: 'Save',
     delete: 'Delete',
     confirm: 'Confirm',
+    loading: 'Loading…',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
 
     // Sidebar
     newChat: 'New Chat',
@@ -75,6 +78,10 @@ const en = {
     workspaceInitLoading: 'Initializing workspace…',
     workspaceInitSuccess: 'Workspace initialized and default files are ready.',
     workspaceInitFailed: 'Failed to initialize workspace',
+    importChat: 'Import chat',
+    importChatSuccess: 'Chat imported',
+    importChatFailed: 'Failed to import chat',
+    importChatNoMessages: 'No messages found in import file',
 
     // ChatArea
     thinking: 'Thinking…',
@@ -168,6 +175,7 @@ const en = {
     // NotebookPanel
     allFilter: 'All',
     searchNotes: 'Search notes…',
+    searchAllNotebooks: 'Search all notebooks…',
     noResults: 'No results',
     noEntries: 'No entries',
     selectArticle: 'Select an article to read',
@@ -310,6 +318,11 @@ const en = {
     routingSaved: 'Routing saved',
     routingSaveFailed: 'Failed to save routing',
     routingInvalidNumber: 'Please provide a valid number',
+    routingPresets: 'Simple mode presets',
+    routingPresetsHint: 'Quickly adjust score thresholds without editing advanced values manually.',
+    routingPresetConservative: 'Conservative',
+    routingPresetBalanced: 'Balanced',
+    routingPresetAggressive: 'Aggressive',
 
     // SkillsPanel
     skills: 'Skills',
@@ -367,6 +380,36 @@ const en = {
     notebookRenamed: 'Notebook renamed',
     notebookRenameFailed: 'Failed to rename notebook',
     notebookNewNamePlaceholder: 'New notebook name…',
+
+    // MCP / automation management
+    mcpServers: 'MCP Servers',
+    mcpServersSubtitle: 'Manage workspace mcp.json servers exposed as agent tools',
+    newMcpServer: 'New MCP server',
+    editMcpServer: 'Edit MCP server',
+    mcpNamePlaceholder: 'Server name',
+    mcpCommandPlaceholder: 'Command, e.g. npx',
+    mcpArgsPlaceholder: 'Arguments, e.g. -y @modelcontextprotocol/server-filesystem',
+    mcpCwdPlaceholder: 'Working directory (optional)',
+    mcpEnvPlaceholder: 'Environment variables, one KEY=value per line',
+    mcpSaved: 'MCP server saved',
+    mcpSaveFailed: 'Failed to save MCP server',
+    mcpDeleted: 'MCP server deleted',
+    mcpDeleteFailed: 'Failed to delete MCP server',
+    mcpDeleteConfirm: 'Delete MCP server "{name}"?',
+    mcpEmpty: 'No MCP servers configured yet',
+    automations: 'Automations',
+    automationsSubtitle: 'Manage webhook entrypoint and scheduled agent tasks',
+    webhook: 'Webhook',
+    webhookDescription: 'Send POST requests with message, optional sessionId and your configured webhook secret.',
+    cronJobs: 'Cron jobs',
+    cronNamePlaceholder: 'Task name',
+    cronMessagePlaceholder: 'Message to send to the agent on schedule',
+    cronSaved: 'Cron job saved',
+    cronSaveFailed: 'Failed to save cron job',
+    cronDeleted: 'Cron job deleted',
+    cronDeleteFailed: 'Failed to delete cron job',
+    cronDeleteConfirm: 'Delete cron job "{name}"?',
+    cronEmpty: 'No cron jobs configured yet',
 } as const
 
 export default en

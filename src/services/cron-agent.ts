@@ -172,18 +172,14 @@ export async function startCronAgent(): Promise<void> {
  * Reload schedules for a specific user or all users.
  */
 export async function reloadSchedules(userId?: string): Promise<number> {
-    const userIds = userId ? [userId] : readAllUserIds();
     let count = 0;
 
-    // Stop existing jobs for the target users
-    for (const uid of userIds) {
-        for (const [key, job] of activeJobs) {
-            if (key.startsWith(`${uid}:`)) {
-                job.stop();
-                activeJobs.delete(key);
-            }
-        }
+    // startCronAgent reads schedules for all users, so clear all existing jobs
+    // first to avoid duplicate user/system schedules after a targeted reload.
+    for (const [, job] of activeJobs) {
+        job.stop();
     }
+    activeJobs.clear();
 
     // Re-start the cron agent (it will re-read all schedules)
     await startCronAgent();

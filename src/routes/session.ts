@@ -1,7 +1,7 @@
 import type Router from '@koa/router';
 import { promises as fs } from 'node:fs';
 import { resolve } from 'node:path';
-import { sessionCreate, sessionList, sessionPatch, sessionDelete, sessionGetByNotebook, messageList } from '../services/chat-service.js';
+import { sessionCreate, sessionList, sessionPatch, sessionDelete, sessionGetByNotebook, messageList, messageAdd } from '../services/chat-service.js';
 import { calcUser } from '../services/user-service.js';
 import { listRunIds, loadRun } from '../runtime/store.js';
 import { listRunEvents } from '../runtime/events.js';
@@ -100,6 +100,44 @@ export function newSession(router: Router): void {
             ...(s.notebook_id !== undefined && { notebookId: s.notebook_id }),
             ...(s.source_ids !== undefined && { sourceIds: s.source_ids }),
         }));
+    });
+
+    router.post('/api/session/import', async (ctx: import('koa').Context) => {
+        const userId: string | undefined = ctx.state.userId;
+        if (!userId) { ctx.status = 401; ctx.body = { error: 'Unauthorized' }; return; }
+        const body = ctx.request.body as Record<string, unknown>;
+        const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim().slice(0, 120) : 'Imported Chat';
+        const rawMessages = Array.isArray(body.messages) ? body.messages : [];
+        const messages = rawMessages
+            .map((item) => typeof item === 'object' && item !== null ? item as Record<string, unknown> : null)
+            .filter((item): item is Record<string, unknown> => item !== null)
+            .map((item) => ({
+                role: item.role === 'assistant' || item.role === 'model' ? 'assistant' as const : 'user' as const,
+                content: typeof item.content === 'string' ? item.content : '',
+            }))
+            .filter((item) => item.content.trim());
+        if (messages.length === 0) {
+            ctx.status = 400;
+            ctx.body = { error: 'messages are required' };
+            return;
+        }
+        const session = await sessionCreate(userId, undefined, { title });
+        for (const message of messages.slice(0, 500)) {
+            await messageAdd(session.id, userId, message.role, message.content);
+        }
+        ctx.body = {
+            ok: true,
+            session: {
+                id: session.id,
+                title,
+                isPinned: false,
+                isArchived: false,
+                createdAt: new Date(session.start_time).getTime(),
+                updatedAt: Date.now(),
+                projectRoot: session.project_root ?? null,
+                mode: session.mode ?? 'general',
+            },
+        };
     });
 
     /**
@@ -399,6 +437,5 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function sameArgs(left: Record<string, unknown> | undefined, right: Record<string, unknown> | undefined): boolean {
     return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
 }
-
 
 

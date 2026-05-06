@@ -6,6 +6,9 @@ const zh: Record<TranslationKeys, string> = {
     save: '保存',
     delete: '删除',
     confirm: '确认',
+    loading: '加载中…',
+    enabled: '已启用',
+    disabled: '已禁用',
 
     // Sidebar
     newChat: '新对话',
@@ -77,6 +80,10 @@ const zh: Record<TranslationKeys, string> = {
     workspaceInitLoading: '正在初始化 workspace…',
     workspaceInitSuccess: '已初始化 workspace，并补齐默认模板。',
     workspaceInitFailed: '初始化 workspace 失败',
+    importChat: '导入对话',
+    importChatSuccess: '对话已导入',
+    importChatFailed: '导入对话失败',
+    importChatNoMessages: '导入文件中没有可用消息',
 
     // ChatArea
     thinking: '思考中…',
@@ -170,6 +177,7 @@ const zh: Record<TranslationKeys, string> = {
     // NotebookPanel
     allFilter: '全部',
     searchNotes: '搜索笔记…',
+    searchAllNotebooks: '搜索全部笔记本…',
     noResults: '没有结果',
     noEntries: '暂无条目',
     selectArticle: '选择一篇文章阅读',
@@ -312,6 +320,11 @@ const zh: Record<TranslationKeys, string> = {
     routingSaved: '路由配置已保存',
     routingSaveFailed: '保存路由配置失败',
     routingInvalidNumber: '请输入有效的数字',
+    routingPresets: '简单模式预设',
+    routingPresetsHint: '无需手动理解高级参数，快速调整评分阈值。',
+    routingPresetConservative: '保守',
+    routingPresetBalanced: '平衡',
+    routingPresetAggressive: '激进',
 
     // SkillsPanel
     skills: '技能',
@@ -369,6 +382,36 @@ const zh: Record<TranslationKeys, string> = {
     notebookRenamed: '笔记本已重命名',
     notebookRenameFailed: '重命名笔记本失败',
     notebookNewNamePlaceholder: '新笔记本名称…',
+
+    // MCP / automation management
+    mcpServers: 'MCP 服务器',
+    mcpServersSubtitle: '管理工作区 mcp.json 中暴露给 Agent 的 MCP 工具服务器',
+    newMcpServer: '新建 MCP 服务器',
+    editMcpServer: '编辑 MCP 服务器',
+    mcpNamePlaceholder: '服务器名称',
+    mcpCommandPlaceholder: '命令，例如 npx',
+    mcpArgsPlaceholder: '参数，例如 -y @modelcontextprotocol/server-filesystem',
+    mcpCwdPlaceholder: '工作目录（可选）',
+    mcpEnvPlaceholder: '环境变量，每行一个 KEY=value',
+    mcpSaved: 'MCP 服务器已保存',
+    mcpSaveFailed: '保存 MCP 服务器失败',
+    mcpDeleted: 'MCP 服务器已删除',
+    mcpDeleteFailed: '删除 MCP 服务器失败',
+    mcpDeleteConfirm: '删除 MCP 服务器 "{name}"？',
+    mcpEmpty: '暂无 MCP 服务器配置',
+    automations: '自动化',
+    automationsSubtitle: '管理 Webhook 入口和定时 Agent 任务',
+    webhook: 'Webhook',
+    webhookDescription: '使用配置的 webhookSecret 发送包含 message、可选 sessionId 的 POST 请求。',
+    cronJobs: '定时任务',
+    cronNamePlaceholder: '任务名称',
+    cronMessagePlaceholder: '按计划发送给 Agent 的消息',
+    cronSaved: '定时任务已保存',
+    cronSaveFailed: '保存定时任务失败',
+    cronDeleted: '定时任务已删除',
+    cronDeleteFailed: '删除定时任务失败',
+    cronDeleteConfirm: '删除定时任务 "{name}"？',
+    cronEmpty: '暂无定时任务',
 }
 
 export default zh

@@ -1,9 +1,23 @@
 import React from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { Cpu, Zap, LayoutGrid, ExternalLink, Upload, Trash2, Plus, X, Loader2 } from 'lucide-react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Cpu, Zap, LayoutGrid, ExternalLink, Upload, Trash2, Plus, X, Loader2, Server, Clock } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
-import { fetchUserApps, uploadAppFiles, deleteUserApp, type UserAppInfo } from '../api'
+import {
+    fetchUserApps,
+    uploadAppFiles,
+    deleteUserApp,
+    mcpList,
+    mcpSave,
+    mcpDelete,
+    cronList,
+    cronSave,
+    cronDelete,
+    fetchMe,
+    type UserAppInfo,
+    type McpServerConfig,
+} from '../api'
+import type { CronJobInfo } from '../types'
 import { ModelPanel } from './ModelPanel'
 import { SkillsPanel } from './SkillsPanel'
 import { toast } from './Toast'
@@ -212,13 +226,251 @@ const AppsTab: React.FC = () => {
     )
 }
 
+// ── MCP Tab ──────────────────────────────────────────────────────────────────
+
+const parseLines = (value: string) => value.split(/\s+/).map((s) => s.trim()).filter(Boolean)
+
+const parseEnv = (value: string): Record<string, string> => Object.fromEntries(
+    value.split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+            const idx = line.indexOf('=')
+            return idx >= 0 ? [line.slice(0, idx).trim(), line.slice(idx + 1)] : [line, '']
+        })
+        .filter(([key]) => key)
+)
+
+const McpTab: React.FC = () => {
+    const t = useT()
+    const [servers, setServers] = React.useState<Record<string, McpServerConfig>>({})
+    const [loading, setLoading] = React.useState(true)
+    const [saving, setSaving] = React.useState(false)
+    const [editingName, setEditingName] = React.useState('')
+    const [command, setCommand] = React.useState('')
+    const [args, setArgs] = React.useState('')
+    const [cwd, setCwd] = React.useState('')
+    const [env, setEnv] = React.useState('')
+
+    const reload = () => {
+        setLoading(true)
+        mcpList().then((res) => setServers(res.servers)).catch(() => setServers({})).finally(() => setLoading(false))
+    }
+
+    React.useEffect(() => { reload() }, [])
+
+    const edit = (name: string, server: McpServerConfig) => {
+        setEditingName(name)
+        setCommand(server.command)
+        setArgs((server.args ?? []).join(' '))
+        setCwd(server.cwd ?? '')
+        setEnv(Object.entries(server.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'))
+    }
+
+    const resetForm = () => {
+        setEditingName('')
+        setCommand('')
+        setArgs('')
+        setCwd('')
+        setEnv('')
+    }
+
+    const save = async () => {
+        const name = editingName.trim()
+        if (!name || !command.trim()) return
+        setSaving(true)
+        try {
+            await mcpSave(name, {
+                command: command.trim(),
+                args: parseLines(args),
+                ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
+                env: parseEnv(env),
+            })
+            toast.success(t('mcpSaved'))
+            resetForm()
+            reload()
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : t('mcpSaveFailed'))
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const remove = async (name: string) => {
+        if (!await confirmDialog(t('mcpDeleteConfirm').replace('{name}', name), { destructive: true, confirmText: t('delete'), cancelText: t('cancel') })) return
+        try {
+            await mcpDelete(name)
+            toast.success(t('mcpDeleted'))
+            reload()
+        } catch {
+            toast.error(t('mcpDeleteFailed'))
+        }
+    }
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="px-6 py-4 border-b border-border shrink-0">
+                <h1 className="text-base font-semibold text-text">{t('mcpServers')}</h1>
+                <p className="text-xs text-text-tertiary mt-0.5">{t('mcpServersSubtitle')}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-4">
+                <div className="bg-bg-container border border-border rounded-xl p-4 space-y-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                    <h3 className="text-sm font-semibold text-text">{editingName && servers[editingName] ? t('editMcpServer') : t('newMcpServer')}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input value={editingName} onChange={(e) => setEditingName(e.target.value)} placeholder={t('mcpNamePlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
+                        <input value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t('mcpCommandPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
+                        <input value={args} onChange={(e) => setArgs(e.target.value)} placeholder={t('mcpArgsPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                        <input value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder={t('mcpCwdPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                        <textarea value={env} onChange={(e) => setEnv(e.target.value)} placeholder={t('mcpEnvPlaceholder')} rows={3} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2 font-mono" />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <button onClick={resetForm} className="px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:bg-fill transition-colors">{t('cancel')}</button>
+                        <button disabled={!editingName.trim() || !command.trim() || saving} onClick={() => void save()} className="px-3 py-1.5 rounded-lg bg-primary-mint text-white text-xs font-medium hover:opacity-90 disabled:opacity-50">{saving ? '...' : t('save')}</button>
+                    </div>
+                </div>
+                {loading ? (
+                    <div className="py-12 text-center text-sm text-text-quaternary">{t('loading')}</div>
+                ) : Object.keys(servers).length === 0 ? (
+                    <div className="py-12 text-center text-sm text-text-quaternary">{t('mcpEmpty')}</div>
+                ) : (
+                    <div className="bg-bg-container border border-border rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                        {Object.entries(servers).map(([name, server]) => (
+                            <div key={name} className="flex items-center gap-3 px-4 py-3 border-b border-border/60 last:border-b-0">
+                                <Server size={15} className="text-text-tertiary" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-semibold text-text truncate">{name}</p>
+                                    <p className="text-xs text-text-tertiary truncate font-mono">{server.command} {(server.args ?? []).join(' ')}</p>
+                                </div>
+                                <button onClick={() => edit(name, server)} className="px-2 py-1 text-xs rounded border border-border text-text-secondary hover:bg-fill">{t('edit')}</button>
+                                <button onClick={() => void remove(name)} className="p-1.5 rounded-lg text-text-tertiary hover:text-destructive hover:bg-destructive/10"><Trash2 size={13} /></button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// ── Automations Tab ──────────────────────────────────────────────────────────
+
+const AutomationsTab: React.FC = () => {
+    const t = useT()
+    const [jobs, setJobs] = React.useState<CronJobInfo[]>([])
+    const [userId, setUserId] = React.useState<string | null>(null)
+    const [loading, setLoading] = React.useState(true)
+    const [saving, setSaving] = React.useState(false)
+    const [name, setName] = React.useState('')
+    const [schedule, setSchedule] = React.useState('0 8 * * *')
+    const [message, setMessage] = React.useState('')
+    const [enabled, setEnabled] = React.useState(true)
+    const [timezone, setTimezone] = React.useState('Asia/Shanghai')
+
+    const reload = () => {
+        setLoading(true)
+        Promise.all([cronList().catch(() => []), fetchMe().catch(() => null)])
+            .then(([nextJobs, me]) => { setJobs(nextJobs); setUserId(me?.userId ?? null) })
+            .finally(() => setLoading(false))
+    }
+
+    React.useEffect(() => { reload() }, [])
+
+    const edit = (job: CronJobInfo) => {
+        setName(job.name)
+        setSchedule(job.schedule)
+        setMessage(job.description ?? '')
+        setEnabled(job.enabled !== 0)
+    }
+
+    const save = async () => {
+        if (!name.trim() || !schedule.trim() || !message.trim()) return
+        setSaving(true)
+        try {
+            await cronSave(name.trim(), { cron: schedule.trim(), message, enabled, timezone: timezone.trim() || undefined })
+            toast.success(t('cronSaved'))
+            setName('')
+            setMessage('')
+            reload()
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : t('cronSaveFailed'))
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const remove = async (job: CronJobInfo) => {
+        if (!await confirmDialog(t('cronDeleteConfirm').replace('{name}', job.name), { destructive: true, confirmText: t('delete'), cancelText: t('cancel') })) return
+        try {
+            await cronDelete(job.name)
+            toast.success(t('cronDeleted'))
+            reload()
+        } catch {
+            toast.error(t('cronDeleteFailed'))
+        }
+    }
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="px-6 py-4 border-b border-border shrink-0">
+                <h1 className="text-base font-semibold text-text">{t('automations')}</h1>
+                <p className="text-xs text-text-tertiary mt-0.5">{t('automationsSubtitle')}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-4">
+                <div className="bg-bg-container border border-border rounded-xl p-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                    <h3 className="text-sm font-semibold text-text mb-2">{t('webhook')}</h3>
+                    <p className="text-xs text-text-tertiary mb-2">{t('webhookDescription')}</p>
+                    <code className="block text-xs font-mono bg-fill-secondary border border-border rounded-lg p-2 overflow-x-auto">
+                        {userId ? `/api/webhook/${userId}` : t('loading')}
+                    </code>
+                </div>
+                <div className="bg-bg-container border border-border rounded-xl p-4 space-y-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                    <h3 className="text-sm font-semibold text-text">{t('cronJobs')}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('cronNamePlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
+                        <input value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 8 * * *" className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 font-mono" />
+                        <input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Asia/Shanghai" className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                        <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t('cronMessagePlaceholder')} rows={3} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-text-secondary">
+                        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+                        {t('enabled')}
+                    </label>
+                    <div className="flex justify-end">
+                        <button disabled={!name.trim() || !schedule.trim() || !message.trim() || saving} onClick={() => void save()} className="px-3 py-1.5 rounded-lg bg-primary-mint text-white text-xs font-medium hover:opacity-90 disabled:opacity-50">{saving ? '...' : t('save')}</button>
+                    </div>
+                </div>
+                {loading ? (
+                    <div className="py-12 text-center text-sm text-text-quaternary">{t('loading')}</div>
+                ) : jobs.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-text-quaternary">{t('cronEmpty')}</div>
+                ) : (
+                    <div className="bg-bg-container border border-border rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                        {jobs.map((job) => (
+                            <div key={job.name} className="flex items-center gap-3 px-4 py-3 border-b border-border/60 last:border-b-0">
+                                <Clock size={15} className="text-text-tertiary" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-semibold text-text truncate">{job.name} <span className="text-[11px] text-text-quaternary font-normal">{job.enabled ? t('enabled') : t('disabled')}</span></p>
+                                    <p className="text-xs text-text-tertiary truncate font-mono">{job.schedule}</p>
+                                    {job.description && <p className="text-xs text-text-tertiary truncate">{job.description}</p>}
+                                </div>
+                                <button onClick={() => edit(job)} className="px-2 py-1 text-xs rounded border border-border text-text-secondary hover:bg-fill">{t('edit')}</button>
+                                <button onClick={() => void remove(job)} className="p-1.5 rounded-lg text-text-tertiary hover:text-destructive hover:bg-destructive/10"><Trash2 size={13} /></button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
-type TabId = 'models' | 'skills' | 'apps'
+type TabId = 'models' | 'skills' | 'apps' | 'mcp' | 'automations'
 
 interface TabDef {
     id: TabId
-    labelKey: 'models' | 'skills' | 'apps'
+    labelKey: 'models' | 'skills' | 'apps' | 'mcpServers' | 'automations'
     icon: React.ReactNode
 }
 
@@ -226,21 +478,21 @@ const TABS: TabDef[] = [
     { id: 'models', labelKey: 'models', icon: <Cpu size={14} /> },
     { id: 'skills', labelKey: 'skills', icon: <Zap size={14} /> },
     { id: 'apps',   labelKey: 'apps',   icon: <LayoutGrid size={14} /> },
+    { id: 'mcp', labelKey: 'mcpServers', icon: <Server size={14} /> },
+    { id: 'automations', labelKey: 'automations', icon: <Clock size={14} /> },
 ]
 
 // ── Main Panel ────────────────────────────────────────────────────────────────
 
 export const SettingsPanel: React.FC = () => {
     const t = useT()
-    const location = useLocation()
     const navigate = useNavigate()
+    const params = useParams<{ tab?: string }>()
 
-    // Parse active tab from hash: /settings#skills
-    const hash = location.hash.replace('#', '') as TabId
-    const activeTab: TabId = TABS.some(tab => tab.id === hash) ? hash : 'models'
+    const activeTab: TabId = TABS.some(tab => tab.id === params.tab) ? params.tab as TabId : 'models'
 
     const switchTab = (id: TabId) => {
-        navigate(`/settings#${id}`, { replace: true })
+        navigate(`/settings/${id}`)
     }
 
     return (
@@ -271,6 +523,8 @@ export const SettingsPanel: React.FC = () => {
                 {activeTab === 'models' && <ModelPanel />}
                 {activeTab === 'skills' && <SkillsPanel />}
                 {activeTab === 'apps'   && <AppsTab />}
+                {activeTab === 'mcp' && <McpTab />}
+                {activeTab === 'automations' && <AutomationsTab />}
             </div>
         </div>
     )
