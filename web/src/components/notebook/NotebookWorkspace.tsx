@@ -209,6 +209,12 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         </div>
     )
 
+    // Desktop workspace ref — must be declared before any early return
+    const workspaceRef = React.useRef<HTMLDivElement>(null)
+    React.useEffect(() => {
+        if (workspaceRef.current) workspaceRef.current.scrollLeft = 0
+    }, [notebook])
+
     // ── Mobile ─────────────────────────────────────────────────────────────
 
     if (isMobile) {
@@ -251,12 +257,6 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     }
 
     // ── Desktop ────────────────────────────────────────────────────────────
-
-    const workspaceRef = React.useRef<HTMLDivElement>(null)
-    // Reset any stale browser-induced horizontal scroll
-    React.useEffect(() => {
-        if (workspaceRef.current) workspaceRef.current.scrollLeft = 0
-    }, [])
 
     return (
         <div ref={workspaceRef} className="flex h-full bg-bg overflow-hidden relative">
