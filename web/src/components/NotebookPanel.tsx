@@ -356,9 +356,35 @@ const NotebookList: React.FC<{
     onOpenWorkspace?: () => void
 }> = ({ notebooks, selectedNotebook, onNotebookChange, entries, loading, error, inSearch, searchQuery, setSearchQuery, totalCount, onSelect, selectedId, onNew, onOpenWorkspace }) => {
     const [sortBy, setSortBy] = React.useState<NoteSort>('default')
+    const [activeTag, setActiveTag] = React.useState<string | null>(null)
+
+    // Parse tags string → array
+    const parseTags = (raw: string | null): string[] => {
+        if (!raw) return []
+        return raw.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean)
+    }
+
+    // Collect unique tags from all entries
+    const allTags = React.useMemo(() => {
+        const set = new Set<string>()
+        for (const e of entries) {
+            parseTags(e.tags).forEach(tag => set.add(tag))
+        }
+        return Array.from(set).sort()
+    }, [entries])
+
+    // Reset active tag when entries change (e.g., notebook switch)
+    React.useEffect(() => {
+        setActiveTag(null)
+    }, [selectedNotebook])
+
+    const tagFilteredEntries = React.useMemo(() => {
+        if (!activeTag) return entries
+        return entries.filter(e => parseTags(e.tags).includes(activeTag))
+    }, [entries, activeTag])
 
     const sortedEntries = React.useMemo(() => {
-        const arr = [...entries]
+        const arr = [...tagFilteredEntries]
         switch (sortBy) {
             case 'date-desc':
                 arr.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
@@ -373,7 +399,7 @@ const NotebookList: React.FC<{
                 break
         }
         return arr
-    }, [entries, sortBy])
+    }, [tagFilteredEntries, sortBy])
 
     return (
     <>
@@ -434,6 +460,38 @@ const NotebookList: React.FC<{
             </div>
         )}
 
+        {/* Tag filter chips */}
+        {!inSearch && allTags.length > 0 && (
+            <div className="px-3 py-2 border-b border-border shrink-0 flex gap-1.5 overflow-x-auto">
+                <button
+                    onClick={() => setActiveTag(null)}
+                    className={cn(
+                        'flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full whitespace-nowrap transition-all duration-200 font-medium',
+                        activeTag === null
+                            ? 'bg-primary-mint/12 text-primary-mint'
+                            : 'text-text-tertiary hover:bg-fill-secondary'
+                    )}
+                >
+                    {t('allFilter')}
+                </button>
+                {allTags.map((tag) => (
+                    <button
+                        key={tag}
+                        onClick={() => setActiveTag(activeTag === tag ? null : tag)}
+                        className={cn(
+                            'flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-full whitespace-nowrap transition-all duration-200 font-medium',
+                            activeTag === tag
+                                ? 'bg-primary-mint/12 text-primary-mint'
+                                : 'text-text-tertiary hover:bg-fill-secondary'
+                        )}
+                    >
+                        <Tag size={9} className="shrink-0" />
+                        {tag}
+                    </button>
+                ))}
+            </div>
+        )}
+
         {/* Search */}
         <div className="px-3 py-3 border-b border-border shrink-0">
             <div className="relative">
@@ -469,7 +527,7 @@ const NotebookList: React.FC<{
                         <option key={k} value={k}>{v}</option>
                     ))}
                 </select>
-                <span className="ml-auto text-[10px] text-text-quaternary">{entries.length} 篇</span>
+                <span className="ml-auto text-[10px] text-text-quaternary">{tagFilteredEntries.length} 篇</span>
             </div>
         )}
 

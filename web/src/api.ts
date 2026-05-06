@@ -586,6 +586,35 @@ export async function fetchUserApps(): Promise<UserAppInfo[]> {
     return r.apps ?? []
 }
 
+export async function uploadAppFiles(appName: string, files: File[]): Promise<string[]> {
+    const formData = new FormData()
+    for (const f of files) formData.append('files', f, f.name)
+    const res = await fetch(`/api/apps/${encodeURIComponent(appName)}`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+    })
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error((body as Record<string, string>).error ?? `HTTP ${res.status}`)
+    }
+    const data = await res.json() as { saved?: string[] }
+    return data.saved ?? []
+}
+
+export async function deleteUserApp(appName: string): Promise<void> {
+    const res = await fetch(`/api/apps/${encodeURIComponent(appName)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    })
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error((body as Record<string, string>).error ?? `HTTP ${res.status}`)
+    }
+}
+
 // ── Notebook API ──────────────────────────────────────────────────────────────
 
 export function notebookListNotebooks(): Promise<string[]> {

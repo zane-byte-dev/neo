@@ -119,6 +119,19 @@ const SkillRow: React.FC<{
                     )}
                 </div>
                 <p className="text-xs text-text-tertiary truncate mt-0.5 leading-snug">{skill.description}</p>
+                {skill.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                        {skill.tags.map((tag) => (
+                            <span
+                                key={tag}
+                                className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-px rounded-full bg-fill border border-border/60 text-text-quaternary font-medium leading-tight"
+                            >
+                                <Tag size={8} className="shrink-0" />
+                                {tag}
+                            </span>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Hover action buttons */}

@@ -1,4 +1,5 @@
 import React from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import {
     deleteToolApproval,
     fetchModels,
@@ -1203,12 +1204,39 @@ export const ModelPanel: React.FC = () => {
                         <p className="text-xs text-text-tertiary mt-0.5">{t('modelsSubtitle')}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const d = new Date(month + '-01')
+                                d.setMonth(d.getMonth() - 1)
+                                setMonth(d.toISOString().slice(0, 7))
+                            }}
+                            className="p-1.5 bg-fill border border-border rounded-lg text-text-secondary hover:bg-fill-secondary transition-colors"
+                            title={t('prevMonth')}
+                        >
+                            <ChevronLeft size={14} />
+                        </button>
                         <input
                             type="month"
                             value={month}
                             onChange={(e) => setMonth(e.target.value)}
                             className="bg-fill border border-border rounded-lg px-3 py-1.5 text-xs text-text-secondary outline-none focus:border-primary-mint"
                         />
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const d = new Date(month + '-01')
+                                d.setMonth(d.getMonth() + 1)
+                                const next = d.toISOString().slice(0, 7)
+                                if (next <= new Date().toISOString().slice(0, 7)) setMonth(next)
+                            }}
+                            className="p-1.5 bg-fill border border-border rounded-lg text-text-secondary hover:bg-fill-secondary transition-colors disabled:opacity-40"
+                            title={t('nextMonth')}
+                        >
+                            <ChevronRight size={14} />
+                        </button>
+                    </div>
                         <button
                             onClick={() => {
                                 void load()
