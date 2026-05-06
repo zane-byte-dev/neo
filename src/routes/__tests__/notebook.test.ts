@@ -59,9 +59,6 @@ vi.mock('../../services/notebook-ai.js', () => ({
     generateAudioScript: vi.fn(),
     runNoteQuickAction: vi.fn(),
 }));
-vi.mock('../../services/notebook-chat.js', () => ({
-    streamNotebookChat: vi.fn(),
-}));
 vi.mock('../../services/document-parser.js', () => ({
     parseUrl: vi.fn(),
     parseYouTube: vi.fn(),

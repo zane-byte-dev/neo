@@ -3,7 +3,7 @@
  *
  * Source management  → notebook-source.ts
  * AI generation      → notebook-studio.ts
- * Notebook chat      → notebook-chat.ts
+ * Notebook chat      → unified via /api/chat (see routes/chat.ts)
  *
  * Re-exports from sibling modules so tests and callers can import
  * everything from one place.
@@ -19,10 +19,6 @@ export {
     notebookGenerateArtifact,
     notebookDeleteArtifact,
 } from './notebook-studio.js';
-export {
-    notebookChat,
-    notebookClearChat,
-} from './notebook-chat.js';
 import type Router from '@koa/router';
 import {
     nbListNotebooks,

@@ -1139,7 +1139,18 @@ interface PendingDocument {
     mimeType?: string
 }
 
-const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolApprovals }) => {
+export interface SlashCommand {
+    id: string
+    label: string
+    icon?: React.ComponentType<{ size?: number; className?: string }>
+    description?: string
+}
+
+const ChatInput: React.FC<{
+    onOpenToolApprovals: () => void
+    slashCommands?: SlashCommand[]
+    onSlashCommand?: (id: string) => void
+}> = ({ onOpenToolApprovals, slashCommands, onSlashCommand }) => {
     const {
         inputValue, setInputValue,
         pendingQuickReply, setPendingQuickReply,
@@ -1161,6 +1172,16 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
     const [pendingDocs, setPendingDocs] = React.useState<PendingDocument[]>([])
     const [isUploading, setIsUploading] = React.useState(false)
     const [availableModels, setAvailableModels] = React.useState<string[]>([])
+    const [slashDropdownIdx, setSlashDropdownIdx] = React.useState(-1)
+
+    // Filtered slash commands based on current input
+    const slashQuery = inputValue.startsWith('/') && !inputValue.includes(' ')
+        ? inputValue.slice(1).toLowerCase()
+        : null
+    const filteredCmds = slashQuery !== null && slashCommands?.length
+        ? slashCommands.filter((c) => slashQuery === '' || c.id.startsWith(slashQuery) || c.label.includes(slashQuery))
+        : []
+    const showSlashDropdown = filteredCmds.length > 0
 
     React.useEffect(() => {
         let disposed = false
@@ -1398,6 +1419,36 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        // Slash command dropdown navigation
+        if (showSlashDropdown) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setSlashDropdownIdx((i) => Math.min(i + 1, filteredCmds.length - 1))
+                return
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setSlashDropdownIdx((i) => Math.max(i - 1, 0))
+                return
+            }
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                const idx = slashDropdownIdx >= 0 ? slashDropdownIdx : 0
+                const cmd = filteredCmds[idx]
+                if (cmd) {
+                    setInputValue('')
+                    setSlashDropdownIdx(-1)
+                    onSlashCommand?.(cmd.id)
+                }
+                return
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault()
+                setInputValue('')
+                setSlashDropdownIdx(-1)
+                return
+            }
+        }
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault()
             handleSend()
@@ -1553,7 +1604,7 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
 
     return (
         <div className="p-3 sm:p-4 bg-bg-container/80 backdrop-blur-xl shrink-0 border-t border-border safe-bottom">
-            <div className="max-w-3xl mx-auto min-w-0">
+            <div className="max-w-3xl mx-auto min-w-0 relative">
                 {/* Attachment previews */}
                 {(pendingImages.length > 0 || pendingDocs.length > 0) && (
                     <div className="flex flex-wrap gap-2 mb-2">
@@ -1605,6 +1656,36 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
                     className="hidden"
                     onChange={handleFileSelect}
                 />
+                {/* Slash command dropdown */}
+                {showSlashDropdown && (
+                    <div className="absolute bottom-full left-0 right-0 mb-1.5 z-50">
+                        <div className="mx-2 bg-bg-container border border-border rounded-xl shadow-lg overflow-hidden">
+                            {filteredCmds.map((cmd, i) => (
+                                <button
+                                    key={cmd.id}
+                                    onMouseDown={(e) => {
+                                        e.preventDefault()
+                                        setInputValue('')
+                                        setSlashDropdownIdx(-1)
+                                        onSlashCommand?.(cmd.id)
+                                    }}
+                                    className={cn(
+                                        'w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left',
+                                        i === slashDropdownIdx
+                                            ? 'bg-primary-mint/10 text-primary-mint'
+                                            : 'text-text hover:bg-fill-secondary/60',
+                                    )}
+                                >
+                                    {cmd.icon && <cmd.icon size={14} className="shrink-0 text-text-tertiary" />}
+                                    <span className="font-medium shrink-0">/{cmd.id}</span>
+                                    {cmd.description && (
+                                        <span className="text-text-tertiary text-xs truncate">{cmd.description}</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <div
                      className={cn(
                          "relative bg-fill-secondary/80 border rounded-2xl focus-within:ring-2 focus-within:ring-primary-mint/30 focus-within:border-primary-mint/40 transition-all duration-200",
@@ -1618,7 +1699,7 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
                     <textarea
                         ref={textareaRef}
                         value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
+                        onChange={(e) => { setInputValue(e.target.value); setSlashDropdownIdx(-1) }}
                         onKeyDown={handleKeyDown}
                         onPaste={handlePaste}
                         placeholder={t('askAnything')}
@@ -1713,7 +1794,10 @@ const ChatInput: React.FC<{ onOpenToolApprovals: () => void }> = ({ onOpenToolAp
 
 // ── Chat area ─────────────────────────────────────────────────────────────────
 
-export const ChatArea: React.FC = () => {
+export const ChatArea: React.FC<{
+    slashCommands?: SlashCommand[]
+    onSlashCommand?: (id: string) => void
+}> = ({ slashCommands, onSlashCommand }) => {
     const { chats, activeChatId, messages, setMessages } = useAppStore()
     const isGenerating = useAppStore(s => activeChatId ? !!s.generatingBySession[activeChatId] : false)
     const thinkingStatus = useAppStore(s => activeChatId ? (s.thinkingStatusBySession[activeChatId] ?? '') : '')
@@ -1953,7 +2037,11 @@ export const ChatArea: React.FC = () => {
             </div>
 
             <ScrollToBottom onClick={scrollToBottom} visible={showScrollBtn} />
-            <ChatInput onOpenToolApprovals={() => setShowToolApprovals(true)} />
+            <ChatInput
+                onOpenToolApprovals={() => setShowToolApprovals(true)}
+                slashCommands={slashCommands}
+                onSlashCommand={onSlashCommand}
+            />
             <ToolApprovalsModal
                 open={showToolApprovals}
                 onClose={() => setShowToolApprovals(false)}

@@ -9,8 +9,7 @@ import {
     notebookGet, notebookCreate, notebookUpdate, notebookDelete,
     notebookImportSource, notebookGenerateGuide, notebookSourceActions,
     notebookOverview, notebookConfig, notebookNoteSave, notebookNoteDelete,
-    notebookGenerateArtifact, notebookDeleteArtifact, notebookChat,
-    notebookClearChat,
+    notebookGenerateArtifact, notebookDeleteArtifact,
 } from '../notebook.js';
 
 // Mock user-service to return tmpdir workDir
@@ -84,7 +83,6 @@ function buildApp() {
     notebookNoteDelete(router);
     notebookGenerateArtifact(router);
     notebookDeleteArtifact(router);
-    notebookClearChat(router);
     mount();
     return app;
 }

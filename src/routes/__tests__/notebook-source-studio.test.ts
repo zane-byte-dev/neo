@@ -1,5 +1,5 @@
 /**
- * Tests for notebook-source / notebook-studio / notebook-chat route modules
+ * Tests for notebook-source / notebook-studio route modules
  * — covers GET branches and validation 400/404 paths.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -25,9 +25,6 @@ const nbRenameSourceMock = vi.fn();
 const nbListArtifactsMock = vi.fn();
 const nbGetArtifactMock = vi.fn();
 const nbDeleteArtifactMock = vi.fn();
-const nbReadChatHistoryMock = vi.fn();
-const nbClearChatHistoryMock = vi.fn();
-const nbForkChatHistoryMock = vi.fn();
 
 vi.mock('../../services/notebook-service.js', () => ({
     nbListSources: nbListSourcesMock,
@@ -40,9 +37,6 @@ vi.mock('../../services/notebook-service.js', () => ({
     nbListArtifacts: nbListArtifactsMock,
     nbGetArtifact: nbGetArtifactMock,
     nbDeleteArtifact: nbDeleteArtifactMock,
-    nbReadChatHistory: nbReadChatHistoryMock,
-    nbClearChatHistory: nbClearChatHistoryMock,
-    nbForkChatHistory: nbForkChatHistoryMock,
     nbListNotes: vi.fn(() => []),
     nbSaveNote: vi.fn((_w, _n, x) => ({ id: 'n1', ...x })),
 }));
@@ -64,8 +58,7 @@ beforeEach(() => {
     calcUserMock.mockResolvedValue({ workDir });
     [nbListSourcesMock, nbListSourcesWithGuidesMock, nbGetSourceEntryMock, nbGetSourceGuideMock,
      nbImportSourceMock, nbArchiveSourceMock, nbRenameSourceMock,
-     nbListArtifactsMock, nbGetArtifactMock, nbDeleteArtifactMock,
-     nbReadChatHistoryMock, nbClearChatHistoryMock, nbForkChatHistoryMock].forEach((m) => m.mockReset());
+     nbListArtifactsMock, nbGetArtifactMock, nbDeleteArtifactMock].forEach((m) => m.mockReset());
 });
 
 afterEach(() => rmSync(workDir, { recursive: true, force: true }));
@@ -412,66 +405,3 @@ describe('DELETE /api/notebook/artifact', () => {
     });
 });
 
-describe('notebook-chat routes', () => {
-    it('GET history 400 missing notebook', async () => {
-        const { notebookChatHistory } = await import('../notebook-chat.js');
-        const { app, router, mount } = createTestApp();
-        notebookChatHistory(router); mount();
-        const res = await request(app.callback())
-            .get('/api/notebook/chat')
-            .set('Cookie', cookie());
-        expect(res.status).toBe(400);
-    });
-
-    it('GET history ok', async () => {
-        nbReadChatHistoryMock.mockReturnValue([]);
-        const { notebookChatHistory } = await import('../notebook-chat.js');
-        const { app, router, mount } = createTestApp();
-        notebookChatHistory(router); mount();
-        const res = await request(app.callback())
-            .get('/api/notebook/chat?notebook=nb')
-            .set('Cookie', cookie());
-        expect(res.status).toBe(200);
-    });
-
-    it('DELETE clear 400 missing', async () => {
-        const { notebookClearChat } = await import('../notebook-chat.js');
-        const { app, router, mount } = createTestApp();
-        notebookClearChat(router); mount();
-        const res = await request(app.callback())
-            .delete('/api/notebook/chat')
-            .set('Cookie', cookie());
-        expect(res.status).toBe(400);
-    });
-
-    it('DELETE clear ok', async () => {
-        const { notebookClearChat } = await import('../notebook-chat.js');
-        const { app, router, mount } = createTestApp();
-        notebookClearChat(router); mount();
-        const res = await request(app.callback())
-            .delete('/api/notebook/chat?notebook=nb')
-            .set('Cookie', cookie());
-        expect(res.status).toBe(200);
-    });
-
-    it('POST fork 400 missing fields', async () => {
-        const { notebookForkChat } = await import('../notebook-chat.js');
-        const { app, router, mount } = createTestApp();
-        notebookForkChat(router); mount();
-        const res = await request(app.callback())
-            .post('/api/notebook/chat/fork')
-            .set('Cookie', cookie()).send({ notebook: 'nb' });
-        expect(res.status).toBe(400);
-    });
-
-    it('POST fork ok', async () => {
-        nbForkChatHistoryMock.mockReturnValue([{ id: 'm1' }]);
-        const { notebookForkChat } = await import('../notebook-chat.js');
-        const { app, router, mount } = createTestApp();
-        notebookForkChat(router); mount();
-        const res = await request(app.callback())
-            .post('/api/notebook/chat/fork')
-            .set('Cookie', cookie()).send({ notebook: 'nb', messageId: 'm1' });
-        expect(res.status).toBe(200);
-    });
-});

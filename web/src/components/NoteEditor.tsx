@@ -95,48 +95,47 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     }
 
     return (
-        <div className="flex flex-col h-full">
-            {/* Minimal toolbar */}
-            <div className="h-11 border-b border-border flex items-center gap-1.5 px-3 shrink-0 bg-bg-container/80 backdrop-blur-xl"
-                 style={{ boxShadow: 'var(--shadow-soft)' }}>
+        <div className="flex flex-col h-full bg-white dark:bg-[#191919]">
+            {/* Slim action bar — scoped to content width */}
+            <div className="shrink-0 flex items-center justify-between px-4 h-10 border-b border-gray-100 dark:border-white/8">
                 <button
                     onClick={onBack}
-                    className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-secondary hover:text-text shrink-0"
+                    className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                 >
-                    <ArrowLeft size={15} />
+                    <ArrowLeft size={14} />
                 </button>
 
-                <div className="flex-1" />
-
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-0.5">
                     <button
                         onClick={() => setShowMeta((v) => !v)}
                         className={cn(
-                            'px-2 py-1 text-[11px] rounded-md transition-all duration-200 font-medium',
-                            showMeta ? 'bg-primary-mint/12 text-primary-mint' : 'text-text-quaternary hover:bg-fill-secondary hover:text-text-tertiary'
+                            'px-2 py-1 text-[11px] rounded-md transition-colors font-medium',
+                            showMeta
+                                ? 'text-primary-mint bg-primary-mint/10'
+                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'
                         )}
                     >
                         {t('meta')}
                     </button>
                     <button
                         onClick={() => setMode(mode === 'edit' ? 'preview' : 'edit')}
-                        className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-quaternary hover:text-text-secondary"
+                        className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                         title={mode === 'edit' ? t('preview') : t('edit')}
                     >
                         {mode === 'edit' ? <Eye size={13} /> : <Pencil size={13} />}
                     </button>
                     {note && (
                         confirmDelete ? (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1 ml-1">
                                 <button
                                     onClick={handleDelete}
-                                    className="px-2 py-1 text-[11px] bg-destructive text-white rounded-md font-medium transition-all duration-200 hover:bg-destructive/90"
+                                    className="px-2 py-1 text-[11px] bg-red-500 text-white rounded-md font-medium hover:bg-red-600 transition-colors"
                                 >
                                     {t('confirmDelete')}
                                 </button>
                                 <button
                                     onClick={() => setConfirmDelete(false)}
-                                    className="px-2 py-1 text-[11px] text-text-tertiary hover:bg-fill-secondary rounded-md transition-colors"
+                                    className="px-2 py-1 text-[11px] text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 rounded-md transition-colors"
                                 >
                                     {t('cancel')}
                                 </button>
@@ -144,7 +143,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         ) : (
                             <button
                                 onClick={() => setConfirmDelete(true)}
-                                className="p-1.5 hover:bg-fill-secondary rounded-lg transition-all duration-200 text-text-quaternary hover:text-destructive"
+                                className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
                                 title={t('delete')}
                             >
                                 <Trash2 size={13} />
@@ -155,12 +154,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         onClick={handleSave}
                         disabled={saving || !title.trim()}
                         className={cn(
-                            'flex items-center gap-1 px-3 py-1 text-[11px] rounded-lg transition-all duration-200 font-medium ml-0.5',
+                            'flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md transition-colors font-medium ml-1',
                             saving || !title.trim()
-                                ? 'bg-fill-secondary text-text-quaternary cursor-not-allowed'
-                                : 'bg-gradient-to-b from-primary-mint to-emerald-600 text-white hover:opacity-90'
+                                ? 'bg-gray-100 dark:bg-white/10 text-gray-400 cursor-not-allowed'
+                                : 'bg-[#2ecc71] hover:bg-[#27ae60] text-white'
                         )}
-                        style={!saving && title.trim() ? { boxShadow: '0 1px 6px rgba(52, 211, 153, 0.25)' } : undefined}
                     >
                         <Save size={11} />
                         {saving ? t('saving') : t('save')}
@@ -170,8 +168,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
 
             {/* Document body */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                {/* Title */}
-                <div className="px-8 md:px-16 pt-10 pb-2">
+                <div className="max-w-[720px] mx-auto px-14 pt-12 pb-16">
+                    {/* Title */}
                     <textarea
                         ref={titleRef}
                         value={title}
@@ -182,30 +180,26 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         }}
                         placeholder={t('articleTitle')}
                         rows={1}
-                        className="w-full bg-transparent text-[1.75rem] font-bold outline-none resize-none leading-snug placeholder:text-text-quaternary text-text overflow-hidden"
-                        style={{ minHeight: '2.5rem' }}
+                        className="w-full bg-transparent text-[28px] font-bold outline-none resize-none leading-tight mb-4 placeholder:text-gray-300 dark:placeholder:text-white/20 text-[#1a1a1a] dark:text-[#e8e8e8] overflow-hidden"
+                        style={{ minHeight: '2.25rem' }}
                     />
-                </div>
 
-                {/* Meta (collapsible) */}
-                {showMeta && (
-                    <div className="px-8 md:px-16 pb-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 p-4 bg-fill-secondary/40 rounded-xl border border-border">
+                    {/* Meta (collapsible) */}
+                    {showMeta && (
+                        <div className="mb-6 grid grid-cols-2 gap-x-6 gap-y-2.5 py-4 border-y border-gray-100 dark:border-white/8">
                             <MetaField label={t('author')} value={author} onChange={setAuthor} />
                             <MetaField label={t('date')} value={date} onChange={setDate} type="date" />
                             <MetaField label={t('source')} value={source} onChange={setSource} />
                             <MetaField label={t('tags')} value={tags} onChange={setTags} placeholder={t('tagsPlaceholder')} />
-                            <div className="md:col-span-2">
+                            <div className="col-span-2">
                                 <MetaField label={t('summary')} value={summary} onChange={setSummary} />
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* Content editor */}
-                <div className="px-8 md:px-16 pb-16" style={{ minHeight: '60vh' }}>
+                    {/* Content editor */}
                     {loading ? (
-                        <div className="flex items-center gap-2 pt-8 text-text-tertiary">
+                        <div className="flex items-center gap-2 pt-4 text-gray-300">
                             <span className="typing-dot" style={{ width: 5, height: 5 }} />
                             <span className="typing-dot" style={{ width: 5, height: 5 }} />
                             <span className="typing-dot" style={{ width: 5, height: 5 }} />
@@ -229,11 +223,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                                 }
                             }}
                             placeholder="开始写作…"
-                            className="w-full bg-transparent outline-none resize-none text-[15px] leading-relaxed text-text placeholder:text-text-quaternary font-mono"
-                            style={{ minHeight: '60vh', fontFamily: "'SF Mono', 'Fira Code', 'Menlo', monospace" }}
+                            className="w-full bg-transparent outline-none resize-none text-[15px] leading-[1.8] text-[#374151] dark:text-[#d1d5db] placeholder:text-gray-300 dark:placeholder:text-white/20"
+                            style={{ minHeight: '60vh' }}
                         />
                     ) : (
-                        <div className="markdown-content text-sm leading-relaxed">
+                        <div className="markdown-content text-[15px] leading-[1.8] text-[#374151] dark:text-[#d1d5db]">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
                         </div>
                     )}
@@ -249,14 +243,14 @@ const MetaField: React.FC<{
     type?: string
     placeholder?: string
 }> = ({ label, value, onChange, type = 'text', placeholder }) => (
-    <label className="flex items-center gap-2.5 text-xs">
-        <span className="text-text-tertiary w-8 shrink-0 font-medium">{label}</span>
+    <label className="flex items-center gap-2 text-[12px]">
+        <span className="text-gray-400 dark:text-gray-500 w-10 shrink-0">{label}</span>
         <input
             type={type}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="flex-1 bg-fill-secondary border border-border rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all duration-200 placeholder:text-text-quaternary"
+            className="flex-1 bg-transparent border-b border-gray-200 dark:border-white/10 py-1 text-[13px] text-[#374151] dark:text-[#d1d5db] outline-none focus:border-gray-400 dark:focus:border-white/30 transition-colors placeholder:text-gray-300 dark:placeholder:text-white/20"
         />
     </label>
 )

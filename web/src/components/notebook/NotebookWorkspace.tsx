@@ -1,62 +1,60 @@
 /**
- * NotebookWorkspace — NotebookLM-style 3-column workspace
- * on mobile, switches between tabs.
+ * NotebookWorkspace — 知识库全屏工作区
+ * 左列：文章列表（可折叠）
+ * 中列：文章内容 / 编辑
+ * 右侧：浮动 AI 聊天抽屉
+ * 移动端：底部 tab 切换
  */
 import React from 'react'
-import { ArrowLeft, FileText, MessageSquare, Sparkles, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Plus, Link as LinkIcon, Youtube, Type, Volume2, Brain, StickyNote } from 'lucide-react'
-import { SourcePanel } from './SourcePanel'
-import { StudioPanel } from './StudioPanel'
-import { SourceDetailView } from './SourceDetailView'
-import { ChatArea } from '../ChatArea'
+import { ArrowLeft, BookOpen, MessageSquare, Plus, Pencil, Calendar, User, Tag, Search, X, ArrowUpDown, PanelLeftOpen } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { NotebookChatDrawer } from './NotebookChatDrawer'
+import { NoteEditor } from '../NoteEditor'
 import { useAppStore } from '../../stores/useAppStore'
 import { cn } from '../../lib/utils'
-import type { ParsedCitation, SourceMeta } from '../../types'
+import { notebookList, notebookRead, notebookSearch } from '../../api'
+import type { NoteEntry } from '../../types'
 
-const MOBILE_BREAKPOINT = 1024  // lg
+const MOBILE_BREAKPOINT = 1024
+const LIST_WIDTH = 280
+const CHAT_DRAWER_WIDTH = 380
 
-// Source type to icon mapping (mirrors SourceRow)
-const SOURCE_TYPE_ICON: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-    url: LinkIcon,
-    youtube: Youtube,
-    pdf: FileText,
-    text: Type,
-    audio: Volume2,
-    image: FileText,
+type NoteSort = 'default' | 'date-desc' | 'date-asc' | 'title'
+const SORT_LABELS: Record<NoteSort, string> = {
+    default: '默认', 'date-desc': '最新', 'date-asc': '最早', title: '标题',
 }
-
-// Studio cards for collapsed strip
-const STUDIO_CARDS = [
-    { id: 'audio',    icon: Volume2,    label: '音频概览', iconColor: 'text-green-600 dark:text-green-400',  bg: 'hover:bg-green-50 dark:hover:bg-green-950/30' },
-    { id: 'mindmap',  icon: Brain,      label: '思维导图', iconColor: 'text-purple-600 dark:text-purple-400', bg: 'hover:bg-purple-50 dark:hover:bg-purple-950/30' },
-    { id: 'report',   icon: FileText,   label: '报告',     iconColor: 'text-blue-600 dark:text-blue-400',    bg: 'hover:bg-blue-50 dark:hover:bg-blue-950/30' },
-    { id: 'overview', icon: Sparkles,   label: '概览',     iconColor: 'text-amber-600 dark:text-amber-400',  bg: 'hover:bg-amber-50 dark:hover:bg-amber-950/30' },
-    { id: 'notes',    icon: StickyNote, label: '笔记',     iconColor: 'text-rose-600 dark:text-rose-400',    bg: 'hover:bg-rose-50 dark:hover:bg-rose-950/30' },
-]
 
 interface Props {
     notebook: string
     onBack: () => void
 }
 
-type MobileTab = 'sources' | 'chat' | 'studio'
+type MobileTab = 'list' | 'detail' | 'chat'
 
 export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     const [isMobile, setIsMobile] = React.useState(false)
-    const [mobileTab, setMobileTab] = React.useState<MobileTab>('chat')
-    const [viewingSource, setViewingSource] = React.useState<SourceMeta | null>(null)
-    const [citationTarget, setCitationTarget] = React.useState<ParsedCitation | null>(null)
-    const [sourceCollapsed, setSourceCollapsed] = React.useState(false)
-    const [studioCollapsed, setStudioCollapsed] = React.useState(false)
-    // Only animate when collapsing (shrinking), not when expanding (avoids text reflow jitter)
-    const [sourceAnimating, setSourceAnimating] = React.useState(false)
-    const [studioAnimating, setStudioAnimating] = React.useState(false)
-    // Resizable panel widths (px)
-    const [sourceWidth, setSourceWidth] = React.useState(288)   // 18rem ≈ w-72
-    const [studioWidth, setStudioWidth] = React.useState(320)   // 20rem ≈ w-80
-    const dragRef = React.useRef<{ handle: 'source' | 'studio'; startX: number; startWidth: number } | null>(null)
-    const { selectedModel, setSelectedModel, sources, selectedSourceIds, openOrCreateNotebookChat, setChatSourceIds, activeChatId } = useAppStore()
+    const [mobileTab, setMobileTab] = React.useState<MobileTab>('list')
+    const [listCollapsed, setListCollapsed] = React.useState(false)
+    const [chatOpen, setChatOpen] = React.useState(false)
 
-    // Bind notebook to a chat session on mount / notebook change
+    // Article list state
+    const [entries, setEntries] = React.useState<NoteEntry[]>([])
+    const [loading, setLoading] = React.useState(false)
+    const [searchQuery, setSearchQuery] = React.useState('')
+    const [searchResults, setSearchResults] = React.useState<NoteEntry[]>([])
+    const [inSearch, setInSearch] = React.useState(false)
+    const [sortBy, setSortBy] = React.useState<NoteSort>('default')
+    const searchTimerRef = React.useRef<number | null>(null)
+
+    // Article detail/edit state
+    const { selectedNote, setSelectedNote } = useAppStore()
+    const [editing, setEditing] = React.useState<NoteEntry | null | 'new'>(null)
+    const [fullContent, setFullContent] = React.useState<string>('')
+    const [contentLoading, setContentLoading] = React.useState(false)
+
+    // Bind notebook chat session
+    const { openOrCreateNotebookChat, setChatSourceIds, selectedSourceIds, activeChatId } = useAppStore()
     React.useEffect(() => {
         let cancelled = false
         openOrCreateNotebookChat(notebook).catch((err) => {
@@ -64,67 +62,46 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         })
         return () => { cancelled = true }
     }, [notebook, openOrCreateNotebookChat])
-
-    // Sync source selection to the bound chat session
     React.useEffect(() => {
         if (!activeChatId) return
-        // Only sync when the active chat is the notebook's session
         const chat = useAppStore.getState().chats.find((c) => c.id === activeChatId)
         if (!chat || chat.mode !== 'notebook' || chat.notebookId !== notebook) return
         const current = chat.sourceIds ?? []
-        const next = selectedSourceIds
-        if (current.length === next.length && current.every((v, i) => v === next[i])) return
-        setChatSourceIds(activeChatId, next).catch((err) => console.error('[notebook] sync sources failed', err))
+        if (current.length === selectedSourceIds.length && current.every((v, i) => v === selectedSourceIds[i])) return
+        setChatSourceIds(activeChatId, selectedSourceIds).catch(() => {})
     }, [selectedSourceIds, activeChatId, notebook, setChatSourceIds])
 
-    const collapseSource = React.useCallback(() => {
-        setSourceAnimating(true)
-        setSourceCollapsed(true)
-        setTimeout(() => setSourceAnimating(false), 300)
-    }, [])
-    const expandSource = React.useCallback(() => {
-        setSourceCollapsed(false)
-    }, [])
-    const collapseStudio = React.useCallback(() => {
-        setStudioAnimating(true)
-        setStudioCollapsed(true)
-        setTimeout(() => setStudioAnimating(false), 300)
-    }, [])
-    const expandStudio = React.useCallback(() => {
-        setStudioCollapsed(false)
-    }, [])
-
-    // Global mouse handlers for panel drag-resize
+    // Load article list
     React.useEffect(() => {
-        const onMove = (e: MouseEvent) => {
-            const drag = dragRef.current
-            if (!drag) return
-            const delta = e.clientX - drag.startX
-            if (drag.handle === 'source') {
-                setSourceWidth(Math.max(180, Math.min(600, drag.startWidth + delta)))
-            } else {
-                setStudioWidth(Math.max(180, Math.min(600, drag.startWidth - delta)))
-            }
-        }
-        const onUp = () => { dragRef.current = null; document.body.style.cursor = '' }
-        window.addEventListener('mousemove', onMove)
-        window.addEventListener('mouseup', onUp)
-        return () => {
-            window.removeEventListener('mousemove', onMove)
-            window.removeEventListener('mouseup', onUp)
-        }
-    }, [])
+        setLoading(true)
+        notebookList(notebook)
+            .then((data) => setEntries(data as NoteEntry[]))
+            .catch(() => setEntries([]))
+            .finally(() => setLoading(false))
+    }, [notebook])
 
-    const startDrag = React.useCallback((handle: 'source' | 'studio', e: React.MouseEvent) => {
-        e.preventDefault()
-        dragRef.current = {
-            handle,
-            startX: e.clientX,
-            startWidth: handle === 'source' ? sourceWidth : studioWidth,
-        }
-        document.body.style.cursor = 'col-resize'
-    }, [sourceWidth, studioWidth])
+    // Debounced search
+    React.useEffect(() => {
+        if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+        const q = searchQuery.trim()
+        if (!q) { setInSearch(false); setSearchResults([]); return }
+        setInSearch(true)
+        searchTimerRef.current = window.setTimeout(() => {
+            notebookSearch(q, notebook).then((d) => setSearchResults(d as NoteEntry[])).catch(() => setSearchResults([]))
+        }, 280)
+    }, [searchQuery, notebook])
 
+    // Load full content when note is selected
+    React.useEffect(() => {
+        if (!selectedNote) { setFullContent(''); return }
+        setContentLoading(true)
+        notebookRead(selectedNote.id)
+            .then((data) => setFullContent((data as NoteEntry).content ?? ''))
+            .catch(() => setFullContent(selectedNote.content ?? ''))
+            .finally(() => setContentLoading(false))
+    }, [selectedNote?.id])
+
+    // Responsive
     React.useEffect(() => {
         const handle = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
         handle()
@@ -132,10 +109,84 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         return () => window.removeEventListener('resize', handle)
     }, [])
 
-    // Citation click handler — navigate to SourceDetailView (in source panel).
-    // TODO: wire up via store/event so ChatArea's CitationRenderer can trigger it.
-    // For now, citation buttons are still clickable but no panel navigation.
-    void sources
+    const displayList = inSearch ? searchResults : entries
+    const sortedList = React.useMemo(() => {
+        const arr = [...displayList]
+        if (sortBy === 'date-desc') arr.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+        else if (sortBy === 'date-asc') arr.sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+        else if (sortBy === 'title') arr.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
+        return arr
+    }, [displayList, sortBy])
+
+    const selectNote = (note: NoteEntry) => {
+        setSelectedNote(note)
+        setEditing(null)
+        if (isMobile) setMobileTab('detail')
+    }
+
+    const handleEditorSaved = (entry: NoteEntry) => {
+        if (editing === 'new') {
+            setEntries((prev) => [entry, ...prev])
+        } else {
+            setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, ...entry } : e)))
+        }
+        setEditing(null)
+        setSelectedNote(entry)
+        if (isMobile) setMobileTab('detail')
+    }
+
+    const handleEditorDeleted = (id: string) => {
+        setEntries((prev) => prev.filter((e) => e.id !== id))
+        setEditing(null)
+        setSelectedNote(null)
+        if (isMobile) setMobileTab('list')
+    }
+
+    // ── Sub-views ──────────────────────────────────────────────────────────
+
+    const articleList = (
+        <ArticleList
+            notebook={notebook}
+            entries={sortedList}
+            loading={loading}
+            inSearch={inSearch}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            totalCount={entries.length}
+            selectedId={selectedNote?.id ?? null}
+            onSelect={selectNote}
+            onNew={() => { setEditing('new'); if (isMobile) setMobileTab('detail') }}
+            onBack={onBack}
+            chatOpen={chatOpen}
+            onToggleChat={() => setChatOpen((v) => !v)}
+        />
+    )
+
+    const articleDetail = editing !== null ? (
+        <NoteEditor
+            note={editing === 'new' ? null : editing}
+            notebook={editing === 'new' ? notebook : (editing as NoteEntry).notebook}
+            onBack={() => { setEditing(null); if (isMobile) setMobileTab('detail') }}
+            onSaved={handleEditorSaved}
+            onDeleted={handleEditorDeleted}
+        />
+    ) : selectedNote ? (
+        <ArticleDetail
+            note={selectedNote}
+            fullContent={fullContent}
+            loading={contentLoading}
+            onEdit={() => setEditing(selectedNote)}
+        />
+    ) : (
+        <div className="flex-1 flex flex-col items-center justify-center text-text-quaternary gap-3 bg-white dark:bg-[#191919]">
+            <BookOpen size={32} className="opacity-40" />
+            <span className="text-sm">从左侧选择一篇文章</span>
+        </div>
+    )
+
+    // ── Mobile ─────────────────────────────────────────────────────────────
 
     if (isMobile) {
         return (
@@ -145,32 +196,19 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                         <ArrowLeft size={16} />
                     </button>
                     <span className="text-sm font-semibold flex-1 truncate">{notebook}</span>
-                    <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value as typeof selectedModel)}
-                        className="px-2 py-1 rounded-lg text-[11px] font-medium bg-transparent text-text-tertiary border border-transparent hover:border-fill hover:bg-fill focus:outline-none focus:border-primary-mint/30 focus:text-primary-mint transition-all duration-200 cursor-pointer shrink-0"
-                    >
-                        <option value="auto">🧠 Auto</option>
-                        <option value="flash">⚡ Flash</option>
-                        <option value="pro">✨ Pro</option>
-                        <option value="deepseek">🐋 DeepSeek</option>
-                        <option value="gemma">🦙 Gemma</option>
-                        <option value="gemini-acp">💎 Gemini</option>
-                    </select>
                 </div>
-                <div className="flex-1 overflow-hidden">
-                    {mobileTab === 'sources' && (viewingSource
-                        ? <SourceDetailView notebook={notebook} source={viewingSource} focusCitation={citationTarget?.sourceId === viewingSource.id ? citationTarget : null} onBack={() => { setViewingSource(null); setCitationTarget(null) }} />
-                        : <SourcePanel notebook={notebook} onSelectSource={(s) => { setViewingSource(s); setCitationTarget(null) }} />
+                <div className="flex-1 overflow-hidden flex flex-col">
+                    {mobileTab === 'list' && articleList}
+                    {mobileTab === 'detail' && (
+                        <div className="flex flex-col flex-1 overflow-hidden">{articleDetail}</div>
                     )}
-                    {mobileTab === 'chat' && <ChatArea />}
-                    {mobileTab === 'studio'  && <StudioPanel notebook={notebook} />}
+                    {mobileTab === 'chat' && <NotebookChatDrawer notebook={notebook} onClose={() => setMobileTab('detail')} />}
                 </div>
                 <div className="h-14 border-t border-border flex items-center shrink-0 bg-bg-container">
                     {([
-                        ['sources', FileText, '来源'],
-                        ['chat',    MessageSquare, '对话'],
-                        ['studio',  Sparkles, '工作室'],
+                        ['list',   BookOpen,      '文章'],
+                        ['detail', Pencil,        '内容'],
+                        ['chat',   MessageSquare, 'AI'],
                     ] as const).map(([k, Icon, label]) => (
                         <button
                             key={k}
@@ -189,203 +227,241 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         )
     }
 
-    // Desktop: 3-card layout with collapsible source & studio panels
+    // ── Desktop ────────────────────────────────────────────────────────────
+
+    const workspaceRef = React.useRef<HTMLDivElement>(null)
+    // Reset any stale browser-induced horizontal scroll
+    React.useEffect(() => {
+        if (workspaceRef.current) workspaceRef.current.scrollLeft = 0
+    }, [])
+
     return (
-        <div className="flex h-full bg-bg-layout p-2 overflow-hidden select-none">
-            {/* Source card */}
+        <div ref={workspaceRef} className="flex h-full bg-bg overflow-hidden relative">
+            {/* Left: Article list */}
             <div
                 className={cn(
-                    'flex flex-col bg-bg-container rounded-2xl border border-border shrink-0 overflow-hidden',
-                    sourceAnimating && 'transition-all duration-300',
+                    'flex flex-col border-r border-border shrink-0 overflow-hidden bg-bg-container transition-all duration-200',
                 )}
-                style={{ width: sourceCollapsed ? 52 : sourceWidth }}
+                style={{ width: listCollapsed ? 44 : LIST_WIDTH }}
             >
-                {sourceCollapsed ? (
-                    /* Collapsed source: icon per source item */
-                    <div className="flex flex-col items-center h-full">
-                        {/* Toggle + Add */}
-                        <div className="flex flex-col items-center pt-2 pb-1 gap-0.5 shrink-0">
-                            <button
-                                onClick={expandSource}
-                                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-primary-mint transition-colors"
-                                title="展开来源"
-                            >
-                                <PanelLeftOpen size={15} />
-                            </button>
-                            <button
-                                onClick={expandSource}
-                                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-primary-mint transition-colors"
-                                title="添加来源"
-                            >
-                                <Plus size={15} />
-                            </button>
-                        </div>
-                        <div className="w-6 h-px bg-border shrink-0" />
-                        {/* Source icons list */}
-                        <div className="flex-1 overflow-y-auto py-1.5 flex flex-col items-center gap-0.5 custom-scrollbar w-full">
-                            {sources.map((s) => {
-                                const Icon = SOURCE_TYPE_ICON[s.type] ?? FileText
-                                return (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => { setViewingSource(s); expandSource() }}
-                                        className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-text-secondary transition-colors shrink-0"
-                                        title={s.title}
-                                    >
-                                        <Icon size={14} />
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-                ) : (
-                    <>
-                        {/* Card header with collapse button */}
-                        <div className="h-11 border-b border-border flex items-center gap-2 px-3 shrink-0">
-                            {viewingSource ? (
-                                <>
-                                    <button
-                                        onClick={() => { setViewingSource(null); setCitationTarget(null) }}
-                                        className="p-1 hover:bg-fill rounded-lg text-text-secondary transition-colors"
-                                        title="返回来源列表"
-                                    >
-                                        <ArrowLeft size={14} />
-                                    </button>
-                                    <span className="text-sm font-semibold flex-1 truncate text-text">{viewingSource.title}</span>
-                                </>
-                            ) : (
-                                <>
-                                    <FileText size={14} className="text-primary-mint" />
-                                    <span className="text-sm font-semibold flex-1">来源</span>
-                                    <button
-                                        onClick={collapseSource}
-                                        className="p-1.5 rounded-lg hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors"
-                                        title="收起来源"
-                                    >
-                                        <PanelLeftClose size={14} />
-                                    </button>
-                                </>
+                {listCollapsed ? (
+                    <div className="flex flex-col items-center pt-2 gap-0.5">
+                        <button
+                            onClick={onBack}
+                            className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill text-text-tertiary hover:text-text transition-colors"
+                            title="返回笔记本"
+                        >
+                            <ArrowLeft size={14} />
+                        </button>
+                        <button
+                            onClick={() => setListCollapsed(false)}
+                            className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill text-text-tertiary hover:text-text transition-colors"
+                            title="展开文章列表"
+                        >
+                            <PanelLeftOpen size={14} />
+                        </button>
+                        <button
+                            onClick={() => setChatOpen((v) => !v)}
+                            className={cn(
+                                'w-9 h-9 flex items-center justify-center rounded-lg transition-colors',
+                                chatOpen ? 'text-primary-mint bg-primary-mint/10' : 'text-text-tertiary hover:bg-fill hover:text-text',
                             )}
-                        </div>
-                        <div className="flex-1 overflow-hidden">
-                            {viewingSource
-                                ? <SourceDetailView notebook={notebook} source={viewingSource} focusCitation={citationTarget?.sourceId === viewingSource.id ? citationTarget : null} onBack={() => { setViewingSource(null); setCitationTarget(null) }} />
-                                : <SourcePanel notebook={notebook} onSelectSource={(source) => { setViewingSource(source); setCitationTarget(null) }} hideHeader />
-                            }
-                        </div>
-                    </>
-                )}
-            </div>
-
-            {/* Drag handle: source | chat */}
-            {!sourceCollapsed && (
-                <div
-                    onMouseDown={(e) => startDrag('source', e)}
-                    className="w-2 mx-0.5 shrink-0 cursor-col-resize flex items-center justify-center group self-stretch"
-                    title="拖动调整宽度"
-                >
-                    <div className="w-0.5 h-8 rounded-full bg-border group-hover:bg-primary-mint/50 transition-colors" />
-                </div>
-            )}
-            {sourceCollapsed && <div className="w-2 shrink-0" />}
-
-            {/* Chat card */}
-            <div className="flex-1 min-w-0 flex flex-col bg-bg-container rounded-2xl border border-border overflow-hidden">
-                {/* Chat header */}
-                <div className="h-11 border-b border-border flex items-center gap-2 px-3 shrink-0">
-                    <button onClick={onBack} className="p-1 hover:bg-fill rounded-lg text-text-secondary transition-colors" title="返回">
-                        <ArrowLeft size={15} />
-                    </button>
-                    <span className="text-sm font-semibold flex-1 truncate text-text">{notebook}</span>
-                    <select
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value as typeof selectedModel)}
-                        className="px-2 py-1 rounded-lg text-[11px] font-medium bg-transparent text-text-tertiary border border-transparent hover:border-fill hover:bg-fill focus:outline-none focus:border-primary-mint/30 focus:text-primary-mint transition-all duration-200 cursor-pointer shrink-0"
-                    >
-                        <option value="auto">🧠 Auto</option>
-                        <option value="flash">⚡ Flash</option>
-                        <option value="pro">✨ Pro</option>
-                        <option value="deepseek">🐋 DeepSeek</option>
-                        <option value="gemma">🦙 Gemma</option>
-                        <option value="gemini-acp">💎 Gemini</option>
-                    </select>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                    <ChatArea />
-                </div>
-            </div>
-
-            {/* Drag handle: chat | studio */}
-            {!studioCollapsed && (
-                <div
-                    onMouseDown={(e) => startDrag('studio', e)}
-                    className="w-2 mx-0.5 shrink-0 cursor-col-resize flex items-center justify-center group self-stretch"
-                    title="拖动调整宽度"
-                >
-                    <div className="w-0.5 h-8 rounded-full bg-border group-hover:bg-primary-mint/50 transition-colors" />
-                </div>
-            )}
-            {studioCollapsed && <div className="w-2 shrink-0" />}
-
-            {/* Studio card */}
-            <div
-                className={cn(
-                    'flex flex-col bg-bg-container rounded-2xl border border-border shrink-0 overflow-hidden',
-                    studioAnimating && 'transition-all duration-300',
-                )}
-                style={{ width: studioCollapsed ? 52 : studioWidth }}
-            >
-                {studioCollapsed ? (
-                    /* Collapsed studio: icon per studio card */
-                    <div className="flex flex-col items-center h-full">
-                        <div className="flex flex-col items-center pt-2 pb-1 shrink-0">
-                            <button
-                                onClick={expandStudio}
-                                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-fill text-text-tertiary hover:text-primary-mint transition-colors"
-                                title="展开 Studio"
-                            >
-                                <PanelRightOpen size={15} />
-                            </button>
-                        </div>
-                        <div className="w-6 h-px bg-border shrink-0" />
-                        {/* Studio card icons */}
-                        <div className="flex-1 py-1.5 flex flex-col items-center gap-0.5 w-full">
-                            {STUDIO_CARDS.map((card) => (
-                                <button
-                                    key={card.id}
-                                    onClick={expandStudio}
-                                    className={cn(
-                                        'w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0',
-                                        card.iconColor,
-                                        card.bg
-                                    )}
-                                    title={card.label}
-                                >
-                                    <card.icon size={15} />
-                                </button>
-                            ))}
-                        </div>
+                            title="AI 助手"
+                        >
+                            <MessageSquare size={14} />
+                        </button>
                     </div>
                 ) : (
-                    <>
-                        {/* Card header with collapse button */}
-                        <div className="h-11 border-b border-border flex items-center gap-2 px-3 shrink-0">
-                            <Sparkles size={14} className="text-primary-mint" />
-                            <span className="text-sm font-semibold flex-1">Studio</span>
-                            <button
-                                onClick={collapseStudio}
-                                className="p-1.5 rounded-lg hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors"
-                                title="收起 Studio"
-                            >
-                                <PanelRightClose size={14} />
-                            </button>
-                        </div>
-                        <div className="flex-1 overflow-hidden">
-                            <StudioPanel notebook={notebook} hideHeader />
-                        </div>
-                    </>
+                    articleList
                 )}
             </div>
+
+            {/* Center: Article content — no top bar */}
+            <div
+                className="flex-1 min-w-0 flex flex-col overflow-hidden"
+                style={{ marginRight: chatOpen ? CHAT_DRAWER_WIDTH : 0, transition: 'margin-right 200ms ease' }}
+            >
+                {articleDetail}
+            </div>
+
+            {/* Right: Floating chat drawer — conditionally rendered to prevent browser scroll pollution */}
+            {chatOpen && (
+                <div
+                    className="absolute top-0 right-0 h-full border-l border-border bg-bg-container shadow-xl z-20"
+                    style={{ width: CHAT_DRAWER_WIDTH }}
+                >
+                    <NotebookChatDrawer notebook={notebook} onClose={() => setChatOpen(false)} />
+                </div>
+            )}
         </div>
     )
 }
+
+// ── Article list panel ────────────────────────────────────────────────────────
+
+const ArticleList: React.FC<{
+    notebook: string
+    entries: NoteEntry[]
+    loading: boolean
+    inSearch: boolean
+    searchQuery: string
+    setSearchQuery: (q: string) => void
+    sortBy: NoteSort
+    setSortBy: (s: NoteSort) => void
+    totalCount: number
+    selectedId: string | null
+    onSelect: (note: NoteEntry) => void
+    onNew?: () => void
+    onBack: () => void
+    chatOpen: boolean
+    onToggleChat: () => void
+}> = ({ notebook, entries, loading, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, selectedId, onSelect, onNew, onBack, chatOpen, onToggleChat }) => (
+    <div className="flex flex-col h-full overflow-hidden">
+        {/* Header */}
+        <div className="h-11 border-b border-border flex items-center gap-1 px-2 shrink-0 shrink-0">
+            <button onClick={onBack} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors shrink-0" title="返回笔记本">
+                <ArrowLeft size={13} />
+            </button>
+            <span className="text-xs font-medium flex-1 truncate text-text-secondary px-1">{notebook}</span>
+            <button
+                onClick={onToggleChat}
+                className={cn(
+                    'w-7 h-7 flex items-center justify-center rounded-md transition-colors shrink-0',
+                    chatOpen ? 'text-primary-mint bg-primary-mint/10' : 'text-text-quaternary hover:bg-fill hover:text-text-secondary',
+                )}
+                title="AI 助手"
+            >
+                <MessageSquare size={13} />
+            </button>
+            {onNew && (
+                <button onClick={onNew} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors shrink-0" title="新建文章">
+                    <Plus size={13} />
+                </button>
+            )}
+        </div>
+        {/* Search */}
+        <div className="px-2.5 py-2 border-b border-border shrink-0">
+            <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="搜索文章…"
+                    className="w-full bg-fill-secondary border border-border rounded-lg pl-7 pr-7 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary-mint/40 placeholder:text-text-quaternary transition-all"
+                />
+                {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <X size={11} className="text-text-tertiary" />
+                    </button>
+                )}
+            </div>
+        </div>
+        {/* Sort */}
+        {!inSearch && (
+            <div className="px-3 py-1 border-b border-border shrink-0 flex items-center gap-1">
+                <ArrowUpDown size={10} className="text-text-quaternary" />
+                <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as NoteSort)}
+                    className="text-[10px] bg-transparent text-text-tertiary border-none focus:outline-none cursor-pointer flex-1"
+                >
+                    {Object.entries(SORT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+            </div>
+        )}
+        {/* List */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {loading && (
+                <div className="p-3 space-y-3">
+                    {[1,2,3].map(i => <div key={i} className="space-y-1.5"><div className="skeleton h-3.5 w-3/4"/><div className="skeleton h-2.5 w-1/2"/></div>)}
+                </div>
+            )}
+            {!loading && entries.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-text-quaternary gap-2 py-12">
+                    <BookOpen size={20} className="opacity-40" />
+                    <p className="text-xs">{inSearch ? '无搜索结果' : '暂无文章'}</p>
+                </div>
+            )}
+            {!loading && entries.map((entry) => (
+                <div
+                    key={entry.id}
+                    onClick={() => onSelect(entry)}
+                    className={cn(
+                        'mx-1 px-2.5 py-1.5 rounded-md cursor-pointer transition-colors',
+                        selectedId === entry.id
+                            ? 'bg-fill text-text'
+                            : 'text-text-secondary hover:bg-fill-secondary/70 hover:text-text',
+                    )}
+                >
+                    <div className={cn('text-[13px] truncate leading-snug', selectedId === entry.id ? 'font-medium' : '')}>{entry.title}</div>
+                    {entry.date && (
+                        <div className="text-[10px] text-text-quaternary mt-0.5">{entry.date}</div>
+                    )}
+                </div>
+            ))}
+        </div>
+    </div>
+)
+
+// ── Article detail view ───────────────────────────────────────────────────────
+
+const ArticleDetail: React.FC<{
+    note: NoteEntry
+    fullContent: string
+    loading: boolean
+    onEdit: () => void
+}> = ({ note, fullContent, loading, onEdit }) => (
+    <div className="flex flex-col h-full bg-white dark:bg-[#191919]">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+            <div className="max-w-[720px] mx-auto px-14 py-12">
+                {/* Title row */}
+                <div className="flex items-start gap-3 mb-3 group">
+                    <h1 className="text-[28px] font-bold text-[#1a1a1a] dark:text-[#e8e8e8] flex-1 leading-tight tracking-tight">{note.title}</h1>
+                    <button
+                        onClick={onEdit}
+                        className="mt-1.5 p-1.5 rounded-lg text-transparent group-hover:text-text-quaternary hover:!text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 transition-all shrink-0"
+                        title="编辑"
+                    >
+                        <Pencil size={14} />
+                    </button>
+                </div>
+                {/* Meta */}
+                {(note.date || note.author || note.tags) && (
+                    <div className="flex flex-wrap gap-3 mb-7 text-[12px] text-text-tertiary">
+                        {note.date && (
+                            <span className="flex items-center gap-1">
+                                <Calendar size={11} /> {note.date}
+                            </span>
+                        )}
+                        {note.author && (
+                            <span className="flex items-center gap-1">
+                                <User size={11} /> {note.author}
+                            </span>
+                        )}
+                        {note.tags && (
+                            <span className="flex items-center gap-1">
+                                <Tag size={11} /> {note.tags}
+                            </span>
+                        )}
+                    </div>
+                )}
+                {note.summary && (
+                    <div className="mb-7 text-[13px] text-text-secondary leading-relaxed border-l-[3px] border-gray-200 dark:border-white/20 pl-4 italic">
+                        {note.summary}
+                    </div>
+                )}
+                {loading ? (
+                    <div className="space-y-3">
+                        {[1,2,3,4,5].map(i => <div key={i} className={`skeleton h-4 ${['w-full','w-5/6','w-4/6','w-full','w-3/4'][i-1]}`} />)}
+                    </div>
+                ) : (
+                    <div className="markdown-content text-[15px] leading-[1.8] text-[#374151] dark:text-[#d1d5db]">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{fullContent}</ReactMarkdown>
+                    </div>
+                )}
+            </div>
+        </div>
+    </div>
+)
+

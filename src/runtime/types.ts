@@ -37,7 +37,6 @@ export type RunStatus = typeof RUN_STATUS_VALUES[number];
 
 export const RUN_ENTRYPOINT_VALUES = [
     'web-chat',
-    'notebook-chat',
     'cron',
     'telegram',
     'webhook',
@@ -49,7 +48,6 @@ export type RunEntrypoint = typeof RUN_ENTRYPOINT_VALUES[number];
 
 export const RUN_TRIGGER_TYPE_VALUES = [
     'user_message',
-    'notebook_message',
     'scheduled_task',
     'telegram_message',
     'webhook_call',

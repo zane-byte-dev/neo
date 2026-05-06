@@ -721,11 +721,6 @@ export function notebookDeleteArtifact(notebook: string, id: string) {
     }).then((r) => _jsonOrThrow<{ ok: true }>(r))
 }
 
-// Chat (notebook chat is now unified with the regular chat session API; legacy
-// /api/notebook/chat endpoints remain for backwards compatibility but are no
-// longer consumed by the web client.)
-
-
 // ── Session API ───────────────────────────────────────────────────────────────
 
 export function sessionNew(sessionId: string, title: string) {
