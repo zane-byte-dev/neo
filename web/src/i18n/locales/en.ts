@@ -36,6 +36,8 @@ const en = {
     newNote: 'New note',
     notebookNamePlaceholder: 'Notebook name…',
     apps: 'Apps',
+    appsSubtitle: 'User-defined mini apps running in the workspace',
+    settings: 'Settings',
     puzzle: 'Puzzle',
     noUserApps: 'Drop an index.html into stateDir/apps/ to see it here',
     deleteChat: 'Delete Chat',
@@ -299,6 +301,10 @@ const en = {
     skillsEmptyHint: 'Create your first skill to give the agent custom capabilities',
     skillCount: '{n} skills',
     skillEnabledCount: 'enabled',
+    skillEnableAction: 'Enable skill',
+    skillDisableAction: 'Disable skill',
+    skillEnabledGroup: 'Enabled',
+    skillDisabledGroup: 'Disabled',
 } as const
 
 export default en

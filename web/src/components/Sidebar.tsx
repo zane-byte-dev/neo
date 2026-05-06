@@ -1,9 +1,9 @@
 import React from 'react'
-import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, LayoutGrid, Cpu, MessageSquarePlus, PanelLeftClose, Plus, Zap } from 'lucide-react'
+import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, fetchUserApps, initializeWorkspace, type MeInfo, type UserAppInfo } from '../api'
+import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, initializeWorkspace, type MeInfo } from '../api'
 import { useT, LOCALE_OPTIONS } from '../i18n'
 import { toast } from './Toast'
 import type { Theme } from '../types'
@@ -26,8 +26,6 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const location = useLocation()
     const navigate = useNavigate()
     const [menuOpen, setMenuOpen] = React.useState(false)
-    const [appsOpen, setAppsOpen] = React.useState(false)
-    const [userApps, setUserApps] = React.useState<UserAppInfo[]>([])
     const [notebookOpen, setNotebookOpen] = React.useState(false)
     const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [addingNotebook, setAddingNotebook] = React.useState(false)
@@ -70,12 +68,6 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
         if (!notebookOpen) return
         notebookListNotebooks().then(setNotebooks).catch(() => {})
     }, [notebookOpen])
-
-    // Load user-defined mini apps when the Apps section is expanded
-    React.useEffect(() => {
-        if (!appsOpen) return
-        fetchUserApps().then(setUserApps).catch(() => setUserApps([]))
-    }, [appsOpen])
 
     const handleDelete = (id: string) => {
         setConfirmDelete(id)
@@ -341,64 +333,18 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                 </div>
 
                 <Link
-                    to="/models"
+                    to="/settings"
                     onClick={onNavigate}
                     className={cn(
                         'flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150',
-                        location.pathname === '/models'
+                        location.pathname === '/settings'
                             ? 'bg-sidebar-active text-text font-medium'
                             : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
                     )}
                 >
-                    <Cpu size={15} className="shrink-0 text-text-tertiary" />
-                    <span>{t('models')}</span>
+                    <Settings size={15} className="shrink-0 text-text-tertiary" />
+                    <span>{t('settings')}</span>
                 </Link>
-                <Link
-                    to="/skills"
-                    onClick={onNavigate}
-                    className={cn(
-                        'flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150',
-                        location.pathname === '/skills'
-                            ? 'bg-sidebar-active text-text font-medium'
-                            : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
-                    )}
-                >
-                    <Zap size={15} className="shrink-0 text-text-tertiary" />
-                    <span>{t('skills')}</span>
-                </Link>
-                <div>
-                    <button
-                        onClick={() => setAppsOpen(!appsOpen)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150 cursor-pointer"
-                    >
-                        <LayoutGrid size={15} className="shrink-0 text-text-tertiary" />
-                        <span className="flex-1 text-left">{t('apps')}</span>
-                        {appsOpen ? <ChevronDown size={13} className="text-text-quaternary" /> : <ChevronRight size={13} className="text-text-quaternary" />}
-                    </button>
-                    {appsOpen && (
-                        <div className="ml-5 mt-0.5 space-y-0.5 border-l border-border pl-2">
-                            {userApps.map((app) => (
-                                <a
-                                    key={app.name}
-                                    href={`/apps/${encodeURIComponent(app.name)}/`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={onNavigate}
-                                    title={app.description ?? app.title}
-                                    className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 text-text-secondary hover:bg-sidebar-hover hover:text-text"
-                                >
-                                    <LayoutGrid size={13} className="shrink-0 text-text-tertiary" />
-                                    <span className="truncate">{app.title}</span>
-                                </a>
-                            ))}
-                            {userApps.length === 0 && (
-                                <div className="px-2.5 py-1.5 text-[11px] text-text-quaternary">
-                                    {t('noUserApps')}
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
             </div>
 
             {/* Chat list */}

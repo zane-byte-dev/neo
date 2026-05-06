@@ -7,8 +7,7 @@ import { ChatArea } from './components/ChatArea'
 import { NoteEditor } from './components/NoteEditor'
 import { NotebookPanel } from './components/NotebookPanel'
 import { Login } from './components/Login'
-import { ModelPanel } from './components/ModelPanel'
-import { SkillsPanel } from './components/SkillsPanel'
+import { SettingsPanel } from './components/SettingsPanel'
 import { useAppStore } from './stores/useAppStore'
 import { checkAuth, type AuthResult } from './api'
 import { cn } from './lib/utils'
@@ -127,8 +126,7 @@ const MainLayout: React.FC = () => {
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/notebook/article/new" element={<NewNotePage />} />
             <Route path="/notebook/:notebookName" element={<NotebookPage />} />
-            <Route path="/models" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><ModelPanel /></div>} />
-            <Route path="/skills" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><SkillsPanel /></div>} />
+            <Route path="/settings" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><SettingsPanel /></div>} />
             <Route path="*" element={<Navigate to="/chat" replace />} />
         </Routes>
     )

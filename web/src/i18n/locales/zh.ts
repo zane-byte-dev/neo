@@ -38,6 +38,8 @@ const zh: Record<TranslationKeys, string> = {
     newNote: '新建笔记',
     notebookNamePlaceholder: '笔记本名称…',
     apps: '应用',
+    appsSubtitle: '运行在工作区的用户自定义小应用',
+    settings: '设置',
     puzzle: '水壶谜题',
     noUserApps: '在 stateDir/apps/ 下放入 index.html 即可出现在这里',
     deleteChat: '删除对话',
@@ -301,6 +303,10 @@ const zh: Record<TranslationKeys, string> = {
     skillsEmptyHint: '创建第一个技能，为 Agent 添加自定义能力',
     skillCount: '{n} 个技能',
     skillEnabledCount: '已启用',
+    skillEnableAction: '启用技能',
+    skillDisableAction: '禁用技能',
+    skillEnabledGroup: '已启用',
+    skillDisabledGroup: '已禁用',
 }
 
 export default zh

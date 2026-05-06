@@ -5,6 +5,7 @@ import {
     createSkill,
     updateSkill,
     deleteSkill,
+    toggleSkill,
     type SkillSummary,
     type SkillDetail,
 } from '../api'
@@ -24,86 +25,157 @@ tags: []
 Write your skill prompt here. Use {{parameter_name}} for template variables.
 `
 
-// ── Skill Card ────────────────────────────────────────────────────────────────
+// ── Skill icon ────────────────────────────────────────────────────────────────
 
-const SkillCard: React.FC<{
+const SkillIcon: React.FC<{ name: string; enabled: boolean }> = ({ name, enabled }) => {
+    const letter = name.charAt(0).toUpperCase()
+    return (
+        <div className={cn(
+            'w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-sm font-semibold border',
+            enabled
+                ? 'bg-fill border-border text-text-secondary'
+                : 'bg-fill/50 border-border/50 text-text-quaternary'
+        )}>
+            {letter}
+        </div>
+    )
+}
+
+// ── Toggle switch ─────────────────────────────────────────────────────────────
+
+const ToggleSwitch: React.FC<{
+    enabled: boolean
+    loading: boolean
+    onChange: (e: React.MouseEvent) => void
+}> = ({ enabled, loading, onChange }) => (
+    <button
+        onClick={onChange}
+        disabled={loading}
+        className={cn(
+            'relative inline-flex h-[22px] w-[40px] shrink-0 items-center rounded-full transition-colors duration-200 focus:outline-none disabled:opacity-50',
+            enabled ? 'bg-emerald-500' : 'bg-border'
+        )}
+    >
+        <span className={cn(
+            'inline-block h-[16px] w-[16px] transform rounded-full bg-white shadow transition-transform duration-200',
+            enabled ? 'translate-x-[20px]' : 'translate-x-[3px]'
+        )}>
+            {loading && (
+                <svg className="animate-spin absolute inset-0 m-auto" width="10" height="10" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+            )}
+        </span>
+    </button>
+)
+
+// ── Skill Row ─────────────────────────────────────────────────────────────────
+
+const SkillRow: React.FC<{
     skill: SkillSummary
+    isLast: boolean
+    onView: (name: string) => void
     onEdit: (name: string) => void
     onDelete: (name: string) => void
-}> = ({ skill, onEdit, onDelete }) => {
+    onToggle: (name: string, enabled: boolean) => void
+}> = ({ skill, isLast, onView, onEdit, onDelete, onToggle }) => {
     const t = useT()
+    const [toggling, setToggling] = React.useState(false)
+    const [showActions, setShowActions] = React.useState(false)
     const [confirmingDelete, setConfirmingDelete] = React.useState(false)
 
-    const handleDeleteClick = () => {
-        if (confirmingDelete) {
-            onDelete(skill.name)
-            setConfirmingDelete(false)
-        } else {
-            setConfirmingDelete(true)
+    const handleToggle = async (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (toggling) return
+        setToggling(true)
+        try {
+            await onToggle(skill.name, !skill.enabled)
+        } finally {
+            setToggling(false)
         }
     }
 
     return (
         <div
             className={cn(
-                'bg-bg-container border border-border rounded-xl p-4 transition-all duration-200',
-                'hover:border-primary-mint/40',
-                !skill.enabled && 'opacity-60',
+                'group flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-fill/60 transition-colors',
+                !isLast && 'border-b border-border/60',
+                !skill.enabled && 'opacity-60'
             )}
-            style={{ boxShadow: 'var(--shadow-soft)' }}
+            onClick={() => onView(skill.name)}
         >
-            <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                    <Zap size={15} className={cn('shrink-0', skill.enabled ? 'text-primary-mint' : 'text-text-quaternary')} />
-                    <h3 className="text-sm font-semibold text-text truncate">{skill.name}</h3>
-                    {!skill.enabled && (
-                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-fill text-text-tertiary">
-                            {t('skillDisabled')}
+            {/* Icon */}
+            <SkillIcon name={skill.name} enabled={skill.enabled} />
+
+            {/* Name + description */}
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-semibold text-text truncate">{skill.name}</span>
+                    {skill.hasExecutable && (
+                        <span className="shrink-0 text-[9px] px-1 py-px rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 font-medium leading-tight">
+                            code
                         </span>
                     )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                    <button
-                        onClick={() => onEdit(skill.name)}
-                        className="p-1.5 rounded-lg text-text-tertiary hover:text-text hover:bg-fill transition-colors"
-                        title={t('edit')}
-                    >
-                        <Pencil size={13} />
-                    </button>
-                    <button
-                        onClick={handleDeleteClick}
-                        onBlur={() => setConfirmingDelete(false)}
-                        className={cn(
-                            'p-1.5 rounded-lg transition-colors',
-                            confirmingDelete
-                                ? 'bg-destructive/15 text-destructive'
-                                : 'text-text-tertiary hover:text-destructive hover:bg-destructive/10'
-                        )}
-                        title={confirmingDelete ? t('skillDeleteConfirm') : t('delete')}
-                    >
-                        <Trash2 size={13} />
-                    </button>
-                </div>
+                <p className="text-xs text-text-tertiary truncate mt-0.5 leading-snug">{skill.description}</p>
             </div>
 
-            <p className="text-xs text-text-secondary mb-3 leading-relaxed line-clamp-2">{skill.description}</p>
+            {/* Hover action buttons */}
+            <div
+                className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                onClick={(e) => e.stopPropagation()}
+            >
+                {showActions ? (
+                    <>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onEdit(skill.name); setShowActions(false) }}
+                            className="p-1.5 rounded-md text-text-tertiary hover:text-text hover:bg-fill transition-colors"
+                            title={t('edit')}
+                        >
+                            <Pencil size={12} />
+                        </button>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                if (confirmingDelete) {
+                                    onDelete(skill.name)
+                                } else {
+                                    setConfirmingDelete(true)
+                                    setTimeout(() => setConfirmingDelete(false), 3000)
+                                }
+                            }}
+                            className={cn(
+                                'p-1.5 rounded-md transition-colors text-xs',
+                                confirmingDelete
+                                    ? 'text-destructive bg-destructive/10'
+                                    : 'text-text-tertiary hover:text-destructive hover:bg-destructive/10'
+                            )}
+                            title={confirmingDelete ? t('skillDeleteConfirm') : t('delete')}
+                        >
+                            {confirmingDelete ? <span className="text-[10px] font-medium px-0.5">{t('confirm')}</span> : <Trash2 size={12} />}
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowActions(false); setConfirmingDelete(false) }}
+                            className="p-1.5 rounded-md text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors text-[11px]"
+                        >
+                            ✕
+                        </button>
+                    </>
+                ) : (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setShowActions(true) }}
+                        className="p-1.5 rounded-md text-text-quaternary hover:text-text-secondary hover:bg-fill transition-colors"
+                        title={t('edit')}
+                    >
+                        <Pencil size={12} />
+                    </button>
+                )}
+            </div>
 
-            <div className="flex flex-wrap items-center gap-1.5">
-                {skill.tags.map((tag) => (
-                    <span key={tag} className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-primary-mint/10 text-primary-mint font-medium">
-                        <Tag size={9} />
-                        {tag}
-                    </span>
-                ))}
-                {skill.hasExecutable && (
-                    <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">
-                        <Code2 size={9} />
-                        {t('skillHasCode')}
-                    </span>
-                )}
-                {skill.version && (
-                    <span className="text-[10px] text-text-quaternary ml-auto">v{skill.version}</span>
-                )}
+            {/* Toggle */}
+            <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                <ToggleSwitch enabled={skill.enabled} loading={toggling} onChange={handleToggle} />
             </div>
         </div>
     )
@@ -113,7 +185,7 @@ const SkillCard: React.FC<{
 
 const SkillEditor: React.FC<{
     initialContent: string
-    skillName: string | null  // null = new skill
+    skillName: string | null
     onSave: (rawContent: string) => Promise<void>
     onCancel: () => void
 }> = ({ initialContent, skillName, onSave, onCancel }) => {
@@ -142,12 +214,8 @@ const SkillEditor: React.FC<{
 
     return (
         <div className="flex flex-col h-full">
-            {/* Header */}
             <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
-                <button
-                    onClick={onCancel}
-                    className="p-1.5 rounded-lg text-text-tertiary hover:text-text hover:bg-fill transition-colors"
-                >
+                <button onClick={onCancel} className="p-1.5 rounded-lg text-text-tertiary hover:text-text hover:bg-fill transition-colors">
                     <ChevronLeft size={16} />
                 </button>
                 <div className="flex-1 min-w-0">
@@ -157,10 +225,7 @@ const SkillEditor: React.FC<{
                     <p className="text-xs text-text-tertiary mt-0.5">{t('skillEditorHint')}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={onCancel}
-                        className="px-3 py-1.5 text-xs text-text-secondary hover:text-text bg-fill hover:bg-border rounded-lg transition-colors"
-                    >
+                    <button onClick={onCancel} className="px-3 py-1.5 text-xs text-text-secondary hover:text-text bg-fill hover:bg-border rounded-lg transition-colors">
                         {t('cancel')}
                     </button>
                     <button
@@ -173,16 +238,12 @@ const SkillEditor: React.FC<{
                     </button>
                 </div>
             </div>
-
-            {/* Error */}
             {error && (
                 <div className="mx-6 mt-3 flex items-center gap-2 text-xs text-destructive bg-destructive/8 border border-destructive/20 rounded-lg px-3 py-2">
                     <AlertTriangle size={13} />
                     {error}
                 </div>
             )}
-
-            {/* Editor */}
             <div className="flex-1 min-h-0 px-6 py-4">
                 <textarea
                     ref={textareaRef}
@@ -204,18 +265,26 @@ const SkillDetailView: React.FC<{
     onEdit: () => void
     onBack: () => void
     onDelete: () => void
-}> = ({ skill, onEdit, onBack, onDelete }) => {
+    onToggle: (enabled: boolean) => Promise<void>
+}> = ({ skill, onEdit, onBack, onDelete, onToggle }) => {
     const t = useT()
     const [confirmingDelete, setConfirmingDelete] = React.useState(false)
+    const [toggling, setToggling] = React.useState(false)
+
+    const handleToggle = async () => {
+        if (toggling) return
+        setToggling(true)
+        try {
+            await onToggle(!skill.enabled)
+        } finally {
+            setToggling(false)
+        }
+    }
 
     return (
         <div className="flex flex-col h-full">
-            {/* Header */}
             <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
-                <button
-                    onClick={onBack}
-                    className="p-1.5 rounded-lg text-text-tertiary hover:text-text hover:bg-fill transition-colors"
-                >
+                <button onClick={onBack} className="p-1.5 rounded-lg text-text-tertiary hover:text-text hover:bg-fill transition-colors">
                     <ChevronLeft size={16} />
                 </button>
                 <div className="flex-1 min-w-0">
@@ -223,16 +292,15 @@ const SkillDetailView: React.FC<{
                         <Zap size={15} className="text-primary-mint shrink-0" />
                         <h2 className="text-sm font-semibold text-text truncate">{skill.name}</h2>
                         {!skill.enabled && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-fill text-text-tertiary">
-                                {t('skillDisabled')}
-                            </span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-fill text-text-tertiary">{t('skillDisabled')}</span>
                         )}
                     </div>
-                    {skill.version && (
-                        <p className="text-xs text-text-quaternary mt-0.5">v{skill.version}</p>
-                    )}
+                    {skill.version && <p className="text-xs text-text-quaternary mt-0.5">v{skill.version}</p>}
                 </div>
                 <div className="flex items-center gap-2">
+                    <div onClick={(e) => e.stopPropagation()}>
+                        <ToggleSwitch enabled={skill.enabled} loading={toggling} onChange={() => handleToggle()} />
+                    </div>
                     <button
                         onClick={onEdit}
                         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-fill hover:bg-border text-text-secondary hover:text-text rounded-lg transition-colors"
@@ -241,19 +309,11 @@ const SkillDetailView: React.FC<{
                         {t('edit')}
                     </button>
                     <button
-                        onClick={() => {
-                            if (confirmingDelete) {
-                                onDelete()
-                            } else {
-                                setConfirmingDelete(true)
-                            }
-                        }}
+                        onClick={() => { if (confirmingDelete) { onDelete() } else { setConfirmingDelete(true) } }}
                         onBlur={() => setConfirmingDelete(false)}
                         className={cn(
                             'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors',
-                            confirmingDelete
-                                ? 'bg-destructive/15 text-destructive font-medium'
-                                : 'bg-fill hover:bg-destructive/10 text-text-secondary hover:text-destructive'
+                            confirmingDelete ? 'bg-destructive/15 text-destructive font-medium' : 'bg-fill hover:bg-destructive/10 text-text-secondary hover:text-destructive'
                         )}
                     >
                         <Trash2 size={12} />
@@ -262,59 +322,34 @@ const SkillDetailView: React.FC<{
                 </div>
             </div>
 
-            {/* Content */}
             <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-5">
-                {/* Description */}
                 <div>
                     <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-1.5">{t('skillDescription')}</p>
                     <p className="text-sm text-text-secondary">{skill.description}</p>
                 </div>
-
-                {/* Tags */}
                 {skill.tags.length > 0 && (
                     <div>
                         <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-1.5">{t('tags')}</p>
                         <div className="flex flex-wrap gap-1.5">
                             {skill.tags.map((tag) => (
                                 <span key={tag} className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary-mint/10 text-primary-mint font-medium">
-                                    <Tag size={10} />
-                                    {tag}
+                                    <Tag size={10} />{tag}
                                 </span>
                             ))}
                         </div>
                     </div>
                 )}
-
-                {/* Status */}
-                <div className="flex items-center gap-3">
-                    {skill.enabled ? (
-                        <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                            <ToggleRight size={15} />
-                            {t('skillEnabled')}
-                        </span>
-                    ) : (
-                        <span className="flex items-center gap-1.5 text-xs text-text-quaternary">
-                            <ToggleLeft size={15} />
-                            {t('skillDisabled')}
-                        </span>
-                    )}
-                    {skill.hasExecutable && (
-                        <span className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400">
-                            <Code2 size={13} />
-                            {t('skillHasCode')}
-                        </span>
-                    )}
-                </div>
-
-                {/* Prompt body */}
+                {skill.hasExecutable && (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400">
+                        <Code2 size={13} />{t('skillHasCode')}
+                    </span>
+                )}
                 <div>
                     <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-1.5">{t('skillPromptBody')}</p>
                     <pre className="text-xs text-text-secondary bg-bg-container border border-border rounded-xl p-4 whitespace-pre-wrap break-words leading-relaxed font-mono custom-scrollbar overflow-x-auto">
                         {skill.body || <span className="text-text-quaternary">{t('skillNoBody')}</span>}
                     </pre>
                 </div>
-
-                {/* Executable blocks */}
                 {skill.executableBlocks.length > 0 && (
                     <div>
                         <p className="text-xs font-medium text-text-tertiary uppercase tracking-wider mb-1.5">{t('skillCodeBlocks')}</p>
@@ -365,9 +400,17 @@ export const SkillsPanel: React.FC = () => {
         }
     }, [t])
 
-    React.useEffect(() => {
-        loadSkills()
-    }, [loadSkills])
+    React.useEffect(() => { loadSkills() }, [loadSkills])
+
+    const handleToggle = React.useCallback(async (name: string, enabled: boolean) => {
+        try {
+            await toggleSkill(name, enabled)
+            setSkills((prev) => prev.map((s) => s.name === name ? { ...s, enabled } : s))
+            setDetailSkill((prev) => prev && prev.name === name ? { ...prev, enabled } : prev)
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : t('skillSaveFailed'))
+        }
+    }, [t])
 
     const handleEdit = async (name: string) => {
         setLoadingDetail(true)
@@ -382,6 +425,7 @@ export const SkillsPanel: React.FC = () => {
     }
 
     const handleViewDetail = async (name: string) => {
+        if (loadingDetail) return
         setLoadingDetail(true)
         try {
             const detail = await fetchSkill(name)
@@ -409,19 +453,15 @@ export const SkillsPanel: React.FC = () => {
     const handleSave = async (rawContent: string) => {
         if (view.kind !== 'edit') return
         if (view.name === null) {
-            // Create
             const result = await createSkill(rawContent)
             toast.success(t('skillCreated', { name: result.name }))
         } else {
-            // Update
             await updateSkill(view.name, rawContent)
             toast.success(t('skillSaved', { name: view.name }))
         }
         setView({ kind: 'list' })
         await loadSkills()
     }
-
-    // ── Render views ─────────────────────────────────────────────────────────
 
     if (view.kind === 'edit') {
         return (
@@ -441,11 +481,15 @@ export const SkillsPanel: React.FC = () => {
                 onEdit={() => handleEdit(detailSkill.name)}
                 onBack={() => setView({ kind: 'list' })}
                 onDelete={() => handleDelete(detailSkill.name)}
+                onToggle={(enabled) => handleToggle(detailSkill.name, enabled)}
             />
         )
     }
 
-    // List view
+    // ── List view ─────────────────────────────────────────────────────────────
+    const enabledSkills = skills.filter((s) => s.enabled)
+    const disabledSkills = skills.filter((s) => !s.enabled)
+
     return (
         <div className="flex flex-col h-full">
             {/* Header */}
@@ -474,7 +518,7 @@ export const SkillsPanel: React.FC = () => {
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5">
+            <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-5">
                 {loading && (
                     <div className="flex items-center justify-center py-16 text-text-tertiary">
                         <Loader2 size={20} className="animate-spin" />
@@ -508,34 +552,53 @@ export const SkillsPanel: React.FC = () => {
 
                 {!loading && !error && skills.length > 0 && (
                     <>
-                        {/* Summary bar */}
-                        <div className="flex items-center gap-3 mb-4 text-xs text-text-tertiary">
-                            <span>{t('skillCount', { n: skills.length })}</span>
-                            <span>·</span>
-                            <span className="text-emerald-600 dark:text-emerald-400">
-                                {skills.filter(s => s.enabled).length} {t('skillEnabledCount')}
-                            </span>
-                        </div>
-
-                        {/* Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {skills.map((skill) => (
-                                <div
-                                    key={skill.name}
-                                    onClick={() => !loadingDetail && handleViewDetail(skill.name)}
-                                    className="cursor-pointer"
-                                >
-                                    <SkillCard
-                                        skill={skill}
-                                        onEdit={(name) => { handleEdit(name) }}
-                                        onDelete={handleDelete}
-                                    />
+                        {/* Enabled group */}
+                        {enabledSkills.length > 0 && (
+                            <section>
+                                <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wider mb-2 px-1">
+                                    {t('skillEnabledGroup')} {enabledSkills.length}
+                                </p>
+                                <div className="bg-bg-container border border-border rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                                    {enabledSkills.map((skill, i) => (
+                                        <SkillRow
+                                            key={skill.name}
+                                            skill={skill}
+                                            isLast={i === enabledSkills.length - 1}
+                                            onView={handleViewDetail}
+                                            onEdit={handleEdit}
+                                            onDelete={handleDelete}
+                                            onToggle={handleToggle}
+                                        />
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            </section>
+                        )}
+
+                        {/* Disabled group */}
+                        {disabledSkills.length > 0 && (
+                            <section>
+                                <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wider mb-2 px-1">
+                                    {t('skillDisabledGroup')} {disabledSkills.length}
+                                </p>
+                                <div className="bg-bg-container border border-border rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                                    {disabledSkills.map((skill, i) => (
+                                        <SkillRow
+                                            key={skill.name}
+                                            skill={skill}
+                                            isLast={i === disabledSkills.length - 1}
+                                            onView={handleViewDetail}
+                                            onEdit={handleEdit}
+                                            onDelete={handleDelete}
+                                            onToggle={handleToggle}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
                     </>
                 )}
             </div>
         </div>
     )
 }
+

@@ -71,14 +71,34 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         setChatSourceIds(activeChatId, selectedSourceIds).catch(() => {})
     }, [selectedSourceIds, activeChatId, notebook, setChatSourceIds])
 
-    // Load article list
+    // Load article list (stale-while-revalidate: keep old entries visible during switch)
+    const [showListSkeleton, setShowListSkeleton] = React.useState(false)
     React.useEffect(() => {
+        // Reset local UI state on notebook change
+        setSelectedNote(null)
+        setEditing(null)
+        setSearchQuery('')
+        setInSearch(false)
+        setSearchResults([])
+        setSortBy('default')
+        if (isMobile) setMobileTab('list')
         setLoading(true)
         notebookList(notebook)
-            .then((data) => setEntries(data as NoteEntry[]))
+            .then((data) => {
+                const notes = data as NoteEntry[]
+                setEntries(notes)
+                if (notes.length > 0) setSelectedNote(notes[0])
+            })
             .catch(() => setEntries([]))
             .finally(() => setLoading(false))
     }, [notebook])
+
+    // Show skeleton only after a delay — avoids flash on fast loads
+    React.useEffect(() => {
+        if (!loading) { setShowListSkeleton(false); return }
+        const t = window.setTimeout(() => setShowListSkeleton(true), 200)
+        return () => clearTimeout(t)
+    }, [loading])
 
     // Debounced search
     React.useEffect(() => {
@@ -94,10 +114,12 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
     // Load full content when note is selected
     React.useEffect(() => {
         if (!selectedNote) { setFullContent(''); return }
+        // Show available preview content immediately — avoids blank flash
+        setFullContent(selectedNote.content ?? '')
         setContentLoading(true)
         notebookRead(selectedNote.id)
             .then((data) => setFullContent((data as NoteEntry).content ?? ''))
-            .catch(() => setFullContent(selectedNote.content ?? ''))
+            .catch(() => {}) // already showing selectedNote.content
             .finally(() => setContentLoading(false))
     }, [selectedNote?.id])
 
@@ -148,7 +170,8 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         <ArticleList
             notebook={notebook}
             entries={sortedList}
-            loading={loading}
+            loading={showListSkeleton}
+            stale={loading}
             inSearch={inSearch}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -303,6 +326,7 @@ const ArticleList: React.FC<{
     notebook: string
     entries: NoteEntry[]
     loading: boolean
+    stale?: boolean
     inSearch: boolean
     searchQuery: string
     setSearchQuery: (q: string) => void
@@ -315,7 +339,7 @@ const ArticleList: React.FC<{
     onBack: () => void
     chatOpen: boolean
     onToggleChat: () => void
-}> = ({ notebook, entries, loading, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, selectedId, onSelect, onNew, onBack, chatOpen, onToggleChat }) => (
+}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, selectedId, onSelect, onNew, onBack, chatOpen, onToggleChat }) => (
     <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
         <div className="h-11 border-b border-border flex items-center gap-1 px-2 shrink-0 shrink-0">
@@ -372,23 +396,27 @@ const ArticleList: React.FC<{
         )}
         {/* List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {loading && (
+            {/* Skeleton: only when loading with no entries yet */}
+            {loading && entries.length === 0 && (
                 <div className="p-3 space-y-3">
                     {[1,2,3].map(i => <div key={i} className="space-y-1.5"><div className="skeleton h-3.5 w-3/4"/><div className="skeleton h-2.5 w-1/2"/></div>)}
                 </div>
             )}
-            {!loading && entries.length === 0 && (
+            {/* Empty state: only when fully loaded */}
+            {!stale && !loading && entries.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-text-quaternary gap-2 py-12">
                     <BookOpen size={20} className="opacity-40" />
                     <p className="text-xs">{inSearch ? '无搜索结果' : '暂无文章'}</p>
                 </div>
             )}
-            {!loading && entries.map((entry) => (
+            {/* Entries: stale entries shown with reduced opacity while new notebook loads */}
+            {entries.map((entry) => (
                 <div
                     key={entry.id}
-                    onClick={() => onSelect(entry)}
+                    onClick={() => !stale && onSelect(entry)}
                     className={cn(
-                        'mx-1 px-2.5 py-1.5 rounded-md cursor-pointer transition-colors',
+                        'mx-1 px-2.5 py-1.5 rounded-md cursor-pointer transition-all duration-200',
+                        stale ? 'opacity-40 pointer-events-none' : '',
                         selectedId === entry.id
                             ? 'bg-fill text-text'
                             : 'text-text-secondary hover:bg-fill-secondary/70 hover:text-text',
@@ -412,7 +440,12 @@ const ArticleDetail: React.FC<{
     loading: boolean
     onEdit: () => void
 }> = ({ note, fullContent, loading, onEdit }) => (
-    <div className="flex flex-col h-full bg-white dark:bg-[#191919]">
+    <div className="flex flex-col h-full bg-white dark:bg-[#191919] relative">
+        {/* Thin top progress bar during content loading — no layout shift */}
+        <div className={cn(
+            'absolute top-0 left-0 right-0 h-0.5 bg-primary-mint/70 z-10 transition-opacity duration-300',
+            loading ? 'opacity-100' : 'opacity-0',
+        )} />
         <div className="flex-1 overflow-y-auto custom-scrollbar">
             <div className="max-w-[720px] mx-auto px-14 py-12">
                 {/* Title row */}
@@ -451,15 +484,12 @@ const ArticleDetail: React.FC<{
                         {note.summary}
                     </div>
                 )}
-                {loading ? (
-                    <div className="space-y-3">
-                        {[1,2,3,4,5].map(i => <div key={i} className={`skeleton h-4 ${['w-full','w-5/6','w-4/6','w-full','w-3/4'][i-1]}`} />)}
-                    </div>
-                ) : (
-                    <div className="markdown-content text-[15px] leading-[1.8] text-[#374151] dark:text-[#d1d5db]">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{fullContent}</ReactMarkdown>
-                    </div>
-                )}
+                <div className={cn(
+                    'markdown-content text-[15px] leading-[1.8] text-[#374151] dark:text-[#d1d5db] transition-opacity duration-200',
+                    loading && 'opacity-50',
+                )}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{fullContent}</ReactMarkdown>
+                </div>
             </div>
         </div>
     </div>

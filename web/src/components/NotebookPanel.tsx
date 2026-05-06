@@ -191,7 +191,7 @@ export const NotebookPanel: React.FC<{
 
     // ── Notebook workspace mode ──────────────────────────────────────────
     if (activeNotebook) {
-        return <NotebookWorkspace key={activeNotebook} notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
+        return <NotebookWorkspace notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
     }
 
     const displayList = inSearch ? results : notebookEntries

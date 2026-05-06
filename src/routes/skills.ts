@@ -8,12 +8,12 @@
  *   PUT    /api/skills/:name     — overwrite a skill
  *   DELETE /api/skills/:name     — delete a skill
  */
-import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, unlink, stat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type Router from '@koa/router';
 import { calcUser } from '../services/user-service.js';
-import { loadUserSkills } from '../skills/skill-registry.js';
 import { parseSkillFile } from '../skills/skill-parser.js';
+import type { SkillDefinition } from '../skills/skill-parser.js';
 
 const SKILL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
@@ -23,6 +23,64 @@ function isValidName(name: string): boolean {
 
 function skillFilePath(skillsDir: string, name: string): string {
     return join(skillsDir, `${name}.skill.md`);
+}
+
+/**
+ * Locate the actual file for a skill by checking both supported layouts:
+ *   - Flat:   {skillsDir}/{name}.skill.md
+ *   - Nested: {skillsDir}/{name}/skill.md
+ * Returns the path if found, null otherwise.
+ */
+async function findSkillFile(skillsDir: string, name: string): Promise<string | null> {
+    const flat = skillFilePath(skillsDir, name);
+    try {
+        const s = await stat(flat);
+        if (s.isFile()) return flat;
+    } catch { /* not found */ }
+
+    const nested = join(skillsDir, name, 'skill.md');
+    try {
+        const s = await stat(nested);
+        if (s.isFile()) return nested;
+    } catch { /* not found */ }
+
+    return null;
+}
+
+/**
+ * Scan all skill files in skillsDir (both layouts, including disabled).
+ * Never throws — missing directory returns [].
+ */
+async function _scanAllSkills(skillsDir: string): Promise<SkillDefinition[]> {
+    let entries: { name: string; isFile(): boolean }[];
+    try {
+        entries = await readdir(skillsDir, { withFileTypes: true, encoding: 'utf-8' }) as unknown as { name: string; isFile(): boolean }[];
+    } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+        throw err;
+    }
+
+    const candidatePaths: string[] = [];
+    for (const entry of entries) {
+        if (entry.isFile() && entry.name.endsWith('.skill.md')) {
+            candidatePaths.push(join(skillsDir, entry.name));
+        } else if (!entry.isFile()) {
+            const nested = join(skillsDir, entry.name, 'skill.md');
+            try {
+                const s = await stat(nested);
+                if (s.isFile()) candidatePaths.push(nested);
+            } catch { /* no skill.md */ }
+        }
+    }
+
+    const results: SkillDefinition[] = [];
+    for (const filePath of candidatePaths) {
+        try {
+            const content = await readFile(filePath, 'utf-8');
+            results.push(parseSkillFile(content, filePath));
+        } catch { /* skip unparseable files */ }
+    }
+    return results;
 }
 
 export function skillsRoute(router: Router): void {
@@ -35,9 +93,11 @@ export function skillsRoute(router: Router): void {
             ctx.body = { skills: [] };
             return;
         }
-        const registry = await loadUserSkills(stateDir, userId);
+        // Scan the skills dir directly so disabled skills are also included in the list.
+        const skillsDir = join(stateDir, 'skills');
+        const allSkills = await _scanAllSkills(skillsDir);
         ctx.body = {
-            skills: registry.list().map((s) => ({
+            skills: allSkills.map((s) => ({
                 name: s.frontmatter.name,
                 description: s.frontmatter.description,
                 tags: s.frontmatter.tags ?? [],
@@ -65,18 +125,17 @@ export function skillsRoute(router: Router): void {
             ctx.body = { error: 'No state directory' };
             return;
         }
-        const registry = await loadUserSkills(stateDir, userId);
-        const skill = registry.get(name);
-        if (!skill) {
+        // Read directly from file — do NOT go through the registry because
+        // the registry skips disabled skills and may miss nested layout files.
+        const skillsDir = join(stateDir, 'skills');
+        const filePath = await findSkillFile(skillsDir, name);
+        if (!filePath) {
             ctx.status = 404;
             ctx.body = { error: `Skill "${name}" not found` };
             return;
         }
-        // Return raw file content too, for the editor
-        let rawContent = '';
-        try {
-            rawContent = await readFile(skill.filePath, 'utf8');
-        } catch { /* ignore */ }
+        const rawContent = await readFile(filePath, 'utf8');
+        const skill = parseSkillFile(rawContent, filePath);
         ctx.body = {
             name: skill.frontmatter.name,
             description: skill.frontmatter.description,
@@ -128,19 +187,77 @@ export function skillsRoute(router: Router): void {
 
         const skillsDir = join(stateDir, 'skills');
         await mkdir(skillsDir, { recursive: true });
-        const filePath = skillFilePath(skillsDir, name);
 
-        // Check if already exists
-        try {
-            await readFile(filePath);
+        // Check if already exists in either layout
+        const existing = await findSkillFile(skillsDir, name);
+        if (existing) {
             ctx.status = 409;
             ctx.body = { error: `Skill "${name}" already exists` };
             return;
-        } catch { /* ok, doesn't exist */ }
+        }
 
+        const filePath = skillFilePath(skillsDir, name);
         await writeFile(filePath, rawContent, 'utf8');
         ctx.status = 201;
         ctx.body = { ok: true, name };
+    });
+
+    // ── Toggle skill enabled/disabled ────────────────────────────────────────
+    router.patch('/api/skills/:name', async (ctx) => {
+        const name = ctx.params.name ?? '';
+        if (!isValidName(name)) {
+            ctx.status = 400;
+            ctx.body = { error: 'Invalid skill name' };
+            return;
+        }
+        const userId = ctx.state.userId as string;
+        const userCtx = await calcUser(userId);
+        const stateDir = userCtx.stateDir;
+        if (!stateDir) {
+            ctx.status = 500;
+            ctx.body = { error: 'No state directory configured' };
+            return;
+        }
+
+        const body = ctx.request.body as Record<string, unknown>;
+        if (typeof body.enabled !== 'boolean') {
+            ctx.status = 400;
+            ctx.body = { error: '`enabled` (boolean) is required' };
+            return;
+        }
+        const enabled: boolean = body.enabled;
+
+        const skillsDir = join(stateDir, 'skills');
+        const filePath = await findSkillFile(skillsDir, name);
+        if (!filePath) {
+            ctx.status = 404;
+            ctx.body = { error: `Skill "${name}" not found` };
+            return;
+        }
+
+        const raw = await readFile(filePath, 'utf8');
+
+        // Patch the enabled field inside the YAML frontmatter block
+        const FRONTMATTER_RE = /^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))([\s\S]*)$/;
+        const m = raw.match(FRONTMATTER_RE);
+        if (!m) {
+            ctx.status = 400;
+            ctx.body = { error: 'Skill file has no valid YAML frontmatter' };
+            return;
+        }
+        const [, open, yaml, close, rest] = m;
+
+        // Replace existing `enabled:` line or append it
+        const enabledLine = `enabled: ${enabled}`;
+        let newYaml: string;
+        if (/^enabled:/m.test(yaml)) {
+            newYaml = yaml.replace(/^enabled:.*$/m, enabledLine);
+        } else {
+            newYaml = yaml.trimEnd() + '\n' + enabledLine;
+        }
+
+        await writeFile(filePath, open + newYaml + close + rest, 'utf8');
+        ctx.body = { ok: true, name, enabled };
     });
 
     // ── Update skill ─────────────────────────────────────────────────────────
@@ -186,8 +303,10 @@ export function skillsRoute(router: Router): void {
         }
 
         const skillsDir = join(stateDir, 'skills');
-        await mkdir(skillsDir, { recursive: true });
-        const filePath = skillFilePath(skillsDir, name);
+        // Write to wherever the file already lives; fall back to flat layout for new files
+        const existingPath = await findSkillFile(skillsDir, name);
+        const filePath = existingPath ?? skillFilePath(skillsDir, name);
+        await mkdir(join(filePath, '..'), { recursive: true });
         await writeFile(filePath, rawContent, 'utf8');
         ctx.body = { ok: true, name };
     });
@@ -209,18 +328,13 @@ export function skillsRoute(router: Router): void {
             return;
         }
         const skillsDir = join(stateDir, 'skills');
-        const filePath = skillFilePath(skillsDir, name);
-        try {
-            await unlink(filePath);
-        } catch (err) {
-            const code = (err as NodeJS.ErrnoException).code;
-            if (code === 'ENOENT') {
-                ctx.status = 404;
-                ctx.body = { error: `Skill "${name}" not found` };
-                return;
-            }
-            throw err;
+        const filePath = await findSkillFile(skillsDir, name);
+        if (!filePath) {
+            ctx.status = 404;
+            ctx.body = { error: `Skill "${name}" not found` };
+            return;
         }
+        await unlink(filePath);
         ctx.body = { ok: true };
     });
 }

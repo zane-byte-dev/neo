@@ -540,6 +540,17 @@ export async function createSkill(rawContent: string): Promise<{ ok: boolean; na
     return _jsonOrThrow(res)
 }
 
+export async function toggleSkill(name: string, enabled: boolean): Promise<{ ok: boolean; name: string; enabled: boolean }> {
+    const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    })
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    return _jsonOrThrow(res)
+}
+
 export async function updateSkill(name: string, rawContent: string): Promise<{ ok: boolean; name: string }> {
     const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
         method: 'PUT',
