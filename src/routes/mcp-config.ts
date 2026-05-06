@@ -15,7 +15,7 @@ interface McpConfigFile {
     mcpServers?: Record<string, McpServerConfig>;
 }
 
-const SERVER_NAME_RE = /^[a-zA-Z0-9._-]{1,64}$/;
+const SERVER_NAME_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
 
 async function readConfig(workDir: string): Promise<McpConfigFile> {
     try {
@@ -60,7 +60,7 @@ export function mcpConfigRoute(router: Router): void {
     router.put('/api/mcp/:name', async (ctx) => {
         const userId = ctx.state.userId as string;
         const name = ctx.params.name ?? '';
-        if (!SERVER_NAME_RE.test(name)) {
+        if (!SERVER_NAME_PATTERN.test(name)) {
             ctx.status = 400;
             ctx.body = { error: 'Invalid server name' };
             return;

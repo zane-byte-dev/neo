@@ -15,7 +15,7 @@ interface ScheduledTask {
     telegramChatId?: string;
 }
 
-const TASK_ID_RE = /^[a-zA-Z0-9._-]{1,64}$/;
+const TASK_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
 
 function schedulePath(stateDir: string): string {
     return join(stateDir, 'memory', 'schedule.json');
@@ -76,7 +76,7 @@ export function cronRoute(router: Router): void {
     router.put('/api/crons/:name', async (ctx) => {
         const userId = ctx.state.userId as string;
         const name = ctx.params.name ?? '';
-        if (!TASK_ID_RE.test(name)) {
+        if (!TASK_ID_PATTERN.test(name)) {
             ctx.status = 400;
             ctx.body = { error: 'Invalid task name' };
             return;

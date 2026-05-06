@@ -254,7 +254,13 @@ const McpTab: React.FC = () => {
 
     const reload = () => {
         setLoading(true)
-        mcpList().then((res) => setServers(res.servers)).catch(() => setServers({})).finally(() => setLoading(false))
+        mcpList()
+            .then((res) => setServers(res.servers))
+            .catch(() => {
+                setServers({})
+                toast.error(t('mcpLoadFailed'))
+            })
+            .finally(() => setLoading(false))
     }
 
     React.useEffect(() => { reload() }, [])
@@ -368,8 +374,16 @@ const AutomationsTab: React.FC = () => {
 
     const reload = () => {
         setLoading(true)
-        Promise.all([cronList().catch(() => []), fetchMe().catch(() => null)])
-            .then(([nextJobs, me]) => { setJobs(nextJobs); setUserId(me?.userId ?? null) })
+        Promise.allSettled([cronList(), fetchMe()])
+            .then(([jobsResult, meResult]) => {
+                if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value)
+                else {
+                    setJobs([])
+                    toast.error(t('automationsLoadFailed'))
+                }
+                if (meResult.status === 'fulfilled') setUserId(meResult.value.userId)
+                else toast.error(t('automationsLoadFailed'))
+            })
             .finally(() => setLoading(false))
     }
 

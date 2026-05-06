@@ -848,6 +848,12 @@ const ROUTING_PRESETS = {
 
 type RoutingPresetId = keyof typeof ROUTING_PRESETS
 
+const ROUTING_PRESET_LABEL_KEYS: Record<RoutingPresetId, TranslationKeys> = {
+    conservative: 'routingPresetConservative',
+    balanced: 'routingPresetBalanced',
+    aggressive: 'routingPresetAggressive',
+}
+
 const RoutingEditor: React.FC<{
     routing: RoutingConfigData
     onSaved: (next: RoutingConfigData) => void
@@ -976,7 +982,7 @@ const RoutingEditor: React.FC<{
                                 onClick={() => applyPreset(id)}
                                 className="px-2.5 py-1 rounded-lg border border-border bg-bg-container text-[11px] text-text-secondary hover:bg-fill-secondary transition-colors"
                             >
-                                {t(`routingPreset${id[0].toUpperCase()}${id.slice(1)}` as Parameters<T>[0])}
+                                {t(ROUTING_PRESET_LABEL_KEYS[id])}
                             </button>
                         ))}
                     </div>

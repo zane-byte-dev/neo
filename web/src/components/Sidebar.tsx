@@ -11,7 +11,8 @@ import type { Theme } from '../types'
 function parseImportedChat(raw: string, filename: string): { title: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
     try {
         const data = JSON.parse(raw) as Record<string, unknown>
-        const title = typeof data.title === 'string' && data.title.trim() ? data.title.trim() : filename.replace(/\.[^.]+$/, '')
+        const trimmedTitle = typeof data.title === 'string' ? data.title.trim() : ''
+        const title = trimmedTitle || filename.replace(/\.[^.]+$/, '')
         const messages = Array.isArray(data.messages)
             ? data.messages.map((item) => typeof item === 'object' && item !== null ? item as Record<string, unknown> : null)
                 .filter((item): item is Record<string, unknown> => item !== null)
