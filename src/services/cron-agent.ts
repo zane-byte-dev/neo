@@ -171,11 +171,11 @@ export async function startCronAgent(): Promise<void> {
 /**
  * Reload schedules for a specific user or all users.
  */
-export async function reloadSchedules(userId?: string): Promise<number> {
+export async function reloadSchedules(): Promise<number> {
     let count = 0;
 
     // startCronAgent reads schedules for all users, so clear all existing jobs
-    // first to avoid duplicate user/system schedules after a targeted reload.
+    // first to avoid duplicate user/system schedules after any reload.
     for (const [, job] of activeJobs) {
         job.stop();
     }

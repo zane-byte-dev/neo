@@ -8,7 +8,7 @@ import { useT, LOCALE_OPTIONS } from '../i18n'
 import { toast } from './Toast'
 import type { Theme } from '../types'
 
-function parseImportedChat(raw: string, filename: string): { title: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
+function parseImportedChatFile(raw: string, filename: string): { title: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
     try {
         const data = JSON.parse(raw) as Record<string, unknown>
         const trimmedTitle = typeof data.title === 'string' ? data.title.trim() : ''
@@ -250,7 +250,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const handleImportChat = async (file: File | undefined) => {
         if (!file) return
         try {
-            const parsed = parseImportedChat(await file.text(), file.name)
+            const parsed = parseImportedChatFile(await file.text(), file.name)
             if (parsed.messages.length === 0) throw new Error(t('importChatNoMessages'))
             const res = await importChatApi(parsed.title, parsed.messages)
             setChats([{

@@ -15,7 +15,7 @@ interface ScheduledTask {
     telegramChatId?: string;
 }
 
-const TASK_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
+const TASK_NAME_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
 
 function schedulePath(stateDir: string): string {
     return join(stateDir, 'memory', 'schedule.json');
@@ -76,7 +76,7 @@ export function cronRoute(router: Router): void {
     router.put('/api/crons/:name', async (ctx) => {
         const userId = ctx.state.userId as string;
         const name = ctx.params.name ?? '';
-        if (!TASK_ID_PATTERN.test(name)) {
+        if (!TASK_NAME_PATTERN.test(name)) {
             ctx.status = 400;
             ctx.body = { error: 'Invalid task name' };
             return;
@@ -94,7 +94,7 @@ export function cronRoute(router: Router): void {
         if (existingIndex >= 0) tasks[existingIndex] = task;
         else tasks.push(task);
         await writeSchedule(stateDir, tasks);
-        await reloadSchedules(userId);
+        await reloadSchedules();
         ctx.body = { ok: true, task };
     });
 
@@ -118,7 +118,7 @@ export function cronRoute(router: Router): void {
         }
         tasks[index] = task;
         await writeSchedule(stateDir, tasks);
-        await reloadSchedules(userId);
+        await reloadSchedules();
         ctx.body = { ok: true, task };
     });
 
@@ -127,7 +127,7 @@ export function cronRoute(router: Router): void {
         const name = ctx.params.name ?? '';
         const { stateDir } = await calcUser(userId);
         await writeSchedule(stateDir, (await readSchedule(stateDir)).filter((task) => task.id !== name));
-        await reloadSchedules(userId);
+        await reloadSchedules();
         ctx.body = { ok: true };
     });
 }

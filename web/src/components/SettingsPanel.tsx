@@ -228,7 +228,7 @@ const AppsTab: React.FC = () => {
 
 // ── MCP Tab ──────────────────────────────────────────────────────────────────
 
-const parseLines = (value: string) => value.split(/\s+/).map((s) => s.trim()).filter(Boolean)
+const parseSpaceDelimitedArgs = (value: string) => value.split(/\s+/).map((s) => s.trim()).filter(Boolean)
 
 const parseEnv = (value: string): Record<string, string> => Object.fromEntries(
     value.split('\n')
@@ -288,7 +288,7 @@ const McpTab: React.FC = () => {
         try {
             await mcpSave(name, {
                 command: command.trim(),
-                args: parseLines(args),
+                args: parseSpaceDelimitedArgs(args),
                 ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
                 env: parseEnv(env),
             })
