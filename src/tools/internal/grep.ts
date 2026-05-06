@@ -1,7 +1,10 @@
 /**
  * grep.ts — Recursive file content search tool.
  *
- * Searches files by regex pattern. Supports:
+ * Uses ripgrep (rg) when available for fast search with .gitignore awareness.
+ * Falls back to pure-JS implementation when rg is not installed.
+ *
+ * Supports:
  * - output_mode: "files" (default), "content" (with context), "count"
  * - glob filter (e.g. "*.ts")
  * - case sensitivity toggle
@@ -9,8 +12,119 @@
  */
 import { promises as fs } from 'fs';
 import { join, isAbsolute } from 'path';
+import { spawnSync } from 'child_process';
 import type { Tool } from '../_base.js';
 import { matchesGlob, walkDirEntries } from '../../utils/file-search.js';
+
+// ── ripgrep availability (cached per process) ────────────────────────────────
+
+let _rgAvailable: boolean | undefined;
+
+function rgAvailable(): boolean {
+    if (_rgAvailable !== undefined) return _rgAvailable;
+    try {
+        const r = spawnSync('rg', ['--version'], { encoding: 'utf8', timeout: 3_000 });
+        _rgAvailable = r.status === 0;
+    } catch {
+        _rgAvailable = false;
+    }
+    return _rgAvailable;
+}
+
+// Directories to skip — mirrors walkDirEntries DEFAULT_SKIP_DIRS
+const SKIP_DIRS = ['node_modules', 'dist', '.git', '.cache', 'cache', '__pycache__', '.next'];
+const SKIP_GLOBS = SKIP_DIRS.flatMap(d => ['--glob', `!${d}`]);
+
+// ── ripgrep-based search ─────────────────────────────────────────────────────
+
+function relPath(absFile: string, base: string): string {
+    return absFile.startsWith(base + '/') ? absFile.slice(base.length + 1) : absFile;
+}
+
+function rgSearch(
+    pattern: string,
+    searchPath: string,
+    globFilter: string | null,
+    outputMode: 'files' | 'content' | 'count',
+    contextLines: number,
+    caseSensitive: boolean,
+    maxResults: number,
+): string {
+    const baseArgs: string[] = [
+        '--hidden',
+        ...SKIP_GLOBS,
+        ...(caseSensitive ? [] : ['--ignore-case']),
+        ...(globFilter ? ['--glob', globFilter] : []),
+    ];
+
+    // ── files mode ──────────────────────────────────────────────────────────
+    if (outputMode === 'files') {
+        const r = spawnSync('rg', [...baseArgs, '--files-with-matches', pattern, searchPath],
+            { encoding: 'utf8', timeout: 30_000 });
+        if (r.status === 2) throw new Error(r.stderr?.trim());
+        const files = (r.stdout ?? '').split('\n').filter(Boolean).slice(0, maxResults);
+        if (files.length === 0) return `No matches found for "${pattern}"`;
+        const rel = files.map(f => relPath(f, searchPath));
+        return `${rel.length} file(s) match "${pattern}":\n\n${rel.join('\n')}`;
+    }
+
+    // ── count mode ──────────────────────────────────────────────────────────
+    if (outputMode === 'count') {
+        const r = spawnSync('rg', [...baseArgs, '--count', pattern, searchPath],
+            { encoding: 'utf8', timeout: 30_000 });
+        if (r.status === 2) throw new Error(r.stderr?.trim());
+        const lines = (r.stdout ?? '').split('\n').filter(Boolean);
+        if (lines.length === 0) return `No matches found for "${pattern}"`;
+        let totalMatches = 0;
+        const out = lines.map(line => {
+            const colonIdx = line.lastIndexOf(':');
+            const count = parseInt(line.slice(colonIdx + 1), 10) || 0;
+            totalMatches += count;
+            return `${relPath(line.slice(0, colonIdx), searchPath)}: ${count}`;
+        });
+        return `${totalMatches} match(es) across ${lines.length} file(s):\n\n${out.join('\n')}`;
+    }
+
+    // ── content mode — JSON output for structured parsing ────────────────────
+    const r = spawnSync(
+        'rg',
+        [...baseArgs, '--json', ...(contextLines > 0 ? ['--context', String(contextLines)] : []), pattern, searchPath],
+        { encoding: 'utf8', timeout: 30_000, maxBuffer: 20 * 1024 * 1024 },
+    );
+    if (r.status === 2) throw new Error(r.stderr?.trim());
+
+    const outputLines: string[] = [];
+    let totalMatches = 0;
+    let fileCount = 0;
+    let currentBlock: string[] = [];
+    let prevLineNum = -2;
+
+    for (const jsonLine of (r.stdout ?? '').split('\n')) {
+        if (!jsonLine) continue;
+        let msg: { type: string; data: any };
+        try { msg = JSON.parse(jsonLine); } catch { continue; }
+
+        if (msg.type === 'begin') {
+            const file = relPath(msg.data.path?.text ?? '', searchPath);
+            currentBlock = [`${file}:`];
+            prevLineNum = -2;
+            fileCount++;
+        } else if (msg.type === 'match' || msg.type === 'context') {
+            const lineNum: number = msg.data.line_number;
+            const text: string = (msg.data.lines?.text ?? '').replace(/\n$/, '');
+            if (lineNum > prevLineNum + 1 && prevLineNum >= 0) currentBlock.push('  --');
+            currentBlock.push(`${msg.type === 'match' ? '> ' : '  '}${lineNum}: ${text}`);
+            prevLineNum = lineNum;
+            if (msg.type === 'match') totalMatches++;
+        } else if (msg.type === 'end') {
+            outputLines.push(currentBlock.join('\n'));
+            if (outputLines.length >= maxResults) break;
+        }
+    }
+
+    if (outputLines.length === 0) return `No matches found for "${pattern}"`;
+    return `${totalMatches} match(es) in ${fileCount} file(s):\n\n${outputLines.join('\n')}`;
+}
 
 export const grepTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0', permission: 'read' },
@@ -71,6 +185,7 @@ export const grepTool: Tool = {
         const caseSensitive = String(args.case_sensitive ?? 'true') !== 'false';
         const maxResults = Math.min(500, Number(args.max_results ?? 100));
 
+        // Validate regex early so we can return a clear error before spawning rg.
         let regex: RegExp;
         try {
             regex = new RegExp(pattern, caseSensitive ? '' : 'i');
@@ -78,6 +193,16 @@ export const grepTool: Tool = {
             return `[Error] Invalid regex: ${e.message}`;
         }
 
+        // ── fast path: ripgrep ───────────────────────────────────────────────
+        if (rgAvailable()) {
+            try {
+                return rgSearch(pattern, searchPath, globFilter, outputMode, contextLines, caseSensitive, maxResults);
+            } catch {
+                // rg failed (e.g. path not found) — fall through to JS impl
+            }
+        }
+
+        // ── fallback: pure-JS implementation ────────────────────────────────
         let stat;
         try {
             stat = await fs.stat(searchPath);
@@ -120,15 +245,15 @@ export const grepTool: Tool = {
             totalMatches += matchingLineIdxs.length;
             fileMatchCount++;
 
-            const relPath = file.startsWith(searchPath)
+            const fileRelPath = file.startsWith(searchPath)
                 ? file.slice(searchPath.length + 1)
                 : file;
 
             if (outputMode === 'files') {
-                outputLines.push(relPath);
+                outputLines.push(fileRelPath);
                 if (outputLines.length >= maxResults) break;
             } else if (outputMode === 'count') {
-                outputLines.push(`${relPath}: ${matchingLineIdxs.length}`);
+                outputLines.push(`${fileRelPath}: ${matchingLineIdxs.length}`);
             } else {
                 // content mode with context
                 const shown = new Set<number>();
@@ -137,7 +262,7 @@ export const grepTool: Tool = {
                         shown.add(c);
                     }
                 }
-                const block: string[] = [`${relPath}:`];
+                const block: string[] = [`${fileRelPath}:`];
                 let prev = -2;
                 for (const li of Array.from(shown).sort((a, b) => a - b)) {
                     if (li > prev + 1 && prev >= 0) block.push('  --');
