@@ -11,7 +11,7 @@ import {
 } from '../api'
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
-import { Zap, Plus, Pencil, Trash2, Tag, ChevronLeft, Loader2, AlertTriangle, Code2, ToggleLeft, ToggleRight, RefreshCw } from 'lucide-react'
+import { Zap, Plus, Pencil, Trash2, Tag, ChevronLeft, Loader2, AlertTriangle, Code2, RefreshCw } from 'lucide-react'
 import { toast } from './Toast'
 
 // ── Default template ──────────────────────────────────────────────────────────
@@ -614,4 +614,3 @@ export const SkillsPanel: React.FC = () => {
         </div>
     )
 }
-

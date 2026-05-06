@@ -599,14 +599,11 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         const output = fullResponse.trim();
         const citations = isNotebookSession ? citationsFromText(runId, output) : [];
         if (output) {
-            await messageAdd(
-                session.id,
-                userId,
-                'assistant',
-                output,
-                undefined,
-                citations.length > 0 ? { citations } : undefined,
-            );
+            if (citations.length > 0) {
+                await messageAdd(session.id, userId, 'assistant', output, undefined, { citations });
+            } else {
+                await messageAdd(session.id, userId, 'assistant', output);
+            }
             await appendRunEventSafe(stateDir, runId, 'user_message_saved', {
                 role: 'assistant',
                 sessionId: session.id,

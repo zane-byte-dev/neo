@@ -895,6 +895,19 @@ export function deleteSessionApi(id: string) {
     })
 }
 
+export function importChatApi(title: string, messages: Array<{ role: 'user' | 'assistant'; content: string }>) {
+    return _post('/api/session/import', { title, messages }).then((r) => _jsonOrThrow<{ ok: boolean; session: {
+        id: string;
+        title: string;
+        isPinned: boolean;
+        isArchived?: boolean;
+        createdAt: number;
+        updatedAt?: number;
+        projectRoot: string | null;
+        mode?: 'general' | 'notebook';
+    } }>(r))
+}
+
 export interface NotebookSessionRow {
     id: string
     title: string
@@ -1060,6 +1073,49 @@ export function cronTrigger(name: string) {
         method: 'POST',
         credentials: 'include',
     }).then((r) => r.json()) as Promise<{ status: string; summary?: string; error?: string }>
+}
+
+export interface McpServerConfig {
+    command: string
+    args?: string[]
+    env?: Record<string, string>
+    cwd?: string
+}
+
+export function mcpList() {
+    return apiGet<{ servers: Record<string, McpServerConfig> }>('/api/mcp')
+}
+
+export function mcpSave(name: string, server: McpServerConfig) {
+    return fetch(`/api/mcp/${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(server),
+    }).then((r) => _jsonOrThrow<{ ok: true; name: string; server: McpServerConfig }>(r))
+}
+
+export function mcpDelete(name: string) {
+    return fetch(`/api/mcp/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+}
+
+export function cronSave(name: string, job: { cron: string; message: string; enabled: boolean; timezone?: string; telegramChatId?: string }) {
+    return fetch(`/api/crons/${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(job),
+    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+}
+
+export function cronDelete(name: string) {
+    return fetch(`/api/crons/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

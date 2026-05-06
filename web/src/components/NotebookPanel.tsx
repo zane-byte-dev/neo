@@ -500,7 +500,7 @@ const NotebookList: React.FC<{
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t('searchNotes')}
+                    placeholder={selectedNotebook ? t('searchNotes') : t('searchAllNotebooks')}
                     className="w-full bg-fill-secondary border border-border rounded-xl pl-9 pr-9 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40 transition-all duration-200 placeholder:text-text-quaternary"
                 />
                 {searchQuery && (
