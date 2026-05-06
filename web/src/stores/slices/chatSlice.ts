@@ -59,6 +59,7 @@ export interface ChatSlice {
     pinChat: (id: string) => void
     archiveChat: (id: string, archived: boolean) => void
     renameChat: (id: string, title: string) => void
+    setChatModel: (id: string, model: string) => void
 
     // Messages
     messages: Record<string, Message[]>
@@ -165,6 +166,9 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
     })),
     renameChat: (id: string, title: string) => set((state) => ({
         chats: state.chats.map((c) => c.id === id ? { ...c, title } : c),
+    })),
+    setChatModel: (id: string, model: string) => set((state) => ({
+        chats: state.chats.map((c) => c.id === id ? { ...c, chatModel: model } : c),
     })),
 
     // Messages

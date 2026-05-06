@@ -438,6 +438,72 @@ const ToolApprovalsCard: React.FC<{
     )
 }
 
+// ── Daily Token Chart ─────────────────────────────────────────────────────────
+
+const DailyTokenChart: React.FC<{ records: UsageRecord[]; t: T }> = ({ records, t }) => {
+    if (records.length === 0) return null
+
+    // Aggregate by day
+    const byDay: Record<string, number> = {}
+    for (const r of records) {
+        const day = new Date(r.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        byDay[day] = (byDay[day] ?? 0) + r.totalTokens
+    }
+
+    const entries = Object.entries(byDay).slice(-30) // last 30 days
+    if (entries.length === 0) return null
+
+    const maxVal = Math.max(...entries.map(([, v]) => v))
+    const H = 80
+    const W_BAR = 18
+    const GAP = 4
+    const totalW = entries.length * (W_BAR + GAP)
+
+    const fmtNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(0)}k` : String(n)
+
+    return (
+        <div className="bg-bg-container border border-border rounded-xl p-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
+            <h3 className="text-xs font-medium text-text-tertiary mb-3">{t('dailyTokenChart')}</h3>
+            <div className="overflow-x-auto custom-scrollbar">
+                <svg width={totalW} height={H + 24} className="block">
+                    {entries.map(([day, val], i) => {
+                        const barH = maxVal > 0 ? Math.round((val / maxVal) * H) : 0
+                        const x = i * (W_BAR + GAP)
+                        const y = H - barH
+                        return (
+                            <g key={day}>
+                                <title>{day}: {fmtNum(val)} tokens</title>
+                                <rect
+                                    x={x}
+                                    y={y}
+                                    width={W_BAR}
+                                    height={barH || 1}
+                                    rx={3}
+                                    className="fill-primary-mint/70 hover:fill-primary-mint transition-colors"
+                                />
+                                {entries.length <= 15 && (
+                                    <text
+                                        x={x + W_BAR / 2}
+                                        y={H + 14}
+                                        textAnchor="middle"
+                                        fontSize={9}
+                                        className="fill-text-quaternary"
+                                    >
+                                        {day.split(' ')[1]}
+                                    </text>
+                                )}
+                            </g>
+                        )
+                    })}
+                </svg>
+            </div>
+            <div className="mt-1 text-[10px] text-text-quaternary text-right">
+                {t('chartMaxLabel').replace('{n}', fmtNum(maxVal))}
+            </div>
+        </div>
+    )
+}
+
 // ── History Table ─────────────────────────────────────────────────────────────
 
 const HistoryTable: React.FC<{ records: UsageRecord[]; t: T; onViewDetail: (r: UsageRecord) => void }> = ({ records, t, onViewDetail }) => {
@@ -842,9 +908,16 @@ const RoutingEditor: React.FC<{
         }
     }
 
-    const numField = (label: string, path: Parameters<typeof updateNumber>[0], value: number, step = '0.01') => (
+    const numField = (label: string, path: Parameters<typeof updateNumber>[0], value: number, step = '0.01', tooltip?: string) => (
         <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-text-tertiary">{label}</span>
+            <span className="text-[11px] text-text-tertiary flex items-center gap-1">
+                {label}
+                {tooltip && (
+                    <span title={tooltip} className="cursor-help text-text-quaternary hover:text-text-tertiary transition-colors">
+                        &#x24D8;
+                    </span>
+                )}
+            </span>
             <input
                 type="number"
                 step={step}
@@ -884,12 +957,12 @@ const RoutingEditor: React.FC<{
 
             {/* Numeric tunables */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {numField(t('simpleMax'), 'boundaries.simpleMax', draft.boundaries.simpleMax)}
-                {numField(t('standardMax'), 'boundaries.standardMax', draft.boundaries.standardMax)}
-                {numField(t('confidenceK'), 'confidence.k', draft.confidence.k, '1')}
-                {numField(t('fallbackThreshold'), 'confidence.fallbackThreshold', draft.confidence.fallbackThreshold)}
-                {numField(t('ctxThreshold'), 'overrides.largeContextThreshold', draft.overrides.largeContextThreshold, '1000')}
-                {numField(t('momentumWindow'), 'momentum.historySize', draft.momentum.historySize, '1')}
+                {numField(t('simpleMax'), 'boundaries.simpleMax', draft.boundaries.simpleMax, '0.01', t('simpleMaxTooltip'))}
+                {numField(t('standardMax'), 'boundaries.standardMax', draft.boundaries.standardMax, '0.01', t('standardMaxTooltip'))}
+                {numField(t('confidenceK'), 'confidence.k', draft.confidence.k, '1', t('confidenceKTooltip'))}
+                {numField(t('fallbackThreshold'), 'confidence.fallbackThreshold', draft.confidence.fallbackThreshold, '0.01', t('fallbackThresholdTooltip'))}
+                {numField(t('ctxThreshold'), 'overrides.largeContextThreshold', draft.overrides.largeContextThreshold, '1000', t('ctxThresholdTooltip'))}
+                {numField(t('momentumWindow'), 'momentum.historySize', draft.momentum.historySize, '1', t('momentumWindowTooltip'))}
             </div>
 
             {/* Floors */}
@@ -1230,6 +1303,10 @@ export const ModelPanel: React.FC = () => {
                         <section>
                             <h2 className="text-sm font-semibold text-text mb-2.5">{t('usageOverview')} — {data.usage.month}</h2>
                             <UsageSummary data={data} t={t} />
+                        </section>
+
+                        <section>
+                            <DailyTokenChart records={data.history} t={t} />
                         </section>
 
                         <section>

@@ -5,9 +5,9 @@ import { createUiSlice } from './slices/uiSlice'
 import { createChatSlice } from './slices/chatSlice'
 import { createNotebookSlice } from './slices/notebookSlice'
 
-type PersistedAppStore = Pick<AppState, 'theme' | 'locale' | 'selectedModel' | 'confirmDangerous'>
+type PersistedAppStore = Pick<AppState, 'theme' | 'locale' | 'selectedModel' | 'confirmDangerous' | 'chats'>
 
-const WEB_STORE_VERSION = 2
+const WEB_STORE_VERSION = 3
 
 export const useAppStore = create<AppState>()(
     persist(
@@ -32,12 +32,13 @@ export const useAppStore = create<AppState>()(
                 }
                 return state as PersistedAppStore
             },
-            // Persist chats + messages + theme, not UI state
+            // Persist chats (for per-chat model) + theme, not UI state
             partialize: (state) => ({
                 theme: state.theme,
                 locale: state.locale,
                 selectedModel: state.selectedModel,
                 confirmDangerous: state.confirmDangerous,
+                chats: state.chats,
             }),
         }
     )

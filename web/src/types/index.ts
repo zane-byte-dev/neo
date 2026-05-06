@@ -16,6 +16,8 @@ export interface Chat {
     notebookId?: string
     /** When mode === 'notebook', the selected source ids that ground the chat. */
     sourceIds?: string[]
+    /** Per-chat model override. Undefined means use global selectedModel. */
+    chatModel?: string
 }
 
 export interface Message {
@@ -175,6 +177,7 @@ export interface AppState {
     pinChat: (id: string) => void
     archiveChat: (id: string, archived: boolean) => void
     renameChat: (id: string, title: string) => void
+    setChatModel: (id: string, model: string) => void
 
     // Messages
     messages: Record<string, Message[]>

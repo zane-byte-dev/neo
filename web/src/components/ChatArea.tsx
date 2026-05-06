@@ -129,10 +129,51 @@ const MAX_EXPORT_FILENAME_LENGTH = 50
 
 function exportChatAsMarkdown(title: string, messages: Message[]) {
     const lines = [`# ${title}\n`]
+    const fmt = (ts: number) => new Date(ts).toLocaleString()
     for (const msg of messages) {
         const role = msg.role === 'user' ? t('you') : t('neo')
-        lines.push(`### ${role}\n`)
+        const ts = msg.timestamp ? ` *(${fmt(msg.timestamp)})*` : ''
+        lines.push(`### ${role}${ts}\n`)
+        if (msg.thinking) {
+            lines.push(`> 💭 ${msg.thinking.replace(/\n/g, '\n> ')}\n`)
+        }
         if (msg.content) lines.push(msg.content + '\n')
+        if (msg.activityLog?.length) {
+            for (const act of msg.activityLog) {
+                if (act.type === 'tool_call') {
+                    lines.push(`\n> **[Tool call]** \`${act.toolName}\``)
+                    if (act.args && Object.keys(act.args).length > 0) {
+                        lines.push(`\n> \`\`\`json\n> ${JSON.stringify(act.args, null, 2).replace(/\n/g, '\n> ')}\n> \`\`\``)
+                    }
+                    lines.push('')
+                } else if (act.type === 'tool_result') {
+                    lines.push(`> **[Tool result]** \`${act.toolName}\``)
+                    if (act.result) {
+                        const preview = act.truncated ? act.result + '\n*(truncated)*' : act.result
+                        lines.push(`> \`\`\`\n> ${preview.replace(/\n/g, '\n> ')}\n> \`\`\`\n`)
+                    }
+                }
+            }
+        }
+        if (msg.parts?.length) {
+            for (const part of msg.parts) {
+                if (part.type !== 'activity') continue
+                const act = part.item
+                if (act.type === 'tool_call') {
+                    lines.push(`\n> **[Tool call]** \`${act.toolName}\``)
+                    if (act.args && Object.keys(act.args).length > 0) {
+                        lines.push(`\n> \`\`\`json\n> ${JSON.stringify(act.args, null, 2).replace(/\n/g, '\n> ')}\n> \`\`\``)
+                    }
+                    lines.push('')
+                } else if (act.type === 'tool_result') {
+                    lines.push(`> **[Tool result]** \`${act.toolName}\``)
+                    if (act.result) {
+                        const preview = act.truncated ? act.result + '\n*(truncated)*' : act.result
+                        lines.push(`> \`\`\`\n> ${preview.replace(/\n/g, '\n> ')}\n> \`\`\`\n`)
+                    }
+                }
+            }
+        }
     }
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
@@ -1173,9 +1214,27 @@ const ChatInput: React.FC<{
         setIsGenerating,
         setCurrentRunId, setAbortController, setThinkingStatus,
         selectedModel, setSelectedModel,
+        setChatModel,
         confirmDangerous, setConfirmDangerous,
     } = useAppStore()
     const isGenerating = useAppStore(s => activeChatId ? !!s.generatingBySession[activeChatId] : false)
+
+    // Restore per-chat model when switching chats
+    const prevChatIdRef = React.useRef<string | null>(null)
+    React.useEffect(() => {
+        if (activeChatId && activeChatId !== prevChatIdRef.current) {
+            prevChatIdRef.current = activeChatId
+            const chat = chats.find(c => c.id === activeChatId)
+            if (chat?.chatModel) setSelectedModel(chat.chatModel)
+        }
+    }, [activeChatId])
+
+    // Persist model choice to the active chat when user changes it
+    const handleModelSelect = React.useCallback((model: string) => {
+        setSelectedModel(model as typeof selectedModel)
+        if (activeChatId) setChatModel(activeChatId, model)
+    }, [activeChatId, setSelectedModel, setChatModel])
+
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)
     const docInputRef = React.useRef<HTMLInputElement>(null)
@@ -1779,7 +1838,7 @@ const ChatInput: React.FC<{
                             )}
                             <ModelPicker
                                 selectedModel={selectedModel}
-                                onSelect={(model) => setSelectedModel(model as typeof selectedModel)}
+                                onSelect={handleModelSelect}
                                 availableModels={availableModels}
                             />
                         </div>

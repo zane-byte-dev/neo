@@ -1,5 +1,5 @@
 import React from 'react'
-import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings } from 'lucide-react'
+import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings, CheckSquare, Square } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
@@ -44,6 +44,55 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const searchRef = React.useRef<HTMLInputElement>(null)
     const renameInputRef = React.useRef<HTMLInputElement>(null)
     const longPressTimerRef = React.useRef<number | null>(null)
+
+    // Multi-select state
+    const [selectMode, setSelectMode] = React.useState(false)
+    const [selectedChatIds, setSelectedChatIds] = React.useState<Set<string>>(new Set())
+
+    const toggleSelectMode = () => {
+        setSelectMode((v) => !v)
+        setSelectedChatIds(new Set())
+    }
+
+    const toggleSelectChat = (id: string) => {
+        setSelectedChatIds((prev) => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+
+    const selectAllVisible = (ids: string[]) => {
+        setSelectedChatIds(new Set(ids))
+    }
+
+    const handleBulkDelete = async () => {
+        const ids = Array.from(selectedChatIds)
+        if (ids.length === 0) return
+        const confirmed = window.confirm(t('bulkDeleteConfirm').replace('{n}', String(ids.length)))
+        if (!confirmed) return
+        for (const id of ids) {
+            deleteSessionApi(id).catch(() => {})
+            deleteChat(id)
+        }
+        toast.success(t('bulkDeleteSuccess').replace('{n}', String(ids.length)))
+        setSelectedChatIds(new Set())
+        setSelectMode(false)
+    }
+
+    const handleBulkArchive = (archived: boolean) => {
+        const ids = Array.from(selectedChatIds)
+        if (ids.length === 0) return
+        for (const id of ids) {
+            archiveChat(id, archived)
+            patchSession(id, { isArchived: archived }).catch(() => {})
+        }
+        const key = archived ? 'bulkArchiveSuccess' : 'bulkUnarchiveSuccess'
+        toast.success(t(key).replace('{n}', String(ids.length)))
+        setSelectedChatIds(new Set())
+        setSelectMode(false)
+    }
 
     React.useEffect(() => {
         fetchMe().then(setMe).catch(() => {})
@@ -413,7 +462,57 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
 
             {/* Chat list */}
             <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2">
-                <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wider px-2.5 mb-1.5">{t('chats') ?? 'Chats'}</p>
+                <div className="flex items-center px-2.5 mb-1.5">
+                    <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wider flex-1">{t('chats') ?? 'Chats'}</p>
+                    <button
+                        type="button"
+                        onClick={toggleSelectMode}
+                        className={cn(
+                            'text-[11px] px-1.5 py-0.5 rounded transition-colors',
+                            selectMode ? 'text-primary-mint hover:text-primary-mint/80' : 'text-text-quaternary hover:text-text-tertiary'
+                        )}
+                    >
+                        {selectMode ? t('cancelSelect') : t('selectChats')}
+                    </button>
+                </div>
+                {/* Bulk action toolbar */}
+                {selectMode && (
+                    <div className="flex items-center gap-1.5 px-1 pb-2 flex-wrap">
+                        <span className="text-[11px] text-text-tertiary flex-1">
+                            {t('selectedCount').replace('{n}', String(selectedChatIds.size))}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const q = searchQuery.toLowerCase().trim()
+                                const visible = (q ? chats.filter(c => c.title.toLowerCase().includes(q)) : chats).map(c => c.id)
+                                if (selectedChatIds.size === visible.length) setSelectedChatIds(new Set())
+                                else selectAllVisible(visible)
+                            }}
+                            className="text-[11px] px-2 py-1 rounded-lg border border-border text-text-secondary hover:bg-fill transition-colors"
+                        >
+                            {selectedChatIds.size > 0 ? t('deselectAll') : t('selectAll')}
+                        </button>
+                        <button
+                            type="button"
+                            disabled={selectedChatIds.size === 0}
+                            onClick={() => void handleBulkArchive(!Array.from(selectedChatIds).every(id => chats.find(c => c.id === id)?.isArchived))}
+                            className="text-[11px] px-2 py-1 rounded-lg border border-border text-text-secondary hover:bg-fill transition-colors disabled:opacity-40"
+                        >
+                            {Array.from(selectedChatIds).every(id => chats.find(c => c.id === id)?.isArchived)
+                                ? t('unarchiveSelected')
+                                : t('archiveSelected')}
+                        </button>
+                        <button
+                            type="button"
+                            disabled={selectedChatIds.size === 0}
+                            onClick={() => void handleBulkDelete()}
+                            className="text-[11px] px-2 py-1 rounded-lg border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                        >
+                            {t('deleteSelected')}
+                        </button>
+                    </div>
+                )}
                 <div className="space-y-px">
                 {(() => {
                     const q = searchQuery.toLowerCase().trim()
@@ -475,6 +574,29 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                         const needsConfirm = !!lastAssistant?.activityLog?.some(
                             (a) => a.type === 'tool_confirm' && a.confirmStatus === 'pending'
                         )
+                        const isSelected = selectedChatIds.has(chat.id)
+
+                        if (selectMode) {
+                            return (
+                                <div
+                                    key={chat.id}
+                                    onClick={() => toggleSelectChat(chat.id)}
+                                    className={cn(
+                                        'group relative flex items-center gap-2 px-2.5 py-[7px] rounded-lg cursor-pointer transition-all duration-150 text-[13px]',
+                                        isSelected
+                                            ? 'bg-primary-mint/10 text-text'
+                                            : 'text-text-secondary hover:bg-sidebar-hover'
+                                    )}
+                                >
+                                    {isSelected
+                                        ? <CheckSquare size={14} className="shrink-0 text-primary-mint" />
+                                        : <Square size={14} className="shrink-0 text-text-quaternary" />
+                                    }
+                                    <span className="flex-1 truncate">{chat.title}</span>
+                                </div>
+                            )
+                        }
+
                         return (
                             <div
                                 key={chat.id}
