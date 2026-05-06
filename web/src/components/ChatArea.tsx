@@ -951,9 +951,13 @@ const ModelPicker: React.FC<ModelPickerProps> = ({ selectedModel, onSelect, avai
         })
     }, [])
 
-    React.useEffect(() => {
+    React.useLayoutEffect(() => {
         if (!open) return
         updatePanelPosition()
+    }, [open, updatePanelPosition])
+
+    React.useEffect(() => {
+        if (!open) return
         const handleViewportChange = () => updatePanelPosition()
         window.addEventListener('resize', handleViewportChange)
         window.addEventListener('scroll', handleViewportChange, true)
@@ -1054,7 +1058,10 @@ const ModelPicker: React.FC<ModelPickerProps> = ({ selectedModel, onSelect, avai
             <button
                 ref={triggerRef}
                 type="button"
-                onClick={() => setOpen((value) => !value)}
+                onClick={() => {
+                    if (!open) updatePanelPosition()
+                    setOpen((value) => !value)
+                }}
                 className={cn(
                     'group flex items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-all duration-150 cursor-pointer shrink-0 min-w-0',
                     open

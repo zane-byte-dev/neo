@@ -1,5 +1,5 @@
 import React from 'react'
-import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, LayoutGrid, Cpu, MessageSquarePlus, PanelLeftClose, Plus } from 'lucide-react'
+import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, LayoutGrid, Cpu, MessageSquarePlus, PanelLeftClose, Plus, Zap } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
@@ -352,6 +352,19 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                 >
                     <Cpu size={15} className="shrink-0 text-text-tertiary" />
                     <span>{t('models')}</span>
+                </Link>
+                <Link
+                    to="/skills"
+                    onClick={onNavigate}
+                    className={cn(
+                        'flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150',
+                        location.pathname === '/skills'
+                            ? 'bg-sidebar-active text-text font-medium'
+                            : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
+                    )}
+                >
+                    <Zap size={15} className="shrink-0 text-text-tertiary" />
+                    <span>{t('skills')}</span>
                 </Link>
                 <div>
                     <button

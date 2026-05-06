@@ -505,6 +505,61 @@ export async function fetchToolResult(resultId: string): Promise<{ id: string; t
     return apiGet(`/api/tool-result/${encodeURIComponent(resultId)}`)
 }
 
+// ── Skills API ────────────────────────────────────────────────────────────────
+
+export interface SkillSummary {
+    name: string
+    description: string
+    tags: string[]
+    version: string | null
+    enabled: boolean
+    hasExecutable: boolean
+    filePath: string
+}
+
+export interface SkillDetail extends SkillSummary {
+    body: string
+    executableBlocks: Array<{ lang: string; code: string }>
+    rawContent: string
+}
+
+export interface SkillsResponse {
+    skills: SkillSummary[]
+}
+
+export function fetchSkills(): Promise<SkillsResponse> {
+    return apiGet<SkillsResponse>('/api/skills')
+}
+
+export function fetchSkill(name: string): Promise<SkillDetail> {
+    return apiGet<SkillDetail>(`/api/skills/${encodeURIComponent(name)}`)
+}
+
+export async function createSkill(rawContent: string): Promise<{ ok: boolean; name: string }> {
+    const res = await _post('/api/skills', { rawContent })
+    return _jsonOrThrow(res)
+}
+
+export async function updateSkill(name: string, rawContent: string): Promise<{ ok: boolean; name: string }> {
+    const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawContent }),
+    })
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    return _jsonOrThrow(res)
+}
+
+export async function deleteSkill(name: string): Promise<{ ok: boolean }> {
+    const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    })
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    return _jsonOrThrow(res)
+}
+
 // ── User Apps API ─────────────────────────────────────────────────────────────
 
 export interface UserAppInfo {
