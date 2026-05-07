@@ -101,7 +101,8 @@ export const NotebookPanel: React.FC<{
     urlNotebook?: string
     navigate?: (path: string) => void
     autoNewNote?: boolean
-}> = ({ fullPage, urlNotebook, navigate, autoNewNote }) => {
+    initialArticleId?: string
+}> = ({ fullPage, urlNotebook, navigate, autoNewNote, initialArticleId }) => {
     const { selectedNote, setSelectedNote, notebookEntries, setNotebookEntries, activeNotebook, setActiveNotebook } = useAppStore()
     const [notebooks, setNotebooks] = React.useState<string[]>([])
     const [selectedNotebook, setSelectedNotebook] = React.useState<string | undefined>(undefined)
@@ -191,7 +192,7 @@ export const NotebookPanel: React.FC<{
 
     // ── Notebook workspace mode ──────────────────────────────────────────
     if (activeNotebook) {
-        return <NotebookWorkspace notebook={activeNotebook} onBack={() => setActiveNotebook(null)} />
+        return <NotebookWorkspace notebook={activeNotebook} onBack={() => setActiveNotebook(null)} startCollapsed={fullPage} initialArticleId={initialArticleId} />
     }
 
     const displayList = inSearch ? results : notebookEntries

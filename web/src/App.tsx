@@ -66,10 +66,12 @@ const ChatPage: React.FC = () => {
 
 const NotebookPage: React.FC = () => {
     const { notebookName } = useParams<{ notebookName?: string }>()
+    const [searchParams] = useSearchParams()
     const navigate = useNavigate()
+    const articleId = searchParams.get('article') ?? undefined
     return (
         <div className="flex-1 overflow-hidden">
-            <NotebookPanel fullPage urlNotebook={notebookName} navigate={navigate} />
+            <NotebookPanel fullPage urlNotebook={notebookName} navigate={navigate} initialArticleId={articleId} />
         </div>
     )
 }

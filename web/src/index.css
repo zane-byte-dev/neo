@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github.css" layer(base);
+@plugin "@tailwindcss/typography";
 
 @theme {
   --color-primary-mint: #34d399;
@@ -161,6 +162,7 @@
     width: 100%;
     height: 100%;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    overscroll-behavior: none;
   }
 
   body {
@@ -397,3 +399,125 @@
 .safe-bottom {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
+
+/* ── Novel / ProseMirror editor ──────────────────────────────────────────────── */
+
+/* Novel highlight color variables */
+:root {
+  --novel-highlight-default: #ffffff;
+  --novel-highlight-purple: #f6f3f8;
+  --novel-highlight-red: #fdebeb;
+  --novel-highlight-yellow: #fbf4a2;
+  --novel-highlight-blue: #c1ecf9;
+  --novel-highlight-green: #acf79f;
+  --novel-highlight-orange: #faebdd;
+  --novel-highlight-pink: #faf1f5;
+  --novel-highlight-gray: #f1f1ef;
+}
+[data-theme='dark'],
+[data-theme='classic-dark'] {
+  --novel-highlight-default: #1a1a1a;
+  --novel-highlight-purple: #3f2c4b;
+  --novel-highlight-red: #5c1a1a;
+  --novel-highlight-yellow: #5c4b1a;
+  --novel-highlight-blue: #1a3d5c;
+  --novel-highlight-green: #1a5c20;
+  --novel-highlight-orange: #5c3a1a;
+  --novel-highlight-pink: #5c1a3a;
+  --novel-highlight-gray: #3a3a3a;
+}
+
+/* ProseMirror base */
+.novel-editor-body {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--color-text);
+  caret-color: var(--color-primary-mint);
+}
+
+.novel-editor-body > * + * { margin-top: 0.6em; }
+
+.novel-editor-body h1 { font-size: 2rem; font-weight: 700; line-height: 1.25; letter-spacing: -0.02em; margin-top: 1.5em; margin-bottom: 0.25em; }
+.novel-editor-body h2 { font-size: 1.4rem; font-weight: 600; line-height: 1.3;  letter-spacing: -0.01em; margin-top: 1.25em; margin-bottom: 0.2em; }
+.novel-editor-body h3 { font-size: 1.15rem; font-weight: 600; line-height: 1.35; margin-top: 1em; margin-bottom: 0.15em; }
+
+.novel-editor-body p { color: var(--color-text-secondary); }
+.novel-editor-body strong { color: var(--color-text); font-weight: 600; }
+.novel-editor-body em { font-style: italic; }
+.novel-editor-body s { text-decoration: line-through; color: var(--color-text-tertiary); }
+
+.novel-editor-body code {
+  background: var(--color-fill);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  padding: 0.15em 0.4em;
+}
+
+.novel-editor-body pre {
+  background: var(--color-fill-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  overflow-x: auto;
+  padding: 1rem 1.25rem;
+  margin: 1em 0;
+}
+.novel-editor-body pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+.novel-editor-body blockquote {
+  border-left: 3px solid var(--color-primary-mint);
+  padding: 0.4rem 1rem;
+  color: var(--color-text-secondary);
+  margin: 1em 0;
+  background: color-mix(in srgb, var(--color-primary-mint) 5%, transparent);
+  border-radius: 0 3px 3px 0;
+}
+
+.novel-editor-body ul { list-style-type: disc; padding-left: 1.5rem; }
+.novel-editor-body ol { list-style-type: decimal; padding-left: 1.5rem; }
+.novel-editor-body li > p { margin: 0; }
+.novel-editor-body li + li { margin-top: 0.25em; }
+
+.novel-editor-body hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1.5em 0;
+}
+
+.novel-editor-body a {
+  color: var(--color-info);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+/* Placeholder */
+.novel-editor-body p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-text-quaternary);
+  pointer-events: none;
+  height: 0;
+}
+.novel-editor-body p.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--color-text-quaternary);
+  pointer-events: none;
+  height: 0;
+}
+
+/* Selection */
+.novel-editor-body .ProseMirror-selectednode { outline: 2px solid var(--color-primary-mint); outline-offset: 2px; }
+.novel-editor-body ::selection { background: color-mix(in srgb, var(--color-primary-mint) 20%, transparent); }
+
+/* Slash command popup */
+.novel-slash-menu { background: var(--color-bg-container); }
+
+/* Bubble menu */
+.novel-bubble-menu { background: var(--color-bg-container); }
+

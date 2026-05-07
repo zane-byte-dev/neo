@@ -1,12 +1,12 @@
 import React from 'react'
-import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings, CheckSquare, Square, Upload } from 'lucide-react'
+import { Pin, PinOff, Archive, ArchiveRestore, Loader2, AlertTriangle, Trash2, MoreHorizontal, Palette, LogOut, Search, X, Pencil, Globe, BookOpen, ChevronDown, ChevronRight, MessageSquarePlus, PanelLeftClose, Plus, Settings, CheckSquare, Square, Upload, Home, MessageSquare } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
-import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, notebookDeleteFolder, notebookRenameFolder, initializeWorkspace, importChatApi, type MeInfo } from '../api'
+import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, notebookDeleteFolder, notebookRenameFolder, initializeWorkspace, importChatApi, notebookList, type MeInfo } from '../api'
 import { useT, LOCALE_OPTIONS } from '../i18n'
 import { toast } from './Toast'
-import type { Theme } from '../types'
+import type { Theme, NoteEntry } from '../types'
 
 function parseImportedChatFile(raw: string, filename: string): { title: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
     try {
@@ -86,6 +86,60 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const importInputRef = React.useRef<HTMLInputElement>(null)
     const longPressTimerRef = React.useRef<number | null>(null)
 
+    // Sidebar tab state
+    type SidebarTab = 'home' | 'chat' | 'articles'
+    const getInitialTab = (): SidebarTab => {
+        if (location.pathname.startsWith('/notebook')) return 'articles'
+        if (location.pathname.startsWith('/chat')) return 'chat'
+        return 'home'
+    }
+    const [activeTab, setActiveTab] = React.useState<SidebarTab>(getInitialTab)
+    // Track whether the user explicitly selected the home tab (prevents /chat sync from overriding it)
+    const explicitHomeRef = React.useRef(false)
+    // Recently viewed articles (from localStorage)
+    const [recentArticles, setRecentArticles] = React.useState<Array<{ id: string; title: string; notebook: string }>>(() => {
+        try { return JSON.parse(localStorage.getItem('neo:recentArticles') ?? '[]') } catch { return [] }
+    })
+    // Refresh recentArticles when home tab is activated
+    React.useEffect(() => {
+        if (activeTab !== 'home') return
+        try { setRecentArticles(JSON.parse(localStorage.getItem('neo:recentArticles') ?? '[]')) } catch { /* ignore */ }
+    }, [activeTab])
+
+    // Sync tab with navigation
+    React.useEffect(() => {
+        if (location.pathname.startsWith('/notebook')) {
+            explicitHomeRef.current = false
+            setActiveTab('articles')
+        } else if (location.pathname.startsWith('/chat')) {
+            if (!explicitHomeRef.current) setActiveTab('chat')
+        }
+    }, [location.pathname])
+
+    // Articles tab: per-notebook expanded state and loaded articles
+    const [expandedNbs, setExpandedNbs] = React.useState<Set<string>>(new Set())
+    const [nbArticles, setNbArticles] = React.useState<Record<string, NoteEntry[]>>({})
+    const [loadingNbs, setLoadingNbs] = React.useState<Set<string>>(new Set())
+
+    const toggleNotebookExpand = async (nb: string) => {
+        setExpandedNbs((prev) => {
+            const next = new Set(prev)
+            if (next.has(nb)) { next.delete(nb); return next }
+            next.add(nb)
+            return next
+        })
+        if (!nbArticles[nb]) {
+            setLoadingNbs((prev) => new Set(prev).add(nb))
+            try {
+                const articles = await notebookList(nb) as NoteEntry[]
+                setNbArticles((prev) => ({ ...prev, [nb]: articles }))
+            } catch { /* ignore */ }
+            finally {
+                setLoadingNbs((prev) => { const next = new Set(prev); next.delete(nb); return next })
+            }
+        }
+    }
+
     // Multi-select state
     const [selectMode, setSelectMode] = React.useState(false)
     const [selectedChatIds, setSelectedChatIds] = React.useState<Set<string>>(new Set())
@@ -157,11 +211,11 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
             .catch(() => {})
     }, [])
 
-    // Load notebooks when section is expanded
+    // Load notebooks when section is expanded or articles tab is activated
     React.useEffect(() => {
-        if (!notebookOpen) return
+        if (!notebookOpen && activeTab !== 'articles') return
         notebookListNotebooks().then(setNotebooks).catch(() => {})
-    }, [notebookOpen])
+    }, [notebookOpen, activeTab])
 
     const handleDelete = (id: string) => {
         setConfirmDelete(id)
@@ -374,8 +428,8 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
 
     return (
         <div className="flex flex-col h-full bg-bg-sidebar border-r border-border w-full overflow-hidden select-none">
-            {/* Logo + Search */}
-            <div className="px-3 pt-3.5 pb-2 space-y-2.5">
+            {/* Logo */}
+            <div className="px-3 pt-3.5 pb-2">
                 <div className="flex items-center gap-2 px-2">
                     <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-mint to-emerald-600 flex items-center justify-center shrink-0">
                         <span className="text-white text-[10px] font-bold leading-none">N</span>
@@ -391,82 +445,420 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                         </button>
                     )}
                 </div>
-
-                {/* Search box */}
-                <div className="relative">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
-                    <input
-                        ref={searchRef}
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={t('searchChats')}
-                        className="w-full bg-sidebar-hover border border-transparent rounded-lg pl-8 pr-8 py-[7px] text-[13px] placeholder:text-text-quaternary focus:outline-none focus:bg-bg-container focus:border-border focus:ring-1 focus:ring-primary-mint/20 transition-all"
-                    />
-                    {searchQuery && (
-                        <button
-                            onClick={() => { setSearchQuery(''); searchRef.current?.focus() }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-fill transition-colors"
-                        >
-                            <X size={12} className="text-text-tertiary" />
-                        </button>
-                    )}
-                </div>
             </div>
 
-            {/* Navigation */}
-            <div className="px-3 py-1.5 space-y-0.5 border-b border-border">
-                <button
-                    onClick={() => { createChat(); navigate('/chat'); onNavigate?.() }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150 cursor-pointer"
-                >
-                    <MessageSquarePlus size={15} className="shrink-0 text-text-tertiary" />
-                    <span>{t('newChat')}</span>
-                </button>
-
-                {/* Notebook collapsible */}
-                <div>
+            {/* Horizontal Tab Bar */}
+            <div className="flex items-stretch border-b border-border px-1">
+                {([
+                    { key: 'home' as const, Icon: Home, label: t('tabHome') },
+                    { key: 'chat' as const, Icon: MessageSquare, label: t('tabChat') },
+                    { key: 'articles' as const, Icon: BookOpen, label: t('tabArticles') },
+                ]).map((tab) => (
                     <button
-                        onClick={() => setNotebookOpen(!notebookOpen)}
+                        key={tab.key}
+                        onClick={() => {
+                            if (tab.key === 'home') {
+                                explicitHomeRef.current = true
+                                setActiveTab('home')
+                            } else {
+                                explicitHomeRef.current = false
+                                setActiveTab(tab.key)
+                                if (tab.key === 'chat') navigate('/chat')
+                            }
+                        }}
                         className={cn(
-                            'w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150 cursor-pointer',
-                            location.pathname.startsWith('/notebook')
-                                ? 'bg-sidebar-active text-text font-medium'
-                                : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
+                            'flex-1 flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-all border-b-2 -mb-px cursor-pointer',
+                            activeTab === tab.key
+                                ? 'border-primary-mint text-text'
+                                : 'border-transparent text-text-tertiary hover:text-text-secondary'
                         )}
                     >
-                        <BookOpen size={15} className="shrink-0 text-text-tertiary" />
-                        <span className="flex-1 text-left">{t('notebook')}</span>
-                        <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => { e.stopPropagation(); setNotebookOpen(true); setAddingNotebook(true) }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setNotebookOpen(true); setAddingNotebook(true) } }}
-                            className="p-0.5 rounded hover:bg-fill transition-colors text-text-quaternary hover:text-text-secondary"
+                        <tab.Icon size={15} />
+                        <span>{tab.label}</span>
+                    </button>
+                ))}
+            </div>
+
+            {/* ── Home Tab ── */}
+            {activeTab === 'home' && (() => {
+                const pinnedChats = chats.filter(c => c.isPinned && !c.isArchived && c.mode !== 'notebook')
+                const recentChats = [...chats]
+                    .filter(c => !c.isArchived && c.mode !== 'notebook')
+                    .sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
+                    .slice(0, 5)
+                const sectionLabel = 'text-[11px] font-semibold text-text-quaternary uppercase tracking-wide px-1 mb-1'
+                const chatRow = (chat: typeof chats[number]) => (
+                    <div
+                        key={chat.id}
+                        onClick={() => {
+                            explicitHomeRef.current = false
+                            selectChat(chat.id)
+                            navigate('/chat')
+                            onNavigate?.()
+                        }}
+                        className="flex items-center gap-2 px-2.5 py-[7px] rounded-lg cursor-pointer transition-all duration-150 text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text"
+                    >
+                        <span className="shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-text-quaternary/70" />
+                        <span className="flex-1 truncate">{chat.title}</span>
+                    </div>
+                )
+                return (
+                    <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-4">
+                        {/* Quick actions */}
+                        <div className="space-y-0.5">
+                            <button
+                                onClick={() => { explicitHomeRef.current = false; createChat(); navigate('/chat'); setActiveTab('chat'); onNavigate?.() }}
+                                className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150 cursor-pointer"
+                            >
+                                <MessageSquarePlus size={15} className="shrink-0 text-text-tertiary" />
+                                <span>{t('newChat')}</span>
+                            </button>
+                            <Link
+                                to="/settings/models"
+                                onClick={() => { explicitHomeRef.current = false; onNavigate?.() }}
+                                className="flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150"
+                            >
+                                <Settings size={15} className="shrink-0 text-text-tertiary" />
+                                <span>{t('settings')}</span>
+                            </Link>
+                        </div>
+
+                        {/* Pinned chats */}
+                        {pinnedChats.length > 0 && (
+                            <div>
+                                <p className={sectionLabel}>📌 置顶对话</p>
+                                <div className="space-y-px">{pinnedChats.map(chatRow)}</div>
+                            </div>
+                        )}
+
+                        {/* Recent chats */}
+                        {recentChats.length > 0 && (
+                            <div>
+                                <p className={sectionLabel}>🕐 最近对话</p>
+                                <div className="space-y-px">{recentChats.map(chatRow)}</div>
+                            </div>
+                        )}
+
+                        {/* Recent articles */}
+                        {recentArticles.length > 0 && (
+                            <div>
+                                <p className={sectionLabel}>📄 最近文章</p>
+                                <div className="space-y-px">
+                                    {recentArticles.map(article => (
+                                        <Link
+                                            key={article.id}
+                                            to={`/notebook/${encodeURIComponent(article.notebook)}?article=${encodeURIComponent(article.id)}`}
+                                            onClick={() => { explicitHomeRef.current = false; onNavigate?.() }}
+                                            className="flex items-center gap-2 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150"
+                                        >
+                                            <BookOpen size={13} className="shrink-0 text-text-quaternary" />
+                                            <span className="flex-1 truncate">{article.title}</span>
+                                            <span className="text-[11px] text-text-quaternary shrink-0">{article.notebook}</span>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )
+            })()}
+
+            {/* ── Chat Tab ── */}
+            {activeTab === 'chat' && (
+                <>
+                    {/* Search + New Chat */}
+                    <div className="px-3 pt-2.5 pb-1 space-y-1.5 border-b border-border">
+                        <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                            <input
+                                ref={searchRef}
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder={t('searchChats')}
+                                className="w-full bg-sidebar-hover border border-transparent rounded-lg pl-8 pr-8 py-[7px] text-[13px] placeholder:text-text-quaternary focus:outline-none focus:bg-bg-container focus:border-border focus:ring-1 focus:ring-primary-mint/20 transition-all"
+                            />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => { setSearchQuery(''); searchRef.current?.focus() }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-fill transition-colors"
+                                >
+                                    <X size={12} className="text-text-tertiary" />
+                                </button>
+                            )}
+                        </div>
+                        <button
+                            onClick={() => { createChat(); navigate('/chat'); onNavigate?.() }}
+                            className="w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150 cursor-pointer"
+                        >
+                            <MessageSquarePlus size={15} className="shrink-0 text-text-tertiary" />
+                            <span>{t('newChat')}</span>
+                        </button>
+                    </div>
+
+                    {/* Chat list */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2">
+                        <div className="flex items-center px-2.5 mb-1.5">
+                            <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wider flex-1">{t('chats') ?? 'Chats'}</p>
+                            <button
+                                type="button"
+                                onClick={toggleSelectMode}
+                                className={cn(
+                                    'text-[11px] px-1.5 py-0.5 rounded transition-colors',
+                                    selectMode ? 'text-primary-mint hover:text-primary-mint/80' : 'text-text-quaternary hover:text-text-tertiary'
+                                )}
+                            >
+                                {selectMode ? t('cancelSelect') : t('selectChats')}
+                            </button>
+                        </div>
+                        {/* Bulk action toolbar */}
+                        {selectMode && (
+                            <div className="flex items-center gap-1.5 px-1 pb-2 flex-wrap">
+                                <span className="text-[11px] text-text-tertiary flex-1">
+                                    {t('selectedCount').replace('{n}', String(selectedChatIds.size))}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const q = searchQuery.toLowerCase().trim()
+                                        const visible = (q ? chats.filter(c => c.title.toLowerCase().includes(q)) : chats).map(c => c.id)
+                                        if (selectedChatIds.size === visible.length) setSelectedChatIds(new Set())
+                                        else selectAllVisible(visible)
+                                    }}
+                                    className="text-[11px] px-2 py-1 rounded-lg border border-border text-text-secondary hover:bg-fill transition-colors"
+                                >
+                                    {selectedChatIds.size > 0 ? t('deselectAll') : t('selectAll')}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={selectedChatIds.size === 0}
+                                    onClick={() => void handleBulkArchive(!Array.from(selectedChatIds).every(id => chats.find(c => c.id === id)?.isArchived))}
+                                    className="text-[11px] px-2 py-1 rounded-lg border border-border text-text-secondary hover:bg-fill transition-colors disabled:opacity-40"
+                                >
+                                    {Array.from(selectedChatIds).every(id => chats.find(c => c.id === id)?.isArchived)
+                                        ? t('unarchiveSelected')
+                                        : t('archiveSelected')}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={selectedChatIds.size === 0}
+                                    onClick={() => void handleBulkDelete()}
+                                    className="text-[11px] px-2 py-1 rounded-lg border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                                >
+                                    {t('deleteSelected')}
+                                </button>
+                            </div>
+                        )}
+                        <div className="space-y-px">
+                        {(() => {
+                            const q = searchQuery.toLowerCase().trim()
+                            const filtered = q
+                                ? chats.filter((c) => c.title.toLowerCase().includes(q))
+                                : chats
+
+                            if (filtered.length === 0 && q) {
+                                return (
+                                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                                        <p className="text-xs text-text-tertiary">{t('noMatchingChats')}</p>
+                                    </div>
+                                )
+                            }
+
+                            if (filtered.length === 0) {
+                                return (
+                                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                                        <div className="w-10 h-10 rounded-xl bg-fill flex items-center justify-center mb-3">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-tertiary">
+                                                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                                            </svg>
+                                        </div>
+                                        <p className="text-xs text-text-tertiary">{t('noChatsYet')}</p>
+                                        <p className="text-[11px] text-text-quaternary mt-0.5">{t('startNewConversation')}</p>
+                                    </div>
+                                )
+                            }
+
+                            // ── Compute groups ────────────────────────────────────
+                            const now = new Date()
+                            const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+                            const startOfYesterday = startOfToday - 24 * 3600 * 1000
+                            const startOfPast7 = startOfToday - 7 * 24 * 3600 * 1000
+                            const sortedAll = [...filtered].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
+                            const archived = sortedAll.filter((c) => c.isArchived)
+                            const live = sortedAll.filter((c) => !c.isArchived)
+                            const pinned = live.filter((c) => c.isPinned)
+                            const unpinned = live.filter((c) => !c.isPinned)
+                            const today: typeof unpinned = []
+                            const yesterday: typeof unpinned = []
+                            const past7: typeof unpinned = []
+                            const earlier: typeof unpinned = []
+                            for (const c of unpinned) {
+                                const ts = c.updatedAt ?? c.createdAt
+                                if (ts >= startOfToday) today.push(c)
+                                else if (ts >= startOfYesterday) yesterday.push(c)
+                                else if (ts >= startOfPast7) past7.push(c)
+                                else earlier.push(c)
+                            }
+
+                            // When searching, flatten and skip group chrome.
+                            const searching = !!q
+
+                            const renderChatRow = (chat: typeof sortedAll[number]) => {
+                                const running = !!generatingBySession[chat.id]
+                                const lastMsgs = messagesBySession[chat.id]
+                                const lastAssistant = lastMsgs ? [...lastMsgs].reverse().find((m) => m.role === 'assistant') : undefined
+                                const needsConfirm = !!lastAssistant?.activityLog?.some(
+                                    (a) => a.type === 'tool_confirm' && a.confirmStatus === 'pending'
+                                )
+                                const isSelected = selectedChatIds.has(chat.id)
+
+                                if (selectMode) {
+                                    return (
+                                        <div
+                                            key={chat.id}
+                                            onClick={() => toggleSelectChat(chat.id)}
+                                            className={cn(
+                                                'group relative flex items-center gap-2 px-2.5 py-[7px] rounded-lg cursor-pointer transition-all duration-150 text-[13px]',
+                                                isSelected
+                                                    ? 'bg-primary-mint/10 text-text'
+                                                    : 'text-text-secondary hover:bg-sidebar-hover'
+                                            )}
+                                        >
+                                            {isSelected
+                                                ? <CheckSquare size={14} className="shrink-0 text-primary-mint" />
+                                                : <Square size={14} className="shrink-0 text-text-quaternary" />
+                                            }
+                                            <span className="flex-1 truncate">{chat.title}</span>
+                                        </div>
+                                    )
+                                }
+
+                                return (
+                                    <div
+                                        key={chat.id}
+                                        onClick={() => { selectChat(chat.id); navigate('/chat'); onNavigate?.() }}
+                                        onContextMenu={(e) => handleChatRightClick(e, chat.id)}
+                                        onTouchStart={(e) => handleTouchStart(e, chat.id)}
+                                        onTouchEnd={handleTouchEnd}
+                                        onTouchMove={handleTouchMove}
+                                        className={cn(
+                                            'group relative flex items-center gap-2 px-2.5 py-[7px] rounded-lg cursor-pointer transition-all duration-150 text-[13px]',
+                                            activeChatId === chat.id
+                                                ? 'bg-sidebar-active text-text font-medium'
+                                                : 'text-text-secondary hover:bg-sidebar-hover'
+                                        )}
+                                    >
+                                        {/* Status icon: running > needsConfirm > pinned > default dot */}
+                                        {running ? (
+                                            <Loader2 size={12} className="shrink-0 text-primary-mint animate-spin" aria-label={t('chatStatusRunning')} />
+                                        ) : needsConfirm ? (
+                                            <AlertTriangle size={12} className="shrink-0 text-warning" aria-label={t('chatStatusNeedsConfirm')} />
+                                        ) : chat.isPinned ? (
+                                            <Pin size={11} className="shrink-0 text-primary-mint" fill="currentColor" />
+                                        ) : (
+                                            <span aria-hidden className="shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-text-quaternary/70" />
+                                        )}
+                                        <span className="flex-1 truncate">{chat.title}</span>
+                                        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity duration-150">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handlePin(chat.id) }}
+                                                className="p-1 hover:bg-fill rounded transition-colors cursor-pointer text-text-tertiary hover:text-text-secondary"
+                                                title={chat.isPinned ? t('unpin') : t('pin')}
+                                            >
+                                                <Pin size={12} fill={chat.isPinned ? 'currentColor' : 'none'} />
+                                            </button>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setContextMenu({ id: chat.id, x: e.clientX, y: e.clientY }) }}
+                                                className="p-1 hover:bg-fill rounded transition-colors cursor-pointer text-text-tertiary hover:text-text-secondary"
+                                            >
+                                                <MoreHorizontal size={12} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )
+                            }
+
+                            if (searching) {
+                                return sortedAll.map(renderChatRow)
+                            }
+
+                            type GroupKey = 'pinned' | 'today' | 'yesterday' | 'past7' | 'earlier' | 'archived'
+                            const groups: { key: GroupKey; label: string; items: typeof sortedAll; defaultCollapsed?: boolean }[] = [
+                                { key: 'pinned', label: t('chatGroupPinned'), items: pinned },
+                                { key: 'today', label: t('chatGroupToday'), items: today },
+                                { key: 'yesterday', label: t('chatGroupYesterday'), items: yesterday },
+                                { key: 'past7', label: t('chatGroupPast7Days'), items: past7 },
+                                { key: 'earlier', label: t('chatGroupEarlier'), items: earlier },
+                                { key: 'archived', label: t('chatGroupArchived'), items: archived, defaultCollapsed: true },
+                            ]
+
+                            return (
+                                <>
+                                    {groups.map((g) => {
+                                        if (g.items.length === 0) return null
+                                        const collapsed = collapsedGroups[g.key] ?? !!g.defaultCollapsed
+                                        return (
+                                            <div key={g.key} className="mb-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleGroup(g.key)}
+                                                    className="w-full flex items-center px-2.5 py-1.5 text-[12px] font-medium text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer"
+                                                >
+                                                    <span className="flex-1 text-left">{g.label}</span>
+                                                    <span className="text-text-quaternary font-normal text-[11px]">{g.items.length}</span>
+                                                </button>
+                                                {!collapsed && (
+                                                    <div className="space-y-px">
+                                                        {g.items.map(renderChatRow)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </>
+                            )
+                        })()}
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* ── Articles Tab ── */}
+            {activeTab === 'articles' && (
+                <>
+                    {/* Header */}
+                    <div className="px-3 pt-2.5 pb-1.5 flex items-center border-b border-border">
+                        <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wider flex-1">{t('notebook')}</p>
+                        <button
+                            onClick={() => setAddingNotebook(true)}
+                            className="p-1 rounded hover:bg-fill transition-colors text-text-quaternary hover:text-text-secondary"
                             title={t('addNotebook')}
                         >
-                            <Plus size={12} />
-                        </span>
-                        {notebookOpen ? <ChevronDown size={13} className="text-text-quaternary" /> : <ChevronRight size={13} className="text-text-quaternary" />}
-                    </button>
-                    {notebookOpen && (
-                        <div className="ml-5 mt-0.5 space-y-0.5 border-l border-border pl-2">
-                            {notebooks.map((nb) => (
-                                <div key={nb} className="group relative flex items-center"
-                                    onContextMenu={(e) => handleNotebookContextMenu(e, nb)}>
-                                    <Link
-                                        to={`/notebook/${encodeURIComponent(nb)}`}
-                                        onClick={onNavigate}
+                            <Plus size={13} />
+                        </button>
+                    </div>
+                    {/* Notebooks + articles list */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-1.5 space-y-px">
+                        {notebooks.map((nb) => (
+                            <div key={nb}>
+                                <div className="group relative flex items-center" onContextMenu={(e) => handleNotebookContextMenu(e, nb)}>
+                                    <button
+                                        onClick={() => { navigate(`/notebook/${encodeURIComponent(nb)}`); onNavigate?.(); void toggleNotebookExpand(nb) }}
                                         className={cn(
-                                            'flex-1 flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 min-w-0',
+                                            'flex-1 flex items-center gap-2 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150 cursor-pointer min-w-0',
                                             location.pathname === `/notebook/${encodeURIComponent(nb)}`
                                                 ? 'bg-sidebar-active text-text font-medium'
                                                 : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
                                         )}
                                     >
-                                        <span className="w-3 h-3 shrink-0 flex items-center justify-center text-text-quaternary text-[10px]">#</span>
-                                        <span className="truncate">{nb}</span>
-                                    </Link>
+                                        {loadingNbs.has(nb)
+                                            ? <Loader2 size={13} className="shrink-0 text-text-quaternary animate-spin" />
+                                            : expandedNbs.has(nb)
+                                            ? <ChevronDown size={13} className="shrink-0 text-text-quaternary" />
+                                            : <ChevronRight size={13} className="shrink-0 text-text-quaternary" />
+                                        }
+                                        <span className="truncate flex-1 text-left">{nb}</span>
+                                    </button>
                                     <button
                                         onClick={(e) => { e.stopPropagation(); navigate(`/notebook/article/new?notebook=${encodeURIComponent(nb)}`); onNavigate?.() }}
                                         className="opacity-0 group-hover:opacity-100 shrink-0 p-0.5 rounded hover:bg-fill transition-all text-text-quaternary hover:text-text-secondary"
@@ -482,278 +874,62 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                                         <MoreHorizontal size={12} />
                                     </button>
                                 </div>
-                            ))}
-                            {addingNotebook && (
-                                <div className="flex items-center gap-1 px-2.5 py-1">
-                                    <input
-                                        autoFocus
-                                        type="text"
-                                        value={newNotebookName}
-                                        onChange={(e) => setNewNotebookName(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && newNotebookName.trim()) {
-                                                const name = newNotebookName.trim()
-                                                if (!notebooks.includes(name)) setNotebooks([...notebooks, name])
-                                                navigate(`/notebook/article/new?notebook=${encodeURIComponent(name)}`)
-                                                setNewNotebookName('')
-                                                setAddingNotebook(false)
-                                                onNavigate?.()
-                                            } else if (e.key === 'Escape') {
-                                                setAddingNotebook(false)
-                                                setNewNotebookName('')
-                                            }
-                                        }}
-                                        onBlur={() => { setAddingNotebook(false); setNewNotebookName('') }}
-                                        placeholder={t('notebookNamePlaceholder')}
-                                        className="flex-1 text-xs bg-transparent border-b border-primary-mint/50 focus:outline-none py-0.5 text-text placeholder:text-text-quaternary"
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                <Link
-                    to="/settings/models"
-                    onClick={onNavigate}
-                    className={cn(
-                        'flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150',
-                        location.pathname.startsWith('/settings')
-                            ? 'bg-sidebar-active text-text font-medium'
-                            : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
-                    )}
-                >
-                    <Settings size={15} className="shrink-0 text-text-tertiary" />
-                    <span>{t('settings')}</span>
-                </Link>
-            </div>
-
-            {/* Chat list */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2">
-                <div className="flex items-center px-2.5 mb-1.5">
-                    <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wider flex-1">{t('chats') ?? 'Chats'}</p>
-                    <button
-                        type="button"
-                        onClick={toggleSelectMode}
-                        className={cn(
-                            'text-[11px] px-1.5 py-0.5 rounded transition-colors',
-                            selectMode ? 'text-primary-mint hover:text-primary-mint/80' : 'text-text-quaternary hover:text-text-tertiary'
-                        )}
-                    >
-                        {selectMode ? t('cancelSelect') : t('selectChats')}
-                    </button>
-                </div>
-                {/* Bulk action toolbar */}
-                {selectMode && (
-                    <div className="flex items-center gap-1.5 px-1 pb-2 flex-wrap">
-                        <span className="text-[11px] text-text-tertiary flex-1">
-                            {t('selectedCount').replace('{n}', String(selectedChatIds.size))}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                const q = searchQuery.toLowerCase().trim()
-                                const visible = (q ? chats.filter(c => c.title.toLowerCase().includes(q)) : chats).map(c => c.id)
-                                if (selectedChatIds.size === visible.length) setSelectedChatIds(new Set())
-                                else selectAllVisible(visible)
-                            }}
-                            className="text-[11px] px-2 py-1 rounded-lg border border-border text-text-secondary hover:bg-fill transition-colors"
-                        >
-                            {selectedChatIds.size > 0 ? t('deselectAll') : t('selectAll')}
-                        </button>
-                        <button
-                            type="button"
-                            disabled={selectedChatIds.size === 0}
-                            onClick={() => void handleBulkArchive(!Array.from(selectedChatIds).every(id => chats.find(c => c.id === id)?.isArchived))}
-                            className="text-[11px] px-2 py-1 rounded-lg border border-border text-text-secondary hover:bg-fill transition-colors disabled:opacity-40"
-                        >
-                            {Array.from(selectedChatIds).every(id => chats.find(c => c.id === id)?.isArchived)
-                                ? t('unarchiveSelected')
-                                : t('archiveSelected')}
-                        </button>
-                        <button
-                            type="button"
-                            disabled={selectedChatIds.size === 0}
-                            onClick={() => void handleBulkDelete()}
-                            className="text-[11px] px-2 py-1 rounded-lg border border-destructive/40 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
-                        >
-                            {t('deleteSelected')}
-                        </button>
-                    </div>
-                )}
-                <div className="space-y-px">
-                {(() => {
-                    const q = searchQuery.toLowerCase().trim()
-                    const filtered = q
-                        ? chats.filter((c) => c.title.toLowerCase().includes(q))
-                        : chats
-
-                    if (filtered.length === 0 && q) {
-                        return (
-                            <div className="flex flex-col items-center justify-center py-8 text-center">
-                                <p className="text-xs text-text-tertiary">{t('noMatchingChats')}</p>
-                            </div>
-                        )
-                    }
-
-                    if (filtered.length === 0) {
-                        return (
-                            <div className="flex flex-col items-center justify-center py-12 text-center">
-                                <div className="w-10 h-10 rounded-xl bg-fill flex items-center justify-center mb-3">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-tertiary">
-                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
-                                    </svg>
-                                </div>
-                                <p className="text-xs text-text-tertiary">{t('noChatsYet')}</p>
-                                <p className="text-[11px] text-text-quaternary mt-0.5">{t('startNewConversation')}</p>
-                            </div>
-                        )
-                    }
-
-                    // ── Compute groups ────────────────────────────────────
-                    const now = new Date()
-                    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-                    const startOfYesterday = startOfToday - 24 * 3600 * 1000
-                    const startOfPast7 = startOfToday - 7 * 24 * 3600 * 1000
-                    const sortedAll = [...filtered].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt))
-                    const archived = sortedAll.filter((c) => c.isArchived)
-                    const live = sortedAll.filter((c) => !c.isArchived)
-                    const pinned = live.filter((c) => c.isPinned)
-                    const unpinned = live.filter((c) => !c.isPinned)
-                    const today: typeof unpinned = []
-                    const yesterday: typeof unpinned = []
-                    const past7: typeof unpinned = []
-                    const earlier: typeof unpinned = []
-                    for (const c of unpinned) {
-                        const ts = c.updatedAt ?? c.createdAt
-                        if (ts >= startOfToday) today.push(c)
-                        else if (ts >= startOfYesterday) yesterday.push(c)
-                        else if (ts >= startOfPast7) past7.push(c)
-                        else earlier.push(c)
-                    }
-
-                    // When searching, flatten and skip group chrome.
-                    const searching = !!q
-
-                    const renderChatRow = (chat: typeof sortedAll[number]) => {
-                        const running = !!generatingBySession[chat.id]
-                        const lastMsgs = messagesBySession[chat.id]
-                        const lastAssistant = lastMsgs ? [...lastMsgs].reverse().find((m) => m.role === 'assistant') : undefined
-                        const needsConfirm = !!lastAssistant?.activityLog?.some(
-                            (a) => a.type === 'tool_confirm' && a.confirmStatus === 'pending'
-                        )
-                        const isSelected = selectedChatIds.has(chat.id)
-
-                        if (selectMode) {
-                            return (
-                                <div
-                                    key={chat.id}
-                                    onClick={() => toggleSelectChat(chat.id)}
-                                    className={cn(
-                                        'group relative flex items-center gap-2 px-2.5 py-[7px] rounded-lg cursor-pointer transition-all duration-150 text-[13px]',
-                                        isSelected
-                                            ? 'bg-primary-mint/10 text-text'
-                                            : 'text-text-secondary hover:bg-sidebar-hover'
-                                    )}
-                                >
-                                    {isSelected
-                                        ? <CheckSquare size={14} className="shrink-0 text-primary-mint" />
-                                        : <Square size={14} className="shrink-0 text-text-quaternary" />
-                                    }
-                                    <span className="flex-1 truncate">{chat.title}</span>
-                                </div>
-                            )
-                        }
-
-                        return (
-                            <div
-                                key={chat.id}
-                                onClick={() => { selectChat(chat.id); navigate('/chat'); onNavigate?.() }}
-                                onContextMenu={(e) => handleChatRightClick(e, chat.id)}
-                                onTouchStart={(e) => handleTouchStart(e, chat.id)}
-                                onTouchEnd={handleTouchEnd}
-                                onTouchMove={handleTouchMove}
-                                className={cn(
-                                    'group relative flex items-center gap-2 px-2.5 py-[7px] rounded-lg cursor-pointer transition-all duration-150 text-[13px]',
-                                    activeChatId === chat.id
-                                        ? 'bg-sidebar-active text-text font-medium'
-                                        : 'text-text-secondary hover:bg-sidebar-hover'
-                                )}
-                            >
-                                {/* Status icon: running > needsConfirm > pinned > default dot */}
-                                {running ? (
-                                    <Loader2 size={12} className="shrink-0 text-primary-mint animate-spin" aria-label={t('chatStatusRunning')} />
-                                ) : needsConfirm ? (
-                                    <AlertTriangle size={12} className="shrink-0 text-warning" aria-label={t('chatStatusNeedsConfirm')} />
-                                ) : chat.isPinned ? (
-                                    <Pin size={11} className="shrink-0 text-primary-mint" fill="currentColor" />
-                                ) : (
-                                    <span aria-hidden className="shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-text-quaternary/70" />
-                                )}
-                                <span className="flex-1 truncate">{chat.title}</span>
-                                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity duration-150">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handlePin(chat.id) }}
-                                        className="p-1 hover:bg-fill rounded transition-colors cursor-pointer text-text-tertiary hover:text-text-secondary"
-                                        title={chat.isPinned ? t('unpin') : t('pin')}
-                                    >
-                                        <Pin size={12} fill={chat.isPinned ? 'currentColor' : 'none'} />
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setContextMenu({ id: chat.id, x: e.clientX, y: e.clientY }) }}
-                                        className="p-1 hover:bg-fill rounded transition-colors cursor-pointer text-text-tertiary hover:text-text-secondary"
-                                    >
-                                        <MoreHorizontal size={12} />
-                                    </button>
-                                </div>
-                            </div>
-                        )
-                    }
-
-                    if (searching) {
-                        return sortedAll.map(renderChatRow)
-                    }
-
-                    type GroupKey = 'pinned' | 'today' | 'yesterday' | 'past7' | 'earlier' | 'archived'
-                    const groups: { key: GroupKey; label: string; items: typeof sortedAll; defaultCollapsed?: boolean }[] = [
-                        { key: 'pinned', label: t('chatGroupPinned'), items: pinned },
-                        { key: 'today', label: t('chatGroupToday'), items: today },
-                        { key: 'yesterday', label: t('chatGroupYesterday'), items: yesterday },
-                        { key: 'past7', label: t('chatGroupPast7Days'), items: past7 },
-                        { key: 'earlier', label: t('chatGroupEarlier'), items: earlier },
-                        { key: 'archived', label: t('chatGroupArchived'), items: archived, defaultCollapsed: true },
-                    ]
-
-                    return (
-                        <>
-                            {groups.map((g) => {
-                                if (g.items.length === 0) return null
-                                const collapsed = collapsedGroups[g.key] ?? !!g.defaultCollapsed
-                                return (
-                                    <div key={g.key} className="mb-1">
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleGroup(g.key)}
-                                            className="w-full flex items-center px-2.5 py-1.5 text-[12px] font-medium text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer"
-                                        >
-                                            <span className="flex-1 text-left">{g.label}</span>
-                                            <span className="text-text-quaternary font-normal text-[11px]">{g.items.length}</span>
-                                        </button>
-                                        {!collapsed && (
-                                            <div className="space-y-px">
-                                                {g.items.map(renderChatRow)}
-                                            </div>
-                                        )}
+                                {expandedNbs.has(nb) && (
+                                    <div className="ml-5 space-y-px border-l border-border pl-2 pb-1">
+                                        {(nbArticles[nb] ?? []).length === 0 && !loadingNbs.has(nb) ? (
+                                            <p className="px-2.5 py-1.5 text-xs text-text-quaternary italic">{t('noChatsYet')}</p>
+                                        ) : (nbArticles[nb] ?? []).map((article) => (
+                                            <Link
+                                                key={article.id}
+                                                to={`/notebook/${encodeURIComponent(nb)}?article=${encodeURIComponent(article.id)}`}
+                                                onClick={onNavigate}
+                                                className={cn(
+                                                    'flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 min-w-0',
+                                                    location.pathname === `/notebook/${encodeURIComponent(nb)}` && location.search.includes(`article=${encodeURIComponent(article.id)}`)
+                                                        ? 'bg-sidebar-active text-text font-medium'
+                                                        : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
+                                                )}
+                                            >
+                                                <span className="truncate">{article.title}</span>
+                                            </Link>
+                                        ))}
                                     </div>
-                                )
-                            })}
-                        </>
-                    )
-                })()}
-                </div>
-            </div>
+                                )}
+                            </div>
+                        ))}
+                        {addingNotebook && (
+                            <div className="flex items-center gap-1 px-2.5 py-1">
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={newNotebookName}
+                                    onChange={(e) => setNewNotebookName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && newNotebookName.trim()) {
+                                            const name = newNotebookName.trim()
+                                            if (!notebooks.includes(name)) setNotebooks([...notebooks, name])
+                                            navigate(`/notebook/article/new?notebook=${encodeURIComponent(name)}`)
+                                            setNewNotebookName('')
+                                            setAddingNotebook(false)
+                                            onNavigate?.()
+                                        } else if (e.key === 'Escape') {
+                                            setAddingNotebook(false)
+                                            setNewNotebookName('')
+                                        }
+                                    }}
+                                    onBlur={() => { setAddingNotebook(false); setNewNotebookName('') }}
+                                    placeholder={t('notebookNamePlaceholder')}
+                                    className="flex-1 text-xs bg-transparent border-b border-primary-mint/50 focus:outline-none py-0.5 text-text placeholder:text-text-quaternary"
+                                />
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
+
 
             {/* Footer */}
+
             <div className="mt-auto border-t border-border relative">
                 <div
                     onClick={() => setMenuOpen(!menuOpen)}

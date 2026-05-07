@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2 } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2, FolderOpen } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -1238,6 +1238,7 @@ const ChatInput: React.FC<{
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)
     const docInputRef = React.useRef<HTMLInputElement>(null)
+    const folderInputRef = React.useRef<HTMLInputElement>(null)
     const [pendingImages, setPendingImages] = React.useState<string[]>([])
     const [pendingDocs, setPendingDocs] = React.useState<PendingDocument[]>([])
     const [isUploading, setIsUploading] = React.useState(false)
@@ -1324,6 +1325,35 @@ const ChatInput: React.FC<{
             }
         } catch (err) {
             console.error('File upload failed:', err)
+        } finally {
+            setIsUploading(false)
+            e.target.value = ''
+        }
+    }
+
+    const handleFolderSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const fileList = e.target.files
+        if (!fileList) return
+        const files = Array.from(fileList).filter(f => f.size <= 20 * 1024 * 1024)
+        if (files.length === 0) return
+
+        setIsUploading(true)
+        try {
+            const results = await uploadFiles(files)
+            for (const r of results) {
+                if (r.type === 'image') {
+                    setPendingImages((prev) => [...prev, r.dataUrl])
+                } else if (r.type === 'document') {
+                    setPendingDocs((prev) => [...prev, {
+                        filename: r.filename,
+                        text: r.text,
+                        pageCount: r.pageCount,
+                        mimeType: r.mimeType,
+                    }])
+                }
+            }
+        } catch (err) {
+            console.error('Folder upload failed:', err)
         } finally {
             setIsUploading(false)
             e.target.value = ''
@@ -1588,11 +1618,24 @@ const ChatInput: React.FC<{
     // Attachment menu
     const [attachMenuOpen, setAttachMenuOpen] = React.useState(false)
     const attachMenuRef = React.useRef<HTMLDivElement>(null)
+    const attachButtonRef = React.useRef<HTMLButtonElement>(null)
+    const [attachMenuStyle, setAttachMenuStyle] = React.useState<React.CSSProperties>({})
+    React.useLayoutEffect(() => {
+        if (!attachMenuOpen) return
+        const rect = attachButtonRef.current?.getBoundingClientRect()
+        if (!rect) return
+        setAttachMenuStyle({
+            position: 'fixed',
+            left: rect.left,
+            bottom: window.innerHeight - rect.top + 6,
+            width: 160,
+        })
+    }, [attachMenuOpen])
     React.useEffect(() => {
         const onClick = (e: MouseEvent) => {
-            if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
-                setAttachMenuOpen(false)
-            }
+            const target = e.target as Node
+            if (attachMenuRef.current?.contains(target) || attachButtonRef.current?.contains(target)) return
+            setAttachMenuOpen(false)
         }
         if (attachMenuOpen) document.addEventListener('mousedown', onClick)
         return () => document.removeEventListener('mousedown', onClick)
@@ -1739,6 +1782,15 @@ const ChatInput: React.FC<{
                     className="hidden"
                     onChange={handleFileSelect}
                 />
+                <input
+                    ref={folderInputRef}
+                    type="file"
+                    // @ts-expect-error webkitdirectory is not in standard types
+                    webkitdirectory=""
+                    multiple
+                    className="hidden"
+                    onChange={handleFolderSelect}
+                />
                 {/* Slash command dropdown */}
                 {showSlashDropdown && (
                     <div className="absolute bottom-full left-0 right-0 mb-1.5 z-50">
@@ -1793,8 +1845,9 @@ const ChatInput: React.FC<{
                     <div className="flex items-center justify-between px-3 pb-2.5 gap-2 min-w-0">
                         <div className="flex items-center gap-1 min-w-0 flex-1 mobile-scroll-x">
                             {/* "+" Attachment drawer */}
-                            <div ref={attachMenuRef} className="relative shrink-0">
+                            <div className="relative shrink-0">
                                 <button
+                                    ref={attachButtonRef}
                                     onClick={() => setAttachMenuOpen((v) => !v)}
                                     className={cn(
                                         'p-1.5 rounded-lg transition-all duration-150 cursor-pointer',
@@ -1807,28 +1860,42 @@ const ChatInput: React.FC<{
                                 >
                                     <Plus size={16} />
                                 </button>
-                                {attachMenuOpen && (
-                                    <div className="absolute bottom-full left-0 mb-1.5 w-36 rounded-xl border border-border bg-bg-container shadow-lg z-50 py-1 overflow-hidden">
-                                        <button
-                                            onClick={() => { fileInputRef.current?.click(); setAttachMenuOpen(false) }}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text hover:bg-fill-secondary/60 transition-colors"
-                                            type="button"
-                                        >
-                                            <ImagePlus size={14} className="text-text-tertiary shrink-0" />
-                                            <span>{t('attachImage')}</span>
-                                        </button>
-                                        <button
-                                            onClick={() => { docInputRef.current?.click(); setAttachMenuOpen(false) }}
-                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text hover:bg-fill-secondary/60 transition-colors"
-                                            type="button"
-                                            disabled={isUploading}
-                                        >
-                                            <Paperclip size={14} className="text-text-tertiary shrink-0" />
-                                            <span>{t('attachDocument')}</span>
-                                        </button>
-                                    </div>
-                                )}
                             </div>
+                            {attachMenuOpen && typeof document !== 'undefined' && createPortal(
+                                <div
+                                    ref={attachMenuRef}
+                                    className="rounded-xl border border-border bg-bg-container shadow-lg z-[120] py-1 overflow-hidden"
+                                    style={attachMenuStyle}
+                                >
+                                    <button
+                                        onClick={() => { fileInputRef.current?.click(); setAttachMenuOpen(false) }}
+                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text hover:bg-fill-secondary/60 transition-colors"
+                                        type="button"
+                                    >
+                                        <ImagePlus size={14} className="text-text-tertiary shrink-0" />
+                                        <span>{t('attachImage')}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => { docInputRef.current?.click(); setAttachMenuOpen(false) }}
+                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text hover:bg-fill-secondary/60 transition-colors"
+                                        type="button"
+                                        disabled={isUploading}
+                                    >
+                                        <Paperclip size={14} className="text-text-tertiary shrink-0" />
+                                        <span>{t('attachDocument')}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => { folderInputRef.current?.click(); setAttachMenuOpen(false) }}
+                                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-text hover:bg-fill-secondary/60 transition-colors"
+                                        type="button"
+                                        disabled={isUploading}
+                                    >
+                                        <FolderOpen size={14} className="text-text-tertiary shrink-0" />
+                                        <span>{t('attachFolder')}</span>
+                                    </button>
+                                </div>,
+                                document.body,
+                            )}
                             {/* Project picker (目录选择) */}
                             {activeChatId && (
                                 <ProjectPicker

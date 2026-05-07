@@ -381,5 +381,5 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
     notebookEntries: [],
     setNotebookEntries: (entries: NoteEntry[]) => set({ notebookEntries: entries }),
     selectedNote: null,
-    setSelectedNote: (note: NoteEntry | null) => set({ selectedNote: note, activeChatId: note ? null : null }),
+    setSelectedNote: (note: NoteEntry | null) => set({ selectedNote: note }),
 })

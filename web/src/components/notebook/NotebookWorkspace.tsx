@@ -6,20 +6,17 @@
  * 移动端：底部 tab 切换
  */
 import React from 'react'
-import { ArrowLeft, BookOpen, MessageSquare, Plus, Pencil, Calendar, User, Tag, Search, X, ArrowUpDown, PanelLeftOpen, MoreHorizontal } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { ArrowLeft, BookOpen, MessageSquare, Plus, Pencil, Search, X, ArrowUpDown, PanelLeftOpen, MoreHorizontal } from 'lucide-react'
 import { NotebookChatDrawer } from './NotebookChatDrawer'
 import { NoteEditor } from '../NoteEditor'
 import { useAppStore } from '../../stores/useAppStore'
 import { cn } from '../../lib/utils'
-import { notebookList, notebookRead, notebookSearch, notebookDelete } from '../../api'
+import { notebookList, notebookRead, notebookSearch, notebookDelete, notebookUpdate } from '../../api'
 import { confirm } from '../ConfirmDialog'
 import type { NoteEntry } from '../../types'
 
 const MOBILE_BREAKPOINT = 1024
 const LIST_WIDTH = 280
-const CHAT_DRAWER_WIDTH = 380
 
 type NoteSort = 'default' | 'date-desc' | 'date-asc' | 'title'
 const SORT_LABELS: Record<NoteSort, string> = {
@@ -29,14 +26,16 @@ const SORT_LABELS: Record<NoteSort, string> = {
 interface Props {
     notebook: string
     onBack: () => void
+    startCollapsed?: boolean
+    initialArticleId?: string
 }
 
 type MobileTab = 'list' | 'detail' | 'chat'
 
-export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
+export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startCollapsed, initialArticleId }) => {
     const [isMobile, setIsMobile] = React.useState(false)
     const [mobileTab, setMobileTab] = React.useState<MobileTab>('list')
-    const [listCollapsed, setListCollapsed] = React.useState(false)
+    const [listCollapsed, setListCollapsed] = React.useState(() => startCollapsed ?? false)
     const [chatOpen, setChatOpen] = React.useState(false)
 
     // Article list state
@@ -50,34 +49,41 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
 
     // Article detail/edit state
     const { selectedNote, setSelectedNote } = useAppStore()
-    const [editing, setEditing] = React.useState<NoteEntry | null | 'new'>(null)
+    const [creatingNew, setCreatingNew] = React.useState(false)
+    // fullContent is kept for the AI drawer (loads full text for AI operations)
     const [fullContent, setFullContent] = React.useState<string>('')
-    const [contentLoading, setContentLoading] = React.useState(false)
 
-    // Bind notebook chat session
-    const { openOrCreateNotebookChat, setChatSourceIds, selectedSourceIds, activeChatId } = useAppStore()
+    // Bind notebook chat session — save/restore activeChatId so leaving the workspace
+    // doesn't leave a notebook chat as the "active" chat.
+    const [notebookChatId, setNotebookChatId] = React.useState<string | null>(null)
+    const { openOrCreateNotebookChat, setChatSourceIds, selectedSourceIds } = useAppStore()
     React.useEffect(() => {
+        const prevId = useAppStore.getState().activeChatId
         let cancelled = false
-        openOrCreateNotebookChat(notebook).catch((err) => {
-            if (!cancelled) console.error('[notebook] failed to open chat session', err)
-        })
-        return () => { cancelled = true }
+        openOrCreateNotebookChat(notebook)
+            .then((id) => { if (!cancelled) setNotebookChatId(id) })
+            .catch((err) => { if (!cancelled) console.error('[notebook] failed to open chat session', err) })
+        return () => {
+            cancelled = true
+            // Restore the previous activeChatId when leaving the workspace
+            useAppStore.setState({ activeChatId: prevId })
+        }
     }, [notebook, openOrCreateNotebookChat])
     React.useEffect(() => {
-        if (!activeChatId) return
-        const chat = useAppStore.getState().chats.find((c) => c.id === activeChatId)
+        if (!notebookChatId) return
+        const chat = useAppStore.getState().chats.find((c) => c.id === notebookChatId)
         if (!chat || chat.mode !== 'notebook' || chat.notebookId !== notebook) return
         const current = chat.sourceIds ?? []
         if (current.length === selectedSourceIds.length && current.every((v, i) => v === selectedSourceIds[i])) return
-        setChatSourceIds(activeChatId, selectedSourceIds).catch(() => {})
-    }, [selectedSourceIds, activeChatId, notebook, setChatSourceIds])
+        setChatSourceIds(notebookChatId, selectedSourceIds).catch(() => {})
+    }, [selectedSourceIds, notebookChatId, notebook, setChatSourceIds])
 
     // Load article list (stale-while-revalidate: keep old entries visible during switch)
     const [showListSkeleton, setShowListSkeleton] = React.useState(false)
     React.useEffect(() => {
         // Reset local UI state on notebook change
         setSelectedNote(null)
-        setEditing(null)
+        setCreatingNew(false)
         setSearchQuery('')
         setInSearch(false)
         setSearchResults([])
@@ -88,11 +94,25 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
             .then((data) => {
                 const notes = data as NoteEntry[]
                 setEntries(notes)
-                if (notes.length > 0) setSelectedNote(notes[0])
+                const preselect = initialArticleId
+                    ? notes.find(n => n.id === initialArticleId) ?? null
+                    : null
+                if (preselect) setSelectedNote(preselect)
+                else if (notes.length > 0) setSelectedNote(notes[0])
             })
             .catch(() => setEntries([]))
             .finally(() => setLoading(false))
     }, [notebook])
+
+    // Sync article selection when initialArticleId changes (e.g. sidebar article click)
+    React.useEffect(() => {
+        if (!initialArticleId || entries.length === 0) return
+        const found = entries.find(n => n.id === initialArticleId)
+        if (found && found.id !== selectedNote?.id) {
+            setSelectedNote(found)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialArticleId, entries])
 
     // Show skeleton only after a delay — avoids flash on fast loads
     React.useEffect(() => {
@@ -112,17 +132,28 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
         }, 280)
     }, [searchQuery, notebook])
 
-    // Load full content when note is selected
+    // Load full content for the AI drawer (NoteEditor handles its own loading)
     React.useEffect(() => {
         if (!selectedNote) { setFullContent(''); return }
-        // Show available preview content immediately — avoids blank flash
         setFullContent(selectedNote.content ?? '')
-        setContentLoading(true)
         notebookRead(selectedNote.id)
             .then((data) => setFullContent((data as NoteEntry).content ?? ''))
-            .catch(() => {}) // already showing selectedNote.content
-            .finally(() => setContentLoading(false))
+            .catch(() => {})
     }, [selectedNote?.id])
+
+    // Track recently viewed articles in localStorage
+    React.useEffect(() => {
+        if (!selectedNote) return
+        try {
+            const raw = localStorage.getItem('neo:recentArticles')
+            const recent: Array<{ id: string; title: string; notebook: string }> = raw ? JSON.parse(raw) : []
+            const updated = [
+                { id: selectedNote.id, title: selectedNote.title, notebook },
+                ...recent.filter(a => a.id !== selectedNote.id),
+            ].slice(0, 8)
+            localStorage.setItem('neo:recentArticles', JSON.stringify(updated))
+        } catch { /* ignore */ }
+    }, [selectedNote?.id, notebook])
 
     // Responsive
     React.useEffect(() => {
@@ -143,27 +174,40 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
 
     const selectNote = (note: NoteEntry) => {
         setSelectedNote(note)
-        setEditing(null)
+        setCreatingNew(false)
         if (isMobile) setMobileTab('detail')
     }
 
-    const handleEditorSaved = (entry: NoteEntry) => {
-        if (editing === 'new') {
-            setEntries((prev) => [entry, ...prev])
-        } else {
-            setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, ...entry } : e)))
-        }
-        setEditing(null)
+    // Called when a new note is first saved
+    const handleNewNoteSaved = (entry: NoteEntry) => {
+        setEntries((prev) => [entry, ...prev])
+        setCreatingNew(false)
         setSelectedNote(entry)
         if (isMobile) setMobileTab('detail')
     }
 
+    // Called silently by auto-save for existing notes
+    const handleAutoSaved = React.useCallback((entry: NoteEntry) => {
+        setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, ...entry } : e))
+        setSelectedNote(entry)
+        setFullContent(entry.content ?? '')
+    }, [setSelectedNote])
+
     const handleEditorDeleted = (id: string) => {
         setEntries((prev) => prev.filter((e) => e.id !== id))
-        setEditing(null)
+        setCreatingNew(false)
         setSelectedNote(null)
         if (isMobile) setMobileTab('list')
     }
+
+    // Apply AI edits to a note (called from DocDiffModal via NotebookChatDrawer)
+    const handleNoteApply = React.useCallback(async (noteId: string, newContent: string) => {
+        await notebookUpdate(noteId, { content: newContent })
+        setFullContent(newContent)
+        setEntries((prev) => prev.map((e) => e.id === noteId ? { ...e, content: newContent } : e))
+        const current = useAppStore.getState().selectedNote
+        if (current?.id === noteId) setSelectedNote({ ...current, content: newContent })
+    }, [setSelectedNote])
 
     // ── Sub-views ──────────────────────────────────────────────────────────
 
@@ -191,30 +235,30 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
             totalCount={entries.length}
             selectedId={selectedNote?.id ?? null}
             onSelect={selectNote}
-            onEdit={(entry) => { setEditing(entry); if (isMobile) setMobileTab('detail') }}
+            onEdit={(entry) => { selectNote(entry); if (isMobile) setMobileTab('detail') }}
             onDelete={handleDeleteEntry}
-            onNew={() => { setEditing('new'); if (isMobile) setMobileTab('detail') }}
+            onNew={() => { setCreatingNew(true); if (isMobile) setMobileTab('detail') }}
             onBack={onBack}
-            chatOpen={chatOpen}
-            onToggleChat={() => setChatOpen((v) => !v)}
         />
     )
 
-    const articleDetail = editing !== null ? (
+    const articleDetail = creatingNew ? (
         <NoteEditor
-            note={editing === 'new' ? null : editing}
-            notebook={editing === 'new' ? notebook : (editing as NoteEntry).notebook}
-            onBack={() => { setEditing(null); if (isMobile) setMobileTab('detail') }}
-            onSaved={handleEditorSaved}
+            note={null}
+            notebook={notebook}
+            onBack={() => { setCreatingNew(false); if (isMobile) setMobileTab('detail') }}
+            onSaved={handleNewNoteSaved}
             onDeleted={handleEditorDeleted}
         />
     ) : selectedNote ? (
-        <ArticleDetail
+        <NoteEditor
+            key={selectedNote.id}
             note={selectedNote}
-            fullContent={fullContent}
-            loading={contentLoading}
-            onEdit={() => setEditing(selectedNote)}
-            onDelete={() => handleDeleteEntry(selectedNote)}
+            notebook={selectedNote.notebook}
+            autoSave
+            onBack={() => {}}
+            onSaved={handleAutoSaved}
+            onDeleted={handleEditorDeleted}
         />
     ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-text-quaternary gap-3 bg-white dark:bg-[#191919]">
@@ -245,7 +289,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
                     {mobileTab === 'detail' && (
                         <div className="flex flex-col flex-1 overflow-hidden">{articleDetail}</div>
                     )}
-                    {mobileTab === 'chat' && <NotebookChatDrawer notebook={notebook} onClose={() => setMobileTab('detail')} />}
+                    {mobileTab === 'chat' && <NotebookChatDrawer notebook={notebook} selectedNote={selectedNote} fullContent={fullContent} onClose={() => setMobileTab('detail')} onNoteApply={handleNoteApply} />}
                 </div>
                 <div className="h-14 border-t border-border flex items-center shrink-0 bg-bg-container">
                     {([
@@ -274,62 +318,65 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack }) => {
 
     return (
         <div ref={workspaceRef} className="flex h-full bg-bg overflow-hidden relative">
-            {/* Left: Article list */}
-            <div
-                className={cn(
-                    'flex flex-col border-r border-border shrink-0 overflow-hidden bg-bg-container transition-all duration-200',
-                )}
-                style={{ width: listCollapsed ? 44 : LIST_WIDTH }}
-            >
-                {listCollapsed ? (
-                    <div className="flex flex-col items-center pt-2 gap-0.5">
-                        <button
-                            onClick={onBack}
-                            className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill text-text-tertiary hover:text-text transition-colors"
-                            title="返回笔记本"
-                        >
-                            <ArrowLeft size={14} />
-                        </button>
-                        <button
-                            onClick={() => setListCollapsed(false)}
-                            className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill text-text-tertiary hover:text-text transition-colors"
-                            title="展开文章列表"
-                        >
-                            <PanelLeftOpen size={14} />
-                        </button>
-                        <button
-                            onClick={() => setChatOpen((v) => !v)}
-                            className={cn(
-                                'w-9 h-9 flex items-center justify-center rounded-lg transition-colors',
-                                chatOpen ? 'text-primary-mint bg-primary-mint/10' : 'text-text-tertiary hover:bg-fill hover:text-text',
-                            )}
-                            title="AI 助手"
-                        >
-                            <MessageSquare size={14} />
-                        </button>
-                    </div>
-                ) : (
-                    articleList
-                )}
-            </div>
+            {/* Left: Article list — hidden in full-page mode (sidebar handles navigation) */}
+            {(!startCollapsed || !listCollapsed) && (
+                <div
+                    className={cn(
+                        'flex flex-col border-r border-border shrink-0 overflow-hidden bg-bg-container transition-all duration-200',
+                    )}
+                    style={{ width: listCollapsed ? 44 : LIST_WIDTH }}
+                >
+                    {listCollapsed ? (
+                        <div className="flex flex-col items-center pt-2 gap-0.5">
+                            <button
+                                onClick={onBack}
+                                className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill text-text-tertiary hover:text-text transition-colors"
+                                title="返回笔记本"
+                            >
+                                <ArrowLeft size={14} />
+                            </button>
+                            <button
+                                onClick={() => setListCollapsed(false)}
+                                className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill text-text-tertiary hover:text-text transition-colors"
+                                title="展开文章列表"
+                            >
+                                <PanelLeftOpen size={14} />
+                            </button>
+                        </div>
+                    ) : (
+                        articleList
+                    )}
+                </div>
+            )}
 
-            {/* Center: Article content — no top bar */}
-            <div
-                className="flex-1 min-w-0 flex flex-col overflow-hidden"
-                style={{ marginRight: chatOpen ? CHAT_DRAWER_WIDTH : 0, transition: 'margin-right 200ms ease' }}
-            >
+            {/* Center: Article content — full width, chat floats over it */}
+            <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
                 {articleDetail}
             </div>
 
-            {/* Right: Floating chat drawer — conditionally rendered to prevent browser scroll pollution */}
+            {/* Right-bottom: Floating chat popover — sits above the FAB */}
             {chatOpen && (
                 <div
-                    className="absolute top-0 right-0 h-full border-l border-border bg-bg-container shadow-xl z-20"
-                    style={{ width: CHAT_DRAWER_WIDTH }}
+                    className="absolute bottom-16 right-4 flex flex-col rounded-2xl border border-border bg-bg-container shadow-2xl z-30 overflow-hidden"
+                    style={{ width: 340, height: 500 }}
                 >
-                    <NotebookChatDrawer notebook={notebook} onClose={() => setChatOpen(false)} />
+                    <NotebookChatDrawer notebook={notebook} selectedNote={selectedNote} fullContent={fullContent} onClose={() => setChatOpen(false)} onNoteApply={handleNoteApply} />
                 </div>
             )}
+
+            {/* FAB — always-visible chat toggle */}
+            <button
+                onClick={() => setChatOpen((v) => !v)}
+                className={cn(
+                    'absolute bottom-4 right-4 w-10 h-10 flex items-center justify-center rounded-full shadow-lg z-30 transition-all duration-150',
+                    chatOpen
+                        ? 'bg-primary-mint text-white rotate-90'
+                        : 'bg-bg-container border border-border text-text-secondary hover:text-primary-mint hover:border-primary-mint/50',
+                )}
+                title={chatOpen ? '收起 AI 助手' : 'AI 助手'}
+            >
+                {chatOpen ? <X size={16} /> : <MessageSquare size={15} />}
+            </button>
         </div>
     )
 }
@@ -353,26 +400,14 @@ const ArticleList: React.FC<{
     onDelete: (note: NoteEntry) => void
     onNew?: () => void
     onBack: () => void
-    chatOpen: boolean
-    onToggleChat: () => void
-}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, selectedId, onSelect, onEdit, onDelete, onNew, onBack, chatOpen, onToggleChat }) => (
+}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, selectedId, onSelect, onEdit, onDelete, onNew, onBack }) => (
     <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <div className="h-11 border-b border-border flex items-center gap-1 px-2 shrink-0 shrink-0">
+        <div className="h-11 border-b border-border flex items-center gap-1 px-2 shrink-0">
             <button onClick={onBack} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors shrink-0" title="返回笔记本">
                 <ArrowLeft size={13} />
             </button>
             <span className="text-xs font-medium flex-1 truncate text-text-secondary px-1">{notebook}</span>
-            <button
-                onClick={onToggleChat}
-                className={cn(
-                    'w-7 h-7 flex items-center justify-center rounded-md transition-colors shrink-0',
-                    chatOpen ? 'text-primary-mint bg-primary-mint/10' : 'text-text-quaternary hover:bg-fill hover:text-text-secondary',
-                )}
-                title="AI 助手"
-            >
-                <MessageSquare size={13} />
-            </button>
             {onNew && (
                 <button onClick={onNew} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors shrink-0" title="新建文章">
                     <Plus size={13} />
@@ -505,99 +540,5 @@ const ArticleListItem: React.FC<{
                 </div>
             )}
         </div>
-    )
-}
-
-// ── Article detail view ───────────────────────────────────────────────────────
-
-const ArticleDetail: React.FC<{
-    note: NoteEntry
-    fullContent: string
-    loading: boolean
-    onEdit: () => void
-    onDelete: () => void
-}> = ({ note, fullContent, loading, onEdit, onDelete }) => {
-    const [menuOpen, setMenuOpen] = React.useState(false)
-    const menuRef = React.useRef<HTMLDivElement>(null)
-    React.useEffect(() => {
-        if (!menuOpen) return
-        const handler = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
-        }
-        document.addEventListener('mousedown', handler)
-        return () => document.removeEventListener('mousedown', handler)
-    }, [menuOpen])
-
-    return (
-    <div className="flex flex-col h-full bg-white dark:bg-[#191919] relative">
-        {/* Thin top progress bar during content loading — no layout shift */}
-        <div className={cn(
-            'absolute top-0 left-0 right-0 h-0.5 bg-primary-mint/70 z-10 transition-opacity duration-300',
-            loading ? 'opacity-100' : 'opacity-0',
-        )} />
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
-            <div className="max-w-[720px] mx-auto px-14 py-12">
-                {/* Title row */}
-                <div className="flex items-start gap-3 mb-3">
-                    <h1 className="text-[28px] font-bold text-[#1a1a1a] dark:text-[#e8e8e8] flex-1 leading-tight tracking-tight">{note.title}</h1>
-                    <div className="relative mt-1.5 shrink-0" ref={menuRef}>
-                        <button
-                            onClick={() => setMenuOpen((v) => !v)}
-                            className="p-1.5 rounded-lg text-text-quaternary hover:text-text-secondary hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
-                        >
-                            <MoreHorizontal size={16} />
-                        </button>
-                        {menuOpen && (
-                            <div className="absolute right-0 top-full mt-0.5 z-50 bg-bg-container border border-border rounded-lg shadow-lg py-0.5 min-w-[110px]">
-                                <button
-                                    onClick={() => { setMenuOpen(false); onEdit() }}
-                                    className="w-full text-left px-3 py-1.5 text-xs hover:bg-fill-secondary transition-colors"
-                                >
-                                    编辑
-                                </button>
-                                <button
-                                    onClick={() => { setMenuOpen(false); onDelete() }}
-                                    className="w-full text-left px-3 py-1.5 text-xs text-destructive hover:bg-fill-secondary transition-colors"
-                                >
-                                    删除
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-                {/* Meta */}
-                {(note.date || note.author || note.tags) && (
-                    <div className="flex flex-wrap gap-3 mb-7 text-[12px] text-text-tertiary">
-                        {note.date && (
-                            <span className="flex items-center gap-1">
-                                <Calendar size={11} /> {note.date}
-                            </span>
-                        )}
-                        {note.author && (
-                            <span className="flex items-center gap-1">
-                                <User size={11} /> {note.author}
-                            </span>
-                        )}
-                        {note.tags && (
-                            <span className="flex items-center gap-1">
-                                <Tag size={11} /> {note.tags}
-                            </span>
-                        )}
-                    </div>
-                )}
-                {note.summary && (
-                    <div className="mb-7 text-[13px] text-text-secondary leading-relaxed border-l-[3px] border-gray-200 dark:border-white/20 pl-4 italic">
-                        {note.summary}
-                    </div>
-                )}
-                <div className={cn(
-                    'markdown-content text-[15px] leading-[1.8] text-[#374151] dark:text-[#d1d5db] transition-opacity duration-200',
-                    loading && 'opacity-50',
-                )}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{fullContent}</ReactMarkdown>
-                </div>
-            </div>
-        </div>
-    </div>
     )
 }
