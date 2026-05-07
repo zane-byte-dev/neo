@@ -1,7 +1,7 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useParams, useNavigate } from 'react-router-dom'
 import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from 'react-resizable-panels'
-import { Menu, X, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftOpen } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NoteEditor } from './components/NoteEditor'
@@ -10,7 +10,6 @@ import { Login } from './components/Login'
 import { SettingsPanel } from './components/SettingsPanel'
 import { useAppStore } from './stores/useAppStore'
 import { checkAuth, type AuthResult } from './api'
-import { cn } from './lib/utils'
 import { ToastContainer } from './components/Toast'
 import { ConfirmDialogContainer } from './components/ConfirmDialog'
 
@@ -99,16 +98,8 @@ const NewNotePage: React.FC = () => {
 
 const MainLayout: React.FC = () => {
     const { theme } = useAppStore()
-    const [sidebarOpen, setSidebarOpen] = React.useState(false)
     const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
-    const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 768)
     const sidebarPanelRef = React.useRef<ImperativePanelHandle>(null)
-
-    React.useEffect(() => {
-        const onResize = () => setIsMobile(window.innerWidth < 768)
-        window.addEventListener('resize', onResize)
-        return () => window.removeEventListener('resize', onResize)
-    }, [])
 
     const toggleSidebar = React.useCallback(() => {
         if (sidebarCollapsed) {
@@ -136,72 +127,37 @@ const MainLayout: React.FC = () => {
 
     return (
         <div className="h-screen w-screen bg-bg-layout overflow-hidden text-text flex flex-row">
-            {isMobile ? (
-                <>
-                    {/* Mobile sidebar overlay */}
-                    {sidebarOpen && (
-                        <div
-                            className="fixed inset-0 bg-black/40 z-40 animate-fade-in"
-                            onClick={() => setSidebarOpen(false)}
-                        />
-                    )}
-
-                    {/* Mobile hamburger button */}
-                    <button
-                        onClick={() => setSidebarOpen((o) => !o)}
-                        className="fixed top-3 left-3 z-50 p-2 rounded-lg bg-bg-container/80 backdrop-blur-xl border border-border text-text-secondary hover:bg-fill transition-colors"
-                        style={{ boxShadow: 'var(--shadow-soft)' }}
-                    >
-                        {sidebarOpen ? <X size={16} /> : <Menu size={16} />}
-                    </button>
-
-                    {/* Mobile sidebar drawer */}
-                    <div className={cn(
-                        'fixed inset-y-0 left-0 z-40 w-72 transform transition-transform duration-300 ease-out',
-                        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-                    )}>
-                        <Sidebar onNavigate={() => setSidebarOpen(false)} />
-                    </div>
-
-                    {/* Mobile content */}
-                    <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+            <PanelGroup direction="horizontal" className="w-full">
+                <Panel
+                    ref={sidebarPanelRef}
+                    defaultSize={20}
+                    minSize={14}
+                    maxSize={32}
+                    collapsible
+                    collapsedSize={0}
+                    onCollapse={() => setSidebarCollapsed(true)}
+                    onExpand={() => setSidebarCollapsed(false)}
+                >
+                    <Sidebar onCollapse={toggleSidebar} />
+                </Panel>
+                {!sidebarCollapsed && <ResizeHandle />}
+                <Panel defaultSize={80} minSize={50}>
+                    <div className="h-full flex flex-col overflow-hidden relative">
+                        {/* Expand button shown when sidebar is collapsed */}
+                        {sidebarCollapsed && (
+                            <button
+                                onClick={toggleSidebar}
+                                className="absolute top-3 left-3 z-10 p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-fill border border-border bg-bg-container/80 backdrop-blur-xl transition-all duration-150"
+                                style={{ boxShadow: 'var(--shadow-soft)' }}
+                                title="Expand sidebar"
+                            >
+                                <PanelLeftOpen size={15} />
+                            </button>
+                        )}
                         {pageRoutes}
                     </div>
-                </>
-            ) : (
-                /* Desktop: sidebar + content with resizable panels */
-                <PanelGroup direction="horizontal" className="w-full">
-                    <Panel
-                        ref={sidebarPanelRef}
-                        defaultSize={20}
-                        minSize={14}
-                        maxSize={32}
-                        collapsible
-                        collapsedSize={0}
-                        onCollapse={() => setSidebarCollapsed(true)}
-                        onExpand={() => setSidebarCollapsed(false)}
-                    >
-                        <Sidebar onCollapse={toggleSidebar} />
-                    </Panel>
-                    {!sidebarCollapsed && <ResizeHandle />}
-                    <Panel defaultSize={80} minSize={50}>
-                        <div className="h-full flex flex-col overflow-hidden relative">
-                            {/* Expand button shown when sidebar is collapsed */}
-                            {sidebarCollapsed && (
-                                <button
-                                    onClick={toggleSidebar}
-                                    className="absolute top-3 left-3 z-10 p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-fill border border-border bg-bg-container/80 backdrop-blur-xl transition-all duration-150"
-                                    style={{ boxShadow: 'var(--shadow-soft)' }}
-                                    title="Expand sidebar"
-                                >
-                                    <PanelLeftOpen size={15} />
-                                </button>
-                            )}
-                            {pageRoutes}
-                        </div>
-                    </Panel>
-                </PanelGroup>
-            )}
+                </Panel>
+            </PanelGroup>
         </div>
     )
 }

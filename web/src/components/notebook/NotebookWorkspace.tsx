@@ -6,7 +6,7 @@
  * 移动端：底部 tab 切换
  */
 import React from 'react'
-import { ArrowLeft, BookOpen, MessageSquare, Plus, Pencil, Search, X, ArrowUpDown, PanelLeftOpen, MoreHorizontal } from 'lucide-react'
+import { ArrowLeft, BookOpen, MessageSquare, Plus, Search, X, ArrowUpDown, PanelLeftOpen, MoreHorizontal } from 'lucide-react'
 import { NotebookChatDrawer } from './NotebookChatDrawer'
 import { NoteEditor } from '../NoteEditor'
 import { useAppStore } from '../../stores/useAppStore'
@@ -15,10 +15,10 @@ import { notebookList, notebookRead, notebookSearch, notebookDelete, notebookUpd
 import { confirm } from '../ConfirmDialog'
 import type { NoteEntry } from '../../types'
 
-const MOBILE_BREAKPOINT = 1024
 const LIST_WIDTH = 280
 
 type NoteSort = 'default' | 'date-desc' | 'date-asc' | 'title'
+
 const SORT_LABELS: Record<NoteSort, string> = {
     default: '默认', 'date-desc': '最新', 'date-asc': '最早', title: '标题',
 }
@@ -30,11 +30,7 @@ interface Props {
     initialArticleId?: string
 }
 
-type MobileTab = 'list' | 'detail' | 'chat'
-
 export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startCollapsed, initialArticleId }) => {
-    const [isMobile, setIsMobile] = React.useState(false)
-    const [mobileTab, setMobileTab] = React.useState<MobileTab>('list')
     const [listCollapsed, setListCollapsed] = React.useState(() => startCollapsed ?? false)
     const [chatOpen, setChatOpen] = React.useState(false)
 
@@ -88,7 +84,6 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         setInSearch(false)
         setSearchResults([])
         setSortBy('default')
-        if (isMobile) setMobileTab('list')
         setLoading(true)
         notebookList(notebook)
             .then((data) => {
@@ -155,13 +150,11 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         } catch { /* ignore */ }
     }, [selectedNote?.id, notebook])
 
-    // Responsive
+    // Workspace scroll reset on notebook change
+    const workspaceRef = React.useRef<HTMLDivElement>(null)
     React.useEffect(() => {
-        const handle = () => setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-        handle()
-        window.addEventListener('resize', handle)
-        return () => window.removeEventListener('resize', handle)
-    }, [])
+        if (workspaceRef.current) workspaceRef.current.scrollLeft = 0
+    }, [notebook])
 
     const displayList = inSearch ? searchResults : entries
     const sortedList = React.useMemo(() => {
@@ -175,7 +168,6 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
     const selectNote = (note: NoteEntry) => {
         setSelectedNote(note)
         setCreatingNew(false)
-        if (isMobile) setMobileTab('detail')
     }
 
     // Called when a new note is first saved
@@ -183,7 +175,6 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         setEntries((prev) => [entry, ...prev])
         setCreatingNew(false)
         setSelectedNote(entry)
-        if (isMobile) setMobileTab('detail')
     }
 
     // Called silently by auto-save for existing notes
@@ -197,7 +188,6 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         setEntries((prev) => prev.filter((e) => e.id !== id))
         setCreatingNew(false)
         setSelectedNote(null)
-        if (isMobile) setMobileTab('list')
     }
 
     // Apply AI edits to a note (called from DocDiffModal via NotebookChatDrawer)
@@ -235,9 +225,9 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
             totalCount={entries.length}
             selectedId={selectedNote?.id ?? null}
             onSelect={selectNote}
-            onEdit={(entry) => { selectNote(entry); if (isMobile) setMobileTab('detail') }}
+            onEdit={(entry) => { selectNote(entry) }}
             onDelete={handleDeleteEntry}
-            onNew={() => { setCreatingNew(true); if (isMobile) setMobileTab('detail') }}
+            onNew={() => { setCreatingNew(true) }}
             onBack={onBack}
         />
     )
@@ -246,7 +236,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         <NoteEditor
             note={null}
             notebook={notebook}
-            onBack={() => { setCreatingNew(false); if (isMobile) setMobileTab('detail') }}
+            onBack={() => { setCreatingNew(false) }}
             onSaved={handleNewNoteSaved}
             onDeleted={handleEditorDeleted}
         />
@@ -266,55 +256,6 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
             <span className="text-sm">从左侧选择一篇文章</span>
         </div>
     )
-
-    // Desktop workspace ref — must be declared before any early return
-    const workspaceRef = React.useRef<HTMLDivElement>(null)
-    React.useEffect(() => {
-        if (workspaceRef.current) workspaceRef.current.scrollLeft = 0
-    }, [notebook])
-
-    // ── Mobile ─────────────────────────────────────────────────────────────
-
-    if (isMobile) {
-        return (
-            <div className="flex flex-col h-full bg-bg overflow-hidden">
-                <div className="h-12 border-b border-border flex items-center gap-2 px-3 shrink-0">
-                    <button onClick={onBack} className="p-1.5 hover:bg-fill-secondary rounded-lg">
-                        <ArrowLeft size={16} />
-                    </button>
-                    <span className="text-sm font-semibold flex-1 truncate">{notebook}</span>
-                </div>
-                <div className="flex-1 overflow-hidden flex flex-col">
-                    {mobileTab === 'list' && articleList}
-                    {mobileTab === 'detail' && (
-                        <div className="flex flex-col flex-1 overflow-hidden">{articleDetail}</div>
-                    )}
-                    {mobileTab === 'chat' && <NotebookChatDrawer notebook={notebook} selectedNote={selectedNote} fullContent={fullContent} onClose={() => setMobileTab('detail')} onNoteApply={handleNoteApply} />}
-                </div>
-                <div className="h-14 border-t border-border flex items-center shrink-0 bg-bg-container">
-                    {([
-                        ['list',   BookOpen,      '文章'],
-                        ['detail', Pencil,        '内容'],
-                        ['chat',   MessageSquare, 'AI'],
-                    ] as const).map(([k, Icon, label]) => (
-                        <button
-                            key={k}
-                            onClick={() => setMobileTab(k)}
-                            className={cn(
-                                'flex-1 flex flex-col items-center justify-center gap-0.5 py-1 text-[10px] transition-colors',
-                                mobileTab === k ? 'text-primary-mint' : 'text-text-tertiary',
-                            )}
-                        >
-                            <Icon size={16} />
-                            <span>{label}</span>
-                        </button>
-                    ))}
-                </div>
-            </div>
-        )
-    }
-
-    // ── Desktop ────────────────────────────────────────────────────────────
 
     return (
         <div ref={workspaceRef} className="flex h-full bg-bg overflow-hidden relative">
