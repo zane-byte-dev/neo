@@ -17,6 +17,7 @@ import {
     EditorCommandEmpty,
     StarterKit,
     HighlightExtension,
+    AIHighlight,
     Placeholder,
     type EditorInstance,
     type SuggestionItem,
@@ -25,14 +26,44 @@ import {
     renderItems,
     Command,
     useEditor,
+    getPrevText,
+    addAIHighlight,
+    removeAIHighlight,
 } from 'novel'
 import { Markdown } from 'tiptap-markdown'
 import {
     Bold, Italic, Strikethrough, Code,
     Heading1, Heading2, Heading3,
     List, ListOrdered, Quote, Minus, Code2, Type,
+    Sparkles, Wand2, ArrowUpRight, ArrowDownToLine, Scissors, CheckSquare,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+
+// ─── AI completion helper ─────────────────────────────────────────────────────
+
+type AICommand = 'continue' | 'improve' | 'shorter' | 'longer' | 'fix'
+
+async function streamAICompletion(
+    prompt: string,
+    command: AICommand,
+    onChunk: (text: string) => void,
+    signal?: AbortSignal,
+): Promise<void> {
+    const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, command }),
+        signal,
+    })
+    if (!res.ok || !res.body) throw new Error(`AI request failed: ${res.status}`)
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        onChunk(decoder.decode(value, { stream: true }))
+    }
+}
 
 // ─── Slash-command suggestion items ──────────────────────────────────────────
 
@@ -109,6 +140,47 @@ const SUGGESTION_ITEMS: SuggestionItem[] = createSuggestionItems([
         command: ({ editor, range }) =>
             editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
     },
+    {
+        title: 'AI 续写',
+        description: '根据已有内容继续写作',
+        searchTerms: ['ai', 'continue', '续写', '继续'],
+        icon: <Sparkles size={16} />,
+        command: ({ editor, range }) => {
+            editor.chain().focus().deleteRange(range).run()
+            const text = getPrevText(editor, { chars: 5000 })
+            if (!text.trim()) return
+            const pos = editor.state.selection.to
+            addAIHighlight(editor)
+            const ctrl = new AbortController()
+            let inserted = 0
+            streamAICompletion(text, 'continue', (chunk) => {
+                editor.chain().focus().insertContentAt(pos + inserted, chunk).run()
+                inserted += chunk.length
+            }, ctrl.signal).then(() => {
+                removeAIHighlight(editor)
+            }).catch(() => {
+                removeAIHighlight(editor)
+            })
+        },
+    },
+    {
+        title: 'AI 改写',
+        description: '改进选中文本的表达',
+        searchTerms: ['ai', 'improve', 'rewrite', '改写', '优化'],
+        icon: <Wand2 size={16} />,
+        command: ({ editor, range }) => {
+            editor.chain().focus().deleteRange(range).run()
+            const text = getPrevText(editor, { chars: 5000 })
+            if (!text.trim()) return
+            const pos = editor.state.selection.to
+            addAIHighlight(editor)
+            let inserted = 0
+            streamAICompletion(text, 'improve', (chunk) => {
+                editor.chain().focus().insertContentAt(pos + inserted, chunk).run()
+                inserted += chunk.length
+            }).then(() => removeAIHighlight(editor)).catch(() => removeAIHighlight(editor))
+        },
+    },
 ])
 
 // ─── Bubble menu button ───────────────────────────────────────────────────────
@@ -129,6 +201,71 @@ const BubbleButton: React.FC<BubbleButtonProps> = ({ mark, icon, title, onSelect
                 className={cn(
                     'w-7 h-7 flex items-center justify-center rounded-md text-text-secondary hover:bg-fill hover:text-text transition-colors',
                     editor?.isActive(mark) && 'bg-fill text-primary-mint'
+                )}
+            >
+                {icon}
+            </button>
+        </EditorBubbleItem>
+    )
+}
+
+// ─── AI bubble button ─────────────────────────────────────────────────────────
+
+interface AIBubbleButtonProps {
+    command: AICommand | 'continue'
+    icon: React.ReactNode
+    title: string
+}
+
+const AIBubbleButton: React.FC<AIBubbleButtonProps> = ({ command, icon, title }) => {
+    const { editor } = useEditor()
+    const [loading, setLoading] = React.useState(false)
+
+    const handleSelect = async (ed: EditorInstance) => {
+        if (loading || !ed) return
+        const { from, to } = ed.state.selection
+        const selectedText = ed.state.doc.textBetween(from, to, '\n')
+        const text = selectedText || getPrevText(ed, { chars: 5000 })
+        if (!text.trim()) return
+
+        setLoading(true)
+        addAIHighlight(ed)
+
+        // Insert after current selection
+        const insertPos = to
+
+        try {
+            let inserted = 0
+            // If text was selected, delete it first and write the AI output in place
+            if (selectedText) {
+                ed.chain().focus().deleteSelection().run()
+                await streamAICompletion(text, command as AICommand, (chunk) => {
+                    ed.chain().focus().insertContentAt(from + inserted, chunk).run()
+                    inserted += chunk.length
+                })
+            } else {
+                await streamAICompletion(text, command as AICommand, (chunk) => {
+                    ed.chain().focus().insertContentAt(insertPos + inserted, chunk).run()
+                    inserted += chunk.length
+                })
+            }
+        } catch {
+            // silently ignore cancelled requests
+        } finally {
+            removeAIHighlight(ed)
+            setLoading(false)
+        }
+    }
+
+    return (
+        <EditorBubbleItem onSelect={handleSelect} className="p-0">
+            <button
+                title={title}
+                disabled={loading}
+                className={cn(
+                    'w-7 h-7 flex items-center justify-center rounded-md text-text-secondary hover:bg-fill hover:text-primary-mint transition-colors',
+                    loading && 'animate-pulse text-primary-mint',
+                    editor?.isActive('ai-highlight') && loading && 'bg-fill'
                 )}
             >
                 {icon}
@@ -160,6 +297,7 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
         StarterKit.configure({
             heading: { levels: [1, 2, 3] },
         }),
+        AIHighlight,
         HighlightExtension,
         Markdown.configure({
             html: false,
@@ -249,6 +387,13 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
                     <BubbleButton mark="strike"    icon={<Strikethrough size={13} />} title="删除线" onSelect={(e) => e.chain().focus().toggleStrike().run()} />
                     <BubbleButton mark="code"      icon={<Code size={13} />}          title="代码"   onSelect={(e) => e.chain().focus().toggleCode().run()} />
                     <BubbleButton mark="highlight" icon={<span className="text-[11px] font-bold leading-none" style={{ fontFamily: 'serif' }}>A</span>} title="高亮" onSelect={(e) => e.chain().focus().toggleHighlight().run()} />
+                    {/* AI actions */}
+                    <div className="w-px h-4 bg-border mx-0.5 shrink-0" />
+                    <AIBubbleButton command="improve" icon={<Wand2 size={13} />}          title="AI 改写" />
+                    <AIBubbleButton command="shorter" icon={<Scissors size={13} />}        title="AI 缩短" />
+                    <AIBubbleButton command="longer"  icon={<ArrowDownToLine size={13} />} title="AI 扩写" />
+                    <AIBubbleButton command="fix"     icon={<CheckSquare size={13} />}     title="AI 纠错" />
+                    <AIBubbleButton command="continue" icon={<ArrowUpRight size={13} />}   title="AI 续写" />
                 </EditorBubble>
             </EditorContent>
         </EditorRoot>
