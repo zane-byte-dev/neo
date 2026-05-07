@@ -36,6 +36,7 @@ import {
     Heading1, Heading2, Heading3,
     List, ListOrdered, Quote, Minus, Code2, Type,
     Sparkles, Wand2, ArrowUpRight, ArrowDownToLine, Scissors, CheckSquare,
+    Check, X as XIcon,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
@@ -43,27 +44,33 @@ import { cn } from '../lib/utils'
 
 type AICommand = 'continue' | 'improve' | 'shorter' | 'longer' | 'fix'
 
-async function streamAICompletion(
-    prompt: string,
-    command: AICommand,
-    onChunk: (text: string) => void,
-    signal?: AbortSignal,
-): Promise<void> {
+async function fetchAICompletion(prompt: string, command: AICommand): Promise<string> {
     const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, command }),
-        signal,
     })
-    if (!res.ok || !res.body) throw new Error(`AI request failed: ${res.status}`)
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        onChunk(decoder.decode(value, { stream: true }))
-    }
+    if (!res.ok) throw new Error(`AI request failed: ${res.status}`)
+    return res.text()
 }
+
+// ─── AI pending state & context ──────────────────────────────────────────────
+
+interface AIPendingState {
+    /** Start position of AI-inserted text in the doc */
+    from: number
+    /** End position of AI-inserted text in the doc */
+    to: number
+    /** Original text that was replaced (empty for insert-only commands) */
+    originalText: string
+    /** Human-readable label shown in the confirm bar */
+    label: string
+}
+
+const AIStateContext = React.createContext<{
+    pending: AIPendingState | null
+    setPending: React.Dispatch<React.SetStateAction<AIPendingState | null>>
+} | null>(null)
 
 // ─── Slash-command suggestion items ──────────────────────────────────────────
 
@@ -140,47 +147,6 @@ const SUGGESTION_ITEMS: SuggestionItem[] = createSuggestionItems([
         command: ({ editor, range }) =>
             editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
     },
-    {
-        title: 'AI 续写',
-        description: '根据已有内容继续写作',
-        searchTerms: ['ai', 'continue', '续写', '继续'],
-        icon: <Sparkles size={16} />,
-        command: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).run()
-            const text = getPrevText(editor, { chars: 5000 })
-            if (!text.trim()) return
-            const pos = editor.state.selection.to
-            addAIHighlight(editor)
-            const ctrl = new AbortController()
-            let inserted = 0
-            streamAICompletion(text, 'continue', (chunk) => {
-                editor.chain().focus().insertContentAt(pos + inserted, chunk).run()
-                inserted += chunk.length
-            }, ctrl.signal).then(() => {
-                removeAIHighlight(editor)
-            }).catch(() => {
-                removeAIHighlight(editor)
-            })
-        },
-    },
-    {
-        title: 'AI 改写',
-        description: '改进选中文本的表达',
-        searchTerms: ['ai', 'improve', 'rewrite', '改写', '优化'],
-        icon: <Wand2 size={16} />,
-        command: ({ editor, range }) => {
-            editor.chain().focus().deleteRange(range).run()
-            const text = getPrevText(editor, { chars: 5000 })
-            if (!text.trim()) return
-            const pos = editor.state.selection.to
-            addAIHighlight(editor)
-            let inserted = 0
-            streamAICompletion(text, 'improve', (chunk) => {
-                editor.chain().focus().insertContentAt(pos + inserted, chunk).run()
-                inserted += chunk.length
-            }).then(() => removeAIHighlight(editor)).catch(() => removeAIHighlight(editor))
-        },
-    },
 ])
 
 // ─── Bubble menu button ───────────────────────────────────────────────────────
@@ -212,47 +178,45 @@ const BubbleButton: React.FC<BubbleButtonProps> = ({ mark, icon, title, onSelect
 // ─── AI bubble button ─────────────────────────────────────────────────────────
 
 interface AIBubbleButtonProps {
-    command: AICommand | 'continue'
+    command: AICommand
     icon: React.ReactNode
     title: string
+    label: string
 }
 
-const AIBubbleButton: React.FC<AIBubbleButtonProps> = ({ command, icon, title }) => {
-    const { editor } = useEditor()
+const AIBubbleButton: React.FC<AIBubbleButtonProps> = ({ command, icon, title, label }) => {
+    const ctx = React.useContext(AIStateContext)
     const [loading, setLoading] = React.useState(false)
 
     const handleSelect = async (ed: EditorInstance) => {
-        if (loading || !ed) return
+        if (loading || ctx?.pending) return
         const { from, to } = ed.state.selection
         const selectedText = ed.state.doc.textBetween(from, to, '\n')
-        const text = selectedText || getPrevText(ed, { chars: 5000 })
-        if (!text.trim()) return
+        const contextText = selectedText || getPrevText(ed, 5000)
+        if (!contextText.trim()) return
 
         setLoading(true)
-        addAIHighlight(ed)
-
-        // Insert after current selection
-        const insertPos = to
-
         try {
-            let inserted = 0
-            // If text was selected, delete it first and write the AI output in place
+            const result = await fetchAICompletion(contextText, command)
+            if (!result.trim()) return
+
             if (selectedText) {
+                // Replace mode: delete selection, insert AI text, record original
                 ed.chain().focus().deleteSelection().run()
-                await streamAICompletion(text, command as AICommand, (chunk) => {
-                    ed.chain().focus().insertContentAt(from + inserted, chunk).run()
-                    inserted += chunk.length
-                })
+                const insertFrom = from
+                ed.chain().focus().insertContentAt(insertFrom, result).run()
+                addAIHighlight(ed)
+                ctx?.setPending({ from: insertFrom, to: insertFrom + result.length, originalText: selectedText, label })
             } else {
-                await streamAICompletion(text, command as AICommand, (chunk) => {
-                    ed.chain().focus().insertContentAt(insertPos + inserted, chunk).run()
-                    inserted += chunk.length
-                })
+                // Insert mode: append after cursor
+                const insertFrom = to
+                ed.chain().focus().insertContentAt(insertFrom, result).run()
+                addAIHighlight(ed)
+                ctx?.setPending({ from: insertFrom, to: insertFrom + result.length, originalText: '', label })
             }
         } catch {
-            // silently ignore cancelled requests
+            // silently ignore
         } finally {
-            removeAIHighlight(ed)
             setLoading(false)
         }
     }
@@ -261,16 +225,63 @@ const AIBubbleButton: React.FC<AIBubbleButtonProps> = ({ command, icon, title })
         <EditorBubbleItem onSelect={handleSelect} className="p-0">
             <button
                 title={title}
-                disabled={loading}
+                disabled={loading || !!ctx?.pending}
                 className={cn(
-                    'w-7 h-7 flex items-center justify-center rounded-md text-text-secondary hover:bg-fill hover:text-primary-mint transition-colors',
-                    loading && 'animate-pulse text-primary-mint',
-                    editor?.isActive('ai-highlight') && loading && 'bg-fill'
+                    'w-7 h-7 flex items-center justify-center rounded-md transition-colors',
+                    loading
+                        ? 'text-primary-mint animate-pulse cursor-wait'
+                        : ctx?.pending
+                        ? 'text-text-quaternary cursor-not-allowed'
+                        : 'text-text-secondary hover:bg-fill hover:text-primary-mint'
                 )}
             >
                 {icon}
             </button>
         </EditorBubbleItem>
+    )
+}
+
+// ─── AI confirm bar ───────────────────────────────────────────────────────────
+
+interface AIConfirmBarProps {
+    pending: AIPendingState
+    onAccept: () => void
+    onReject: () => void
+}
+
+const AIConfirmBar: React.FC<AIConfirmBarProps> = ({ pending, onAccept, onReject }) => {
+    React.useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); onAccept() }
+            else if (e.key === 'Escape') { e.preventDefault(); onReject() }
+        }
+        document.addEventListener('keydown', handler)
+        return () => document.removeEventListener('keydown', handler)
+    }, [onAccept, onReject])
+
+    return (
+        <div className="flex justify-center pb-3 pt-1 pointer-events-none">
+            <div className="pointer-events-auto flex items-center gap-1.5 bg-bg-container border border-border rounded-xl shadow-float px-2.5 py-1.5 animate-slide-up">
+                <Sparkles size={13} className="text-primary-mint shrink-0" />
+                <span className="text-[12px] text-text-secondary font-medium pr-1">{pending.label}</span>
+                <div className="w-px h-3.5 bg-border shrink-0" />
+                <button
+                    onClick={onAccept}
+                    className="flex items-center gap-1 text-[12px] font-medium text-primary-mint hover:bg-fill px-2 py-1 rounded-lg transition-colors"
+                >
+                    <Check size={12} />
+                    <span>接受</span>
+                </button>
+                <button
+                    onClick={onReject}
+                    className="flex items-center gap-1 text-[12px] font-medium text-text-secondary hover:bg-fill px-2 py-1 rounded-lg transition-colors"
+                >
+                    <XIcon size={12} />
+                    <span>撤回</span>
+                </button>
+                <span className="text-[11px] text-text-quaternary pl-1 hidden sm:inline">↵ 接受 · Esc 撤回</span>
+            </div>
+        </div>
     )
 }
 
@@ -291,6 +302,26 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
     onChange,
     className,
 }) => {
+    const [pending, setPending] = React.useState<AIPendingState | null>(null)
+    const editorRef = React.useRef<EditorInstance | null>(null)
+
+    const handleAccept = React.useCallback(() => {
+        if (editorRef.current) removeAIHighlight(editorRef.current)
+        setPending(null)
+    }, [])
+
+    const handleReject = React.useCallback(() => {
+        const ed = editorRef.current
+        if (ed && pending) {
+            ed.chain().focus().deleteRange({ from: pending.from, to: pending.to }).run()
+            if (pending.originalText) {
+                ed.chain().focus().insertContentAt(pending.from, pending.originalText).run()
+            }
+            removeAIHighlight(ed)
+        }
+        setPending(null)
+    }, [pending])
+
     // Build extensions fresh when placeholder changes (remount via parent key)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const extensions = React.useMemo((): any[] => [
@@ -323,79 +354,92 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
     ], [placeholder])
 
     return (
-        <EditorRoot>
-            <EditorContent
-                className={cn('relative w-full', className)}
-                extensions={extensions}
-                editorProps={{
-                    handleDOMEvents: {
-                        keydown: (_view, event) => handleCommandNavigation(event),
-                    },
-                    attributes: {
-                        class: 'novel-editor-body outline-none',
-                    },
-                }}
-                onCreate={({ editor }) => {
-                    // tiptap-markdown intercepts setContent for markdown strings
-                    if (initialContent) {
-                        editor.commands.setContent(initialContent)
-                    }
-                }}
-                onUpdate={({ editor }) => {
-                    const md = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown()
-                    onChange?.(md)
-                }}
-            >
-                {/* ── Slash command popup ─────────────────────────────────── */}
-                <EditorCommand className="novel-slash-menu z-50 h-auto max-h-72 w-64 overflow-y-auto rounded-lg border border-border shadow-float py-1">
-                    <EditorCommandEmpty className="px-3 py-2 text-xs text-text-tertiary">
-                        无匹配命令
-                    </EditorCommandEmpty>
-                    <EditorCommandList>
-                        {SUGGESTION_ITEMS.map((item, i) => (
-                            <EditorCommandItem
-                                key={`${item.title}-${i}`}
-                                value={item.title}
-                                onCommand={(val) => item.command?.(val)}
-                                className="flex w-full items-center gap-2.5 px-3 py-2 text-sm hover:bg-fill-secondary aria-selected:bg-fill cursor-pointer transition-colors"
-                            >
-                                <span className="w-7 h-7 flex items-center justify-center rounded-md bg-fill text-text-secondary shrink-0">
-                                    {item.icon}
-                                </span>
-                                <div className="flex flex-col min-w-0">
-                                    <span className="text-[13px] font-medium text-text leading-tight">
-                                        {item.title}
-                                    </span>
-                                    {item.description && (
-                                        <span className="text-[11px] text-text-tertiary truncate">
-                                            {item.description}
+        <AIStateContext.Provider value={{ pending, setPending }}>
+            <div className={cn('flex flex-col', className)}>
+                <EditorRoot>
+                    <EditorContent
+                        className="w-full"
+                        extensions={extensions}
+                        editorProps={{
+                            handleDOMEvents: {
+                                keydown: (_view, event) => handleCommandNavigation(event),
+                            },
+                            attributes: {
+                                class: 'novel-editor-body outline-none',
+                            },
+                        }}
+                        onCreate={({ editor }) => {
+                            editorRef.current = editor
+                            if (initialContent) {
+                                editor.commands.setContent(initialContent)
+                            }
+                        }}
+                        onUpdate={({ editor }) => {
+                            const md = (editor.storage.markdown as { getMarkdown(): string }).getMarkdown()
+                            onChange?.(md)
+                        }}
+                    >
+                        {/* ── Slash command popup ─────────────────────────────────── */}
+                        <EditorCommand className="novel-slash-menu z-50 h-auto max-h-72 w-64 overflow-y-auto rounded-lg border border-border shadow-float py-1">
+                            <EditorCommandEmpty className="px-3 py-2 text-xs text-text-tertiary">
+                                无匹配命令
+                            </EditorCommandEmpty>
+                            <EditorCommandList>
+                                {SUGGESTION_ITEMS.map((item, i) => (
+                                    <EditorCommandItem
+                                        key={`${item.title}-${i}`}
+                                        value={item.title}
+                                        onCommand={(val) => item.command?.(val)}
+                                        className="flex w-full items-center gap-2.5 px-3 py-2 text-sm hover:bg-fill-secondary aria-selected:bg-fill cursor-pointer transition-colors"
+                                    >
+                                        <span className="w-7 h-7 flex items-center justify-center rounded-md bg-fill text-text-secondary shrink-0">
+                                            {item.icon}
                                         </span>
-                                    )}
-                                </div>
-                            </EditorCommandItem>
-                        ))}
-                    </EditorCommandList>
-                </EditorCommand>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-[13px] font-medium text-text leading-tight">
+                                                {item.title}
+                                            </span>
+                                            {item.description && (
+                                                <span className="text-[11px] text-text-tertiary truncate">
+                                                    {item.description}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </EditorCommandItem>
+                                ))}
+                            </EditorCommandList>
+                        </EditorCommand>
 
-                {/* ── Bubble menu ─────────────────────────────────────────── */}
-                <EditorBubble
-                    tippyOptions={{ duration: 100 }}
-                    className="novel-bubble-menu flex items-center gap-0.5 rounded-lg border border-border shadow-float px-1 py-0.5"
-                >
-                    <BubbleButton mark="bold"      icon={<Bold size={13} />}          title="加粗"   onSelect={(e) => e.chain().focus().toggleBold().run()} />
-                    <BubbleButton mark="italic"    icon={<Italic size={13} />}        title="斜体"   onSelect={(e) => e.chain().focus().toggleItalic().run()} />
-                    <BubbleButton mark="strike"    icon={<Strikethrough size={13} />} title="删除线" onSelect={(e) => e.chain().focus().toggleStrike().run()} />
-                    <BubbleButton mark="code"      icon={<Code size={13} />}          title="代码"   onSelect={(e) => e.chain().focus().toggleCode().run()} />
-                    <BubbleButton mark="highlight" icon={<span className="text-[11px] font-bold leading-none" style={{ fontFamily: 'serif' }}>A</span>} title="高亮" onSelect={(e) => e.chain().focus().toggleHighlight().run()} />
-                    {/* AI actions */}
-                    <div className="w-px h-4 bg-border mx-0.5 shrink-0" />
-                    <AIBubbleButton command="improve" icon={<Wand2 size={13} />}          title="AI 改写" />
-                    <AIBubbleButton command="shorter" icon={<Scissors size={13} />}        title="AI 缩短" />
-                    <AIBubbleButton command="longer"  icon={<ArrowDownToLine size={13} />} title="AI 扩写" />
-                    <AIBubbleButton command="fix"     icon={<CheckSquare size={13} />}     title="AI 纠错" />
-                    <AIBubbleButton command="continue" icon={<ArrowUpRight size={13} />}   title="AI 续写" />
-                </EditorBubble>
-            </EditorContent>
-        </EditorRoot>
+                        {/* ── Bubble menu ─────────────────────────────────────────── */}
+                        <EditorBubble
+                            tippyOptions={{ duration: 100 }}
+                            className="novel-bubble-menu flex items-center gap-0.5 rounded-lg border border-border shadow-float px-1 py-0.5"
+                        >
+                            <BubbleButton mark="bold"      icon={<Bold size={13} />}          title="加粗"   onSelect={(e) => e.chain().focus().toggleBold().run()} />
+                            <BubbleButton mark="italic"    icon={<Italic size={13} />}        title="斜体"   onSelect={(e) => e.chain().focus().toggleItalic().run()} />
+                            <BubbleButton mark="strike"    icon={<Strikethrough size={13} />} title="删除线" onSelect={(e) => e.chain().focus().toggleStrike().run()} />
+                            <BubbleButton mark="code"      icon={<Code size={13} />}          title="代码"   onSelect={(e) => e.chain().focus().toggleCode().run()} />
+                            <BubbleButton mark="highlight" icon={<span className="text-[11px] font-bold leading-none" style={{ fontFamily: 'serif' }}>A</span>} title="高亮" onSelect={(e) => e.chain().focus().toggleHighlight().run()} />
+                            {/* AI actions */}
+                            <div className="w-px h-4 bg-border mx-0.5 shrink-0" />
+                            <AIBubbleButton command="improve"  icon={<Wand2 size={13} />}           title="AI 改写" label="AI 改写" />
+                            <AIBubbleButton command="shorter"  icon={<Scissors size={13} />}         title="AI 缩短" label="AI 缩短" />
+                            <AIBubbleButton command="longer"   icon={<ArrowDownToLine size={13} />}  title="AI 扩写" label="AI 扩写" />
+                            <AIBubbleButton command="fix"      icon={<CheckSquare size={13} />}      title="AI 纠错" label="AI 纠错" />
+                            <AIBubbleButton command="continue" icon={<ArrowUpRight size={13} />}     title="AI 续写" label="AI 续写" />
+                        </EditorBubble>
+                    </EditorContent>
+                </EditorRoot>
+
+                {/* ── AI confirm bar ───────────────────────────────────────── */}
+                {pending && (
+                    <AIConfirmBar
+                        pending={pending}
+                        onAccept={handleAccept}
+                        onReject={handleReject}
+                    />
+                )}
+            </div>
+        </AIStateContext.Provider>
     )
 }

@@ -1,11 +1,11 @@
 /**
- * src/routes/generate.ts — Streaming text generation for the Novel editor AI.
+ * src/routes/generate.ts — Text generation for the Novel editor AI.
  *
  * POST /api/generate
- *   Body: { prompt: string, command?: string, model?: string }
+ *   Body: { prompt: string, command?: string, instruction?: string, model?: string }
  *
- * Streams plain text chunks (not SSE) so the front-end `useCompletion`-style
- * fetch consumer can read them with a ReadableStream.
+ * Uses LLMClient (with full fallback chain / model routing) and streams the
+ * result as plain text so the front-end ReadableStream consumer works as-is.
  *
  * Supported commands:
  *   continue   — continue writing from the given text
@@ -16,34 +16,15 @@
  *   zap        — generate content from a free-form instruction
  */
 import type Router from '@koa/router';
-import { streamText } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import {
-    getGeminiApiKey, getOpenAIApiKey, getAnthropicApiKey, getDeepseekApiKey,
-    MODEL_ALIASES, GEMINI_MODEL_ENV,
-} from '../config.js';
-import { calcUser } from '../services/user-service.js';
+import { LLMClient } from '../llm/client.js';
 import { log } from '../utils/logger.js';
 
 const MODULE = 'GenerateRoute';
 
-function resolveModel(alias: string): string {
-    return MODEL_ALIASES[alias] ?? alias;
-}
-
-function createModel(modelId: string) {
-    if (modelId.startsWith('deepseek')) {
-        return createOpenAI({ apiKey: getDeepseekApiKey(), baseURL: 'https://api.deepseek.com' }).chat(modelId);
-    }
-    if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-') || modelId.startsWith('o4-')) {
-        return createOpenAI({ apiKey: getOpenAIApiKey() }).chat(modelId);
-    }
-    if (modelId.startsWith('claude-')) {
-        return createAnthropic({ apiKey: getAnthropicApiKey() })(modelId);
-    }
-    return createGoogleGenerativeAI({ apiKey: getGeminiApiKey() })(modelId);
+let _client: LLMClient | null = null;
+function getClient(): LLMClient {
+    if (!_client) _client = new LLMClient();
+    return _client;
 }
 
 const SYSTEM_PROMPT = `You are an AI writing assistant. When given a writing task, respond with only the requested text — no preamble, no explanation, no markdown fences unless the user's content is already in markdown. Match the style and language of the provided content.`;
@@ -73,7 +54,6 @@ function buildPrompt(command: EditorCommand | string, text: string, instruction?
 
 export function generateRoute(router: Router): void {
     router.post('/api/generate', async (ctx) => {
-        const userId = ctx.state.userId as string;
         const body = ctx.request.body as Record<string, unknown>;
 
         const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
@@ -87,46 +67,32 @@ export function generateRoute(router: Router): void {
             return;
         }
 
-        const defaultAlias = GEMINI_MODEL_ENV ?? 'flash';
-        const modelId = resolveModel(modelAlias ?? defaultAlias);
-
         const userPrompt = buildPrompt(command as EditorCommand, prompt, instruction);
-
-        log.info(MODULE, `generate command=${command} model=${modelId} promptLen=${prompt.length}`);
+        log.info(MODULE, `generate command=${command} model=${modelAlias ?? 'default'} promptLen=${prompt.length}`);
 
         try {
-            const result = streamText({
-                model: createModel(modelId),
+            const text = await getClient().generate(userPrompt, {
+                model: modelAlias,
                 system: SYSTEM_PROMPT,
-                prompt: userPrompt,
-                abortSignal: ctx.req.socket
-                    ? (AbortSignal as unknown as { fromEvent(target: NodeJS.EventEmitter, event: string): AbortSignal }).fromEvent?.(ctx.req.socket, 'close') ?? undefined
-                    : undefined,
             });
 
+            if (!text) {
+                ctx.status = 503;
+                ctx.body = { error: 'No model available' };
+                return;
+            }
+
+            // Stream the result as plain text (front-end uses ReadableStream)
             ctx.status = 200;
             ctx.set({
                 'Content-Type': 'text/plain; charset=utf-8',
-                'Transfer-Encoding': 'chunked',
                 'Cache-Control': 'no-cache',
-                'X-Accel-Buffering': 'no',
             });
-            ctx.respond = false;
-
-            const res = ctx.res;
-            for await (const chunk of result.textStream) {
-                if (res.destroyed) break;
-                res.write(chunk);
-            }
-            res.end();
+            ctx.body = text;
         } catch (err) {
-            if (!ctx.res.headersSent) {
-                ctx.status = 500;
-                ctx.body = { error: err instanceof Error ? err.message : String(err) };
-            } else {
-                ctx.res.end();
-            }
             log.error(MODULE, 'generate failed', { error: err instanceof Error ? err.message : String(err) });
+            ctx.status = 500;
+            ctx.body = { error: err instanceof Error ? err.message : String(err) };
         }
     });
 }

@@ -447,8 +447,8 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                 </div>
             </div>
 
-            {/* Horizontal Tab Bar */}
-            <div className="flex items-stretch border-b border-border px-1">
+            {/* Notion-style Tab Bar */}
+            <div className="flex items-center gap-1 border-b border-border px-2 h-11 shrink-0">
                 {([
                     { key: 'home' as const, Icon: Home, label: t('tabHome') },
                     { key: 'chat' as const, Icon: MessageSquare, label: t('tabChat') },
@@ -467,16 +467,29 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                             }
                         }}
                         className={cn(
-                            'flex-1 flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-all border-b-2 -mb-px cursor-pointer',
+                            'h-7 flex items-center gap-1.5 rounded-md px-2 text-[13px] transition-all duration-150 cursor-pointer shrink-0',
                             activeTab === tab.key
-                                ? 'border-primary-mint text-text'
-                                : 'border-transparent text-text-tertiary hover:text-text-secondary'
+                                ? 'bg-fill text-text font-medium'
+                                : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
                         )}
                     >
-                        <tab.Icon size={15} />
-                        <span>{tab.label}</span>
+                        <tab.Icon size={15} className="shrink-0" />
+                        {activeTab === tab.key && <span>{tab.label}</span>}
                     </button>
                 ))}
+                <div className="flex-1" />
+                <button
+                    onClick={() => {
+                        explicitHomeRef.current = false
+                        setActiveTab('chat')
+                        navigate('/chat')
+                        setTimeout(() => searchRef.current?.focus(), 100)
+                    }}
+                    className="h-7 w-7 flex items-center justify-center rounded-md text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150"
+                    title={t('searchChats')}
+                >
+                    <Search size={15} />
+                </button>
             </div>
 
             {/* ── Home Tab ── */}
@@ -841,14 +854,22 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                     <div className="flex-1 overflow-y-auto custom-scrollbar px-2 py-1.5 space-y-px">
                         {notebooks.map((nb) => (
                             <div key={nb}>
-                                <div className="group relative flex items-center" onContextMenu={(e) => handleNotebookContextMenu(e, nb)}>
+                                <div
+                                    className={cn(
+                                        'group relative flex items-center rounded-lg transition-all duration-150',
+                                        location.pathname === `/notebook/${encodeURIComponent(nb)}`
+                                            ? 'bg-sidebar-active'
+                                            : 'hover:bg-sidebar-hover'
+                                    )}
+                                    onContextMenu={(e) => handleNotebookContextMenu(e, nb)}
+                                >
                                     <button
                                         onClick={() => { navigate(`/notebook/${encodeURIComponent(nb)}`); onNavigate?.(); void toggleNotebookExpand(nb) }}
                                         className={cn(
-                                            'flex-1 flex items-center gap-2 px-2.5 py-[7px] rounded-lg text-[13px] transition-all duration-150 cursor-pointer min-w-0',
+                                            'flex-1 flex items-center gap-2 px-2.5 py-[7px] text-[13px] cursor-pointer min-w-0',
                                             location.pathname === `/notebook/${encodeURIComponent(nb)}`
-                                                ? 'bg-sidebar-active text-text font-medium'
-                                                : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
+                                                ? 'text-text font-medium'
+                                                : 'text-text-secondary'
                                         )}
                                     >
                                         {loadingNbs.has(nb)

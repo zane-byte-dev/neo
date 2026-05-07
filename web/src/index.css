@@ -515,6 +515,14 @@
 .novel-editor-body .ProseMirror-selectednode { outline: 2px solid var(--color-primary-mint); outline-offset: 2px; }
 .novel-editor-body ::selection { background: color-mix(in srgb, var(--color-primary-mint) 20%, transparent); }
 
+/* AI highlight — pending AI-generated content */
+.novel-editor-body mark[data-color] {
+    border-radius: 3px;
+    padding: 1px 0;
+    border-bottom: 2px solid color-mix(in srgb, var(--color-primary-mint) 60%, transparent);
+    background-color: color-mix(in srgb, var(--color-primary-mint) 12%, transparent) !important;
+}
+
 /* Slash command popup */
 .novel-slash-menu { background: var(--color-bg-container); }
 
