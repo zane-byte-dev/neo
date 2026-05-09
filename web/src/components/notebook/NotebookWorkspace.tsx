@@ -6,22 +6,19 @@
  * 移动端：底部 tab 切换
  */
 import React from 'react'
-import { ArrowLeft, BookOpen, MessageSquare, Plus, Search, X, ArrowUpDown, PanelLeftOpen, MoreHorizontal } from 'lucide-react'
+import { ArrowLeft, BookOpen, MessageSquare, Plus, Search, X, MoreHorizontal, Settings } from 'lucide-react'
 import { NotebookChatDrawer } from './NotebookChatDrawer'
 import { NoteEditor } from '../NoteEditor'
 import { useAppStore } from '../../stores/useAppStore'
 import { cn } from '../../lib/utils'
 import { notebookList, notebookRead, notebookSearch, notebookDelete, notebookUpdate } from '../../api'
+import { NotebookSettingsModal, getNotebookSort, setNotebookSort } from './NotebookSettingsModal'
 import { confirm } from '../ConfirmDialog'
 import type { NoteEntry } from '../../types'
 
 const LIST_WIDTH = 280
 
 type NoteSort = 'default' | 'date-desc' | 'date-asc' | 'title'
-
-const SORT_LABELS: Record<NoteSort, string> = {
-    default: '默认', 'date-desc': '最新', 'date-asc': '最早', title: '标题',
-}
 
 interface Props {
     notebook: string
@@ -31,7 +28,6 @@ interface Props {
 }
 
 export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startCollapsed, initialArticleId }) => {
-    const [listCollapsed, setListCollapsed] = React.useState(() => startCollapsed ?? false)
     const [chatOpen, setChatOpen] = React.useState(false)
 
     // Article list state
@@ -40,7 +36,12 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
     const [searchQuery, setSearchQuery] = React.useState('')
     const [searchResults, setSearchResults] = React.useState<NoteEntry[]>([])
     const [inSearch, setInSearch] = React.useState(false)
-    const [sortBy, setSortBy] = React.useState<NoteSort>('default')
+    const [sortBy, setSortBy] = React.useState<NoteSort>(() => getNotebookSort(notebook))
+
+    const handleSortChange = React.useCallback((s: NoteSort) => {
+        setSortBy(s)
+        setNotebookSort(notebook, s)
+    }, [notebook])
     const searchTimerRef = React.useRef<number | null>(null)
 
     // Article detail/edit state
@@ -83,7 +84,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         setSearchQuery('')
         setInSearch(false)
         setSearchResults([])
-        setSortBy('default')
+        setSortBy(getNotebookSort(notebook))
         setLoading(true)
         notebookList(notebook)
             .then((data) => {
@@ -210,6 +211,8 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         } catch { /* silent */ }
     }
 
+    const [settingsOpen, setSettingsOpen] = React.useState(false)
+
     const articleList = (
         <ArticleList
             notebook={notebook}
@@ -220,13 +223,14 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             sortBy={sortBy}
-            setSortBy={setSortBy}
+            setSortBy={handleSortChange}
             totalCount={entries.length}
             onSelect={selectNote}
             onEdit={(entry) => { selectNote(entry) }}
             onDelete={handleDeleteEntry}
             onNew={() => { setCreatingNew(true) }}
             onBack={onBack}
+            onOpenSettings={() => setSettingsOpen(true)}
         />
     )
 
@@ -257,34 +261,21 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
 
     return (
         <div ref={workspaceRef} className="flex h-full bg-bg overflow-hidden relative">
-            {/* Left: Article list — hidden in full-page mode (sidebar handles navigation) */}
-            {(!startCollapsed || !listCollapsed) && (
+            {settingsOpen && (
+                <NotebookSettingsModal
+                    notebook={notebook}
+                    onSortChange={handleSortChange}
+                    onClose={() => setSettingsOpen(false)}
+                    onRenamed={(newName) => { onBack(); window.location.replace(`/notebook/${encodeURIComponent(newName)}`) }}
+                />
+            )}
+            {/* Left: Article list — only shown when not in startCollapsed mode */}
+            {!startCollapsed && (
                 <div
-                    className={cn(
-                        'flex flex-col border-r border-border shrink-0 overflow-hidden bg-bg-container transition-all duration-200',
-                    )}
-                    style={{ width: listCollapsed ? 44 : LIST_WIDTH }}
+                    className="flex flex-col border-r border-border shrink-0 overflow-hidden bg-bg-container transition-all duration-200"
+                    style={{ width: LIST_WIDTH }}
                 >
-                    {listCollapsed ? (
-                        <div className="flex flex-col items-center pt-2 gap-0.5">
-                            <button
-                                onClick={onBack}
-                                className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill text-text-tertiary hover:text-text transition-colors"
-                                title="返回笔记本"
-                            >
-                                <ArrowLeft size={14} />
-                            </button>
-                            <button
-                                onClick={() => setListCollapsed(false)}
-                                className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-fill text-text-tertiary hover:text-text transition-colors"
-                                title="展开文章列表"
-                            >
-                                <PanelLeftOpen size={14} />
-                            </button>
-                        </div>
-                    ) : (
-                        articleList
-                    )}
+                    {articleList}
                 </div>
             )}
 
@@ -338,7 +329,8 @@ const ArticleList: React.FC<{
     onDelete: (note: NoteEntry) => void
     onNew?: () => void
     onBack: () => void
-}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, onSelect, onEdit, onDelete, onNew, onBack }) => (
+    onOpenSettings?: () => void
+}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, onSelect, onEdit, onDelete, onNew, onBack, onOpenSettings }) => (
     <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
         <div className="h-11 border-b border-border flex items-center gap-1 px-2 shrink-0">
@@ -349,6 +341,11 @@ const ArticleList: React.FC<{
             {onNew && (
                 <button onClick={onNew} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors shrink-0" title="新建文章">
                     <Plus size={13} />
+                </button>
+            )}
+            {onOpenSettings && (
+                <button onClick={onOpenSettings} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-fill text-text-quaternary hover:text-text-secondary transition-colors shrink-0" title="笔记本设置">
+                    <Settings size={13} />
                 </button>
             )}
         </div>
@@ -370,19 +367,7 @@ const ArticleList: React.FC<{
                     )}
                 </div>
             </div>
-        {/* Sort */}
-        {!inSearch && (
-            <div className="px-3 py-1 border-b border-border shrink-0 flex items-center gap-1">
-                <ArrowUpDown size={10} className="text-text-quaternary" />
-                <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as NoteSort)}
-                    className="text-[10px] bg-transparent text-text-tertiary border-none focus:outline-none cursor-pointer flex-1"
-                >
-                    {Object.entries(SORT_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-            </div>
-        )}
+
         {/* List */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
             {/* Skeleton: only when loading with no entries yet */}

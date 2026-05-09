@@ -5,7 +5,7 @@ import { PanelLeftOpen } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
 import { ChatArea } from './components/ChatArea'
 import { NoteEditor } from './components/NoteEditor'
-import { NotebookPanel } from './components/NotebookPanel'
+import { NotebookWorkspace } from './components/notebook/NotebookWorkspace'
 import { Login } from './components/Login'
 import { SettingsPanel } from './components/SettingsPanel'
 import { useAppStore } from './stores/useAppStore'
@@ -68,9 +68,15 @@ const NotebookPage: React.FC = () => {
     const [searchParams] = useSearchParams()
     const navigate = useNavigate()
     const articleId = searchParams.get('article') ?? undefined
+    if (!notebookName) return null
     return (
         <div className="flex-1 overflow-hidden">
-            <NotebookPanel fullPage urlNotebook={notebookName} navigate={navigate} initialArticleId={articleId} />
+            <NotebookWorkspace
+                notebook={notebookName}
+                onBack={() => navigate('/chat')}
+                startCollapsed
+                initialArticleId={articleId}
+            />
         </div>
     )
 }

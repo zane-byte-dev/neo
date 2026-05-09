@@ -1,10 +1,11 @@
 /**
- * diff.ts — Line-level text diff (pure TypeScript, zero external dependencies).
+ * diff.ts — Line-level text diff using Myers algorithm (same as git).
  *
- * Algorithm: Iterative LCS backtracking — O(m·n) time & space.
- * Suitable for documents up to ~1000 lines; our 4000-char truncated
- * input is typically 100–300 lines, so this is comfortably fast.
+ * Backed by the battle-tested `diff` npm package instead of a hand-rolled LCS,
+ * which produced noisy results for long documents with many blank lines.
  */
+
+import { diffLines as _diffLines } from 'diff'
 
 export type DiffOpType = 'same' | 'add' | 'del'
 
@@ -33,39 +34,22 @@ const CONTEXT = 3
 
 // ── Core diff ────────────────────────────────────────────────────────────────
 
-/** Compute a line-level diff between two texts. */
+/** Compute a line-level diff between two texts using Myers algorithm (same as git). */
 export function diffLines(oldText: string, newText: string): DiffOp[] {
-    const a = oldText ? oldText.split('\n') : []
-    const b = newText ? newText.split('\n') : []
-    const m = a.length
-    const n = b.length
-
-    if (m === 0) return b.map(v => ({ type: 'add' as const, value: v }))
-    if (n === 0) return a.map(v => ({ type: 'del' as const, value: v }))
-
-    // LCS DP table (Uint32Array for memory efficiency)
-    const dp: Uint32Array[] = Array.from({ length: m + 1 }, () => new Uint32Array(n + 1))
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            dp[i][j] = a[i - 1] === b[j - 1]
-                ? dp[i - 1][j - 1] + 1
-                : Math.max(dp[i - 1][j], dp[i][j - 1])
-        }
-    }
-
-    // Iterative backtrack
+    const changes = _diffLines(oldText ?? '', newText ?? '', { newlineIsToken: false })
     const ops: DiffOp[] = []
-    let i = m, j = n
-    while (i > 0 || j > 0) {
-        if (i > 0 && j > 0 && a[i - 1] === b[j - 1]) {
-            ops.push({ type: 'same', value: a[i - 1] }); i--; j--
-        } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-            ops.push({ type: 'add', value: b[j - 1] }); j--
-        } else {
-            ops.push({ type: 'del', value: a[i - 1] }); i--
+    for (const change of changes) {
+        // Each change.value may contain multiple lines; split and emit per-line ops
+        // but preserve the trailing newline structure by trimming a final empty entry
+        const lines = change.value.split('\n')
+        // _diffLines always ends each block with '\n' so the last element is ''
+        if (lines[lines.length - 1] === '') lines.pop()
+        const type: DiffOpType = change.added ? 'add' : change.removed ? 'del' : 'same'
+        for (const line of lines) {
+            ops.push({ type, value: line })
         }
     }
-    return ops.reverse()
+    return ops
 }
 
 // ── Hunk grouping ────────────────────────────────────────────────────────────

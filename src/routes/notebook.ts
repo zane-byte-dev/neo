@@ -28,7 +28,6 @@ import {
     nbGet,
     nbCreate,
     nbUpdate,
-    nbDelete,
     nbGetConfig,
     nbSetConfig,
     nbListNotes,
@@ -37,12 +36,12 @@ import {
     nbConvertNoteToSource,
     nbGetSourceEntry,
     nbListSources,
-    nbDeleteNotebook,
     nbRenameNotebook,
 } from '../services/notebook-service.js';
 import { generateAndSaveSourceGuide } from '../services/notebook-ai.js';
 import { calcUser } from '../services/user-service.js';
 import { getMonthlyUsage } from '../utils/token-tracker.js';
+import { trashArticle, trashNotebook } from '../services/trash-service.js';
 
 // ── GET /api/notebook — Read-only actions ───────────────────────────────────
 
@@ -174,12 +173,15 @@ export function notebookUpdate(router: Router): void {
 export function notebookDelete(router: Router): void {
     router.delete('/api/notebook', async (ctx) => {
         const userId = ctx.state.userId as string;
-        const { workDir } = await calcUser(userId);
+        const { workDir, stateDir } = await calcUser(userId);
         const q = ctx.query as Record<string, string>;
         const id = q.id?.trim();
         if (!id) { ctx.status = 400; ctx.body = { error: 'id required' }; return; }
-        if (!nbDelete(workDir, id)) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
-        ctx.body = { ok: true };
+        const entry = nbGet(workDir, id);
+        if (!entry) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        const item = await trashArticle(workDir, stateDir, id, entry.title);
+        if (!item) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        ctx.body = { ok: true, trashId: item.id };
     });
 }
 
@@ -272,10 +274,11 @@ export function notebookFolderDelete(router: Router): void {
         const q = ctx.query as Record<string, string>;
         const name = q.name?.trim();
         if (!name) { ctx.status = 400; ctx.body = { error: 'name required' }; return; }
-        if (!nbDeleteNotebook(workDir, stateDir, name)) {
+        const item = await trashNotebook(workDir, stateDir, name);
+        if (!item) {
             ctx.status = 404; ctx.body = { error: 'Notebook not found or invalid name' }; return;
         }
-        ctx.body = { ok: true };
+        ctx.body = { ok: true, trashId: item.id };
     });
 }
 

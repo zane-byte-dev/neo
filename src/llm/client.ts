@@ -126,6 +126,30 @@ function withTimeoutSignal(signal: AbortSignal | undefined, timeoutMs: number): 
     return ctrl.signal;
 }
 
+/**
+ * 空闲超时：每次调用 ping() 都会重置计时器。
+ * 用于流式请求——只要持续有 chunk 输出就不会超时，只有真正无响应时才触发。
+ */
+function withIdleTimeoutSignal(
+    signal: AbortSignal | undefined,
+    timeoutMs: number,
+): { signal: AbortSignal; ping: () => void } {
+    const ctrl = new AbortController();
+    let t: ReturnType<typeof setTimeout> = setTimeout(
+        () => ctrl.abort(new Error('Request timeout')),
+        timeoutMs,
+    );
+    const ping = () => {
+        clearTimeout(t);
+        if (!ctrl.signal.aborted) {
+            t = setTimeout(() => ctrl.abort(new Error('Request timeout')), timeoutMs);
+        }
+    };
+    if (signal) signal.addEventListener('abort', () => ctrl.abort(signal.reason), { once: true });
+    ctrl.signal.addEventListener('abort', () => clearTimeout(t), { once: true });
+    return { signal: ctrl.signal, ping };
+}
+
 type ErrorKind = 'switch-model' | 'retry-same' | 'fatal';
 
 function classifyError(err: unknown): ErrorKind {
@@ -363,12 +387,14 @@ export class LLMClient {
             let sameModelRetryLeft = ROUTING_CONFIG.fallback.maxRetries;
             while (true) {
                 try {
+                    // 使用空闲超时：只要持续有 chunk 输出就不会超时
+                    const { signal: streamSignal, ping: pingStream } = withIdleTimeoutSignal(signal, STREAM_FIRST_CHUNK_TIMEOUT_MS);
                     const baseOpts = {
                         model: createModel(effectiveModel),
                         system: systemInstruction,
                         tools,
                         stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
-                        abortSignal: withTimeoutSignal(signal, STREAM_FIRST_CHUNK_TIMEOUT_MS),
+                        abortSignal: streamSignal,
                         temperature: 0.7,
                     };
 
@@ -379,6 +405,7 @@ export class LLMClient {
                     let fullText = '';
 
                     for await (const part of result.fullStream) {
+                        pingStream(); // 每个 chunk 重置空闲计时器
                         switch (part.type) {
                             case 'reasoning-delta':
                                 onChunk({ type: 'thought', text: part.text });

@@ -416,6 +416,25 @@ const en = {
     cronDeleteFailed: 'Failed to delete cron job',
     cronDeleteConfirm: 'Delete cron job "{name}"?',
     cronEmpty: 'No cron jobs configured yet',
+
+    // Trash bin
+    trash: 'Trash',
+    trashEmpty: 'No deleted items',
+    trashEmptyHint: 'Deleted articles, chats and notebooks will appear here',
+    trashAutoDelete: 'Items are automatically deleted after 30 days',
+    trashRestore: 'Restore',
+    trashDeletePermanently: 'Delete permanently',
+    trashEmptyAll: 'Empty trash',
+    trashEmptyConfirm: 'Permanently delete all items in trash? This cannot be undone.',
+    trashTypeArticle: 'Article',
+    trashTypeSession: 'Chat',
+    trashTypeNotebook: 'Notebook',
+    trashRestoreSuccess: 'Restored',
+    trashRestoreFailed: 'Restore failed',
+    trashDeleteSuccess: 'Permanently deleted',
+    trashDeleteFailed: 'Delete failed',
+    trashEmptied: 'Trash emptied',
+    trashEmptyFailed: 'Failed to empty trash',
 } as const
 
 export default en

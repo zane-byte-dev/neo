@@ -970,6 +970,40 @@ export function deleteProjectApi(id: string) {
     })
 }
 
+// ── Trash API ─────────────────────────────────────────────────────────────────
+
+export interface TrashItem {
+    id: string
+    type: 'article' | 'session' | 'notebook'
+    title: string
+    deletedAt: number
+    originalPath?: string
+    notebook?: string
+    sessionId?: string
+}
+
+export function fetchTrash() {
+    return apiGet<{ items: TrashItem[] }>('/api/trash')
+}
+
+export function restoreTrashItem(id: string) {
+    return _post('/api/trash/restore', { id }).then((r) => _jsonOrThrow<{ ok: boolean }>(r))
+}
+
+export function permanentDeleteTrashItem(id: string) {
+    return fetch(`/api/trash/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: boolean }>(r))
+}
+
+export function emptyTrash() {
+    return fetch('/api/trash', {
+        method: 'DELETE',
+        credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: boolean; count: number }>(r))
+}
+
 // ── Todo API ──────────────────────────────────────────────────────────────────
 import type { TodoItem, TodoAnalysis, InboxNote, NoteHeatmapDay, NoteTag } from './types'
 

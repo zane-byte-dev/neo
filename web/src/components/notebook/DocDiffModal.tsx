@@ -1,24 +1,22 @@
 /**
- * DocDiffModal — AI document editing with line-level diff review.
+ * DocDiffModal — AI document editing with section-by-section processing.
  *
  * Flow:
- *   1. Opens immediately and starts streaming AI response.
- *   2. Shows live streaming text while generating.
- *   3. After stream finishes, computes line diff and shows hunk UI.
- *   4. User can Accept / Reject each hunk independently, or use
- *      "Accept All" / "Reject All" for bulk decisions.
- *   5. "Apply Changes" saves to the server and closes.
+ *   1. Opens immediately; calls LLM to identify logical section boundaries.
+ *   2. Polishes all sections in parallel via /api/generate.
+ *   3. Shows live progress; user can minimise or cancel at any time.
+ *   4. After all sections finish, computes line diff and shows hunk UI.
+ *   5. User can Accept / Reject each hunk independently, or bulk Accept/Reject.
+ *   6. "Apply Changes" saves to the server and closes.
  */
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { X, CheckCheck, XCircle, Check, Minus, Loader2, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
-import { streamChat } from '../../api'
+import { X, CheckCheck, XCircle, Check, Minus, Loader2, AlertCircle, ChevronDown, ChevronUp, Maximize2, Ban } from 'lucide-react'
 import {
     diffLines,
     buildHunks,
     applyDecisions,
     diffStats,
-    extractDocContent,
     type Hunk,
     type HunkDecision,
     type DiffOp,
@@ -33,11 +31,70 @@ type Phase = 'streaming' | 'diffing' | 'applying' | 'error'
 interface Props {
     note: NoteEntry
     actionLabel: string
-    /** Full prompt including document content and instruction. */
-    prompt: string
+    /** Full original document content (not truncated). */
+    content: string
+    /** Per-section transformation instruction sent to /api/generate. */
+    instruction: string
     /** Called after user accepts & saves. Receives the final new content. */
     onApply: (noteId: string, newContent: string) => Promise<void>
     onClose: () => void
+}
+
+// ── Section splitter (LLM-based) ─────────────────────────────────────────────
+
+/**
+ * Ask the LLM to identify logical section boundaries in the document.
+ * Returns an array of section strings preserving original text exactly.
+ * Falls back to a simple blank-line split if the LLM call fails.
+ */
+async function splitSectionsWithLLM(
+    text: string,
+    signal: AbortSignal,
+): Promise<string[]> {
+    const instruction =
+        '你是文章结构分析助手。请将以下文章拆分为逻辑段落，每个段落是一个独立语义单元（如：引言、一个论点、一个故事片段、结论等）。' +
+        '返回 JSON 数组，每个元素是原文中一段的完整文本，段落之间不要遗漏任何内容，拼接后必须与原文完全一致。' +
+        '只返回 JSON，不要任何解释。格式：["段落1", "段落2", ...]'
+    try {
+        const res = await fetch('/api/generate', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: text, command: 'zap', instruction }),
+            signal,
+        })
+        if (!res.ok) throw new Error('LLM split failed')
+        const raw = await res.text()
+        // Extract JSON array from response (may be wrapped in ```json ... ```)
+        const match = raw.match(/\[\s*[\s\S]*\]/)
+        if (!match) throw new Error('No JSON array found')
+        const sections: unknown = JSON.parse(match[0])
+        if (!Array.isArray(sections) || sections.length === 0) throw new Error('Empty array')
+        const valid = (sections as unknown[]).filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
+        if (valid.length > 0) return valid
+        throw new Error('No valid sections')
+    } catch {
+        // Fallback: split on blank lines
+        return text.split(/\n{2,}/).map(s => s.trim()).filter(s => s.length > 0)
+    }
+}
+
+// ── Per-section polish ────────────────────────────────────────────────────────
+
+async function polishSection(
+    section: string,
+    instruction: string,
+    signal: AbortSignal,
+): Promise<string> {
+    const res = await fetch('/api/generate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: section, command: 'zap', instruction }),
+        signal,
+    })
+    if (!res.ok) throw new Error(`请求失败 HTTP ${res.status}`)
+    return res.text()
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -45,56 +102,60 @@ interface Props {
 export const DocDiffModal: React.FC<Props> = ({
     note,
     actionLabel,
-    prompt,
+    content,
+    instruction,
     onApply,
     onClose,
 }) => {
     const [phase, setPhase] = React.useState<Phase>('streaming')
-    const [streamText, setStreamText] = React.useState('')
+    const [progress, setProgress] = React.useState<{ current: number; total: number }>({ current: 0, total: 0 })
     const [errorMsg, setErrorMsg] = React.useState('')
     const [ops, setOps] = React.useState<DiffOp[]>([])
     const [hunks, setHunks] = React.useState<Hunk[]>([])
     const [decisions, setDecisions] = React.useState<Map<string, HunkDecision>>(new Map())
     const [collapsedHunks, setCollapsedHunks] = React.useState<Set<string>>(new Set())
+    const [minimized, setMinimized] = React.useState(false)
     const abortRef = React.useRef<AbortController | null>(null)
 
-    // ── Stream AI response on mount ──────────────────────────────────────────
+    // ── Section-by-section polish on mount ──────────────────────────────────
 
     React.useEffect(() => {
         const ac = new AbortController()
         abortRef.current = ac
 
-        let accumulated = ''
-
         async function run() {
             try {
-                // Use an ephemeral session — never registered in the client store,
-                // so it won't appear in the chat sidebar.
-                const sessionId = `_doc-edit-${crypto.randomUUID()}`
-                for await (const chunk of streamChat(prompt, sessionId, ac.signal)) {
-                    if (ac.signal.aborted) return
-                    if (chunk.type === 'text' && chunk.text) {
-                        accumulated += chunk.text
-                        setStreamText(accumulated)
-                    }
-                    if (chunk.type === 'done') break
-                    if (chunk.type === 'error') throw new Error(chunk.text ?? 'AI 响应出错')
-                }
+                // Split document into reasonably-sized chunks (rule-based, no LLM call)
+                const chunks = buildChunks(content)
+                setProgress({ current: 0, total: chunks.length })
+                if (ac.signal.aborted) return
 
-                // Post-process and compute diff
-                const newContent = extractDocContent(accumulated)
-                const originalContent = note.content ?? ''
-                const diffOps = diffLines(originalContent, newContent)
+                // Polish all chunks in parallel
+                let done = 0
+                const results = await Promise.all(
+                    chunks.map(async (chunk) => {
+                        const result = await polishSection(chunk, instruction, ac.signal)
+                        done++
+                        setProgress(p => ({ ...p, current: done }))
+                        return result.trim()
+                    })
+                )
+                if (ac.signal.aborted) return
+
+                const newContent = results.join('\n\n')
+                const diffOps = diffLines(content, newContent)
                 const diffHunks = buildHunks(diffOps)
 
                 setOps(diffOps)
                 setHunks(diffHunks)
                 setDecisions(new Map())
                 setPhase('diffing')
+                setMinimized(false)
             } catch (err: unknown) {
                 if (ac.signal.aborted) return
                 setErrorMsg(err instanceof Error ? err.message : String(err))
                 setPhase('error')
+                setMinimized(false)
             }
         }
 
@@ -141,11 +202,37 @@ export const DocDiffModal: React.FC<Props> = ({
 
     // ── Render ───────────────────────────────────────────────────────────────
 
+    // 最小化状态：显示右下角浮动任务条
+    if (minimized) {
+        return createPortal(
+            <button
+                onClick={() => setMinimized(false)}
+                className="fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-4 py-3 bg-bg-container border border-border rounded-2xl shadow-2xl hover:shadow-2xl hover:border-primary-mint/60 transition-all group"
+                style={{ maxWidth: 320 }}
+            >
+                <Loader2 size={16} className="animate-spin text-primary-mint shrink-0" />
+                <div className="flex-1 min-w-0 text-left">
+                    <div className="text-xs font-semibold text-text truncate">{actionLabel}</div>
+                    <div className="text-[11px] text-text-tertiary truncate">{note.title}</div>
+                </div>
+                <div className="flex items-center gap-1 text-[11px] text-text-quaternary shrink-0">
+                    <span>
+                        {progress.total > 0
+                            ? `${progress.current}/${progress.total} 块`
+                            : '准备中…'}
+                    </span>
+                    <Maximize2 size={11} className="ml-1 opacity-60 group-hover:opacity-100 transition-opacity" />
+                </div>
+            </button>,
+            document.body,
+        )
+    }
+
     return createPortal(
         <div
             className="fixed inset-0 z-[200] flex items-center justify-center"
             style={{ backdropFilter: 'blur(4px)', background: 'rgba(0,0,0,0.45)' }}
-            onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
+            onMouseDown={(e) => { if (e.target === e.currentTarget && phase !== 'streaming') onClose() }}
         >
             <div
                 className="flex flex-col bg-bg-container border border-border rounded-2xl shadow-2xl overflow-hidden"
@@ -166,6 +253,26 @@ export const DocDiffModal: React.FC<Props> = ({
                             <span>{stats.hunks} 处改动</span>
                         </div>
                     )}
+                    {/* 流式阶段可最小化到后台 */}
+                    {phase === 'streaming' && (
+                        <>
+                            <button
+                                onClick={() => setMinimized(true)}
+                                title="后台运行"
+                                className="p-1.5 rounded-lg text-text-quaternary hover:text-text hover:bg-fill transition-colors shrink-0"
+                            >
+                                <Minus size={14} />
+                            </button>
+                            <button
+                                onClick={() => { abortRef.current?.abort(); onClose() }}
+                                title="取消"
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0"
+                            >
+                                <Ban size={12} />
+                                取消
+                            </button>
+                        </>
+                    )}
                     <button
                         onClick={() => { abortRef.current?.abort(); onClose() }}
                         className="p-1.5 rounded-lg text-text-quaternary hover:text-text hover:bg-fill transition-colors shrink-0"
@@ -179,7 +286,7 @@ export const DocDiffModal: React.FC<Props> = ({
 
                     {/* Streaming phase */}
                     {phase === 'streaming' && (
-                        <StreamingView text={streamText} />
+                        <StreamingView progress={progress} />
                     )}
 
                     {/* Diff phase */}
@@ -289,17 +396,25 @@ export const DocDiffModal: React.FC<Props> = ({
 
 // ── Streaming view ────────────────────────────────────────────────────────────
 
-const StreamingView: React.FC<{ text: string }> = ({ text }) => (
-    <div className="p-4 h-full flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-sm text-text-secondary">
-            <Loader2 size={14} className="animate-spin text-primary-mint shrink-0" />
-            <span>AI 正在生成内容，完成后将显示差异对比…</span>
+const StreamingView: React.FC<{ progress: { current: number; total: number } }> = ({ progress }) => (
+    <div className="p-6 h-full flex flex-col items-center justify-center gap-4">
+        <Loader2 size={28} className="animate-spin text-primary-mint" />
+        <div className="text-center">
+            <p className="text-sm font-medium text-text">
+                {progress.total === 0
+                    ? '正在切分文章块…'
+                    : `并行优化中（${progress.current} / ${progress.total} 块完成）`}
+            </p>
+            <p className="text-xs text-text-tertiary mt-1">完成后将自动显示差异对比</p>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto rounded-xl bg-fill-secondary/50 border border-border/60 p-3">
-            <pre className="text-xs text-text-secondary font-mono leading-relaxed whitespace-pre-wrap break-words">
-                {text || <span className="opacity-40">等待响应…</span>}
-            </pre>
-        </div>
+        {progress.total > 0 && (
+            <div className="w-48 h-1.5 bg-fill-secondary rounded-full overflow-hidden">
+                <div
+                    className="h-full bg-primary-mint rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                />
+            </div>
+        )}
     </div>
 )
 

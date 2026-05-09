@@ -6,6 +6,8 @@ import { cn } from '../lib/utils'
 import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, notebookDeleteFolder, notebookRenameFolder, initializeWorkspace, importChatApi, notebookList, type MeInfo } from '../api'
 import { useT, LOCALE_OPTIONS } from '../i18n'
 import { toast } from './Toast'
+import { NotebookSettingsModal, getNotebookSort, applySortToEntries } from './notebook/NotebookSettingsModal'
+import { TrashPanel } from './TrashPanel'
 import type { Theme, NoteEntry } from '../types'
 
 function parseImportedChatFile(raw: string, filename: string): { title: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
@@ -74,7 +76,9 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const [confirmDeleteNotebook, setConfirmDeleteNotebook] = React.useState<string | null>(null)
     const [renamingNotebook, setRenamingNotebook] = React.useState<string | null>(null)
     const [notebookRenameValue, setNotebookRenameValue] = React.useState('')
+    const [notebookSettingsFor, setNotebookSettingsFor] = React.useState<string | null>(null)
     const [contextMenu, setContextMenu] = React.useState<{ id: string; x: number; y: number } | null>(null)
+    const [trashOpen, setTrashOpen] = React.useState(false)
     const [me, setMe] = React.useState<MeInfo | null>(null)
     const [searchQuery, setSearchQuery] = React.useState('')
     const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null)
@@ -120,6 +124,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const [expandedNbs, setExpandedNbs] = React.useState<Set<string>>(new Set())
     const [nbArticles, setNbArticles] = React.useState<Record<string, NoteEntry[]>>({})
     const [loadingNbs, setLoadingNbs] = React.useState<Set<string>>(new Set())
+    const [nbSortState, setNbSortState] = React.useState<Record<string, string>>({})
 
     const toggleNotebookExpand = async (nb: string) => {
         setExpandedNbs((prev) => {
@@ -878,18 +883,18 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                                         <Plus size={12} />
                                     </button>
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); handleNotebookContextMenu(e, nb) }}
+                                        onClick={(e) => { e.stopPropagation(); setNotebookSettingsFor(nb) }}
                                         className="opacity-0 group-hover:opacity-100 shrink-0 mr-0.5 p-0.5 rounded hover:bg-fill transition-all text-text-quaternary hover:text-text-secondary"
-                                        title={t('rename') + ' / ' + t('deleteNotebook')}
+                                        title="笔记本设置"
                                     >
-                                        <MoreHorizontal size={12} />
+                                        <Settings size={12} />
                                     </button>
                                 </div>
                                 {expandedNbs.has(nb) && (
                                     <div className="ml-5 space-y-px border-l border-border pl-2 pb-1">
                                         {(nbArticles[nb] ?? []).length === 0 && !loadingNbs.has(nb) ? (
                                             <p className="px-2.5 py-1.5 text-xs text-text-quaternary italic">{t('noChatsYet')}</p>
-                                        ) : (nbArticles[nb] ?? []).map((article) => (
+                                        ) : applySortToEntries(nbArticles[nb] ?? [], (nbSortState[nb] ?? getNotebookSort(nb)) as 'default' | 'date-desc' | 'date-asc' | 'title').map((article) => (
                                             <Link
                                                 key={article.id}
                                                 to={`/notebook/${encodeURIComponent(nb)}?article=${encodeURIComponent(article.id)}`}
@@ -942,6 +947,22 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
             {/* Footer */}
 
             <div className="mt-auto border-t border-border relative">
+                {/* Trash button row */}
+                <div className="flex items-center px-3 py-1.5 gap-1">
+                    <button
+                        onClick={() => setTrashOpen(!trashOpen)}
+                        className={cn(
+                            'flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer flex-1',
+                            trashOpen
+                                ? 'bg-fill-secondary text-text-secondary'
+                                : 'text-text-quaternary hover:bg-fill-secondary/60 hover:text-text-secondary',
+                        )}
+                    >
+                        <Trash2 size={13} />
+                        {t('trash')}
+                    </button>
+                </div>
+
                 <div
                     onClick={() => setMenuOpen(!menuOpen)}
                     className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-sidebar-hover transition-colors cursor-pointer mx-1 my-1 rounded-lg"
@@ -1166,6 +1187,22 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                 </div>
             )}
 
+            {/* Notebook settings modal */}
+            {notebookSettingsFor && (
+                <NotebookSettingsModal
+                    notebook={notebookSettingsFor}
+                    onClose={() => setNotebookSettingsFor(null)}
+                    onSortChange={(s) => setNbSortState(prev => ({ ...prev, [notebookSettingsFor!]: s }))}
+                    onRenamed={(newName) => {
+                        setNotebooks(prev => prev.map(n => n === notebookSettingsFor ? newName : n))
+                        if (location.pathname === `/notebook/${encodeURIComponent(notebookSettingsFor)}`) {
+                            navigate(`/notebook/${encodeURIComponent(newName)}`)
+                        }
+                        setNotebookSettingsFor(null)
+                    }}
+                />
+            )}
+
             {/* Notebook context menu */}
             {notebookContextMenu && (
                 <div
@@ -1252,6 +1289,13 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Trash panel */}
+            {trashOpen && (
+                <TrashPanel
+                    onClose={() => setTrashOpen(false)}
+                />
             )}
         </div>
     )

@@ -39,14 +39,17 @@ interface DocAction {
     desc: string
     /** 'edit' → opens DocDiffModal; 'insight' → sends to chat */
     category: 'edit' | 'insight'
+    /**
+     * For 'edit' category: per-section instruction passed to /api/generate.
+     * The modal splits the doc into sections and polishes each one independently.
+     */
+    editInstruction?: string
+    /** For 'insight' category: builds the full chat prompt. */
     buildPrompt: (title: string, content: string) => string
 }
 
-// Instruction suffix appended to 'edit' prompts so the AI returns only content
-const EDIT_SUFFIX = '\n\n重要规则：只输出修改后的完整文章正文，不要添加任何解释、前缀、后缀或代码块包裹。'
-
 const DOC_ACTIONS: DocAction[] = [
-    // ── 文档改写（触发 Diff）──────────────────────────────────────────────
+    // ── 文档改写（触发 Diff，段落分批处理）───────────────────────────────
     {
         id: 'polish',
         label: '优化文档',
@@ -55,8 +58,8 @@ const DOC_ACTIONS: DocAction[] = [
         bg: 'bg-violet-500/10',
         desc: '改善表达流畅度、逻辑结构与专业度',
         category: 'edit',
-        buildPrompt: (title, content) =>
-            `请优化以下文章「${title}」，改善表达流畅度、逻辑结构和整体专业度，保持原文意思不变。${EDIT_SUFFIX}\n\n---\n\n${content}`,
+        editInstruction: '优化以下段落，改善表达流畅度、逻辑结构和整体专业度，保持原文意思和结构不变。只输出修改后的段落内容，不要解释。',
+        buildPrompt: () => '',
     },
     {
         id: 'format',
@@ -66,8 +69,8 @@ const DOC_ACTIONS: DocAction[] = [
         bg: 'bg-blue-500/10',
         desc: '规范 Markdown 格式、标题层级与排版',
         category: 'edit',
-        buildPrompt: (title, content) =>
-            `请对以下文章「${title}」进行 Markdown 格式规范化：统一标题层级、修正列表格式、整理代码块。${EDIT_SUFFIX}\n\n---\n\n${content}`,
+        editInstruction: '对以下段落进行 Markdown 格式规范化：统一标题层级、修正列表格式、整理代码块。只输出规范化后的内容，不要解释。',
+        buildPrompt: () => '',
     },
     {
         id: 'expand',
@@ -77,8 +80,8 @@ const DOC_ACTIONS: DocAction[] = [
         bg: 'bg-teal-500/10',
         desc: '补充细节，扩展内容或换一种写法',
         category: 'edit',
-        buildPrompt: (title, content) =>
-            `请对以下文章「${title}」进行扩写改写：补充细节、举例说明，使内容更丰富完整，保持原有观点和风格。${EDIT_SUFFIX}\n\n---\n\n${content}`,
+        editInstruction: '对以下段落进行扩写改写：补充细节、举例说明，使内容更丰富完整，保持原有观点和风格。只输出改写后的内容，不要解释。',
+        buildPrompt: () => '',
     },
     // ── 内容分析（发送到对话）────────────────────────────────────────────
     {
@@ -130,7 +133,7 @@ export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, fu
     const [artifacts, setArtifacts] = React.useState<Artifact[]>([])
     const [artifactsExpanded, setArtifactsExpanded] = React.useState(false)
     // Pending edit action that opens the diff modal
-    const [diffAction, setDiffAction] = React.useState<{ action: DocAction; prompt: string } | null>(null)
+    const [diffAction, setDiffAction] = React.useState<{ action: DocAction; content: string } | null>(null)
 
     const { notebookArtifacts, setPendingQuickReply, activeChatId } = useAppStore()
 
@@ -154,17 +157,18 @@ export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, fu
     const runDocAction = (action: DocAction) => {
         if (!selectedNote) return
         const content = fullContent ?? selectedNote.content ?? ''
-        const MAX_CHARS = 4000
-        const truncated = content.length > MAX_CHARS
-            ? content.slice(0, MAX_CHARS) + '\n\n[内容已截断…]'
-            : content
-        const prompt = action.buildPrompt(selectedNote.title, truncated)
 
         if (action.category === 'edit') {
-            setDiffAction({ action, prompt })
+            // Pass full content — DocDiffModal splits into sections, no truncation needed
+            setDiffAction({ action, content })
         } else {
             if (!activeChatId) return
-            setPendingQuickReply(prompt)
+            // Insight actions still use chat; truncate to avoid huge prompts
+            const MAX_CHARS = 6000
+            const truncated = content.length > MAX_CHARS
+                ? content.slice(0, MAX_CHARS) + '\n\n[内容已截断…]'
+                : content
+            setPendingQuickReply(action.buildPrompt(selectedNote.title, truncated))
         }
     }
 
@@ -270,7 +274,8 @@ export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, fu
                 <DocDiffModal
                     note={selectedNote}
                     actionLabel={diffAction.action.label}
-                    prompt={diffAction.prompt}
+                    content={diffAction.content}
+                    instruction={diffAction.action.editInstruction ?? ''}
                     onApply={async (noteId, newContent) => {
                         if (onNoteApply) await onNoteApply(noteId, newContent)
                     }}

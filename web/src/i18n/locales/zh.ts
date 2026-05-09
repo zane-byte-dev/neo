@@ -418,6 +418,25 @@ const zh: Record<TranslationKeys, string> = {
     cronDeleteFailed: '删除定时任务失败',
     cronDeleteConfirm: '删除定时任务 "{name}"？',
     cronEmpty: '暂无定时任务',
+
+    // Trash bin
+    trash: '垃圾箱',
+    trashEmpty: '暂无已删除内容',
+    trashEmptyHint: '删除的文章、对话和笔记本将显示在这里',
+    trashAutoDelete: '页面在垃圾箱中保留 30 天后将被自动删除',
+    trashRestore: '恢复',
+    trashDeletePermanently: '永久删除',
+    trashEmptyAll: '清空垃圾箱',
+    trashEmptyConfirm: '永久删除垃圾箱中的所有内容？此操作无法撤销。',
+    trashTypeArticle: '文章',
+    trashTypeSession: '对话',
+    trashTypeNotebook: '笔记本',
+    trashRestoreSuccess: '已恢复',
+    trashRestoreFailed: '恢复失败',
+    trashDeleteSuccess: '已永久删除',
+    trashDeleteFailed: '删除失败',
+    trashEmptied: '垃圾箱已清空',
+    trashEmptyFailed: '清空失败',
 }
 
 export default zh

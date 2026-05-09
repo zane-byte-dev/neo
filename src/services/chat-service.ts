@@ -53,6 +53,9 @@ export interface SessionRow {
     is_current: number;
     is_pinned: number;
     is_archived?: number;
+    /** Soft-deleted into trash; excluded from normal listing. */
+    is_deleted?: number;
+    deleted_at?: string;
     /** Optional absolute path overriding the per-user workDir for this session's tool runs. */
     project_root?: string;
     /** 'general' (default) or 'notebook'. Determines tool whitelist + citation behaviour. */
@@ -174,12 +177,48 @@ export async function sessionGetByNotebook(userId: string, notebookId: string): 
     return all[0] ?? null;
 }
 
-/** List recent sessions for a user, ordered by latest activity (end_time desc). */
+/** List recent sessions for a user, ordered by latest activity (end_time desc). Excludes soft-deleted sessions. */
 export async function sessionList(userId: string, limit = 100): Promise<SessionRow[]> {
     const store = await readSessionsStore(userId);
     return Object.values(store.sessions)
+        .filter(s => !s.is_deleted)
         .sort((a, b) => (b.end_time || b.start_time).localeCompare(a.end_time || a.start_time))
         .slice(0, limit);
+}
+
+/** List only soft-deleted sessions (for trash panel). */
+export async function sessionListDeleted(userId: string): Promise<SessionRow[]> {
+    const store = await readSessionsStore(userId);
+    return Object.values(store.sessions)
+        .filter(s => s.is_deleted === 1)
+        .sort((a, b) => (b.deleted_at ?? b.end_time ?? '').localeCompare(a.deleted_at ?? a.end_time ?? ''));
+}
+
+/** Soft-delete a session (move to trash). Does NOT remove files. */
+export async function sessionSoftDelete(sessionId: string, userId: string): Promise<SessionRow | null> {
+    return withGitAutoCommit(stateDirForUser(userId), 'session_delete', async () => {
+        const store = await readSessionsStore(userId);
+        const session = store.sessions[sessionId];
+        if (!session) return null;
+        session.is_deleted = 1;
+        session.deleted_at = new Date().toISOString();
+        session.is_current = 0;
+        await writeSessionsStore(userId, store);
+        return session;
+    }, 'ChatService');
+}
+
+/** Restore a soft-deleted session from trash. */
+export async function sessionRestoreFromTrash(sessionId: string, userId: string): Promise<boolean> {
+    return withGitAutoCommit(stateDirForUser(userId), 'session_patch', async () => {
+        const store = await readSessionsStore(userId);
+        const session = store.sessions[sessionId];
+        if (!session || !session.is_deleted) return false;
+        delete session.is_deleted;
+        delete session.deleted_at;
+        await writeSessionsStore(userId, store);
+        return true;
+    }, 'ChatService');
 }
 
 /** Patch a session's title, pin, archive, project_root, and/or notebook source selection. */

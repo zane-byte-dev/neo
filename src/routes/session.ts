@@ -1,11 +1,12 @@
 import type Router from '@koa/router';
 import { promises as fs } from 'node:fs';
 import { resolve } from 'node:path';
-import { sessionCreate, sessionList, sessionPatch, sessionDelete, sessionGetByNotebook, messageList, messageAdd } from '../services/chat-service.js';
+import { sessionCreate, sessionList, sessionPatch, sessionDelete, sessionSoftDelete, sessionGetByNotebook, messageList, messageAdd } from '../services/chat-service.js';
 import { calcUser } from '../services/user-service.js';
 import { listRunIds, loadRun } from '../runtime/store.js';
 import { listRunEvents } from '../runtime/events.js';
 import type { RunEvent, ToolApprovalScope } from '../runtime/types.js';
+import { trashRegisterSession } from '../services/trash-service.js';
 
 interface ActivityItemResponse {
     type: 'tool_call' | 'tool_result' | 'tool_confirm';
@@ -229,8 +230,12 @@ export function newSession(router: Router): void {
         const userId: string | undefined = ctx.state.userId;
         if (!userId) { ctx.status = 401; ctx.body = { error: 'Unauthorized' }; return; }
         const { id } = ctx.params;
-        const ok = await sessionDelete(id, userId);
-        ctx.body = { ok };
+        const { stateDir } = await calcUser(userId);
+        const session = await sessionSoftDelete(id, userId);
+        if (session) {
+            await trashRegisterSession(stateDir, id, session.title || '(无标题)');
+        }
+        ctx.body = { ok: !!session };
     });
 
     router.get('/api/messages', async (ctx: import('koa').Context) => {
