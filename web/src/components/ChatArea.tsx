@@ -77,17 +77,21 @@ function mergeActivityItems(items: ActivityItem[]): ActivityDisplayItem[] {
 }
 
 function mergeMessageParts(parts: MessagePart[]): RenderPart[] {
-    // Coalesce all text parts into a single trailing text block to match the
-    // shape produced by /api/messages on refresh. Streaming may interleave
-    // text and activity items, which causes partial markdown (e.g. unclosed
-    // code fences) to render incorrectly when split across multiple <MD>
-    // blocks. Keeping a single text block downstream of activities ensures
-    // the markdown renderer always sees the full document.
+    // Render parts in their original order so the narrative is chronological:
+    // text the AI produced before calling a tool appears before the tool card,
+    // and text produced after appears after. Consecutive text chunks are merged
+    // to avoid split-markdown artifacts (e.g. unclosed code fences that span
+    // multiple streaming chunks). Tool-call/result pairs are still collapsed
+    // into a single activity card.
     const merged: RenderPart[] = []
-    let combinedText = ''
     for (const part of parts) {
         if (part.type === 'text') {
-            combinedText += part.content
+            const last = merged[merged.length - 1]
+            if (last?.type === 'text') {
+                last.content += part.content
+            } else {
+                merged.push({ type: 'text', content: part.content })
+            }
             continue
         }
         const last = merged[merged.length - 1]
@@ -97,7 +101,6 @@ function mergeMessageParts(parts: MessagePart[]): RenderPart[] {
         }
         merged.push({ type: 'activity', item: part.item })
     }
-    if (combinedText) merged.push({ type: 'text', content: combinedText })
     return merged
 }
 
@@ -329,6 +332,48 @@ function SpeakButton({ text }: { text: string }) {
         >
             {isSpeaking ? <Square size={13} /> : <Volume2 size={13} />}
         </button>
+    )
+}
+
+// ── User message bubble (collapsible for long content) ───────────────────────
+
+const COLLAPSE_CHAR_THRESHOLD = 350
+
+const UserMessageBubble: React.FC<{ content: string }> = ({ content }) => {
+    const lineCount = (content.match(/\n/g) ?? []).length + 1
+    const isLong = content.length > COLLAPSE_CHAR_THRESHOLD || lineCount > 8
+    const [collapsed, setCollapsed] = React.useState(isLong)
+
+    return (
+        <div>
+            <div className="relative">
+                <div
+                    className={cn(
+                        'px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap break-words',
+                        collapsed && 'max-h-[7.5rem] overflow-hidden'
+                    )}
+                    style={{ boxShadow: 'var(--shadow-soft)', overflowWrap: 'anywhere' }}
+                >
+                    {content}
+                </div>
+                {collapsed && (
+                    <div
+                        className="absolute bottom-0 left-0 right-0 h-10 pointer-events-none rounded-b-2xl rounded-br-md"
+                        style={{ background: 'linear-gradient(to top, var(--color-user-bubble), transparent)' }}
+                    />
+                )}
+            </div>
+            {isLong && (
+                <button
+                    type="button"
+                    onClick={() => setCollapsed(c => !c)}
+                    className="mt-1 flex items-center gap-1 text-xs text-text-tertiary hover:text-text-secondary transition-colors ml-auto cursor-pointer"
+                >
+                    <ChevronDown size={12} className={cn('transition-transform duration-200', !collapsed && 'rotate-180')} />
+                    <span>{collapsed ? '展开' : '收起'}</span>
+                </button>
+            )}
+        </div>
     )
 }
 
@@ -2259,10 +2304,7 @@ export const ChatArea: React.FC<{
                                         </div>
                                     )}
                                     {msg.content && (
-                                        <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-user-bubble border border-user-bubble-border rounded-2xl rounded-br-md text-sm leading-relaxed whitespace-pre-wrap break-words"
-                                             style={{ boxShadow: 'var(--shadow-soft)', overflowWrap: 'anywhere' }}>
-                                            {msg.content}
-                                        </div>
+                                        <UserMessageBubble content={msg.content} />
                                     )}
                                 </div>
                             ) : (
