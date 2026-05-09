@@ -1,6 +1,6 @@
 import React from 'react'
 import { ArrowLeft, Trash2, Check, Loader2 } from 'lucide-react'
-import { notebookRead, notebookUpdate, notebookCreate, notebookDelete } from '../api'
+import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete } from '../api'
 import { cn } from '../lib/utils'
 import type { NoteEntry } from '../types'
 import { t } from '../i18n'
@@ -22,20 +22,55 @@ interface NoteEditorProps {
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
+function toTime(value: string | number | null | undefined): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim()) {
+        const parsed = Date.parse(value)
+        return Number.isFinite(parsed) ? parsed : null
+    }
+    return null
+}
+
+function formatShortDate(value: string | number | null | undefined): string {
+    const time = toTime(value)
+    if (!time) return '未知'
+    const date = new Date(time)
+    const now = new Date()
+    const options: Intl.DateTimeFormatOptions = date.getFullYear() === now.getFullYear()
+        ? { month: 'numeric', day: 'numeric' }
+        : { year: 'numeric', month: 'numeric', day: 'numeric' }
+    return date.toLocaleDateString('zh-CN', options)
+}
+
+function formatRelativeTime(value: string | number | null | undefined): string {
+    const time = toTime(value)
+    if (!time) return '未知时间'
+    const diffMs = Math.max(0, Date.now() - time)
+    const minute = 60 * 1000
+    const hour = 60 * minute
+    const day = 24 * hour
+    if (diffMs < minute) return '刚刚'
+    if (diffMs < hour) return `${Math.floor(diffMs / minute)} 分钟前`
+    if (diffMs < day) return `${Math.floor(diffMs / hour)} 小时前`
+    return `${Math.floor(diffMs / day)} 天前`
+}
+
 export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'personal', onBack, onSaved, onDeleted, autoSave = false }) => {
     const [title, setTitle] = React.useState(note?.title ?? '')
     const [author, setAuthor] = React.useState(note?.author ?? '')
-    const [date, setDate] = React.useState(note?.date ?? new Date().toISOString().split('T')[0])
-    const [source, setSource] = React.useState(note?.source ?? '')
-    const [summary, setSummary] = React.useState(note?.summary ?? '')
-    const [tags, setTags] = React.useState(note?.tags ?? '')
+    const [date] = React.useState(note?.date ?? new Date().toISOString().split('T')[0])
+    const [source] = React.useState(note?.source ?? '')
+    const [summary] = React.useState(note?.summary ?? '')
+    const [tags] = React.useState(note?.tags ?? '')
     const [content, setContent] = React.useState('')
     const [loading, setLoading] = React.useState(!!note)
     const [saving, setSaving] = React.useState(false)
     const [saveStatus, setSaveStatus] = React.useState<SaveStatus>('idle')
-    const [showMeta, setShowMeta] = React.useState(false)
+    const [activityOpen, setActivityOpen] = React.useState(false)
     const [confirmDelete, setConfirmDelete] = React.useState(false)
+    const [currentDisplayName, setCurrentDisplayName] = React.useState<string | null>(null)
     const titleRef = React.useRef<HTMLTextAreaElement>(null)
+    const activityRef = React.useRef<HTMLDivElement>(null)
     const autoSaveTimerRef = React.useRef<number | null>(null)
     const isDirtyRef = React.useRef(false)
     // Keep latest field values accessible in auto-save callback without stale closures
@@ -43,6 +78,29 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     React.useEffect(() => {
         fieldsRef.current = { title, author, date, source, summary, tags, content }
     })
+
+    React.useEffect(() => {
+        let cancelled = false
+        fetchMe()
+            .then((me) => {
+                if (cancelled) return
+                setCurrentDisplayName(me.displayName)
+                if (!note && !fieldsRef.current.author.trim() && me.displayName) {
+                    setAuthor(me.displayName)
+                }
+            })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [note])
+
+    React.useEffect(() => {
+        if (!activityOpen) return
+        const handler = (e: MouseEvent) => {
+            if (activityRef.current && !activityRef.current.contains(e.target as Node)) setActivityOpen(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [activityOpen])
 
     // Auto-expand content textarea to fit content (avoids internal scroll in textarea)
     // Auto-focus title for new notes
@@ -136,6 +194,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         } catch { /* ignore */ }
     }
 
+    const creatorName = author.trim() || currentDisplayName || '未知'
+    const editorName = currentDisplayName || creatorName
+    const createdTime = note?.createdAt ?? date
+    const updatedTime = note?.updatedAt ?? createdTime
+
     return (
         <div className="flex flex-col h-full bg-white dark:bg-[#191919]">
             {/* ── Top action bar ── */}
@@ -172,17 +235,30 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
 
                 {/* Right: action buttons */}
                 <div className="shrink-0 flex items-center gap-0.5">
-                    <button
-                        onClick={() => setShowMeta((v) => !v)}
-                        className={cn(
-                            'px-2 py-1 text-[11px] rounded-md transition-colors font-medium',
-                            showMeta
-                                ? 'text-primary-mint bg-primary-mint/10'
-                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'
+                    <div className="relative" ref={activityRef}>
+                        <button
+                            onClick={() => setActivityOpen((v) => !v)}
+                            className={cn(
+                                'px-2 py-1 text-[11px] rounded-md transition-colors font-medium',
+                                activityOpen
+                                    ? 'text-primary-mint bg-primary-mint/10'
+                                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'
+                            )}
+                        >
+                            上次编辑 {formatRelativeTime(updatedTime)}
+                        </button>
+                        {activityOpen && (
+                            <div className="absolute right-0 top-full mt-2 w-[300px] rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#202020] shadow-2xl overflow-hidden z-50 animate-slide-up">
+                                <div className="px-4 py-3 border-b border-gray-100 dark:border-white/8 text-sm font-semibold text-gray-500 dark:text-gray-400">
+                                    活动
+                                </div>
+                                <div className="px-4 py-3 space-y-2.5">
+                                    <ActivityRow label="编辑者" name={editorName} time={formatRelativeTime(updatedTime)} />
+                                    <ActivityRow label="创建者" name={creatorName} time={formatShortDate(createdTime)} />
+                                </div>
+                            </div>
                         )}
-                    >
-                        {t('meta')}
-                    </button>
+                    </div>
                     {note && (
                         confirmDelete ? (
                             <div className="flex items-center gap-1 ml-1">
@@ -248,19 +324,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         style={{ minHeight: '2.6rem' }}
                     />
 
-                    {/* Meta (collapsible) */}
-                    {showMeta && (
-                        <div className="mb-6 mt-2 grid grid-cols-2 gap-x-6 gap-y-2.5 py-4 border-y border-gray-100 dark:border-white/8">
-                            <MetaField label={t('author')} value={author} onChange={(v) => { setAuthor(v); scheduleAutoSave() }} />
-                            <MetaField label={t('date')} value={date} onChange={(v) => { setDate(v); scheduleAutoSave() }} type="date" />
-                            <MetaField label={t('source')} value={source} onChange={(v) => { setSource(v); scheduleAutoSave() }} />
-                            <MetaField label={t('tags')} value={tags} onChange={(v) => { setTags(v); scheduleAutoSave() }} placeholder={t('tagsPlaceholder')} />
-                            <div className="col-span-2">
-                                <MetaField label={t('summary')} value={summary} onChange={(v) => { setSummary(v); scheduleAutoSave() }} />
-                            </div>
-                        </div>
-                    )}
-
                     {/* Divider between title and body — subtle, like Notion */}
                     <div className="mb-4 mt-2" />
 
@@ -288,21 +351,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         </div>
     )
 }
-const MetaField: React.FC<{
-    label: string
-    value: string
-    onChange: (v: string) => void
-    type?: string
-    placeholder?: string
-}> = ({ label, value, onChange, type = 'text', placeholder }) => (
-    <label className="flex items-center gap-2 text-[12px]">
-        <span className="text-gray-400 dark:text-gray-500 w-10 shrink-0">{label}</span>
-        <input
-            type={type}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className="flex-1 bg-transparent border-b border-gray-200 dark:border-white/10 py-1 text-[13px] text-[#374151] dark:text-[#d1d5db] outline-none focus:border-gray-400 dark:focus:border-white/30 transition-colors placeholder:text-gray-300 dark:placeholder:text-white/20"
-        />
-    </label>
+
+const ActivityRow: React.FC<{ label: string; name: string; time: string }> = ({ label, name, time }) => (
+    <div className="flex items-center gap-3 text-[13px] leading-6">
+        <span className="w-12 shrink-0 font-semibold text-gray-500 dark:text-gray-400">{label}</span>
+        <span className="min-w-0 flex-1 truncate font-semibold text-gray-800 dark:text-gray-100">{name}</span>
+        <span className="shrink-0 font-semibold text-gray-400 dark:text-gray-500">{time}</span>
+    </div>
 )

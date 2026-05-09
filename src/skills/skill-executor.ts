@@ -19,12 +19,13 @@ import { writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { execa } from 'execa';
-import { generateText, stepCountIs } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { getGeminiApiKey, GEMINI_MODEL_ENV, DANGEROUS_PATTERNS, MAX_TOOL_ITERATIONS, MODEL_ALIASES } from '../config.js';
+import { DANGEROUS_PATTERNS, MAX_TOOL_ITERATIONS } from '../config.js';
 import { buildAiTools } from '../llm/ai-tools.js';
+import { LLMClient } from '../llm/client.js';
 import type { SkillDefinition } from './skill-parser.js';
 import type { ToolContext } from '../llm/types.js';
+
+const llm = new LLMClient();
 
 // ── Interpolation ─────────────────────────────────────────────────────────────
 
@@ -149,30 +150,20 @@ export async function executeSkill(
         }
     }
 
-    // 3. Prompt mode — interpolate body and run AI SDK generateText with tools
+    // 3. Prompt mode — interpolate body and run via LLMClient with tools
     const systemInstruction = interpolate(skill.body, args);
     const triggerMessage = buildTriggerMessage(args);
 
-    if (!getGeminiApiKey()) return '[SkillExecutor] GEMINI_API_KEY not set';
-
-    const modelAlias = GEMINI_MODEL_ENV ?? 'flash';
-    const modelId = MODEL_ALIASES[modelAlias] ?? modelAlias;
-
-    // Import toolRegistry lazily to avoid circular dependency
     const { getToolRegistry } = await import('../llm/client.js');
     const tools = buildAiTools(getToolRegistry(), context.workDir, context);
 
-    const google = createGoogleGenerativeAI({ apiKey: getGeminiApiKey() });
-    const { text } = await generateText({
-        model: google(modelId),
+    const text = await llm.generateWithTools(triggerMessage, tools, {
         system: systemInstruction,
-        prompt: triggerMessage,
-        tools,
-        stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
         temperature: 0.7,
+        maxSteps: MAX_TOOL_ITERATIONS,
     });
 
-    return text;
+    return text ?? '(no response)';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

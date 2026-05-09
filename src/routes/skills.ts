@@ -11,7 +11,7 @@
 import { mkdir, readFile, writeFile, unlink, stat, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type Router from '@koa/router';
-import { calcUser } from '../services/user-service.js';
+import { calcUser, invalidateUserCache } from '../services/user-service.js';
 import { parseSkillFile } from '../skills/skill-parser.js';
 import type { SkillDefinition } from '../skills/skill-parser.js';
 
@@ -198,6 +198,7 @@ export function skillsRoute(router: Router): void {
 
         const filePath = skillFilePath(skillsDir, name);
         await writeFile(filePath, rawContent, 'utf8');
+        invalidateUserCache(userId);
         ctx.status = 201;
         ctx.body = { ok: true, name };
     });
@@ -257,6 +258,7 @@ export function skillsRoute(router: Router): void {
         }
 
         await writeFile(filePath, open + newYaml + close + rest, 'utf8');
+        invalidateUserCache(userId);
         ctx.body = { ok: true, name, enabled };
     });
 
@@ -308,6 +310,7 @@ export function skillsRoute(router: Router): void {
         const filePath = existingPath ?? skillFilePath(skillsDir, name);
         await mkdir(join(filePath, '..'), { recursive: true });
         await writeFile(filePath, rawContent, 'utf8');
+        invalidateUserCache(userId);
         ctx.body = { ok: true, name };
     });
 
@@ -335,6 +338,7 @@ export function skillsRoute(router: Router): void {
             return;
         }
         await unlink(filePath);
+        invalidateUserCache(userId);
         ctx.body = { ok: true };
     });
 }

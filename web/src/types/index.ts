@@ -90,6 +90,8 @@ export interface NoteEntry {
     source: string | null
     summary: string | null
     tags: string | null
+    createdAt?: number
+    updatedAt?: number
     content?: string
 }
 

@@ -7,7 +7,7 @@
  * Files may contain optional YAML frontmatter (title, date, author, tags, summary).
  * IDs are "{notebookName}/{filename}" strings — no SQLite dependency.
  */
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, rmSync, renameSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, rmSync, renameSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseJsonLines, readJsonFileSyncOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
@@ -24,6 +24,8 @@ export interface NotebookEntry {
     source: string | null;
     summary: string | null;
     tags: string | null;  // JSON-encoded string[]
+    createdAt: number;
+    updatedAt: number;
     content?: string;
 }
 
@@ -113,6 +115,12 @@ export function titleFromFilename(filename: string): string {
         .trim();
 }
 
+function parseMetaDateMs(date: string | null | undefined): number | null {
+    if (!date) return null;
+    const parsed = Date.parse(date);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
 function notebooksDir(workDir: string): string {
     return join(workDir, 'notebooks');
 }
@@ -137,6 +145,7 @@ function listMdFilesRecursive(dir: string, relBase: string): string[] {
 function parseEntry(workDir: string, relPath: string, includeContent: boolean): NotebookEntry {
     const filePath = join(workDir, relPath);
     const raw = readFileSync(filePath, 'utf8');
+    const stat = statSync(filePath);
     const { meta, body } = parseFrontmatter(raw);
 
     const parts    = relPath.split('/');
@@ -146,6 +155,7 @@ function parseEntry(workDir: string, relPath: string, includeContent: boolean): 
     const notebook = parts[0] === 'notebooks' && parts.length >= 3 ? parts[1] : (parts.length > 1 ? parts[0] : '.');
     const title    = meta.title || titleFromFilename(filename);
     const tags     = meta.tags?.length ? JSON.stringify(meta.tags) : null;
+    const createdAt = parseMetaDateMs(meta.date) ?? stat.birthtimeMs ?? stat.ctimeMs;
 
     return {
         id: relPath,
@@ -157,6 +167,8 @@ function parseEntry(workDir: string, relPath: string, includeContent: boolean): 
         source:  meta.source  || null,
         summary: meta.summary || null,
         tags,
+        createdAt,
+        updatedAt: stat.mtimeMs,
         ...(includeContent ? { content: body } : {}),
     };
 }
@@ -260,6 +272,7 @@ export function nbCreate(workDir: string, notebook: string, data: NotebookCreate
     writeFileSync(filePath, serializeFrontmatter(meta, data.content ?? ''), 'utf8');
     const entryId = `notebooks/${notebook}/${filename}`;
     scheduleNotebookSourceIndexFromEntryId(workDir, entryId);
+    const stat = statSync(filePath);
 
     return {
         id: entryId,
@@ -271,6 +284,8 @@ export function nbCreate(workDir: string, notebook: string, data: NotebookCreate
         source:  meta.source  || null,
         summary: meta.summary || null,
         tags:    tagsArr.length ? JSON.stringify(tagsArr) : null,
+        createdAt: parseMetaDateMs(meta.date) ?? stat.birthtimeMs ?? stat.ctimeMs,
+        updatedAt: stat.mtimeMs,
         content: data.content ?? '',
     };
 }
@@ -297,6 +312,7 @@ export function nbUpdate(workDir: string, id: string, data: NotebookUpdateInput)
     const body = data.content !== undefined ? (data.content ?? '') : (existing.content ?? '');
     writeFileSync(filePath, serializeFrontmatter(meta, body), 'utf8');
     scheduleNotebookSourceIndexFromEntryId(workDir, id);
+    const stat = statSync(filePath);
 
     return {
         ...existing,
@@ -306,6 +322,8 @@ export function nbUpdate(workDir: string, id: string, data: NotebookUpdateInput)
         source:  meta.source  || null,
         summary: meta.summary || null,
         tags:    newTags.length ? JSON.stringify(newTags) : null,
+        createdAt: parseMetaDateMs(meta.date) ?? existing.createdAt,
+        updatedAt: stat.mtimeMs,
         content: body,
     };
 }
