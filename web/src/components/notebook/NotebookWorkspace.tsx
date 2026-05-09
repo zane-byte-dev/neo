@@ -89,11 +89,10 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
             .then((data) => {
                 const notes = data as NoteEntry[]
                 setEntries(notes)
-                const preselect = initialArticleId
-                    ? notes.find(n => n.id === initialArticleId) ?? null
-                    : null
-                if (preselect) setSelectedNote(preselect)
-                else if (notes.length > 0) setSelectedNote(notes[0])
+                if (initialArticleId) {
+                    const preselect = notes.find(n => n.id === initialArticleId) ?? null
+                    if (preselect) setSelectedNote(preselect)
+                }
             })
             .catch(() => setEntries([]))
             .finally(() => setLoading(false))
@@ -223,7 +222,6 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
             sortBy={sortBy}
             setSortBy={setSortBy}
             totalCount={entries.length}
-            selectedId={selectedNote?.id ?? null}
             onSelect={selectNote}
             onEdit={(entry) => { selectNote(entry) }}
             onDelete={handleDeleteEntry}
@@ -335,13 +333,12 @@ const ArticleList: React.FC<{
     sortBy: NoteSort
     setSortBy: (s: NoteSort) => void
     totalCount: number
-    selectedId: string | null
     onSelect: (note: NoteEntry) => void
     onEdit: (note: NoteEntry) => void
     onDelete: (note: NoteEntry) => void
     onNew?: () => void
     onBack: () => void
-}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, selectedId, onSelect, onEdit, onDelete, onNew, onBack }) => (
+}> = ({ notebook, entries, loading, stale, inSearch, searchQuery, setSearchQuery, sortBy, setSortBy, onSelect, onEdit, onDelete, onNew, onBack }) => (
     <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
         <div className="h-11 border-b border-border flex items-center gap-1 px-2 shrink-0">
@@ -405,7 +402,6 @@ const ArticleList: React.FC<{
                 <ArticleListItem
                     key={entry.id}
                     entry={entry}
-                    selected={selectedId === entry.id}
                     stale={!!stale}
                     onSelect={onSelect}
                     onEdit={onEdit}
@@ -420,12 +416,11 @@ const ArticleList: React.FC<{
 
 const ArticleListItem: React.FC<{
     entry: NoteEntry
-    selected: boolean
     stale: boolean
     onSelect: (e: NoteEntry) => void
     onEdit: (e: NoteEntry) => void
     onDelete: (e: NoteEntry) => void
-}> = ({ entry, selected, stale, onSelect, onEdit, onDelete }) => {
+}> = ({ entry, stale, onSelect, onEdit, onDelete }) => {
     const [menuOpen, setMenuOpen] = React.useState(false)
     const menuRef = React.useRef<HTMLDivElement>(null)
 
@@ -444,11 +439,11 @@ const ArticleListItem: React.FC<{
             className={cn(
                 'group mx-1 px-2.5 py-1.5 rounded-md cursor-pointer transition-all duration-200 relative',
                 stale ? 'opacity-40 pointer-events-none' : '',
-                selected ? 'bg-fill text-text' : 'text-text-secondary hover:bg-fill-secondary/70 hover:text-text',
+                'text-text-secondary hover:bg-fill-secondary/70 hover:text-text',
             )}
         >
             <div className="flex items-center gap-1">
-                <span className={cn('text-[13px] truncate leading-snug flex-1', selected ? 'font-medium' : '')}>{entry.title}</span>
+                <span className="text-[13px] truncate leading-snug flex-1" title={entry.title}>{entry.title}</span>
                 <button
                     onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
                     className="shrink-0 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-fill transition-opacity"

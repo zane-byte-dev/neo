@@ -855,22 +855,12 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                         {notebooks.map((nb) => (
                             <div key={nb}>
                                 <div
-                                    className={cn(
-                                        'group relative flex items-center rounded-lg transition-all duration-150',
-                                        location.pathname === `/notebook/${encodeURIComponent(nb)}`
-                                            ? 'bg-sidebar-active'
-                                            : 'hover:bg-sidebar-hover'
-                                    )}
+                                    className="group relative flex items-center rounded-lg transition-all duration-150 hover:bg-sidebar-hover"
                                     onContextMenu={(e) => handleNotebookContextMenu(e, nb)}
                                 >
                                     <button
                                         onClick={() => { navigate(`/notebook/${encodeURIComponent(nb)}`); onNavigate?.(); void toggleNotebookExpand(nb) }}
-                                        className={cn(
-                                            'flex-1 flex items-center gap-2 px-2.5 py-[7px] text-[13px] cursor-pointer min-w-0',
-                                            location.pathname === `/notebook/${encodeURIComponent(nb)}`
-                                                ? 'text-text font-medium'
-                                                : 'text-text-secondary'
-                                        )}
+                                        className="flex-1 flex items-center gap-2 px-2.5 py-[7px] text-[13px] cursor-pointer min-w-0 text-text-secondary"
                                     >
                                         {loadingNbs.has(nb)
                                             ? <Loader2 size={13} className="shrink-0 text-text-quaternary animate-spin" />
@@ -911,7 +901,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                                                         : 'text-text-secondary hover:bg-sidebar-hover hover:text-text'
                                                 )}
                                             >
-                                                <span className="truncate">{article.title}</span>
+                                                <span className="truncate" title={article.title}>{article.title}</span>
                                             </Link>
                                         ))}
                                     </div>

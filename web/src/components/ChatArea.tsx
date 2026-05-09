@@ -41,6 +41,24 @@ function activityPreviewText(item: ActivityItem): string {
     return item.args ? JSON.stringify(item.args) : ''
 }
 
+/** Human-readable single-line summary of tool args for collapsed card header. */
+function semanticPreview(item: ActivityItem, max = 120): string {
+    if (item.type === 'tool_result') return ''
+    if (typeof item.args?.command === 'string') return compactPreview(item.args.command, max)
+    if (!item.args || Object.keys(item.args).length === 0) return ''
+    const pairs = Object.entries(item.args)
+        .map(([k, v]) => {
+            const val = typeof v === 'string'
+                ? v
+                : (typeof v === 'number' || typeof v === 'boolean')
+                    ? String(v)
+                    : JSON.stringify(v)
+            return `${k}: ${val}`
+        })
+        .join('  ·  ')
+    return compactPreview(pairs, max)
+}
+
 function compactPreview(text: string, max = 96): string {
     const normalized = text.replace(/\s+/g, ' ').trim()
     if (!normalized) return ''
@@ -102,28 +120,6 @@ function mergeMessageParts(parts: MessagePart[]): RenderPart[] {
         merged.push({ type: 'activity', item: part.item })
     }
     return merged
-}
-
-function compactActivityStatus(item: ActivityItem): string {
-    if (item.type === 'tool_result') {
-        return item.result?.startsWith('[BLOCKED]') ? t('toolStatusCompactBlocked') : t('toolStatusCompactDone')
-    }
-    if (item.type !== 'tool_confirm') return ''
-    switch (item.confirmStatus) {
-        case 'pending':
-            return t('toolStatusCompactPending')
-        case 'submitted':
-        case 'approved':
-            return t('toolStatusCompactRunning')
-        case 'denied':
-            return t('toolStatusCompactDenied')
-        case 'expired':
-            return t('toolStatusCompactExpired')
-        case 'cancelled':
-            return t('toolStatusCompactCancelled')
-        default:
-            return ''
-    }
 }
 
 // ── Export chat as Markdown ───────────────────────────────────────────────────
@@ -510,12 +506,8 @@ const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem
     const targetResult = resultItem ?? (item.type === 'tool_result' ? item : undefined)
     const inputText = item.type === 'tool_result' ? '' : activityPreviewText(item)
     const outputText = targetResult ? (expandedResult ?? targetResult.result ?? '') : ''
-    const detailText = [inputText, outputText].filter(Boolean).join('\n\n')
-    const preview = compactPreview(inputText || outputText, 120)
-    const needsDetails = Boolean(detailText)
-    const statusText = targetResult
-        ? compactActivityStatus(targetResult)
-        : compactActivityStatus(item)
+    const preview = semanticPreview(item) || compactPreview(outputText, 120)
+    const needsDetails = Boolean(inputText || outputText)
     const tone = status === 'pending'
         ? 'border-warning/30 bg-warning/5'
         : targetResult?.result?.startsWith('[BLOCKED]') || status === 'denied'
@@ -592,24 +584,17 @@ const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem
 
     if (item.type === 'tool_confirm') {
         return (
-            <div className={cn('group my-2 rounded-xl px-3 py-2 text-xs', tone)}
-                 style={{ boxShadow: 'var(--shadow-soft)' }}>
+            <div
+                className={cn('my-2 rounded-xl px-3 py-2 text-xs transition-colors duration-150', tone, needsDetails && 'cursor-pointer hover:brightness-95 dark:hover:brightness-110')}
+                style={{ boxShadow: 'var(--shadow-soft)' }}
+                onClick={needsDetails ? toggleDetails : undefined}
+            >
                 <div className="flex items-center gap-2 min-w-0">
                     <span className={cn('shrink-0 text-[11px]', iconTone)}>{icon}</span>
                     <span className="font-medium text-text-secondary shrink-0">{item.toolName}</span>
                     {preview && <span className="min-w-0 flex-1 truncate text-text-tertiary">{preview}</span>}
-                    {statusText && <span className="shrink-0 text-[11px] text-text-tertiary">{statusText}</span>}
                     {needsDetails && (
-                        <button
-                            type="button"
-                            onClick={toggleDetails}
-                            className={cn(
-                                'shrink-0 text-[11px] text-text-quaternary hover:text-text-secondary transition-opacity',
-                                showDetails ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
-                            )}
-                        >
-                            {t('toolDetails')}
-                        </button>
+                        <ChevronDown size={11} className={cn('shrink-0 text-text-quaternary transition-transform duration-200', showDetails && 'rotate-180')} />
                     )}
                 </div>
                 {status === 'pending' ? (
@@ -645,8 +630,19 @@ const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem
                     </div>
                 ) : null}
                 {showDetails && needsDetails && (
-                    <div className="mt-2 pl-5 border-l border-border/60 font-mono text-text-tertiary whitespace-pre-wrap break-words">
-                        {detailText}
+                    <div className="mt-2 space-y-2" onClick={e => e.stopPropagation()}>
+                        {inputText && (
+                            <div className="pl-3">
+                                <div className="text-[10px] font-medium text-text-quaternary mb-1">输入</div>
+                                <div className="border-l-2 border-border/50 pl-3 font-mono text-[11px] text-text-tertiary whitespace-pre-wrap break-words">{inputText}</div>
+                            </div>
+                        )}
+                        {outputText && (
+                            <div className="pl-3">
+                                <div className="text-[10px] font-medium text-text-quaternary mb-1">输出</div>
+                                <div className="border-l-2 border-border/50 pl-3 font-mono text-[11px] text-text-tertiary whitespace-pre-wrap break-words">{outputText}</div>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -654,29 +650,33 @@ const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem
     }
 
     return (
-        <div className={cn('group my-2 rounded-xl px-3 py-2 text-xs', tone)}
-             style={{ boxShadow: 'var(--shadow-soft)' }}>
+        <div
+            className={cn('my-2 rounded-xl px-3 py-2 text-xs transition-colors duration-150', tone, needsDetails && 'cursor-pointer hover:brightness-95 dark:hover:brightness-110')}
+            style={{ boxShadow: 'var(--shadow-soft)' }}
+            onClick={needsDetails ? toggleDetails : undefined}
+        >
             <div className="flex items-center gap-2 min-w-0">
                 <span className={cn('shrink-0 text-[10px]', iconTone)}>{icon}</span>
                 <span className="font-medium text-text-secondary shrink-0">{item.toolName}</span>
                 {preview && <span className="min-w-0 flex-1 truncate text-text-tertiary">{preview}</span>}
-                {statusText && <span className="shrink-0 text-[11px] text-text-tertiary">{statusText}</span>}
                 {needsDetails && (
-                    <button
-                        type="button"
-                        onClick={toggleDetails}
-                        className={cn(
-                            'shrink-0 text-[11px] text-text-quaternary hover:text-text-secondary transition-opacity',
-                            showDetails ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
-                        )}
-                    >
-                        {t('toolDetails')}
-                    </button>
+                    <ChevronDown size={11} className={cn('shrink-0 text-text-quaternary transition-transform duration-200', showDetails && 'rotate-180')} />
                 )}
             </div>
             {showDetails && needsDetails && (
-                <div className="mt-2 pl-5 border-l border-border/60 font-mono text-text-tertiary whitespace-pre-wrap break-words">
-                    {detailText}
+                <div className="mt-2 space-y-2" onClick={e => e.stopPropagation()}>
+                    {inputText && (
+                        <div className="pl-3">
+                            <div className="text-[10px] font-medium text-text-quaternary mb-1">输入</div>
+                            <div className="border-l-2 border-border/50 pl-3 font-mono text-[11px] text-text-tertiary whitespace-pre-wrap break-words">{inputText}</div>
+                        </div>
+                    )}
+                    {outputText && (
+                        <div className="pl-3">
+                            <div className="text-[10px] font-medium text-text-quaternary mb-1">输出</div>
+                            <div className="border-l-2 border-border/50 pl-3 font-mono text-[11px] text-text-tertiary whitespace-pre-wrap break-words">{outputText}</div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
