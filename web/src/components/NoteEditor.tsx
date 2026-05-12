@@ -826,7 +826,7 @@ const ArticleAnnotationsBlock: React.FC<{
             >
                 <MessageSquare size={13} className="text-primary-mint shrink-0" />
                 <span className="text-[12px] font-semibold text-text flex-1">文章批注</span>
-                <span className="text-[11px] text-text-tertiary">
+                <span className="text-[11px] text-text-tertiary" aria-label={`${annotations.length} 条批注，${openCount} 条未解决`}>
                     {annotations.length} 条 · {openCount} 未解决
                 </span>
             </button>

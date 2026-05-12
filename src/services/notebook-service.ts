@@ -15,6 +15,7 @@ import { generateId } from '../utils/id-generator.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+// Persisted annotation IDs use `anno_${generateId()}`.
 const ANNOTATION_ID_PREFIX = 'anno_';
 
 export interface NotebookEntry {

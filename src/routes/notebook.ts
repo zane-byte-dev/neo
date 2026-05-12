@@ -319,15 +319,21 @@ function isAnnotationStatus(value: unknown): value is 'open' | 'resolved' {
     return value === 'open' || value === 'resolved';
 }
 
+function truncateContextText(value: unknown): string | undefined {
+    return typeof value === 'string' ? value.slice(0, MAX_ANNOTATION_CONTEXT_TEXT) : undefined;
+}
+
 function parseAnchor(value: unknown) {
     if (!value || typeof value !== 'object') return {};
     const raw = value as Record<string, unknown>;
+    const beforeText = truncateContextText(raw.beforeText);
+    const afterText = truncateContextText(raw.afterText);
     return {
         ...(typeof raw.paragraphId === 'string' ? { paragraphId: raw.paragraphId } : {}),
         ...(typeof raw.startOffset === 'number' && Number.isFinite(raw.startOffset) ? { startOffset: raw.startOffset } : {}),
         ...(typeof raw.endOffset === 'number' && Number.isFinite(raw.endOffset) ? { endOffset: raw.endOffset } : {}),
-        ...(typeof raw.beforeText === 'string' ? { beforeText: raw.beforeText.slice(0, MAX_ANNOTATION_CONTEXT_TEXT) } : {}),
-        ...(typeof raw.afterText === 'string' ? { afterText: raw.afterText.slice(0, MAX_ANNOTATION_CONTEXT_TEXT) } : {}),
+        ...(beforeText !== undefined ? { beforeText } : {}),
+        ...(afterText !== undefined ? { afterText } : {}),
     };
 }
 
@@ -340,8 +346,8 @@ export function notebookAnnotationSave(router: Router): void {
         const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
         const articleId = typeof body.articleId === 'string' ? body.articleId.trim() : '';
         const quote = typeof body.quote === 'string' ? body.quote.trim() : '';
-        const noteBody = typeof body.body === 'string' ? body.body.trim() : '';
-        if (!notebook || !articleId || !quote || !noteBody) {
+        const annotationBody = typeof body.body === 'string' ? body.body.trim() : '';
+        if (!notebook || !articleId || !quote || !annotationBody) {
             ctx.status = 400; ctx.body = { error: 'notebook + articleId + quote + body required' }; return;
         }
         if (!isAnnotationKind(body.kind)) { ctx.status = 400; ctx.body = { error: 'invalid annotation kind' }; return; }
@@ -355,7 +361,7 @@ export function notebookAnnotationSave(router: Router): void {
             kind: body.kind,
             quote,
             anchor: parseAnchor(body.anchor),
-            body: noteBody,
+            body: annotationBody,
             status: body.status,
             author: typeof body.author === 'string' && body.author.trim() ? body.author.trim() : null,
         }, stateDir);
