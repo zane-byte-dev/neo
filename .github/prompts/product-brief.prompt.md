@@ -44,6 +44,8 @@ agent: "agent"
 
 ## Proposed Experience
 
+## Documentation Impact
+
 ## Acceptance Criteria
 
 ## Risks And Dependencies
@@ -58,6 +60,8 @@ agent: "agent"
 - 不要开始写代码。
 - 验收标准要可测试。
 - 明确哪些内容本轮不做。
+- 明确哪些现有文档会因此过期，以及哪些 `docs/user-guide/`、`README.md`、`CHANGELOG.md`、`docs/product/` 文档需要同步。
 - 不要只因为旧产品文档提到某问题就认定它仍然存在。
+- 如果当前代码里功能已经存在但文档缺失，要写清楚这是文档补齐问题，不要误判为纯新功能开发。
 - 如果信息不足，先写 Open Questions，同时给出一个保守的最小方案。
 - 最后说明建议的下一步 Dev Plan 输入文件。

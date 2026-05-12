@@ -15,6 +15,7 @@ Neo 使用 GitHub Copilot 进行产品、开发、测试协作。默认遵循文
 - 产品文档只能作为线索；如果文档可能过期，必须用当前代码、API、测试或 UI 状态核验后再下结论。
 - 如果需求还不清楚，先产出或补全 Product Brief，再进入实现。
 - 如果实现范围超过产品文档，先回写风险或提出方案，不要静默扩大 scope。
+- 如果改动会改变用户可见行为，或会让现有文档显得过期，先识别需要同步的 `docs/user-guide/`、`README.md`、`CHANGELOG.md`、`docs/product/` 文档；未更新或明确记录 defer 前，不算完成。
 - 代码改动应保持聚焦，优先复用现有 `src/utils/`、服务层和测试 helper。
 - 完成后说明验证命令；后端优先 `npm run build` 和相关 `npx vitest run ...`，前端变更补充 `npm --prefix web run build`。
 

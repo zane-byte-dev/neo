@@ -14,6 +14,7 @@ agent: "agent"
 - [Copilot AI Loop](../../docs/developer-guide/COPILOT_AI_LOOP.md)
 - [Test Plan](../../docs/testing/TEST_PLAN.md)
 - 当前 git diff
+- 受影响的 README、用户指南、Feature Brief 或其他状态文档
 - 相关源码和测试
 
 必要时补充或修改测试。不要修复与本次范围无关的问题。
@@ -26,6 +27,8 @@ agent: "agent"
 ## Scope
 
 ## Acceptance Criteria Coverage
+
+## Documentation Coverage
 
 ## Tests Added Or Updated
 
@@ -42,5 +45,7 @@ agent: "agent"
 
 - Findings 优先于总结，按严重程度排序。
 - 每条问题要给出可复现依据或文件位置。
+- 把缺失、过期或与实现冲突的文档视为 finding，而不是可选建议。
 - 如果没有问题，也要说明剩余测试缺口。
+- 如果没有文档问题，也要明确写出 Documentation Coverage 已检查通过。
 - Release Recommendation 只能是 `accept`、`fix required`、`needs product decision` 或 `defer`。

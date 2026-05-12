@@ -34,6 +34,8 @@ agent: "agent"
 
 ## Data Model / API / UI Changes
 
+## Documentation Updates
+
 ## Implementation Steps
 
 ## Test Plan
@@ -49,6 +51,8 @@ agent: "agent"
 
 - 每个实施步骤要能独立验证。
 - 明确哪些测试需要新增或更新。
+- 明确哪些用户文档、README、FAQ、Roadmap、Feature 状态文档或发布资料需要同步；如果无需更新，也要写明理由。
+- 把文档更新纳入实施步骤或文件清单，不要默认留给后续收尾阶段兜底。
 - 避免过度设计，优先复用现有模块和工具。
 - 如果 Product Brief 缺验收标准，先补充问题和建议，不要假装需求完整。
 - 最后说明进入实现前的阻塞项或确认项。

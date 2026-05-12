@@ -21,6 +21,8 @@ agent: "agent"
 - 保持变更范围与 Dev Plan 对齐。
 - 如果发现 Dev Plan 与代码现实冲突，先记录调整理由，再采用最小可行实现。
 - 新行为要补测试；文档或纯流程变更至少运行文档链接校验。
+- 对用户可见行为变化或会使现有文档过期的改动，必须在同一轮实现里同步更新相关 `docs/user-guide/`、`README.md`、`FAQ`、`CHANGELOG.md` 或产品状态文档；除非用户明确要求 defer，不要留到以后。
+- 如果实现表明某个 Feature Brief、体验审查或路线图条目已经过期，要顺手修正文档或补状态注记，避免“功能已做完但文档仍像待实现”。
 - 不要顺手重构无关代码。
 - 不要提交 git commit，除非用户明确要求。
 
@@ -28,6 +30,8 @@ agent: "agent"
 
 ```markdown
 ## Implementation Summary
+
+## Docs Updated
 
 ## Deviations From Plan
 
