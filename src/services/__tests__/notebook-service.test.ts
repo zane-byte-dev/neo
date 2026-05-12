@@ -22,6 +22,10 @@ import {
     nbSaveNote,
     nbListNotes,
     nbDeleteNote,
+    nbSaveAnnotation,
+    nbListAnnotations,
+    nbUpdateAnnotation,
+    nbDeleteAnnotation,
     nbConvertNoteToSource,
     nbSaveArtifact,
     nbGetArtifact,
@@ -154,6 +158,56 @@ describe('nbDelete', () => {
 
     it('blocks path traversal and returns false', () => {
         expect(nbDelete(workDir, '../../../etc/passwd')).toBe(false);
+    });
+});
+
+describe('article annotations', () => {
+    it('persists highlight annotations with anchors', () => {
+        const article = nbCreate(workDir, 'research', {
+            title: 'Annotated Article',
+            content: 'First paragraph.\n\nSecond paragraph.',
+        });
+
+        const saved = nbSaveAnnotation(workDir, 'research', {
+            articleId: article.id,
+            kind: 'highlight',
+            quote: 'First paragraph',
+            anchor: { startOffset: 1, endOffset: 16, beforeText: '', afterText: 'Second' },
+            body: 'Needs a follow-up.',
+            author: 'Tester',
+        });
+
+        expect(saved.status).toBe('open');
+        expect(saved.anchor.startOffset).toBe(1);
+        const annotations = nbListAnnotations(workDir, 'research', article.id);
+        expect(annotations).toHaveLength(1);
+        expect(annotations[0]).toMatchObject({
+            id: saved.id,
+            articleId: article.id,
+            notebook: 'research',
+            kind: 'highlight',
+            quote: 'First paragraph',
+            body: 'Needs a follow-up.',
+            author: 'Tester',
+        });
+    });
+
+    it('updates status and deletes annotations', () => {
+        const article = nbCreate(workDir, 'research', {
+            title: 'Resolvable Article',
+            content: 'Body',
+        });
+        const saved = nbSaveAnnotation(workDir, 'research', {
+            articleId: article.id,
+            kind: 'paragraph',
+            quote: 'Body',
+            body: 'Check this.',
+        });
+
+        const updated = nbUpdateAnnotation(workDir, 'research', article.id, saved.id, { status: 'resolved' });
+        expect(updated?.status).toBe('resolved');
+        expect(nbDeleteAnnotation(workDir, 'research', article.id, saved.id)).toBe(true);
+        expect(nbListAnnotations(workDir, 'research', article.id)).toEqual([]);
     });
 });
 

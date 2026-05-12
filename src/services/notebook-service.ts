@@ -384,6 +384,14 @@ function notebookNoteFilePath(stateDir: string, notebook: string, noteId: string
     return join(notebookNotesDir(stateDir, notebook), `${safeFilename(noteId)}.md`);
 }
 
+function notebookAnnotationsDir(stateDir: string, notebook: string): string {
+    return join(notebookBaseDir(stateDir, notebook), 'annotations');
+}
+
+function notebookAnnotationsFilePath(stateDir: string, notebook: string, articleId: string): string {
+    return join(notebookAnnotationsDir(stateDir, notebook), `${safeFilename(sourceIdFromEntryId(articleId))}.json`);
+}
+
 function notebookArtifactsDir(stateDir: string, notebook: string): string {
     return join(notebookBaseDir(stateDir, notebook), 'artifacts');
 }
@@ -851,6 +859,124 @@ export function nbDeleteNote(workDir: string, notebook: string, noteId: string, 
     return true;
 }
 
+// ── Article annotations ──────────────────────────────────────────────────────
+
+export type NotebookAnnotationKind = 'highlight' | 'paragraph';
+export type NotebookAnnotationStatus = 'open' | 'resolved';
+
+export interface NotebookAnnotationAnchor {
+    paragraphId?: string;
+    startOffset?: number;
+    endOffset?: number;
+    beforeText?: string;
+    afterText?: string;
+}
+
+export interface NotebookAnnotation {
+    id: string;
+    articleId: string;
+    notebook: string;
+    kind: NotebookAnnotationKind;
+    quote: string;
+    anchor: NotebookAnnotationAnchor;
+    body: string;
+    status: NotebookAnnotationStatus;
+    author: string | null;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface AnnotationSaveInput {
+    id?: string;
+    articleId: string;
+    kind: NotebookAnnotationKind;
+    quote: string;
+    anchor?: NotebookAnnotationAnchor;
+    body: string;
+    status?: NotebookAnnotationStatus;
+    author?: string | null;
+}
+
+function readAnnotationFile(stateDir: string, notebook: string, articleId: string): NotebookAnnotation[] {
+    const file = notebookAnnotationsFilePath(stateDir, notebook, articleId);
+    if (!existsSync(file)) return [];
+    const annotations = readJsonFileSyncOr<NotebookAnnotation[]>(file, []);
+    return Array.isArray(annotations) ? annotations : [];
+}
+
+function writeAnnotationFile(stateDir: string, notebook: string, articleId: string, annotations: NotebookAnnotation[]): void {
+    const dir = notebookAnnotationsDir(stateDir, notebook);
+    ensureDir(dir);
+    writeFileSync(notebookAnnotationsFilePath(stateDir, notebook, articleId), JSON.stringify(annotations, null, 2), 'utf8');
+}
+
+export function nbListAnnotations(workDir: string, notebook: string, articleId: string, stateDir = workDir): NotebookAnnotation[] {
+    void workDir;
+    return readAnnotationFile(stateDir, notebook, articleId)
+        .filter((a) => a.articleId === articleId && a.notebook === notebook)
+        .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export function nbSaveAnnotation(workDir: string, notebook: string, data: AnnotationSaveInput, stateDir = workDir): NotebookAnnotation {
+    void workDir;
+    const now = Date.now();
+    const existing = readAnnotationFile(stateDir, notebook, data.articleId);
+    const id = data.id || `anno_${now}_${Math.random().toString(36).slice(2, 8)}`;
+    const prev = existing.find((a) => a.id === id);
+    const annotation: NotebookAnnotation = {
+        id,
+        articleId: data.articleId,
+        notebook,
+        kind: data.kind,
+        quote: data.quote,
+        anchor: data.anchor ?? {},
+        body: data.body,
+        status: data.status ?? prev?.status ?? 'open',
+        author: data.author ?? prev?.author ?? null,
+        createdAt: prev?.createdAt ?? now,
+        updatedAt: now,
+    };
+    writeAnnotationFile(
+        stateDir,
+        notebook,
+        data.articleId,
+        [...existing.filter((a) => a.id !== id), annotation].sort((a, b) => a.createdAt - b.createdAt),
+    );
+    return annotation;
+}
+
+export function nbUpdateAnnotation(
+    workDir: string,
+    notebook: string,
+    articleId: string,
+    id: string,
+    patch: Partial<Pick<NotebookAnnotation, 'body' | 'status'>>,
+    stateDir = workDir,
+): NotebookAnnotation | undefined {
+    void workDir;
+    const existing = readAnnotationFile(stateDir, notebook, articleId);
+    const idx = existing.findIndex((a) => a.id === id);
+    if (idx === -1) return undefined;
+    const updated: NotebookAnnotation = {
+        ...existing[idx],
+        ...(patch.body !== undefined ? { body: patch.body } : {}),
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+        updatedAt: Date.now(),
+    };
+    existing[idx] = updated;
+    writeAnnotationFile(stateDir, notebook, articleId, existing);
+    return updated;
+}
+
+export function nbDeleteAnnotation(workDir: string, notebook: string, articleId: string, id: string, stateDir = workDir): boolean {
+    void workDir;
+    const existing = readAnnotationFile(stateDir, notebook, articleId);
+    const next = existing.filter((a) => a.id !== id);
+    if (next.length === existing.length) return false;
+    writeAnnotationFile(stateDir, notebook, articleId, next);
+    return true;
+}
+
 /** Promote a note into a full source document. */
 export function nbConvertNoteToSource(workDir: string, notebook: string, noteId: string, stateDir = workDir): SourceMeta | undefined {
     const notes = nbListNotes(workDir, notebook, stateDir);
@@ -981,4 +1107,3 @@ export function nbForkChatHistory(workDir: string, notebook: string, messageId: 
     writeFileSync(file, kept.map(m => JSON.stringify(m)).join('\n') + '\n', 'utf8');
     return kept;
 }
-

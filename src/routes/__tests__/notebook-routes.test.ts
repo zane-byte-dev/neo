@@ -9,6 +9,7 @@ import {
     notebookGet, notebookCreate, notebookUpdate, notebookDelete,
     notebookImportSource, notebookGenerateGuide, notebookSourceActions,
     notebookOverview, notebookConfig, notebookNoteSave, notebookNoteDelete,
+    notebookAnnotationSave, notebookAnnotationUpdate, notebookAnnotationDelete,
     notebookGenerateArtifact, notebookDeleteArtifact,
 } from '../notebook.js';
 
@@ -81,6 +82,9 @@ function buildApp() {
     notebookConfig(router);
     notebookNoteSave(router);
     notebookNoteDelete(router);
+    notebookAnnotationSave(router);
+    notebookAnnotationUpdate(router);
+    notebookAnnotationDelete(router);
     notebookGenerateArtifact(router);
     notebookDeleteArtifact(router);
     mount();
@@ -175,6 +179,51 @@ describe('GET /api/notebook', () => {
             .get('/api/notebook?action=notebooks');
 
         expect(res.status).toBe(401);
+    });
+});
+
+describe('article annotation routes', () => {
+    it('creates, lists, resolves, and deletes an annotation', async () => {
+        const app = buildApp();
+        const createRes = await request(app.callback())
+            .post('/api/notebook')
+            .set('Cookie', cookie)
+            .send({ title: 'Annotate Me', notebook: 'anno-nb', content: 'Important sentence.' });
+
+        const saveRes = await request(app.callback())
+            .post('/api/notebook/annotation')
+            .set('Cookie', cookie)
+            .send({
+                notebook: 'anno-nb',
+                articleId: createRes.body.id,
+                kind: 'highlight',
+                quote: 'Important sentence',
+                anchor: { startOffset: 1, endOffset: 19, beforeText: '', afterText: '.' },
+                body: 'Follow up on this.',
+                author: 'Tester',
+            });
+        expect(saveRes.status).toBe(200);
+        expect(saveRes.body.status).toBe('open');
+
+        const listRes = await request(app.callback())
+            .get(`/api/notebook?action=annotations&notebook=anno-nb&articleId=${encodeURIComponent(createRes.body.id)}`)
+            .set('Cookie', cookie);
+        expect(listRes.status).toBe(200);
+        expect(listRes.body).toHaveLength(1);
+        expect(listRes.body[0].quote).toBe('Important sentence');
+
+        const updateRes = await request(app.callback())
+            .patch('/api/notebook/annotation')
+            .set('Cookie', cookie)
+            .send({ notebook: 'anno-nb', articleId: createRes.body.id, id: saveRes.body.id, status: 'resolved' });
+        expect(updateRes.status).toBe(200);
+        expect(updateRes.body.status).toBe('resolved');
+
+        const deleteRes = await request(app.callback())
+            .delete(`/api/notebook/annotation?notebook=anno-nb&articleId=${encodeURIComponent(createRes.body.id)}&id=${encodeURIComponent(saveRes.body.id)}`)
+            .set('Cookie', cookie);
+        expect(deleteRes.status).toBe(200);
+        expect(deleteRes.body.ok).toBe(true);
     });
 });
 

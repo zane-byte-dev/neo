@@ -1,8 +1,8 @@
 import React from 'react'
-import { ArrowLeft, Trash2, Check, Loader2, History, MoreHorizontal, Link, Copy, Maximize2, Type, Download, Layers, Languages, Sparkles, RefreshCw, EyeOff } from 'lucide-react'
-import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete } from '../api'
+import { ArrowLeft, Trash2, Check, Loader2, History, MoreHorizontal, Link, Copy, Maximize2, Type, Download, Layers, Languages, Sparkles, RefreshCw, EyeOff, MessageSquarePlus, MessageSquare, CircleDot } from 'lucide-react'
+import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete, notebookListAnnotations, notebookSaveAnnotation, notebookUpdateAnnotation, notebookDeleteAnnotation } from '../api'
 import { cn } from '../lib/utils'
-import type { NoteEntry } from '../types'
+import type { NoteEntry, NotebookAnnotation, NotebookAnnotationAnchor } from '../types'
 import { t } from '../i18n'
 import { NovelEditor } from './NovelEditor'
 import { HistoryDrawer } from './notebook/HistoryDrawer'
@@ -27,6 +27,11 @@ interface NoteEditorProps {
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+interface AnnotationDraft {
+    quote: string
+    anchor: NotebookAnnotationAnchor
+}
 
 function toTime(value: string | number | null | undefined): number | null {
     if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -86,6 +91,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const [resourcesOpen, setResourcesOpen] = React.useState(false)
     // Diff modal (AI edit actions from more menu)
     const [diffAction, setDiffAction] = React.useState<{ action: DocEditAction; content: string } | null>(null)
+    const [annotations, setAnnotations] = React.useState<NotebookAnnotation[]>([])
+    const [annotationsExpanded, setAnnotationsExpanded] = React.useState(false)
+    const [annotationDraft, setAnnotationDraft] = React.useState<AnnotationDraft | null>(null)
+    const [annotationBody, setAnnotationBody] = React.useState('')
+    const [annotationSaving, setAnnotationSaving] = React.useState(false)
+    const [focusRange, setFocusRange] = React.useState<{ startOffset: number; endOffset: number; requestId: number } | null>(null)
     // Inline summary state
     type SummaryState = 'empty' | 'generating' | 'done'
     const [summaryState, setSummaryState] = React.useState<SummaryState>(() => (note?.summary ?? '').trim() ? 'done' : 'empty')
@@ -161,6 +172,18 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             .catch(() => setContent(''))
             .finally(() => setLoading(false))
     }, [note?.id])
+
+    React.useEffect(() => {
+        if (!note) {
+            setAnnotations([])
+            return
+        }
+        let cancelled = false
+        notebookListAnnotations(note.notebook ?? notebook, note.id)
+            .then((items) => { if (!cancelled) setAnnotations(items) })
+            .catch(() => { if (!cancelled) setAnnotations([]) })
+        return () => { cancelled = true }
+    }, [note?.id, note?.notebook, notebook])
 
     // Reset dirty flag on note change (remount via key=)
     React.useEffect(() => {
@@ -333,6 +356,58 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             setPendingQuickReply(insightAction.buildPrompt(fieldsRef.current.title, truncated))
         }
     }
+
+    const handleAnnotateSelection = React.useCallback((selection: AnnotationDraft) => {
+        setAnnotationDraft(selection)
+        setAnnotationBody('')
+        setAnnotationsExpanded(true)
+    }, [])
+
+    const handleSaveAnnotation = React.useCallback(async () => {
+        if (!note || !annotationDraft || !annotationBody.trim()) return
+        setAnnotationSaving(true)
+        try {
+            const saved = await notebookSaveAnnotation(note.notebook ?? notebook, {
+                articleId: note.id,
+                kind: 'highlight',
+                quote: annotationDraft.quote,
+                anchor: annotationDraft.anchor,
+                body: annotationBody.trim(),
+                author: currentDisplayName,
+            })
+            setAnnotations((items) => [...items, saved].sort((a, b) => a.createdAt - b.createdAt))
+            setAnnotationDraft(null)
+            setAnnotationBody('')
+        } catch {
+            // keep draft open for retry
+        } finally {
+            setAnnotationSaving(false)
+        }
+    }, [annotationBody, annotationDraft, currentDisplayName, note, notebook])
+
+    const handleToggleAnnotationStatus = React.useCallback(async (annotation: NotebookAnnotation) => {
+        if (!note) return
+        const status = annotation.status === 'open' ? 'resolved' : 'open'
+        try {
+            const updated = await notebookUpdateAnnotation(note.notebook ?? notebook, note.id, annotation.id, { status })
+            setAnnotations((items) => items.map((item) => item.id === updated.id ? updated : item))
+        } catch { /* ignore */ }
+    }, [note, notebook])
+
+    const handleDeleteAnnotation = React.useCallback(async (annotation: NotebookAnnotation) => {
+        if (!note) return
+        try {
+            await notebookDeleteAnnotation(note.notebook ?? notebook, note.id, annotation.id)
+            setAnnotations((items) => items.filter((item) => item.id !== annotation.id))
+        } catch { /* ignore */ }
+    }, [note, notebook])
+
+    const handleJumpToAnnotation = React.useCallback((annotation: NotebookAnnotation) => {
+        const startOffset = annotation.anchor.startOffset
+        const endOffset = annotation.anchor.endOffset
+        if (typeof startOffset !== 'number' || typeof endOffset !== 'number') return
+        setFocusRange({ startOffset, endOffset, requestId: Date.now() })
+    }, [])
 
     const creatorName = author.trim() || currentDisplayName || '未知'
     const editorName = currentDisplayName || creatorName
@@ -617,6 +692,23 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         </div>
                     )}
 
+                    {note && (
+                        <ArticleAnnotationsBlock
+                            annotations={annotations}
+                            expanded={annotationsExpanded}
+                            draft={annotationDraft}
+                            body={annotationBody}
+                            saving={annotationSaving}
+                            onToggleExpanded={() => setAnnotationsExpanded((v) => !v)}
+                            onBodyChange={setAnnotationBody}
+                            onSave={() => void handleSaveAnnotation()}
+                            onCancelDraft={() => { setAnnotationDraft(null); setAnnotationBody('') }}
+                            onJump={handleJumpToAnnotation}
+                            onToggleStatus={(annotation) => void handleToggleAnnotationStatus(annotation)}
+                            onDelete={(annotation) => void handleDeleteAnnotation(annotation)}
+                        />
+                    )}
+
                     {/* Content — Novel rich-text editor */}
                     {loading ? (
                         <div className="flex items-center gap-2 text-gray-300">
@@ -633,6 +725,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                                 setContent(md)
                                 scheduleAutoSave()
                             }}
+                            onAnnotateSelection={note ? handleAnnotateSelection : undefined}
+                            focusRange={focusRange}
                             className="pb-20"
                         />
                     )}
@@ -680,6 +774,129 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         />
                     </div>
                 </>
+            )}
+        </div>
+    )
+}
+
+const ArticleAnnotationsBlock: React.FC<{
+    annotations: NotebookAnnotation[]
+    expanded: boolean
+    draft: AnnotationDraft | null
+    body: string
+    saving: boolean
+    onToggleExpanded: () => void
+    onBodyChange: (value: string) => void
+    onSave: () => void
+    onCancelDraft: () => void
+    onJump: (annotation: NotebookAnnotation) => void
+    onToggleStatus: (annotation: NotebookAnnotation) => void
+    onDelete: (annotation: NotebookAnnotation) => void
+}> = ({
+    annotations,
+    expanded,
+    draft,
+    body,
+    saving,
+    onToggleExpanded,
+    onBodyChange,
+    onSave,
+    onCancelDraft,
+    onJump,
+    onToggleStatus,
+    onDelete,
+}) => {
+    const openCount = annotations.filter((annotation) => annotation.status === 'open').length
+    if (!draft && annotations.length === 0) {
+        return (
+            <div className="mb-5 flex items-center gap-2 rounded-xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/3 px-3 py-2 text-[12px] text-text-quaternary">
+                <MessageSquarePlus size={13} className="text-primary-mint shrink-0" />
+                选中正文后点击气泡菜单里的“批注”，即可把想法贴回原文。
+            </div>
+        )
+    }
+
+    return (
+        <div className="mb-5 rounded-xl border border-primary-mint/20 bg-primary-mint/6 overflow-hidden">
+            <button
+                onClick={onToggleExpanded}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-primary-mint/6 transition-colors"
+            >
+                <MessageSquare size={13} className="text-primary-mint shrink-0" />
+                <span className="text-[12px] font-semibold text-text flex-1">文章批注</span>
+                <span className="text-[11px] text-text-tertiary">
+                    {annotations.length} 条 · {openCount} 未解决
+                </span>
+            </button>
+            {(expanded || draft) && (
+                <div className="border-t border-primary-mint/15 px-3 py-3 space-y-3">
+                    {draft && (
+                        <div className="rounded-lg bg-white/70 dark:bg-black/10 border border-primary-mint/20 p-3">
+                            <div className="text-[11px] font-semibold text-primary-mint mb-1">新批注</div>
+                            <blockquote className="text-[12px] text-text-secondary border-l-2 border-primary-mint/50 pl-2 line-clamp-2">
+                                {draft.quote}
+                            </blockquote>
+                            <textarea
+                                value={body}
+                                onChange={(e) => onBodyChange(e.target.value)}
+                                placeholder="写下你的想法、问题或判断…"
+                                rows={3}
+                                className="mt-2 w-full resize-none rounded-lg border border-border bg-bg-container px-2.5 py-2 text-[13px] text-text outline-none focus:border-primary-mint"
+                                autoFocus
+                            />
+                            <div className="mt-2 flex justify-end gap-2">
+                                <button
+                                    onClick={onCancelDraft}
+                                    className="px-2.5 py-1.5 text-[12px] text-text-tertiary hover:bg-fill rounded-md transition-colors"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={onSave}
+                                    disabled={saving || !body.trim()}
+                                    className="px-3 py-1.5 text-[12px] rounded-md bg-primary-mint text-white font-medium disabled:opacity-50 transition-opacity"
+                                >
+                                    {saving ? '保存中…' : '保存批注'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                    {annotations.map((annotation) => (
+                        <div
+                            key={annotation.id}
+                            className={cn(
+                                'rounded-lg border p-3 bg-bg-container',
+                                annotation.status === 'resolved'
+                                    ? 'border-border opacity-70'
+                                    : 'border-primary-mint/20'
+                            )}
+                        >
+                            <button
+                                onClick={() => onJump(annotation)}
+                                className="w-full text-left text-[12px] text-text-secondary border-l-2 border-primary-mint/50 pl-2 line-clamp-2 hover:text-primary-mint transition-colors"
+                            >
+                                {annotation.quote}
+                            </button>
+                            <p className="mt-2 text-[13px] text-text leading-relaxed whitespace-pre-wrap">{annotation.body}</p>
+                            <div className="mt-2 flex items-center gap-2 text-[11px] text-text-quaternary">
+                                <CircleDot size={10} className={annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
+                                <span className="flex-1">{annotation.status === 'open' ? '未解决' : '已解决'}</span>
+                                <button
+                                    onClick={() => onToggleStatus(annotation)}
+                                    className="hover:text-primary-mint transition-colors"
+                                >
+                                    {annotation.status === 'open' ? '标记已解决' : '重新打开'}
+                                </button>
+                                <button
+                                    onClick={() => onDelete(annotation)}
+                                    className="hover:text-red-500 transition-colors"
+                                >
+                                    删除
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             )}
         </div>
     )

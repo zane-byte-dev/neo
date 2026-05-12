@@ -293,6 +293,31 @@ export interface NotebookNote {
     updatedAt: string
 }
 
+export type NotebookAnnotationKind = 'highlight' | 'paragraph'
+export type NotebookAnnotationStatus = 'open' | 'resolved'
+
+export interface NotebookAnnotationAnchor {
+    paragraphId?: string
+    startOffset?: number
+    endOffset?: number
+    beforeText?: string
+    afterText?: string
+}
+
+export interface NotebookAnnotation {
+    id: string
+    articleId: string
+    notebook: string
+    kind: NotebookAnnotationKind
+    quote: string
+    anchor: NotebookAnnotationAnchor
+    body: string
+    status: NotebookAnnotationStatus
+    author: string | null
+    createdAt: number
+    updatedAt: number
+}
+
 export type ArtifactType = 'mindmap' | 'report' | 'audio'
 
 export interface Artifact {

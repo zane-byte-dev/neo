@@ -743,7 +743,7 @@ export function notebookRenameFolder(name: string, newName: string): Promise<{ o
 // ── Notebook workspace (NotebookLM-style) ────────────────────────────────────
 
 import type {
-    SourceMeta, SourceGuide, NotebookConfig, NotebookNote, Artifact, ArtifactType,
+    SourceMeta, SourceGuide, NotebookConfig, NotebookNote, NotebookAnnotation, NotebookAnnotationAnchor, Artifact, ArtifactType,
 } from './types'
 
 async function _jsonOrThrow<T>(r: Response): Promise<T> {
@@ -830,6 +830,39 @@ export function notebookSaveNote(notebook: string, note: { id?: string; title: s
 
 export function notebookDeleteNote(notebook: string, id: string) {
     return fetch(`/api/notebook/note?notebook=${encodeURIComponent(notebook)}&id=${encodeURIComponent(id)}`, {
+        method: 'DELETE', credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+}
+
+// Article annotations
+export function notebookListAnnotations(notebook: string, articleId: string): Promise<NotebookAnnotation[]> {
+    return apiGet(`/api/notebook?action=annotations&notebook=${encodeURIComponent(notebook)}&articleId=${encodeURIComponent(articleId)}`)
+}
+
+export function notebookSaveAnnotation(notebook: string, annotation: {
+    id?: string
+    articleId: string
+    kind: 'highlight' | 'paragraph'
+    quote: string
+    anchor?: NotebookAnnotationAnchor
+    body: string
+    status?: 'open' | 'resolved'
+    author?: string | null
+}): Promise<NotebookAnnotation> {
+    return _post('/api/notebook/annotation', { notebook, ...annotation }).then((r) => _jsonOrThrow<NotebookAnnotation>(r))
+}
+
+export function notebookUpdateAnnotation(notebook: string, articleId: string, id: string, patch: { body?: string; status?: 'open' | 'resolved' }): Promise<NotebookAnnotation> {
+    return fetch('/api/notebook/annotation', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notebook, articleId, id, ...patch }),
+    }).then((r) => _jsonOrThrow<NotebookAnnotation>(r))
+}
+
+export function notebookDeleteAnnotation(notebook: string, articleId: string, id: string) {
+    return fetch(`/api/notebook/annotation?notebook=${encodeURIComponent(notebook)}&articleId=${encodeURIComponent(articleId)}&id=${encodeURIComponent(id)}`, {
         method: 'DELETE', credentials: 'include',
     }).then((r) => _jsonOrThrow<{ ok: true }>(r))
 }
