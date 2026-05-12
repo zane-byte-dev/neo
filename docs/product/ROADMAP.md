@@ -29,14 +29,16 @@
 
 ### 3. 完善工具体系（Tool System）
 
-当前状态：内置 15+ 工具 + 用户自定义工具，已支持 MCP、权限分级和结果缓存。
+当前状态：内置 20+ 工具 + 用户自定义工具，已支持 MCP、权限分级、结果缓存和工具循环防护。
 
 - [x] **MCP 协议支持**：实现 Model Context Protocol 客户端（stdio transport），通过 `{workDir}/mcp.json` 配置 MCP Server，自动加载远程工具（前缀 `mcp__<server>__<tool>`）
 - [x] **工具权限分级**：工具分为 read / write / dangerous 三级（`ToolMeta.permission`），plan mode 下仅允许 read 级别；未标注工具通过启发式推断
-- [x] **工具执行确认**：dangerous 级别工具在 `ToolContext.confirmCallback` 存在时会先征求确认，拒绝则返回 `[DENIED]`；Web UI 已接入（Chat 设置里的盾牌图标开启后，在会话中实时弹出 Approve/Deny 按钮）
+- [x] **工具执行确认**：dangerous 级别工具在 `ToolContext.confirmCallback` 存在时会先征求确认，拒绝则返回 `[DENIED]`；Web UI 已接入（Chat 设置里的盾牌图标开启后，在会话中实时弹出 Approve/Deny 按钮）；支持 once / session / always 三种放行 scope，可在 /models 页面撤销
 - [x] **工具结果优化**：tool_result 改为智能截断（头 500 + 尾 200 + 省略标记），完整原文写入内存 LRU 缓存，通过 `GET /api/tool-result/:id` 按需拉取
 - [x] **工具重试与容错**：新增 `withRetry` 指数退避工具；已应用于 fetch_url、search_web（仅对 5xx/429/网络错误重试）
 - [x] **工具使用统计**：记录每个工具的调用频率、成功率、平均耗时，供优化参考（`GET /api/tool-stats`）
+- [x] **扩展内置工具**：新增 `subagent`（委托子 Agent 完成复杂子任务）、`research`（自动多步调研汇总）、`todo`（任务清单管理）、`ask_user`（会话中征询用户输入）
+- [x] **工具循环防护**：按 toolName 跟踪连续失败签名，同一工具连续失败 3 次后自动短路并提示换源；finishReason 为 tool-calls 且无有效文本时触发 synthesis 兜底回答
 
 ---
 
@@ -69,7 +71,7 @@
 
 ### 6. Web UI 增强
 
-当前状态：React 前端有 Chat 和 Notebook 面板，功能完善；欢迎页已提供首次使用清单，帮助新用户完成最短上手路径。
+当前状态：React 前端有 Chat 和 Notebook 面板，功能完善；欢迎页已提供首次使用清单；支持 Mini-app 托管；零配置首启自动生成默认配置。
 
 - [x] **Artifact 渲染**：代码块支持语法高亮 + 一键复制；支持折叠超长代码块；支持 Mermaid 图表、数学公式（KaTeX）渲染
 - [x] **思维过程展示**：展示 AI 的思考过程（thinking/reasoning chunks）和工具调用过程，可折叠
@@ -80,13 +82,18 @@
 - [x] **首次使用清单**：Chat 欢迎页新增“开始使用 Neo” checklist，引导完成模型配置、第一条消息和 Notebook 笔记创建，并支持完成状态自动刷新与关闭持久化
 - [x] **设置清晰度与系统状态**：设置页新增 Basic / Advanced 分层、Overview 系统状态卡片，以及模型、Telegram、MCP、自动化失败时的修复入口
 - [x] **语音输入**：Web 端支持录音并转文字；前端使用 MediaRecorder 采集音频 Blob，后端新增 POST /api/transcribe 统一转写接口（OpenAI Whisper 优先，Gemini 1.5 Flash fallback），转写结果回填到输入框，默认不自动发送；权限拒绝、浏览器不支持、无可用 provider 等场景均有错误提示
+- [x] **Mini-app 托管**：每个用户可在 `{stateDir}/apps/` 下放置静态 Web 应用，侧边栏「应用」分组动态列出，支持 `manifest.json`（title/description/icon）；路由隔离，每个用户只能访问自己的应用
+- [x] **零配置首启**：首次启动时若无 `config.local.ts` 与 `USERS` 环境变量，自动在 `~/.neo/config.json` 生成默认单用户配置（随机 token/SESSION_SECRET、标准目录），并将登录 token 打印到控制台
+- [x] **模型路由可视化配置**：/models 展示 provider 在线状态（Ollama 探活、ACP 检查 CLI 路径、云端检查 key），支持在 UI 中覆盖路由层级（simple/standard/complex 各 tier），配置持久化到 `{stateDir}/routing.json`
 
 ### 7. 工作流与自动化
 
-当前状态：有基本的 cron-agent 定时任务，但缺乏复杂的自动化能力。
+当前状态：cron-agent 定时任务 + Webhook 入口已落地；Agent 运行时已升级为持久化、可恢复模型，支持进程重启后恢复执行；复杂工作流引擎尚未实现。
 
+- [x] **可恢复 Agent 运行时**：每次 Agent 执行创建持久化 run（文件事件日志），进程重启或 SSE 断线后可从 `cursor` 继续追补事件；工具确认状态持久化，approved 后自动恢复执行；cron、Telegram、Webhook 等后台入口统一复用同一 run model
+- [x] **Webhook 入口**：`POST /api/webhook` 接收外部事件，触发 Agent 任务执行，结果通过 Telegram / webhook response 回传；run 完成后消费 `run_completed` 与 `artifact_created` 事件
 - [ ] **工作流引擎**：定义多步骤工作流（YAML/JSON），支持条件分支、循环、并行执行
-- [ ] **事件触发器**：文件变更、Webhook 接收、新邮件等事件自动触发工作流
+- [ ] **事件触发器**：文件变更、新邮件等外部事件自动触发工作流（当前 Webhook 已覆盖 HTTP 入口）
 - [ ] **Skill 编排**：多个 Skill 串联执行，前序 Skill 输出作为后序 Skill 输入
 - [ ] **定时任务增强**：支持 Web UI 管理定时任务，查看执行历史和日志
 - [ ] **外部服务集成**：日历（Google Calendar）、邮件（IMAP/SMTP）、RSS 订阅触发
@@ -107,8 +114,9 @@
 
 ### 9. 安全与多用户
 
-当前状态：基于 config.json 的简单用户管理，Cookie Session 认证，基础的命令黑名单。
+当前状态：基于 config.json 的简单用户管理，Cookie Session 认证，基础的命令黑名单；凭据（API Key）已支持 UI 管理并加密存储。
 
+- [x] **凭据 UI 管理**：`POST /api/secrets` 管理 Gemini / DeepSeek / OpenAI / Anthropic API Key 及 Telegram token（AES-256-GCM 加密，密钥从 SESSION_SECRET 派生，存储于 `{stateDir}/secrets.json.enc`）；Telegram token 变更时自动 stop → 重新 sync bot；UI CredentialsCard 展示各 provider 配置状态
 - [ ] **OAuth 登录**：支持 GitHub / Google OAuth，简化注册和登录
 - [ ] **API Key 认证**：为 API 调用提供独立的 API Key 机制
 - [ ] **速率限制**：按用户/IP 限制 API 调用频率，防止滥用
@@ -117,21 +125,22 @@
 
 ### 10. 可观测性与运维
 
-当前状态：控制台日志 + JSONL 文件日志，PM2 进程管理。
+当前状态：控制台日志 + JSONL 文件日志，PM2 进程管理；token 用量已按月追踪并可通过 API 查询。
 
-- [ ] **结构化 Metrics**：记录 LLM 调用延迟、token 用量、工具执行耗时等关键指标
+- [x] **Token 用量追踪**：`token-tracker.ts` 按月写入 `logs/token-usage-YYYY-MM.jsonl`，记录 model / inputTokens / outputTokens / cost / fallbackUsed；`GET /api/models?month=YYYY-MM` 可查询月度汇总，Web UI 展示每日用量图表
+- [ ] **结构化 Metrics**：记录 LLM 调用延迟、工具执行耗时等关键指标
 - [ ] **健康检查端点**：`/health` 端点返回服务状态、依赖连通性
-- [ ] **Token 用量追踪**：统计每个用户/会话的 token 消耗量，支持预算告警
 - [ ] **错误追踪集成**：接入 Sentry 或类似服务，自动上报异常
 - [ ] **Dashboard**：简易运维面板，查看活跃用户、对话量、系统负载
 
 ### 11. 测试与工程质量
 
-当前状态：已接入 Vitest（约 45 个测试文件），覆盖 runtime、indexing、Notebook chat、routes 和基础 E2E smoke test；GitHub Actions CI 已落地；ESLint / Prettier / strict mode 仍未引入。
+当前状态：Vitest 测试文件约 55+，覆盖 runtime、indexing、Notebook chat、routes、utils 和基础 E2E smoke test；lines/statements 覆盖率约 72%+，functions 约 75%；GitHub Actions CI 已落地，含独立 Docs Links 检查 job；ESLint / Prettier / strict mode 仍未引入。
 
-- [x] **自动化测试底座**：已建立 Vitest 测试配置与覆盖率统计，runtime / indexing / Notebook chat / runs API 等路径已有回归测试
+- [x] **自动化测试底座**：已建立 Vitest 测试配置与覆盖率统计，runtime / indexing / Notebook chat / runs API / tool-ops 等路径已有回归测试
 - [x] **基础端到端测试**：已具备 chat HTTP API 的 smoke test，覆盖完整 SSE 对话主链路
-- [x] **CI/CD**：GitHub Actions 已自动跑 build + test + web build（`.github/workflows/ci.yml`）
+- [x] **CI/CD**：GitHub Actions 已自动跑 build + test + web build + docs links check（`.github/workflows/ci.yml`）
+- [x] **文档链接校验**：`scripts/check-doc-links.mjs` 零依赖校验 Markdown 相对链接有效性，`npm run docs:check` 可本地运行
 
 - [ ] **单元测试**：为核心模块（tool executor、chat service、notebook service）补齐测试
 - [ ] **集成测试**：模拟完整对话流程的端到端测试
@@ -151,8 +160,8 @@
 
 ## 实施建议
 
-1. **P0 优先**：多模态、沙箱、工具完善是提升日常使用体验的关键，建议优先实施
-2. **渐进式推进**：每个大功能可以拆成多个小 PR，先实现最小可用版本再迭代
-3. **多模态可以先做图片理解**：Gemini 原生支持 Vision，改动量最小，收益最大
-4. **沙箱可以先做 Docker 基础版**：不需要一步到位，先实现基本的容器隔离
-5. **MCP 支持价值很大**：一旦接入 MCP，可以复用大量已有的 MCP Server 生态
+1. **P0 已基本完成**：多模态、沙箱、工具体系核心能力均已落地，当前重心转向 P1/P2 提升
+2. **下一优先级**：RAG Embedding 向量化（P1.4）、工作流引擎（P1.7）是当前最大的功能缺口
+3. **渐进式推进**：每个大功能拆成多个小 PR，先实现最小可用版本再迭代
+4. **向量化可用 SQLite + vss 起步**：不依赖外部服务，改动量最小，收益直接体现在记忆检索质量上
+5. **MCP 生态持续扩展**：已有 stdio transport，后续可补充 HTTP/SSE transport 以支持远程 MCP Server
