@@ -97,6 +97,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const [annotationBody, setAnnotationBody] = React.useState('')
     const [annotationSaving, setAnnotationSaving] = React.useState(false)
     const [focusRange, setFocusRange] = React.useState<{ startOffset: number; endOffset: number; requestId: number } | null>(null)
+    const focusRequestIdRef = React.useRef(0)
     // Inline summary state
     type SummaryState = 'empty' | 'generating' | 'done'
     const [summaryState, setSummaryState] = React.useState<SummaryState>(() => (note?.summary ?? '').trim() ? 'done' : 'empty')
@@ -406,7 +407,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         const startOffset = annotation.anchor.startOffset
         const endOffset = annotation.anchor.endOffset
         if (typeof startOffset !== 'number' || typeof endOffset !== 'number') return
-        setFocusRange({ startOffset, endOffset, requestId: Date.now() })
+        focusRequestIdRef.current += 1
+        setFocusRange({ startOffset, endOffset, requestId: focusRequestIdRef.current })
     }, [])
 
     const creatorName = author.trim() || currentDisplayName || '未知'

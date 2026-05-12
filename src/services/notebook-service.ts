@@ -15,6 +15,8 @@ import { generateId } from '../utils/id-generator.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+const ANNOTATION_ID_PREFIX = 'anno_';
+
 export interface NotebookEntry {
     id: string;           // "{notebook}/{filename}"
     notebook: string;
@@ -922,7 +924,7 @@ export function nbSaveAnnotation(workDir: string, notebook: string, data: Annota
     void workDir;
     const now = Date.now();
     const existing = readAnnotationFile(stateDir, notebook, data.articleId);
-    const id = data.id || `anno_${generateId()}`;
+    const id = data.id || `${ANNOTATION_ID_PREFIX}${generateId()}`;
     const prev = existing.find((a) => a.id === id);
     const annotation: NotebookAnnotation = {
         id,

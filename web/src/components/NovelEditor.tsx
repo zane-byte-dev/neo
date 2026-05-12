@@ -40,7 +40,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
-const ANNOTATION_CONTEXT_LENGTH = 120
+const ANNOTATION_CONTEXT_LENGTH = 200
 
 // ─── AI completion helper ─────────────────────────────────────────────────────
 
