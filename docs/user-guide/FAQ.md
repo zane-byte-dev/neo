@@ -12,6 +12,12 @@
 
 打开 Web UI 后进入 Models 页，添加 Gemini / DeepSeek / OpenAI / Anthropic 等 Provider 的 API Key。Key 会加密保存到 `{stateDir}/secrets.json.enc`，不会写入仓库。
 
+## 首次使用清单在哪里？
+
+登录后进入空 Chat 欢迎页，会看到“开始使用 Neo”清单。它会引导你完成三件事：配置一个模型、发送第一条消息、创建一条 Notebook 笔记。
+
+其中模型配置和 Notebook 条目会根据当前状态自动判断是否完成；如果你手动关闭了这个清单，当前浏览器里的关闭状态会被记住，现阶段还没有单独的“重新打开 checklist”入口。
+
 ## Gemini CLI 怎么用？
 
 先安装 Gemini CLI 并完成登录：

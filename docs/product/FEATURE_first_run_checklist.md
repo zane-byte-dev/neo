@@ -1,5 +1,7 @@
 # First-run Checklist
 
+> Status update (2026-05-12): Chat 欢迎页的首次使用清单 MVP 已实现，当前覆盖模型配置、发送第一条消息、创建 Notebook 笔记三项任务。实现细节见 [FEATURE_first_run_checklist_PLAN.md](../developer-guide/FEATURE_first_run_checklist_PLAN.md)，验收结果见 [FEATURE_first_run_checklist_TEST_REPORT.md](../testing/FEATURE_first_run_checklist_TEST_REPORT.md)。
+
 ## Background
 
 Neo 已经具备 Chat、Notebook、Skills、Tools、MCP、Automations、Apps、Telegram 等完整能力，但产品体验报告指出，新用户登录后缺少“下一步做什么”的任务导向引导。

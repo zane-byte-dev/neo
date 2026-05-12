@@ -28,7 +28,7 @@ npm run dev:bot              # 后端 + Telegram bot，监听 :3000
 npm run web:dev              # 另开终端，前端开发服务器 :5173
 ```
 
-打开 http://localhost:5173，首次进入 **Models** 页填入至少一个 LLM Provider 的 API Key（Gemini / DeepSeek / OpenAI / Anthropic 任一），即可开始对话。生产部署见下文「生产部署」一节，常见问题见 [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)。
+打开 http://localhost:5173，首次进入 **Models** 页填入至少一个 LLM Provider 的 API Key（Gemini / DeepSeek / OpenAI / Anthropic 任一），即可开始对话。空 Chat 欢迎页现在会显示“开始使用 Neo”清单，引导你完成模型配置、第一条消息和第一条 Notebook 笔记。生产部署见下文「生产部署」一节，常见问题见 [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)。如果你想在这个仓库里用 GitHub Copilot 跑一轮文档驱动的 AI 开发流程，直接看 [docs/user-guide/AI_DEVELOPMENT.md](docs/user-guide/AI_DEVELOPMENT.md)。
 
 > 想贡献代码？请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 > 发现安全问题？请走 [SECURITY.md](SECURITY.md) 中的私密披露流程，不要开公开 issue。
@@ -413,6 +413,7 @@ Bot Token 在 Web UI **Models 页 → Credentials** 填入后，Telegram 运行�
 ## 更多文档
 
 - [docs/README.md](docs/README.md)：文档索引
+- [docs/user-guide/AI_DEVELOPMENT.md](docs/user-guide/AI_DEVELOPMENT.md)：如何用 GitHub Copilot 跑 Product Brief → Dev Plan → Implementation → Test Review → Closeout
 - [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)：常见问题
 - [CHANGELOG.md](CHANGELOG.md)：版本变更记录
 
