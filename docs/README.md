@@ -38,6 +38,7 @@ docs/
 | [KNOWLEDGE_INDEX_V1.sql](developer-guide/KNOWLEDGE_INDEX_V1.sql) | SQLite + FTS5 表结构参考 | 📖 参考资料 |
 | [UI_DESIGN_GUIDE.md](developer-guide/UI_DESIGN_GUIDE.md) | Web UI 色彩、间距、圆角设计规范 | ✅ 已落地 |
 | [SMART_SCORING.md](developer-guide/SMART_SCORING.md) | 智能请求评分与模型自动路由设计 | ✅ 已落地 |
+| [COPILOT_AI_LOOP.md](developer-guide/COPILOT_AI_LOOP.md) | GitHub Copilot 驱动的产品→开发→测试→发布闭环 | ✅ 已落地 |
 | [research.md](developer-guide/tools/research.md) | 内置 research 工具说明 | 📖 参考资料 |
 
 ## 产品与规划
