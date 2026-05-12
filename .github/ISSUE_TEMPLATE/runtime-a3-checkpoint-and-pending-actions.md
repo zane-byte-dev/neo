@@ -13,7 +13,7 @@ assignees: []
 相关锚点：
 
 - [src/utils/pending-confirm.ts](../../src/utils/pending-confirm.ts)
-- [docs/AGENT_RUNTIME_PLAN.md](../../docs/AGENT_RUNTIME_PLAN.md)
+- [docs/developer-guide/AGENT_RUNTIME_PLAN.md](../../docs/developer-guide/AGENT_RUNTIME_PLAN.md)
 
 ## 里程碑
 

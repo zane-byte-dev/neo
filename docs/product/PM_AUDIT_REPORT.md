@@ -14,36 +14,40 @@ Neo 是一款「本地运行、自主规划、安全可控的 AI 工作搭子」
 
 ## 二、Bug 清单
 
-| # | 严重级别 | 模块 | 问题描述 | 代码定位 |
-|---|--------|------|---------|---------|
-| B1 | 🔴 高 | 设置-使用记录 | `timeAgo()` 函数输出硬编码英文（"2h ago", "5d ago"），中文模式下显示混乱 | `web/src/components/ModelPanel.tsx:61-67` |
-| B2 | 🔴 高 | 国际化 | `ToolApprovalsModal` 使用 `t('toolApprovalsSubtitle')` key，但 `en.ts`/`zh.ts` 均未定义，会直接渲染 key 名 | `web/src/components/ChatArea.tsx` + `web/src/i18n/locales/en.ts` |
-| B3 | 🟡 中 | 聊天输入 | 附件按钮 `title="添加附件"` 硬编码中文，切英文界面后依然显示中文 | `web/src/components/ChatArea.tsx:ChatInput` |
-| B4 | 🟡 中 | 聊天输入 | 安全确认 toggle 文案 `'安全确认：开/关'` 硬编码中文，未使用 `t()` | `web/src/components/ChatArea.tsx:ChatInput` |
-| B5 | 🟡 中 | 导出功能 | 「导出 Markdown」只导出 `msg.content`，工具调用记录、思考内容（thinking）全部丢失，导出文件信息量不完整 | `web/src/components/ChatArea.tsx:exportChatAsMarkdown` |
-| B6 | 🟡 中 | 笔记本侧边栏 | 添加笔记本输入框触发 `onBlur` 即取消，点击输入框外部（如误触）会导致创建流程被中断且无任何提示 | `web/src/components/Sidebar.tsx` |
-| B7 | 🟢 低 | 笔记本 | 无日期的笔记渲染时日期列空白，布局有轻微错位 | `web/src/components/NotebookPanel.tsx` |
-| B8 | 🟢 低 | 设置 | 设置页用 hash 而非路由（`#skills` / `#apps`），浏览器后退按钮无法精确回到对应 tab | `web/src/components/SettingsPanel.tsx` |
+> **状态更新（2026-05-12）**：B1-B5、B8 已修复；B6、B7 仍待处理。
+
+| # | 严重级别 | 模块 | 问题描述 | 代码定位 | 状态 |
+|---|--------|------|---------|---------|------|
+| B1 | 🔴 高 | 设置-使用记录 | `timeAgo()` 函数输出硬编码英文（"2h ago", "5d ago"），中文模式下显示混乱 | `web/src/components/ModelPanel.tsx:61-67` | ✅ 已修复：改用 `t('timeAgoHours')` 等 i18n key |
+| B2 | 🔴 高 | 国际化 | `ToolApprovalsModal` 使用 `t('toolApprovalsSubtitle')` key，但 `en.ts`/`zh.ts` 均未定义，会直接渲染 key 名 | `web/src/components/ChatArea.tsx` + `web/src/i18n/locales/en.ts` | ✅ 已修复：`toolApprovalsSubtitle` 已加入两个 locale 文件 |
+| B3 | 🟡 中 | 聊天输入 | 附件按钮 `title="添加附件"` 硬编码中文，切英文界面后依然显示中文 | `web/src/components/ChatArea.tsx:ChatInput` | ✅ 已修复：改用 `t('addAttachment')` |
+| B4 | 🟡 中 | 聊天输入 | 安全确认 toggle 文案 `'安全确认：开/关'` 硬编码中文，未使用 `t()` | `web/src/components/ChatArea.tsx:ChatInput` | ✅ 已修复：改用 `t('safeConfirmOn')` / `t('safeConfirmOff')` |
+| B5 | 🟡 中 | 导出功能 | 「导出 Markdown」只导出 `msg.content`，工具调用记录、思考内容（thinking）全部丢失，导出文件信息量不完整 | `web/src/components/ChatArea.tsx:exportChatAsMarkdown` | ✅ 已修复：`exportChatAsMarkdown` 现已导出 thinking、tool_call、tool_result |
+| B6 | 🟡 中 | 笔记本侧边栏 | 添加笔记本输入框触发 `onBlur` 即取消，点击输入框外部（如误触）会导致创建流程被中断且无任何提示 | `web/src/components/Sidebar.tsx:936` | ❌ 待处理 |
+| B7 | 🟢 低 | 笔记本 | 无日期的笔记渲染时日期列空白，布局有轻微错位 | `web/src/components/NotebookPanel.tsx` | ❌ 待确认 |
+| B8 | 🟢 低 | 设置 | 设置页用 hash 而非路由（`#skills` / `#apps`），浏览器后退按钮无法精确回到对应 tab | `web/src/components/SettingsPanel.tsx` | ✅ 已修复：改用 `useNavigate('/settings/:tab')` 路由导航 |
 
 ---
 
 ## 三、功能缺陷
 
-| # | 优先级 | 模块 | 缺失功能 |
-|---|--------|------|---------|
-| F1 | 🔴 高 | 笔记本管理 | **无法删除或重命名笔记本**，用户创建后只能永久保留，UI 中无清理入口 |
-| F2 | 🔴 高 | 对话列表 | **缺少批量管理操作**：已有 17+ 会话，无法批量删除或归档 |
-| F3 | 🔴 高 | 应用 | **应用无 UI 管理入口**：只能手动向 `stateDir/apps/` 放文件，普通用户无法添加/删除应用 |
-| F4 | 🟡 中 | 技能管理 | **技能无法排序或分组**，技能数量增长后难以管理 |
-| F5 | 🟡 中 | 技能管理 | **无技能搜索功能**，仅支持列表浏览 |
-| F6 | 🟡 中 | 模型管理 | **无 MCP 服务器管理 UI**，`mcp/` 后端功能完整但用户只能手动编辑配置文件 |
-| F7 | 🟡 中 | 模型管理 | **无 Webhook/Cron 管理 UI**，后端已有实现但前端无入口 |
-| F8 | 🟡 中 | 笔记本 | **笔记标签（tags）无筛选功能**，NoteEditor 支持写入 tags，但列表视图无法按标签过滤 |
-| F9 | 🟡 中 | 使用记录 | **无可视化图表**，只有纯表格，看不出 Token 消耗趋势 |
-| F10 | 🟡 中 | 使用记录 | **历史数据访问困难**，日期选择器只能切换月份，无快速跳转或范围选择 |
-| F11 | 🟢 低 | 对话搜索 | **搜索结果无高亮**，匹配词在标题中不高亮显示 |
-| F12 | 🟢 低 | 笔记本 | **无跨笔记本搜索**，只能在当前笔记本内搜索 |
-| F13 | 🟢 低 | 对话 | **无法导入对话**，有导出 Markdown 但无对应导入功能 |
+> **状态更新（2026-05-12）**：F1-F3、F6-F9、F13 已实现；F4、F5、F10-F12 待处理。
+
+| # | 优先级 | 模块 | 缺失功能 | 状态 |
+|---|--------|------|---------|------|
+| F1 | 🔴 高 | 笔记本管理 | **无法删除或重命名笔记本**，用户创建后只能永久保留，UI 中无清理入口 | ✅ 已实现：Sidebar 中增加了删除/重命名笔记本（`notebookDeleteFolder` / `notebookRenameFolder`） |
+| F2 | 🔴 高 | 对话列表 | **缺少批量管理操作**：已有 17+ 会话，无法批量删除或归档 | ✅ 已实现：Sidebar 支持多选 + 批量删除 |
+| F3 | 🔴 高 | 应用 | **应用无 UI 管理入口**：只能手动向 `stateDir/apps/` 放文件，普通用户无法添加/删除应用 | ✅ 已实现：设置页 Apps tab 支持查看/删除应用 |
+| F4 | 🟡 中 | 技能管理 | **技能无法排序或分组**，技能数量增长后难以管理 | ❌ 待处理 |
+| F5 | 🟡 中 | 技能管理 | **无技能搜索功能**，仅支持列表浏览 | ❌ 待处理 |
+| F6 | 🟡 中 | 模型管理 | **无 MCP 服务器管理 UI**，`mcp/` 后端功能完整但用户只能手动编辑配置文件 | ✅ 已实现：设置页 MCP tab 支持增删改 MCP Server（`mcpList` / `mcpSave` / `mcpDelete`） |
+| F7 | 🟡 中 | 模型管理 | **无 Webhook/Cron 管理 UI**，后端已有实现但前端无入口 | ✅ 已实现：设置页 Automations tab 支持管理 Cron 任务和 Webhook |
+| F8 | 🟡 中 | 笔记本 | **笔记标签（tags）无筛选功能**，NoteEditor 支持写入 tags，但列表视图无法按标签过滤 | ✅ 已实现：NotebookPanel 顶部有 Tag filter chips |
+| F9 | 🟡 中 | 使用记录 | **无可视化图表**，只有纯表格，看不出 Token 消耗趋势 | ✅ 已实现：ModelPanel 使用记录 tab 新增 `DailyTokenChart` SVG 柱状图 |
+| F10 | 🟡 中 | 使用记录 | **历史数据访问困难**，日期选择器只能切换月份，无快速跳转或范围选择 | 🔄 改善中：已改用 `<input type="month">` 允许直接跳转，但仍无跨月范围选择 |
+| F11 | 🟢 低 | 对话搜索 | **搜索结果无高亮**，匹配词在标题中不高亮显示 | ❌ 待处理 |
+| F12 | 🟢 低 | 笔记本 | **无跨笔记本搜索**，只能在当前笔记本内搜索 | ❌ 待处理 |
+| F13 | 🟢 低 | 对话 | **无法导入对话**，有导出 Markdown 但无对应导入功能 | ✅ 已实现：Sidebar 支持导入 `.md`/`.json` 对话文件（`importChatApi`） |
 
 ---
 

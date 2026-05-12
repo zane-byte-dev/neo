@@ -1,10 +1,10 @@
 # Agent 运行时 Issue 拆分
 
-> 目标：把 [docs/AGENT_RUNTIME_PLAN.md](./AGENT_RUNTIME_PLAN.md) 拆成可直接进入排期、PR 和 issue 系统的工作项。
+> 目标：把 [AGENT_RUNTIME_PLAN.md](AGENT_RUNTIME_PLAN.md) 拆成可直接进入排期、PR 和 issue 系统的工作项。
 >
 > 最后更新：2026-04-27
 
-前 5 个 issue 的可直接发布文本见：[docs/AGENT_RUNTIME_GITHUB_ISSUES.md](./AGENT_RUNTIME_GITHUB_ISSUES.md)
+前 5 个 issue 的可直接发布文本见：[AGENT_RUNTIME_GITHUB_ISSUES.md](AGENT_RUNTIME_GITHUB_ISSUES.md)
 
 > 当前完成情况（2026-04-27）
 >
@@ -46,15 +46,15 @@
 
 ### Epic B：事件驱动执行器
 
-目标：把 [src/services/agent-runner.ts](../src/services/agent-runner.ts) 从“直接执行”改成“写事件 + 更新 checkpoint”。
+目标：把 [src/services/agent-runner.ts](../../src/services/agent-runner.ts) 从“直接执行”改成“写事件 + 更新 checkpoint”。
 
 ### Epic C：确认流与恢复机制
 
-目标：替换当前 [src/utils/pending-confirm.ts](../src/utils/pending-confirm.ts) 的内存态确认逻辑，并补恢复能力。
+目标：替换当前 [src/utils/pending-confirm.ts](../../src/utils/pending-confirm.ts) 的内存态确认逻辑，并补恢复能力。
 
 ### Epic D：统一入口与 API
 
-目标：让 [src/routes/chat.ts](../src/routes/chat.ts)、[src/services/cron-agent.ts](../src/services/cron-agent.ts)、Telegram、Webhook 都复用同一运行时。
+目标：让 [src/routes/chat.ts](../../src/routes/chat.ts)、[src/services/cron-agent.ts](../../src/services/cron-agent.ts)、Telegram、Webhook 都复用同一运行时。
 
 ### Epic E：前端接线、测试与运维
 
@@ -74,7 +74,7 @@
 
 **主要改动点**：
 
-- 新增 [src/runtime/types.ts](../src/runtime/types.ts)
+- 新增 [src/runtime/types.ts](../../src/runtime/types.ts)
 - 约定 `{stateDir}/runs/{runId}/run.json`、`events.jsonl`、`checkpoint.json`、`pending.json`、`artifacts/`
 - 定义 `RunRecord`、`RunStatus`、`RunEvent`、`PendingAction`、`RunArtifact`
 - 固化 `queued/running/waiting_confirm/waiting_input/completed/failed/cancelled/expired` 状态枚举
@@ -83,7 +83,7 @@
 
 **完成条件**：
 
-1. 类型定义能够覆盖 [src/services/agent-runner.ts](../src/services/agent-runner.ts)、[src/routes/chat.ts](../src/routes/chat.ts)、[src/services/cron-agent.ts](../src/services/cron-agent.ts) 需要的最小元数据。
+1. 类型定义能够覆盖 [src/services/agent-runner.ts](../../src/services/agent-runner.ts)、[src/routes/chat.ts](../../src/routes/chat.ts)、[src/services/cron-agent.ts](../../src/services/cron-agent.ts) 需要的最小元数据。
 2. 有明确的 JSON 示例，后续 issue 不再各自发明字段。
 
 **建议 PR 范围**：只包含类型、目录约定和文档，不引入执行逻辑。
@@ -98,8 +98,8 @@
 
 **主要改动点**：
 
-- 新增 [src/runtime/store.ts](../src/runtime/store.ts)
-- 新增 [src/runtime/events.ts](../src/runtime/events.ts)
+- 新增 [src/runtime/store.ts](../../src/runtime/store.ts)
+- 新增 [src/runtime/events.ts](../../src/runtime/events.ts)
 - 实现 `createRun()`、`loadRun()`、`saveRun()`、`appendEvent()`、`listRunEvents()`
 - 支持基于事件序号或 offset 的 cursor 读取
 
@@ -123,8 +123,8 @@
 
 **主要改动点**：
 
-- 新增 [src/runtime/checkpoint.ts](../src/runtime/checkpoint.ts)
-- 新增 [src/runtime/pending-actions.ts](../src/runtime/pending-actions.ts)
+- 新增 [src/runtime/checkpoint.ts](../../src/runtime/checkpoint.ts)
+- 新增 [src/runtime/pending-actions.ts](../../src/runtime/pending-actions.ts)
 - 提供 `saveCheckpoint()`、`loadCheckpoint()`、`savePendingAction()`、`resolvePendingAction()`
 - 约定 timeout、resolvedAt、resolution 等字段
 
@@ -143,12 +143,12 @@
 
 **标题**：重构 agent-runner，分离 prepareRunContext、executeRunLoop、resumeRun
 
-**目标**：把当前 [src/services/agent-runner.ts](../src/services/agent-runner.ts) 的线性流程拆成可恢复的执行骨架。
+**目标**：把当前 [src/services/agent-runner.ts](../../src/services/agent-runner.ts) 的线性流程拆成可恢复的执行骨架。
 
 **主要改动点**：
 
-- 重构 [src/services/agent-runner.ts](../src/services/agent-runner.ts)
-- 新增或引入 [src/runtime/executor.ts](../src/runtime/executor.ts)
+- 重构 [src/services/agent-runner.ts](../../src/services/agent-runner.ts)
+- 新增或引入 [src/runtime/executor.ts](../../src/runtime/executor.ts)
 - 把用户上下文装配、history 读取、消息持久化、LLM 调用从单个函数中分层
 
 **依赖**：A2、A3
@@ -170,7 +170,7 @@
 
 **主要改动点**：
 
-- 在 [src/services/agent-runner.ts](../src/services/agent-runner.ts) 发 `route_resolved`、`user_message_saved`、`run_completed`、`run_failed`
+- 在 [src/services/agent-runner.ts](../../src/services/agent-runner.ts) 发 `route_resolved`、`user_message_saved`、`run_completed`、`run_failed`
 - 在 LLM chunk 回调处发 `llm_chunk`
 - 在工具执行路径补 `tool_call_started`、`tool_call_finished`
 - 在 todo 和 artifact 回调处发 `todo_updated`、`artifact_created`
@@ -194,7 +194,7 @@
 
 **主要改动点**：
 
-- 在 [src/services/agent-runner.ts](../src/services/agent-runner.ts) 或 [src/runtime/executor.ts](../src/runtime/executor.ts) 中记录 `fullResponse`、history cursor、当前阶段、最近工具步骤
+- 在 [src/services/agent-runner.ts](../../src/services/agent-runner.ts) 或 [src/runtime/executor.ts](../../src/runtime/executor.ts) 中记录 `fullResponse`、history cursor、当前阶段、最近工具步骤
 - 实现 `resumeRun(runId)`
 - 约定 checkpoint 何时刷新，避免 chunk 级别过度写盘
 
@@ -215,11 +215,11 @@
 
 **标题**：将危险工具确认从内存 Map 改为持久化 pending_action
 
-**目标**：解决当前 [src/utils/pending-confirm.ts](../src/utils/pending-confirm.ts) 在进程重启后丢失的问题。
+**目标**：解决当前 [src/utils/pending-confirm.ts](../../src/utils/pending-confirm.ts) 在进程重启后丢失的问题。
 
 **主要改动点**：
 
-- 调整 [src/utils/pending-confirm.ts](../src/utils/pending-confirm.ts) 为 runtime-backed 实现，或由 runtime 模块取代
+- 调整 [src/utils/pending-confirm.ts](../../src/utils/pending-confirm.ts) 为 runtime-backed 实现，或由 runtime 模块取代
 - 在确认触发时写入 `confirm_requested` 事件和 `pending_action`
 - 更新 run.status 为 `waiting_confirm`
 
@@ -242,10 +242,10 @@
 
 **主要改动点**：
 
-- 改造 [src/routes/tool-confirm.ts](../src/routes/tool-confirm.ts)
-- 改造 [web/src/api.ts](../web/src/api.ts) 中的 `confirmTool()`
-- 改造 [web/src/types/index.ts](../web/src/types/index.ts) 的 `tool_confirm` 结构
-- 改造 [web/src/components/ChatArea.tsx](../web/src/components/ChatArea.tsx) 的 Approve/Deny 流程
+- 改造 [src/routes/tool-confirm.ts](../../src/routes/tool-confirm.ts)
+- 改造 [web/src/api.ts](../../web/src/api.ts) 中的 `confirmTool()`
+- 改造 [web/src/types/index.ts](../../web/src/types/index.ts) 的 `tool_confirm` 结构
+- 改造 [web/src/components/ChatArea.tsx](../../web/src/components/ChatArea.tsx) 的 Approve/Deny 流程
 
 **依赖**：C1
 
@@ -289,7 +289,7 @@
 
 **主要改动点**：
 
-- 新增 [src/routes/runs.ts](../src/routes/runs.ts)
+- 新增 [src/routes/runs.ts](../../src/routes/runs.ts)
 - 提供 `GET /api/runs/:id`、`GET /api/runs/:id/events`、`GET /api/runs`、`POST /api/runs/:id/cancel`
 - 复用 runtime store 和 event reader
 
@@ -308,12 +308,12 @@
 
 **标题**：重构 chat route，使 SSE 订阅 runtime events 而不是直接订阅执行器内存
 
-**目标**：把 [src/routes/chat.ts](../src/routes/chat.ts) 从“执行入口”降为“运行时桥接层”。
+**目标**：把 [src/routes/chat.ts](../../src/routes/chat.ts) 从“执行入口”降为“运行时桥接层”。
 
 **主要改动点**：
 
-- 改造 [src/routes/chat.ts](../src/routes/chat.ts)
-- 复用 [src/utils/sse.ts](../src/utils/sse.ts)
+- 改造 [src/routes/chat.ts](../../src/routes/chat.ts)
+- 复用 [src/utils/sse.ts](../../src/utils/sse.ts)
 - 在创建 run 后，把运行事件转换成现有 `text/tool_call/tool_result/tool_confirm/todo_update/done/error` SSE chunk
 
 **依赖**：B2、D1
@@ -336,9 +336,9 @@
 
 **主要改动点**：
 
-- 改造 [src/services/cron-agent.ts](../src/services/cron-agent.ts)
-- 改造 [src/platforms/telegram-bot.ts](../src/platforms/telegram-bot.ts)
-- 检查 [src/routes/webhook.ts](../src/routes/webhook.ts)
+- 改造 [src/services/cron-agent.ts](../../src/services/cron-agent.ts)
+- 改造 [src/platforms/telegram-bot.ts](../../src/platforms/telegram-bot.ts)
+- 检查 [src/routes/webhook.ts](../../src/routes/webhook.ts)
 - 为 run 增加 `entrypoint`、`triggerType`、`parentRunId`、`sessionId` 等元数据
 
 **依赖**：D2
@@ -361,10 +361,10 @@
 
 **主要改动点**：
 
-- 改造 [web/src/api.ts](../web/src/api.ts) 的 `streamChat()` 和 `confirmTool()`
-- 改造 [web/src/lib/stream-transport.ts](../web/src/lib/stream-transport.ts) 支持 cursor 或重连语义
-- 改造 [web/src/components/ChatArea.tsx](../web/src/components/ChatArea.tsx)
-- 改造 [web/src/stores/slices/chatSlice.ts](../web/src/stores/slices/chatSlice.ts)
+- 改造 [web/src/api.ts](../../web/src/api.ts) 的 `streamChat()` 和 `confirmTool()`
+- 改造 [web/src/lib/stream-transport.ts](../../web/src/lib/stream-transport.ts) 支持 cursor 或重连语义
+- 改造 [web/src/components/ChatArea.tsx](../../web/src/components/ChatArea.tsx)
+- 改造 [web/src/stores/slices/chatSlice.ts](../../web/src/stores/slices/chatSlice.ts)
 
 **依赖**：C2、D2
 
@@ -387,8 +387,8 @@
 
 - 新增 `src/runtime/__tests__/` 测试目录
 - 补 `store`、`events`、`checkpoint`、`pending-action` 单测
-- 补 [src/services/__tests__/agent-runner.test.ts](../src/services/__tests__/agent-runner.test.ts) 的 runtime 版本用例
-- 补 [src/routes/__tests__/chat.test.ts](../src/routes/__tests__/chat.test.ts) 的 SSE reconnect / confirm 路径
+- 补 [src/services/__tests__/agent-runner.test.ts](../../src/services/__tests__/agent-runner.test.ts) 的 runtime 版本用例
+- 补 [src/routes/__tests__/chat.test.ts](../../src/routes/__tests__/chat.test.ts) 的 SSE reconnect / confirm 路径
 
 **依赖**：A2、B3、C2、D2
 
@@ -408,7 +408,7 @@
 **主要改动点**：
 
 - 为 run 记录总耗时、工具数、fallback 次数、等待确认耗时
-- 接入现有日志体系，如 [src/utils/logger.ts](../src/utils/logger.ts)
+- 接入现有日志体系，如 [src/utils/logger.ts](../../src/utils/logger.ts)
 - 视需要补 run 列表简易调试接口或后台页占位
 
 **依赖**：D1、D2

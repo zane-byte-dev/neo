@@ -57,7 +57,7 @@ export interface ToolContext {
     /** Callback to push real-time todo updates to the client */
     todoCallback?: (todos: { id: number; title: string; status: string }[]) => void;
     skillRegistry?: import('../skills/skill-registry.js').SkillRegistry;
-    /** Per-user tools loaded from .tools/ directory */
+    /** Per-user tools loaded from {stateDir}/tools/ */
     userTools?: Map<string, Tool>;
     /** Agent operating mode: 'plan' restricts write tools; 'notebook' restricts to read-only + grounds answers in notebook sources. */
     mode?: 'normal' | 'plan' | 'notebook';

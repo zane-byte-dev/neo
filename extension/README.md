@@ -1,6 +1,6 @@
 # Neo Clipper
 
-简洁的划词保存工具 - 快速保存网页内容到 Neo vault。
+简洁的划词保存工具 - 快速保存网页内容到本地 Neo inbox。完整使用和排查说明见 [docs/user-guide/BROWSER_EXTENSION.md](../docs/user-guide/BROWSER_EXTENSION.md)。
 
 ## ✨ 功能
 
@@ -30,6 +30,8 @@ extension/
 ## 💾 保存路径
 
 文件保存到：`Downloads/neo/inbox/`
+
+当前版本没有 Neo 服务地址配置 UI，也不会直接写入后端 API。建议把 inbox 中的 Markdown 手动移入 `{workDir}/notebooks/<notebook>/`，或通过 Web UI 导入。
 
 ## 📋 使用方式
 

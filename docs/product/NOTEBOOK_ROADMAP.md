@@ -8,7 +8,7 @@
 
 ### 后端（Koa + AI SDK）
 
-- **模型参数全链路透传**：`notebook-ai.ts` 的 7 个生成函数（`generateSourceGuide`、`generateNotebookOverview`、`generateMindMap`、`generateReport`、`generateAudioScript`、`generateAndSaveSourceGuide`、`runNoteQuickAction`）以及 `notebook-chat.ts` 的 `streamNotebookChat` 统一接受可选 `model?: string`，默认 `gemma`。
+- **模型参数全链路透传**：`notebook-ai.ts` 的 7 个生成函数（`generateSourceGuide`、`generateNotebookOverview`、`generateMindMap`、`generateReport`、`generateAudioScript`、`generateAndSaveSourceGuide`、`runNoteQuickAction`）以及 Notebook 对话主链路（现统一经 `/api/chat`）都接受可选 `model?: string`，默认 `gemma`。
 - **路由层** `src/routes/notebook.ts` 新增 `extractModel(body)` 辅助，所有 POST 接口（`/source-guide`、`/overview`、`/artifact`、`/chat`、`/note/quick-action`）都会把请求体里的 `model` 传给服务层。
 - **软删除 + 重命名**：`FrontmatterMeta` 新增 `archived?: boolean`；`nbListSources` 跳过归档项；新增 `nbArchiveSource` 和 `nbRenameSource`；路由 `/api/notebook/source/archive` 与 `/api/notebook/source/rename` 已就位。
 
@@ -160,7 +160,7 @@
 
 - Google NotebookLM 产品文档：<https://notebooklm.google.com>
 - 现有代码锚点：
-  - 服务层：[src/services/notebook-service.ts](../src/services/notebook-service.ts)、[src/services/notebook-ai.ts](../src/services/notebook-ai.ts)、[src/services/notebook-chat.ts](../src/services/notebook-chat.ts)
-  - 路由：[src/routes/notebook.ts](../src/routes/notebook.ts)
-  - 前端入口：[web/src/components/notebook/NotebookWorkspace.tsx](../web/src/components/notebook/NotebookWorkspace.tsx)
-  - 模型路由：[src/llm/model-router.ts](../src/llm/model-router.ts)
+  - 服务 / agent 层：[src/services/notebook-service.ts](../../src/services/notebook-service.ts)、[src/services/notebook-ai.ts](../../src/services/notebook-ai.ts)、[src/services/agent-runner.ts](../../src/services/agent-runner.ts)
+  - 路由：[src/routes/notebook.ts](../../src/routes/notebook.ts)、[src/routes/chat.ts](../../src/routes/chat.ts)
+  - 前端入口：[web/src/components/notebook/NotebookWorkspace.tsx](../../web/src/components/notebook/NotebookWorkspace.tsx)
+  - 模型路由：[src/llm/model-router.ts](../../src/llm/model-router.ts)

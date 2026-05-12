@@ -11,7 +11,7 @@ pre-1.0 software; pin a commit SHA if you depend on it in production.
 
 Instead, report vulnerabilities privately through one of the following:
 
-- GitHub: open a [private security advisory](../../security/advisories/new)
+- GitHub: open a [private security advisory](https://github.com/zane-byte-dev/neo/security/advisories/new)
 - Email: contact the maintainer (see the GitHub profile of [@zane-byte-dev](https://github.com/zane-byte-dev))
 
 Please include:

@@ -1,0 +1,11 @@
+name: my_first_tool
+description: Return a short greeting for the given name.
+parameters:
+  type: object
+  properties:
+    name:
+      type: string
+      description: Name to greet.
+  required:
+    - name
+timeout: 60000

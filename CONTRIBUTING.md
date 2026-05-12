@@ -15,8 +15,10 @@ npm install
 npm run web:install
 
 # 3. Configure local settings
+# You can start directly. First launch creates ~/.neo/config.json automatically.
+# For repo-local or multi-user development, copy the template instead:
 cp src/config.local.example.ts src/config.local.ts
-# Edit src/config.local.ts:
+# Then edit src/config.local.ts:
 #   - USERS[].workDir / stateDir: absolute paths you control
 #   - USERS[].webToken: any long random string for web sign-in
 #   - SESSION_SECRET: long random string
@@ -67,10 +69,27 @@ key entry points are:
 
 - Tests live next to source files in `__tests__/` directories.
 - Run a single file: `npx vitest run path/to/file.test.ts`.
+- Run a focused group: `npx vitest run src/routes/__tests__/chat.test.ts src/services/__tests__/agent-runner.test.ts`.
 - Tests that touch `chat-service` need `process.env.USERS` set with a valid
   `workDir`. See `src/__tests__/test-helpers.ts`.
+- Route tests can use `createTestApp()` and `signedCookie()` from
+  `src/__tests__/test-helpers.ts` instead of booting the full server.
+- Mock LLM calls with `vi.mock('../llm/client.js', ...)` or the appropriate
+  relative path for the test file. See `src/__tests__/e2e-chat.test.ts` and
+  `src/services/__tests__/agent-runner.test.ts` for minimal examples.
 - New features should come with tests. Bug fixes should come with a regression
   test that fails before the fix.
+
+## Debugging
+
+- Set `LOG_LEVEL=debug` before starting Neo to include detailed route, tool,
+  and runtime logs in `logs/YYYY-MM-DD.jsonl`.
+- `npm run dev:bot` runs `tsc` once and then starts `dist/main.js`; restart it
+  after backend source changes.
+- Use `npm run pm2:logs` for production logs when Neo is managed by PM2.
+- Tool and Skill loading problems are usually visible during startup or after
+  calling `/api/reload`; check the latest JSONL log file and the backend
+  console output first.
 
 ## Commit Messages
 

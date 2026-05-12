@@ -5,7 +5,7 @@
  *
  * Replaces the in-memory `pending-confirm` registry's persistence
  * concern. A run may have at most one outstanding pending action at a
- * time (per `docs/AGENT_RUNTIME_PLAN.md` §3.1) — when a new one is
+ * time (per `docs/developer-guide/AGENT_RUNTIME_PLAN.md` §3.1) — when a new one is
  * created, it overwrites the previous file.
  *
  * Resolution writes the same file with `status` flipped to one of

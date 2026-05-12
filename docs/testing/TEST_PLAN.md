@@ -17,12 +17,13 @@
 - 前端已使用 Vite，统一工具链降低学习成本
 - 内置 `vi.mock()` / `vi.spyOn()` 即可满足 mock 需求
 
-## 当前状态校正（2026-04）
+## 当前状态校正（2026-05 更新）
 
-- 根目录 [package.json](../package.json) 已具备 `test`、`test:watch` 脚本，`vitest.config.ts` 已落地
-- 仓库内已有较完整的测试基线，覆盖 `utils`、`services`、`routes`、`llm`、`memory`、`sandbox`、`tools` 等模块
-- 当前主要缺口不是“从零引入测试”，而是补齐覆盖率脚本、CI 门禁，以及校正文档中已过时的测试前提
-- 目前尚未发现 `.github/workflows`、ESLint、Prettier 配置，测试与代码质量门禁仍需补齐
+- 根目录 [package.json](../../package.json) 已具备 `test`、`test:watch`、`test:coverage` 脚本，`vitest.config.ts` 已含 coverage 配置
+- 仓库内已有 **90+ 个测试文件**，覆盖 `utils`、`services`、`routes`、`llm`、`memory`、`sandbox`、`tools`、`runtime`、`skills`、`indexing` 等全部核心模块
+- `.github/workflows/ci.yml` 已落地，`build + test + coverage` 门禁已接入 CI
+- 当前覆盖率基线约 lines 72+ / statements 58+ / functions 74+ / branches 74+；branches 主要瓶颈在 llm/client.ts 与 routes/notebook-*.ts 的非主流分支
+- 各阶段测试文件已全部创建，本文档以下各节可作为用例清单与回归参考
 
 ---
 
@@ -40,7 +41,7 @@
 
 ---
 
-## 第一阶段：纯函数 & 工具类单元测试（P0）
+## 第一阶段：纯函数 & 工具类单元测试（P0）✅ 已完成
 
 这些模块无外部依赖、无副作用，测试 ROI 最高，应最先完成。
 
@@ -192,7 +193,7 @@
 
 ---
 
-## 第二阶段：文件系统服务层测试（P0）
+## 第二阶段：文件系统服务层测试（P0）✅ 已完成
 
 这些模块操作文件系统，需要在临时目录中运行，但逻辑独立、不依赖网络。
 
@@ -283,10 +284,10 @@
 ```
 测试文件: src/tools/user-tools/__tests__/loader.test.ts
 
-前置: 在 tmp 目录构造 .tools/{name}/tool.yaml + run.sh 结构
+前置: 在 tmp 目录构造 tools/{name}/tool.yaml + run.sh 结构
 
 用例:
-- loadUserTools: .tools/ 不存在时返回空 Map
+- loadUserTools: tools/ 不存在时返回空 Map
 - loadUserTools: 正确解析 tool.yaml 为 Tool 对象
 - loadUserTools: 跳过无 tool.yaml 的目录
 - loadUserTools: 跳过无 run script 的目录
@@ -316,7 +317,7 @@
 
 ---
 
-## 第三阶段：HTTP 路由集成测试（P1）
+## 第三阶段：HTTP 路由集成测试（P1）✅ 已完成
 
 使用 supertest 直接测试 Koa 路由，mock LLM 调用和文件系统。
 
@@ -391,7 +392,7 @@
 
 ---
 
-## 第四阶段：服务层集成测试（P1）
+## 第四阶段：服务层集成测试（P1）✅ 已完成
 
 ### 4.1 `src/services/agent-runner.ts`
 
@@ -448,7 +449,7 @@
 
 ---
 
-## 第五阶段：端到端冒烟测试（P2）
+## 第五阶段：端到端冒烟测试（P2）✅ 已完成
 
 ### 5.1 完整对话链路
 
@@ -481,73 +482,29 @@
 
 ## 实施步骤
 
-### Step 1: 在现有基线上补齐测试基础设施
+### Step 1: 基础设施 ✅ 已完成
 
 当前仓库已具备：
 
-- 根目录 [package.json](../package.json) 中的 `test`、`test:watch`
-- [vitest.config.ts](../vitest.config.ts) 基础配置
+- 根目录 [package.json](../../package.json) 中的 `test`、`test:watch`、**`test:coverage`**
+- [vitest.config.ts](../../vitest.config.ts) 含 coverage 配置（provider: v8，含阈值检查）
+- `.github/workflows/ci.yml` CI 门禁（build + test）已落地
 - `supertest` 与 `@types/supertest` 依赖
 
-建议下一步补齐：
+### Step 2: 按优先级补齐剩余薄弱面 ✅ 已完成
 
-- `test:coverage` 脚本
-- `vitest.config.ts` 中的 coverage 配置
-- CI 中的 `build + test` 门禁
+| 阶段 | 模块数 | 预估用例数 | 优先级 | 依赖 | 状态 |
+|------|--------|-----------|--------|------|------|
+| 第一阶段：纯函数单元测试 | 8 | ~80 | **P0** | 无 | ✅ 已落地 |
+| 第二阶段：文件系统服务测试 | 5 | ~60 | **P0** | tmp 目录 | ✅ 已落地 |
+| 第三阶段：HTTP 路由集成测试 | 5 | ~30 | P1 | supertest + mock | ✅ 已落地 |
+| 第四阶段：服务层集成测试 | 3 | ~25 | P1 | mock LLM | ✅ 已落地 |
+| 第五阶段：端到端冒烟测试 | 2 | ~8 | P2 | 全栈 mock | ✅ 已落地 |
 
-```bash
-# 若尚未安装覆盖率 provider
-npm install -D @vitest/coverage-v8
-```
-
-在 `package.json` 补充脚本：
-
-```json
-{
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
-  }
-}
-```
-
-在现有 `vitest.config.ts` 基础上补充 coverage：
-
-```typescript
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-    env: {
-      SESSION_SECRET: 'test-secret-for-vitest',
-    },
-    coverage: {
-      provider: 'v8',
-      include: ['src/**/*.ts'],
-      exclude: ['src/**/__tests__/**', 'src/types/**'],
-    },
-  },
-});
-```
-
-### Step 2: 按优先级补齐剩余薄弱面
-
-| 阶段 | 模块数 | 预估用例数 | 优先级 | 依赖 |
-|------|--------|-----------|--------|------|
-| 第一阶段：纯函数单元测试 | 8 | ~80 | **P0** | 无 |
-| 第二阶段：文件系统服务测试 | 5 | ~60 | **P0** | tmp 目录 |
-| 第三阶段：HTTP 路由集成测试 | 5 | ~30 | P1 | supertest + mock |
-| 第四阶段：服务层集成测试 | 3 | ~25 | P1 | mock LLM |
-| 第五阶段：端到端冒烟测试 | 2 | ~8 | P2 | 全栈 mock |
-
-### Step 3: CI 集成
+### Step 3: CI 集成 ✅ 已完成
 
 ```yaml
-# .github/workflows/test.yml
+# .github/workflows/ci.yml 已落地
 name: Test
 on: [push, pull_request]
 jobs:

@@ -19,8 +19,8 @@
   live on disk in your own workspace directory. No vendor lock-in.
 - **Multi-LLM routing** — automatically picks the best model for the task
   (tool-heavy → DeepSeek, reasoning → Gemini Pro, offline → Ollama).
-- **Tools and skills are just files** — drop a `tool.yaml` + `run.py` into your
-  workspace and Neo discovers it on the next reload. Skills are Markdown.
+- **Tools and skills are just files** — drop tools into `{stateDir}/tools/`
+  and Markdown skills into `{stateDir}/skills/`; Neo discovers them on reload.
 - **Runs anywhere** — a Mac mini under your desk, a $5 VPS, or your laptop.
   One Node process serves both the API and the React frontend.
 
@@ -31,7 +31,7 @@
 | **AI chat** | Multi-turn streaming chat with function calling and sub-agent spawning |
 | **Notebook** | Article / knowledge-item store with full-text search (SQLite FTS5) |
 | **Skills** | Markdown-defined reusable AI skills with parameter interpolation |
-| **Tools** | Built-in tools + user-defined tools auto-loaded from `<workspace>/tools/` |
+| **Tools** | Built-in tools + user-defined tools auto-loaded from `{stateDir}/tools/` |
 | **Telegram bot** | Telegraf long-polling, Markdown rendering, image / video sending |
 | **Browser extension** | Chrome extension for clipping selections, X.com threads, Gemini chats, Lark wiki pages |
 | **Web UI** | React 19 + Vite + Tailwind CSS, Chat / Notebook panels |
@@ -51,8 +51,10 @@ git clone https://github.com/zane-byte-dev/neo.git
 cd neo
 npm install && npm run web:install
 
-# Copy the local config template; fill in workDir / stateDir / SESSION_SECRET.
-cp src/config.local.example.ts src/config.local.ts
+# Start directly. On first launch, Neo creates ~/.neo/config.json with a
+# default single-user setup, random webToken / SESSION_SECRET, and workspace
+# directories under ~/.neo/{workspace,state}/default. The login webToken is
+# printed in the backend console.
 
 npm run dev:bot          # backend + Telegram bot on :3000
 npm run web:dev          # frontend dev server on :5173 (separate terminal)
@@ -61,7 +63,7 @@ npm run web:dev          # frontend dev server on :5173 (separate terminal)
 Open http://localhost:5173, then go to the **Models** page and add at least
 one provider API key (Gemini / DeepSeek / OpenAI / Anthropic). Keys are
 stored encrypted under `{stateDir}/secrets.json.enc` — they never touch the
-repository.
+repository. See [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md) for common setup issues.
 
 ### Production (single Node process behind Caddy)
 
@@ -77,8 +79,13 @@ same port (default `3000`). Put it behind Caddy / Nginx / Cloudflare for HTTPS.
 
 ## Configuration
 
-All personal configuration lives in `src/config.local.ts` (gitignored — copy
-from `src/config.local.example.ts`):
+By default, first launch creates `~/.neo/config.json`. For multi-user setups,
+custom paths, or repo-local development, you can still create
+`src/config.local.ts` (gitignored). It takes precedence over the home config:
+
+```bash
+cp src/config.local.example.ts src/config.local.ts
+```
 
 ```ts
 import type { LocalConfig } from './config.js';
@@ -90,7 +97,7 @@ const config: LocalConfig = {
             name: 'Alice',
             tenants: [],                       // e.g. ['telegram:123456789']
             webToken: 'long-random-string',    // for web sign-in
-            workDir:  '/abs/path/to/workspace',  // your stuff (notebooks, skills, AGENTS.md…)
+            workDir:  '/abs/path/to/workspace',  // your stuff (notebooks, AGENTS.md…)
             stateDir: '/abs/path/to/state',      // managed by Neo (runs, secrets, usage…)
         },
     ],
@@ -132,10 +139,32 @@ Each user gets two directories:
 ├── tools/              # user-defined tools (tool.yaml + run.py)
 ├── routing.json        # routing overrides saved from the Models page
 ├── tool-approvals.json # tool-confirmation session/always rules
+├── usage.jsonl         # daily token / cost accounting
 ```
 
 > 💡 A minimal runnable template lives at [examples/workspace/](examples/workspace)
 > (AGENTS.md / SOUL.md / USER.md / TOOLS.md). Copy it to your `workDir` to get started.
+
+## Tools And Skills
+
+Neo injects built-in tools automatically and loads user-defined tools from
+`{stateDir}/tools/{name}/tool.yaml` plus a colocated `run.py`, `run.ts`,
+`run.js`, or `run.sh`. See [docs/user-guide/TOOLS.md](docs/user-guide/TOOLS.md) and
+[examples/tools/](examples/tools) for the full protocol.
+
+Skills are Markdown files under `{stateDir}/skills/`, either as
+`name.skill.md` or `name/skill.md`. See [docs/user-guide/SKILLS.md](docs/user-guide/SKILLS.md) and
+[examples/skills/](examples/skills) for frontmatter, parameters, interpolation,
+and executable blocks.
+
+More user guides:
+
+- [docs/user-guide/SANDBOX.md](docs/user-guide/SANDBOX.md) — sandbox and `code_exec`
+- [docs/user-guide/MCP.md](docs/user-guide/MCP.md) — MCP server configuration
+- [docs/user-guide/NOTEBOOK.md](docs/user-guide/NOTEBOOK.md) — Notebook sources, notes, Studio, citations
+- [docs/user-guide/AUTOMATION.md](docs/user-guide/AUTOMATION.md) — Webhook and Cron
+- [docs/user-guide/AGENT_RUNTIME.md](docs/user-guide/AGENT_RUNTIME.md) — runs, event logs, resume, cancellation
+- [docs/user-guide/BROWSER_EXTENSION.md](docs/user-guide/BROWSER_EXTENSION.md) — Chrome extension
 
 ## Project Structure
 
@@ -166,7 +195,7 @@ Gemini chat exports, and Lark wiki pages directly into your Neo inbox.
 
 ## Roadmap
 
-See [docs/ROADMAP.md](docs/ROADMAP.md). Short version: stabilizing the agent
+See [docs/product/ROADMAP.md](docs/product/ROADMAP.md). Short version: stabilizing the agent
 runtime (resumable runs, tool-confirmation scopes), expanding the unified
 knowledge index, and improving the Notebook editor experience.
 

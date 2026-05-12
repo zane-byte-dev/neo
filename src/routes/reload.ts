@@ -4,7 +4,7 @@
  * POST /api/reload         — invalidate cache for the authenticated user
  * POST /api/reload/:userId — invalidate cache for a specific user (admin)
  *
- * After editing AGENTS.md, SOUL.md, USER.md, skills/, or .tools/,
+ * After editing AGENTS.md, SOUL.md, USER.md, skills/, or tools/,
  * call this endpoint to pick up changes without restarting the server.
  */
 import type Router from '@koa/router';

@@ -36,3 +36,6 @@ For larger changes, please open an issue first to discuss the approach.
 - [ ] I have read the [Contributing Guide](../CONTRIBUTING.md).
 - [ ] I am not introducing breaking changes, OR I have called them out above.
 - [ ] I have not committed any secrets, API keys, or personal data.
+- [ ] I updated README if this changes setup, user-facing behavior, or public APIs.
+- [ ] I updated the relevant docs under `docs/` if this adds or changes a feature.
+- [ ] I updated `CHANGELOG.md` if this is user-visible.

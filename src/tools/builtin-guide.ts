@@ -37,7 +37,7 @@ export function buildBuiltinToolsGuide(toolRegistry: Map<string, Tool>): string 
         get_datetime:         '获取当前日期时间',
         get_weather:          '获取天气',
         generate_video:       '生成视频',
-        notebook:             '访问笔记本知识库（浏览/搜索/读写）',
+        notebook_search:      '在 Notebook 模式下检索当前来源并返回可引用段落',
         todo:                 '管理任务清单（多步骤任务）',
         update_now:           '更新当前关注点/近况记忆',
         update_user_profile:  '更新用户档案 USER.md',
@@ -66,7 +66,7 @@ export function buildBuiltinToolsGuide(toolRegistry: Map<string, Tool>): string 
         // utility
         'get_datetime', 'get_weather', 'generate_video',
         // memory & profile
-        'notebook', 'update_now', 'update_user_profile', 'save_memory', 'get_chat_history',
+        'notebook_search', 'update_now', 'update_user_profile', 'save_memory', 'get_chat_history',
         // agent control
         'todo', 'ask_user', 'enter_plan_mode', 'exit_plan_mode',
         'subagent', 'run_skill', 'list_skills',

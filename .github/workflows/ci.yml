@@ -12,6 +12,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  docs:
+    name: Docs Links
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check Markdown links
+        run: npm run docs:check
+
   backend:
     name: Backend (Node ${{ matrix.node }})
     runs-on: ubuntu-latest

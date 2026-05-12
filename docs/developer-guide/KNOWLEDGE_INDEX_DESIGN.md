@@ -18,10 +18,10 @@
 
 当前仓库已经有三套“知识读取”路径，但它们各自为政：
 
-- [src/services/notebook-chat.ts](../src/services/notebook-chat.ts) 通过关键字分段检索 Notebook 来源
-- [src/memory/retriever.ts](../src/memory/retriever.ts) 对 memory item 做内存 BM25-lite 检索
-- [src/services/chat-service.ts](../src/services/chat-service.ts) 负责会话消息持久化，但没有统一索引入口
-- [src/services/notebook-service.ts](../src/services/notebook-service.ts) 负责来源、笔记、artifact、chat history 的文件层存储
+- [src/routes/chat.ts](../../src/routes/chat.ts) + [src/tools/internal/notebook-search.ts](../../src/tools/internal/notebook-search.ts) 在 Notebook 模式下承接对话入口、来源检索与引用落地
+- [src/memory/retriever.ts](../../src/memory/retriever.ts) 对 memory item 做内存 BM25-lite 检索
+- [src/services/chat-service.ts](../../src/services/chat-service.ts) 负责会话消息持久化，但没有统一索引入口
+- [src/services/notebook-service.ts](../../src/services/notebook-service.ts) 负责来源、笔记、artifact、chat history 的文件层存储
 
 这导致几个直接问题：
 
@@ -177,16 +177,16 @@
 
 建议由现有服务在写入事实源后发出索引任务：
 
-- [src/services/notebook-service.ts](../src/services/notebook-service.ts)
+- [src/services/notebook-service.ts](../../src/services/notebook-service.ts)
   - `nbImportSource`
   - `nbUpdate`
   - `nbArchiveSource`
   - `nbSaveNote`
   - `nbSaveArtifact`
-- [src/memory/manager.ts](../src/memory/manager.ts)
+- [src/memory/manager.ts](../../src/memory/manager.ts)
   - `rememberTurn`
   - `rememberFact`
-- [src/services/chat-service.ts](../src/services/chat-service.ts)
+- [src/services/chat-service.ts](../../src/services/chat-service.ts)
   - 不建议直接为每条消息建 document
   - 建议由后台摘要任务生成 `chat_summary` 再入索引
 
@@ -270,7 +270,7 @@ searchKnowledge({
 
 ### 8.1 Notebook chat
 
-[src/services/notebook-chat.ts](../src/services/notebook-chat.ts) 当前是“读取来源全文 -> 本地分段 -> 关键字计数排序”。
+[src/routes/chat.ts](../../src/routes/chat.ts) 当前统一承接 Notebook 对话入口，[src/tools/internal/notebook-search.ts](../../src/tools/internal/notebook-search.ts) 负责在 Notebook 模式下从索引检索来源段落并注册引用。
 
 建议改为：
 
@@ -278,11 +278,11 @@ searchKnowledge({
 2. 直接返回 `char_start / char_end`
 3. LLM 回复后的 citation 绑定到 chunk 级别，而不是只到 source 级别
 
-这样 [web/src/components/notebook/SourceDetailView.tsx](../web/src/components/notebook/SourceDetailView.tsx) 后续就能更稳定地滚动到命中位置。
+这样 [web/src/components/notebook/SourceDetailView.tsx](../../web/src/components/notebook/SourceDetailView.tsx) 后续就能更稳定地滚动到命中位置。
 
 ### 8.2 Memory recall
 
-[src/memory/retriever.ts](../src/memory/retriever.ts) 当前是纯内存 build-on-read 的 BM25-lite。
+[src/memory/retriever.ts](../../src/memory/retriever.ts) 当前是纯内存 build-on-read 的 BM25-lite。
 
 建议过渡方式：
 
@@ -298,7 +298,7 @@ searchKnowledge({
 
 1. 对长会话定期生成 `chat_summary`
 2. 只把摘要、决策、用户偏好、关键产物索引化
-3. 原始消息仍保留在 [src/services/chat-service.ts](../src/services/chat-service.ts) 的 JSONL 中
+3. 原始消息仍保留在 [src/services/chat-service.ts](../../src/services/chat-service.ts) 的 JSONL 中
 
 ---
 

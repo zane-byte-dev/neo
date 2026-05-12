@@ -65,7 +65,7 @@ export function buildAiTools(
         });
     }
 
-    // Per-user tools from .tools/ directory
+    // Per-user tools loaded from {stateDir}/tools/
     const userTools = context?.userTools;
     if (userTools) {
         for (const [name, t] of userTools) {

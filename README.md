@@ -10,9 +10,11 @@
 
 **English** · [Read in English →](README.en.md)
 
+![Neo Web Chat](docs/assets/neo-web-chat.png)
+
 ---
 
-## 5 分钟试一下
+## 快速开始
 
 ```bash
 git clone https://github.com/zane-byte-dev/neo.git
@@ -26,7 +28,7 @@ npm run dev:bot              # 后端 + Telegram bot，监听 :3000
 npm run web:dev              # 另开终端，前端开发服务器 :5173
 ```
 
-打开 http://localhost:5173，首次进入 **Models** 页填入至少一个 LLM Provider 的 API Key（Gemini / DeepSeek / OpenAI / Anthropic 任一），即可开始对话。生产部署见下文「生产部署」一节。
+打开 http://localhost:5173，首次进入 **Models** 页填入至少一个 LLM Provider 的 API Key（Gemini / DeepSeek / OpenAI / Anthropic 任一），即可开始对话。生产部署见下文「生产部署」一节，常见问题见 [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)。
 
 > 想贡献代码？请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 > 发现安全问题？请走 [SECURITY.md](SECURITY.md) 中的私密披露流程，不要开公开 issue。
@@ -40,7 +42,7 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 | **AI 对话** | 基于 Gemini 的多轮对话，支持流式输出、函数调用、子 agent 派生 |
 | **Notebook** | 文章/知识条目管理，含全文搜索 |
 | **Skills** | Markdown 定义的可复用 AI 技能，支持参数插值与代码块执行 |
-| **Tools** | 内置工具 + 用户自定义工具（`.tools/` 目录自动发现） |
+| **Tools** | 内置工具 + 用户自定义工具（`{stateDir}/tools/` 自动加载） |
 | **Telegram Bot** | Telegraf 长轮询接入，支持 Markdown 渲染、图片发送 |
 | **浏览器扩展** | Chrome 划词保存，支持 X.com 推文、Gemini 对话、飞书 Wiki |
 | **Web UI** | React 前端，提供 Chat / Notebook 面板 |
@@ -85,8 +87,6 @@ neo/
 ```
 
 ---
-
-## 快速开始
 
 ### 前置条件
 
@@ -260,26 +260,36 @@ brew services start caddy
 | `routes/assets.ts` | `/api/assets` | 会话生成的静态资源（图片、视频） |
 | `routes/reload.ts` | `/api/reload` | 热重载用户缓存（编辑 AGENTS.md 等后调用） |
 | `routes/webhook.ts` | `/api/webhook/:userId` | 外部系统触发 Agent（需 webhookSecret） |
+| `routes/cron.ts` | `/api/crons` | Cron 定时 Agent 任务管理 |
+| `routes/mcp-config.ts` | `/api/mcp` | MCP Server 配置管理 |
+| `routes/runs.ts` | `/api/runs` | 可恢复 Agent run 查询、事件追补与取消 |
 
 ---
 
 ## Tools（工具系统）
 
-### 内置工具（`src/tools/internal/`）
+Neo 会自动向 Agent 注入内置工具，也会从 `{stateDir}/tools/` 加载用户自定义工具。完整参数、返回格式与开发示例见 [docs/user-guide/TOOLS.md](docs/user-guide/TOOLS.md)，沙箱执行见 [docs/user-guide/SANDBOX.md](docs/user-guide/SANDBOX.md)，MCP 扩展见 [docs/user-guide/MCP.md](docs/user-guide/MCP.md)。
+
+### 内置工具速查（`src/tools/internal/`）
 
 | 工具 | 说明 |
 |------|------|
 | `bash` / `read_file` / `write_file` / `list_dir` | 基础文件系统 + Shell 操作（`src/tools/executor.ts`） |
+| `code_exec` | 沙箱执行代码，适合临时脚本、数据处理与安全隔离运行 |
 | `edit_file` | 精确局部文件编辑 |
 | `glob` | 按模式查找文件 |
 | `grep` | 正则搜索文件内容 |
 | `fetch_url` | 抓取网页内容 |
 | `search_web` | 网络搜索 |
+| `browser_command` | 操控真实浏览器（登录、点击、填表、截图、JS 执行） |
 | `research` | 深度网络调研（自动搜索+阅读+综合报告） |
 | `get_datetime` | 获取当前日期时间 |
 | `get_weather` | 查询天气 |
+| `notebook_search` | 在 Notebook 模式下检索当前来源并返回可引用段落 |
 | `save_memory` | 保存长期记忆 |
+| `update_now` | 更新当前关注点 / 近况记忆 |
 | `todo` | 会话内任务跟踪 |
+| `get_chat_history` | 查询历史对话记录 |
 | `run_skill` / `list_skills` | 执行/列出已注册 Skill |
 | `subagent` | 派生子 agent 执行独立子任务 |
 | `ask_user` | 向用户提问确认 |
@@ -304,11 +314,12 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 | `claude-sonnet` / `claude-opus` / `claude-haiku` | claude-*-4-5 | Anthropic API | Claude 4.5 系列 |
 | `gemma` | ollama/gemma4:e4b | 本地 Ollama | 离线 / 隐私场景 |
 
-**智能路由（auto 模式）**：当用户选择 `auto` 时，`model-router.ts` 会根据任务特性自动选择最优模型：
-- 需要工具调用 → DeepSeek（工具调用可靠且成本低）
-- 纯对话 / 分析 → Gemini ACP（质量最高，OAuth 配额）
-- ACP 不可用 → Gemini flash
-- 无云服务 Key → 本地 Gemma
+**智能路由（auto 模式）**：当用户选择 `auto` 时，`model-router.ts` 会先用 `scorer.ts` 对任务复杂度打分，再映射到 `simple` / `standard` / `complex` 三档：
+- `simple` 默认链：`gemma` → `flash` → `gemini-acp`
+- `standard` 默认链：`gemini-acp` → `flash` → `deepseek`
+- `complex` 默认链：`deepseek-reasoner` → `pro` → `deepseek`
+- 工具任务至少提升到 `standard`；超大上下文任务至少提升到 `complex`
+- fallback 链长度受 `ROUTING_CONFIG.fallback.maxRetries` 控制，默认只追加 1 个重试目标
 
 路由默认值可在 Web UI **Models 页 → 路由配置** 中覆盖保存。
 
@@ -316,7 +327,9 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 
 ## Skills（技能系统）
 
-技能以 Markdown 文件形式定义，存放于 `<workDir>/skills/` 目录。支持 YAML frontmatter 声明参数，正文作为 AI 系统指令，可通过 `{{param_name}}` 语法注入参数。
+技能以 Markdown 文件形式定义，存放于 `{stateDir}/skills/` 目录。支持 YAML frontmatter 声明参数，正文作为 AI 系统指令，可通过 `{{param_name}}` 语法注入参数；也支持标记为 `execute` 的 JS / Python / Bash 代码块。完整格式见 [docs/user-guide/SKILLS.md](docs/user-guide/SKILLS.md)，最小示例见 [examples/skills/](examples/skills)。
+
+Notebook 知识库、Webhook/Cron 自动化和可恢复 Agent 运行时分别见 [docs/user-guide/NOTEBOOK.md](docs/user-guide/NOTEBOOK.md)、[docs/user-guide/AUTOMATION.md](docs/user-guide/AUTOMATION.md)、[docs/user-guide/AGENT_RUNTIME.md](docs/user-guide/AGENT_RUNTIME.md)。
 
 内置 Skills：`brief`、`summarize_text`、`generate_daily_log`、`generate_weekly_report`、`generate_wechat_article`、`js_snippet_runner`、`xifeng`（决策审计）
 
@@ -358,7 +371,7 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 USERS: [{ id: 'alice', name: 'Alice', tenants: ['telegram:123456789'], /* ... */ }]
 ```
 
-Bot Token 在 Web UI **Models 页 → Credentials** 填入后，Telegram 运行时会自动重启。
+Bot Token 在 Web UI **Models 页 → Credentials** 填入后，Telegram 运行时会自动重启。不知道自己的 Telegram userId 时，可以用 Telegram 的 user-info bot 查询，或临时开启 `LOG_LEVEL=debug` 查看收到的 update 日志。
 
 ---
 
@@ -369,7 +382,7 @@ Bot Token 在 Web UI **Models 页 → Credentials** 填入后，Telegram 运行�
               ↓
          agent-runner.ts（共享一轮对话逻辑）
               ↓
-      calcUser → session → history → LLM streaming → save
+    calcUser → session → run(event log) → history → LLM streaming → save
               ↓
          LLM Client (AI SDK + Gemini)
               ↓
@@ -378,6 +391,7 @@ Bot Token 在 Web UI **Models 页 → Credentials** 填入后，Telegram 运行�
 ```
 
 - `src/services/agent-runner.ts`：封装完整的「一次对话轮次」生命周期，HTTP 和 Telegram 共用
+- `src/runtime/`：保存 run 元数据、事件流、checkpoint、pending action 和 artifacts，支持断线追补与工具确认后恢复
 - `src/platforms/telegram-bot.ts`：Telegraf 长轮询，fire-and-forget 模式避免 90 秒超时，Markdown→HTML 渲染
 - `src/routes/chat.ts`：SSE 流式推送，通过 `onChunk` / `onImage` / `onTodo` 回调接收输出
 
@@ -392,7 +406,15 @@ Bot Token 在 Web UI **Models 页 → Credentials** 填入后，Telegram 运行�
 - 保存 Gemini 对话（保留代码格式）
 - 保存飞书 Wiki 文档
 
-**安装方式**：进入 `chrome://extensions/` → 开启开发者模式 → 加载已解压扩展程序，选择 `extension/` 目录。
+**安装方式**：进入 `chrome://extensions/` → 开启开发者模式 → 加载已解压扩展程序，选择 `extension/` 目录。当前扩展保存到 `Downloads/neo/inbox/`，详细说明见 [docs/user-guide/BROWSER_EXTENSION.md](docs/user-guide/BROWSER_EXTENSION.md)。
+
+---
+
+## 更多文档
+
+- [docs/README.md](docs/README.md)：文档索引
+- [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)：常见问题
+- [CHANGELOG.md](CHANGELOG.md)：版本变更记录
 
 ---
 

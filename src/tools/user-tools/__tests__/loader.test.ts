@@ -39,7 +39,7 @@ function makeToolDir(name: string, yamlContent?: string, scriptName?: string) {
 }
 
 describe('loadUserTools', () => {
-    it('returns empty Map when .tools/ does not exist', async () => {
+    it('returns empty Map when tools/ does not exist', async () => {
         const result = await loadUserTools(tmpDir);
         expect(result.size).toBe(0);
     });

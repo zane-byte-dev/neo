@@ -64,7 +64,7 @@ npm run web:dev    # 前端 :5173
 
 - [README (中文)](https://github.com/zane-byte-dev/neo/blob/main/README.md)
 - [README (English)](https://github.com/zane-byte-dev/neo/blob/main/README.en.md)
-- [Roadmap](https://github.com/zane-byte-dev/neo/blob/main/docs/ROADMAP.md)
+- [Roadmap](ROADMAP.md)
 - [Contributing](https://github.com/zane-byte-dev/neo/blob/main/CONTRIBUTING.md)
 - [Security Policy](https://github.com/zane-byte-dev/neo/blob/main/SECURITY.md)
 

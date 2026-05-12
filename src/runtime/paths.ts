@@ -2,7 +2,7 @@
  * src/runtime/paths.ts — Centralised path helpers for runtime artefacts.
  *
  * The runtime persists each run under {stateDir}/runs/{runId}/ as
- * defined by docs/AGENT_RUNTIME_PLAN.md §3.1. This module is the single
+ * defined by docs/developer-guide/AGENT_RUNTIME_PLAN.md §3.1. This module is the single
  * source of truth for that layout so other runtime modules (store,
  * events, checkpoint, pending) do not hand-roll join() calls.
  */

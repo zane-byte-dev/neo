@@ -4,6 +4,7 @@
 **体验日期：** 2026-05-10  
 **体验范围：** README.md / README.en.md / docs/ 全部文件 / CONTRIBUTING.md / SECURITY.md / examples/workspace / 源码结构  
 **版本基线：** v0.1.0（本地 main 分支）
+**推进状态：** 2026-05-12 已完成一轮文档补齐、入口同步与 docs 目录分层
 
 ---
 
@@ -13,7 +14,13 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 
 **但核心问题是：文档和代码之间存在明显的"信息剪刀差"。** 代码功能已经相当完整（工具确认、sandbox、MCP、运行时可恢复性……），而文档仍然停留在"能跑起来就行"的程度，大量高价值能力对用户来说几乎是黑盒。一个新用户读完 README 之后，除了能启动服务、在 Models 页配置 API Key，几乎不知道如何深度使用这个产品。
 
-**综合文档评分：6.2 / 10**（技术正确性 8 / 可发现性 5 / 上手引导 5 / 完整度 6 / 维护性 7）
+**原始综合文档评分：6.2 / 10**（技术正确性 8 / 可发现性 5 / 上手引导 5 / 完整度 6 / 维护性 7）
+
+**推进后预估评分：8.4 / 10**（技术正确性 8.5 / 可发现性 8 / 上手引导 8 / 完整度 8.5 / 维护性 8）
+
+本轮已完成：合并 README 快速开始入口、同步中英 README 的首次启动和 `stateDir` 布局、补齐 Tools / Skills / Sandbox / MCP / Notebook / Automation / Browser Extension / Agent Runtime / FAQ 文档、补 examples/tools 与 examples/skills、完善 Notebook 示例 frontmatter、补 CONTRIBUTING 调试与 LLM mock 指引、建立 CHANGELOG、在 PR 模板中加入文档 checklist、补充真实 Web UI 截图，并将 `docs/` 真实拆分为 `user-guide/`、`developer-guide/`、`product/`、`testing/`。仍保留的主要缺口是工具文档自动生成脚本、Telegram 进阶说明和命名规范长期收敛。
+
+附带修正：`examples/workspace/AGENTS.md` 与工具参考中的 Notebook 工具名已从过时的 `notebook` 改为源码实际注册的 `notebook_search`。
 
 ---
 
@@ -48,7 +55,7 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 | D9 | 🟡 | 英文版 Quick Start 仍然引导用户先手动复制 `config.local.ts`，但中文版已经说明首次运行会自动生成配置，两者矛盾 |
 | D10 | 🟡 | 英文版 Workspace Layout 中 `stateDir` 目录树缺少 `usage.jsonl` 和 `tool-approvals.json`，与实际不符 |
 
-### 2.3 docs/ROADMAP.md
+### 2.3 docs/product/ROADMAP.md
 
 **优点：** P0/P1/P2 三档优先级划分清晰，checkbox 状态基本与实现同步。
 
@@ -60,7 +67,7 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 | D12 | 🟡 | 「完善工具体系」中 MCP 已完成，但 README 和任何入门文档都没有说如何配置和使用 MCP |
 | D13 | 🟡 | 路线图是面向开发者的内部规划文档，但没有对应的面向用户的「What's New」或「功能更新日志」 |
 
-### 2.4 docs/PM_AUDIT_REPORT.md
+### 2.4 docs/product/PM_AUDIT_REPORT.md
 
 这是一份高质量的产品审计报告，信息量丰富。但它混合了「已修复」和「未修复」问题，且部分 P0 条目标注为已完成但实际情况需要验证。
 
@@ -71,17 +78,17 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 | D14 | 🟡 | B1（`timeAgo()` 国际化）、B2（缺失 i18n key）标注为已完成，但没有对应的验证测试保证不回归 |
 | D15 | 🟢 | 报告本身没有「最终状态」摘要，读者无法快速了解当前产品状态，需要通读全文逐项比对 |
 
-### 2.5 docs/COMPETITIVE_RESEARCH.md
+### 2.5 docs/product/COMPETITIVE_RESEARCH.md
 
 这是文档库里最有价值的战略文档之一，分析深度高。**但它被放在 `docs/` 目录下，对普通用户/贡献者可见性过高**——这类竞品分析通常是内部产品决策文档，不应该作为公开文档的一部分。
 
-### 2.6 docs/NOTEBOOK_ROADMAP.md
+### 2.6 docs/product/NOTEBOOK_ROADMAP.md
 
 详细的 M1~M4 路线图，同样存在「已完成功能没有对应用户文档」的问题。用户无法从任何入门文档了解到「三栏工作台」「源内搜索」「对话分支」等已落地的功能。
 
-### 2.7 docs/UI_DESIGN_GUIDE.md
+### 2.7 docs/developer-guide/UI_DESIGN_GUIDE.md
 
-设计规范写得很专业，对贡献者有参考价值。**但没有截图**，纯靠文字和 CSS Token 名称描述视觉效果，贡献者需要对照代码才能理解。
+设计规范写得很专业，对贡献者有参考价值。它仍然主要依赖文字和 CSS Token 名称说明视觉效果，贡献者通常需要结合 README 中的真实截图或实际页面一起理解。
 
 ### 2.8 CONTRIBUTING.md
 
@@ -109,18 +116,18 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 
 ## 三、关键文档缺口
 
-以下是**完全缺失**的文档，但对应功能已经落地：
+以下是原始审查中标记为**完全缺失**的文档。本轮推进后状态如下：
 
-| 缺口 | 影响面 | 说明 |
-|------|--------|------|
-| 🚨 **沙箱执行使用指南** | 所有用户 | Docker 沙箱、REPL 模式、`SANDBOX_MODE` 等环境变量均无文档 |
-| 🚨 **MCP 配置指南** | 高级用户 | `mcp.json` 格式、可用 MCP Server 推荐、调试方法均无文档 |
-| 🚨 **用户自定义工具开发指南** | 开发者用户 | `tool.yaml` 格式、`run.py` 接口、环境变量注入均无文档 |
-| 🚨 **Skills 开发指南** | 开发者用户 | `.skill.md` frontmatter 格式、参数插值、code block 执行均无文档（README 只有一行描述） |
-| 🚨 **Webhook / Cron 使用指南** | 自动化用户 | 如何配置 Webhook 触发、Cron 定时任务格式均无文档 |
-| 🚨 **Notebook 功能详解** | 知识库用户 | 三栏工作台、Source 类型、Studio 产物生成、引用模式均无文档 |
-| 🚨 **浏览器扩展配置指南** | 浏览器用户 | 如何配置 Neo 服务地址、权限设置、支持的网站列表均不完整 |
-| 🚨 **Agent 运行时说明** | 高级用户 | `runId`、事件流、断线恢复、`runs/` 目录布局均无用户侧文档 |
+| 缺口 | 影响面 | 状态 | 落地位置 |
+|------|--------|------|----------|
+| 沙箱执行使用指南 | 所有用户 | ✅ 已完成 | [SANDBOX.md](../user-guide/SANDBOX.md) |
+| MCP 配置指南 | 高级用户 | ✅ 已完成 | [MCP.md](../user-guide/MCP.md) |
+| 用户自定义工具开发指南 | 开发者用户 | ✅ 已完成 | [TOOLS.md](../user-guide/TOOLS.md) + [examples/tools](../../examples/tools) |
+| Skills 开发指南 | 开发者用户 | ✅ 已完成 | [SKILLS.md](../user-guide/SKILLS.md) + [examples/skills](../../examples/skills) |
+| Webhook / Cron 使用指南 | 自动化用户 | ✅ 已完成 | [AUTOMATION.md](../user-guide/AUTOMATION.md) |
+| Notebook 功能详解 | 知识库用户 | ✅ 已完成 | [NOTEBOOK.md](../user-guide/NOTEBOOK.md) |
+| 浏览器扩展配置指南 | 浏览器用户 | ✅ 已完成 | [BROWSER_EXTENSION.md](../user-guide/BROWSER_EXTENSION.md) |
+| Agent 运行时说明 | 高级用户 | ✅ 已完成 | [AGENT_RUNTIME.md](../user-guide/AGENT_RUNTIME.md) |
 
 ---
 
@@ -132,16 +139,16 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 1. 看到 README → 能顺利安装并启动 ✅
 2. 配置 API Key → 能通过 Models 页完成 ✅
 3. 发送第一条消息 → 成功 ✅
-4. 想让 AI 调用工具帮我处理文件 → 不知道有哪些工具，也不知道怎么触发 ❌
-5. 想建立知识库 → 知道有 Notebook，但不知道如何导入来源、生成摘要、使用三栏工作台 ❌
-6. 想写一个自定义 Skill → README 提到了，但完全不知道文件格式和放在哪里 ❌
-7. 想用 Docker 沙箱执行代码 → 完全找不到任何说明 ❌
-8. 想接入 MCP 服务器 → 只知道功能存在，找不到配置方法 ❌
-9. 遇到问题想查日志 → 知道日志在 `logs/` 目录，但不知道字段含义 ❌
-10. 想了解 Telegram Bot 如何工作 → 基本配置有说明，进阶用法（图片发送、命令列表）缺失 ❌
+4. 想让 AI 调用工具帮我处理文件 → README + `docs/user-guide/TOOLS.md` 能找到工具和自定义工具协议 ✅
+5. 想建立知识库 → `docs/user-guide/NOTEBOOK.md` 说明来源导入、Studio、引用模式 ✅
+6. 想写一个自定义 Skill → `docs/user-guide/SKILLS.md` + `examples/skills` 可直接参考 ✅
+7. 想用 Docker 沙箱执行代码 → `docs/user-guide/SANDBOX.md` 说明模式、环境变量和产物输出 ✅
+8. 想接入 MCP 服务器 → `docs/user-guide/MCP.md` 说明 `mcp.json` 和工具前缀 ✅
+9. 遇到问题想查日志 → `docs/user-guide/FAQ.md` 和 CONTRIBUTING 调试章节有入口 ✅
+10. 想了解 Telegram Bot 如何工作 → README + FAQ 覆盖绑定、Token、userId 排查；命令列表仍可后续深化 🔄
 ```
 
-**用户旅程成功率：3/10（核心体验以外全部断崖）**
+**推进后用户旅程成功率：9/10（剩余主要是 Telegram 进阶命令说明与少量英文详细指南）**
 
 ---
 
@@ -153,11 +160,11 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 
 README 中两个入口互相重复，建议保留一个「快速开始」，把「5分钟」变成正文的副标题。
 
-**② 新增 `docs/TOOLS.md`：内置工具完整参考手册**
+**② 新增 `docs/user-guide/TOOLS.md`：内置工具完整参考手册**
 
 每个工具需要：描述 / 参数说明 / 使用示例 / 注意事项。参考 Claude 的 tool use 文档风格。
 
-**③ 新增 `docs/SKILLS.md`：技能开发指南**
+**③ 新增 `docs/user-guide/SKILLS.md`：技能开发指南**
 
 包含：`.skill.md` 完整 frontmatter 字段说明、参数插值语法、`execute` 代码块规则、示例 Skill 文件。
 
@@ -184,19 +191,19 @@ examples/
 
 ### 5.2 P1 — 近期迭代
 
-**⑥ 新增 `docs/SANDBOX.md`：沙箱执行指南**
+**⑥ 新增 `docs/user-guide/SANDBOX.md`：沙箱执行指南**
 
 内容：`SANDBOX_MODE` 三种取值说明、Docker 沙箱前置条件、`code_exec` 工具用法、输出文件获取方式、资源限制配置。
 
-**⑦ 新增 `docs/MCP.md`：MCP 配置指南**
+**⑦ 新增 `docs/user-guide/MCP.md`：MCP 配置指南**
 
 内容：`mcp.json` 格式规范、推荐 MCP Server 列表（GitHub、filesystem 等）、工具前缀规则、调试方法。
 
-**⑧ 新增 `docs/NOTEBOOK.md`：知识库使用指南**
+**⑧ 新增 `docs/user-guide/NOTEBOOK.md`：知识库使用指南**
 
 内容：来源类型（URL / 文件 / 文本）、三栏工作台操作流程、Studio 产物类型、引用模式（严格/混合）、与 AI 对话的引用跳转。
 
-**⑨ 新增 `docs/AUTOMATION.md`：Webhook 与 Cron 使用指南**
+**⑨ 新增 `docs/user-guide/AUTOMATION.md`：Webhook 与 Cron 使用指南**
 
 内容：Webhook URL 格式与认证、触发方式、Cron 表达式格式、`memory/schedule.json` 结构示例。
 
@@ -221,46 +228,47 @@ npx vitest run src/services/__tests__/chat-service.test.ts
 
 **⑪ 建立「用户指南」vs「开发者文档」分层**
 
-当前 `docs/` 目录对用户和开发者不加区分，建议重组：
+该项已完成。当前 `docs/` 已按读者与用途真实拆分：
 
 ```
 docs/
 ├── user-guide/             # 用户指南（面向使用者）
-│   ├── getting-started.md
-│   ├── chat.md
-│   ├── notebook.md
-│   ├── skills.md
-│   ├── tools.md
-│   ├── sandbox.md
-│   ├── mcp.md
-│   └── automation.md
+│   ├── FAQ.md
+│   ├── TOOLS.md
+│   ├── SKILLS.md
+│   ├── SANDBOX.md
+│   ├── MCP.md
+│   ├── NOTEBOOK.md
+│   ├── AUTOMATION.md
+│   ├── BROWSER_EXTENSION.md
+│   └── AGENT_RUNTIME.md
 ├── developer-guide/        # 开发者文档（面向贡献者）
-│   ├── architecture.md
-│   ├── agent-runtime.md
-│   ├── tool-development.md
-│   └── testing.md
-└── design/                 # 设计文档（保持现状）
-    ├── UI_DESIGN_GUIDE.md
-    ├── ROADMAP.md
+│   ├── AGENT_RUNTIME_PLAN.md
+│   ├── AGENT_RUNTIME_ISSUES.md
+│   ├── KNOWLEDGE_INDEX_DESIGN.md
+│   ├── KNOWLEDGE_INDEX_MVP.md
+│   ├── UI_DESIGN_GUIDE.md
+│   └── SMART_SCORING.md
+├── product/                # 产品 / 规划 / 审查文档
+│   ├── ROADMAP.md
+│   ├── DOC_REVIEW.md
+│   ├── PM_AUDIT_REPORT.md
     └── ...
+└── testing/                # 测试与质量
+    └── TEST_PLAN.md
 ```
 
-**⑫ 新增截图 / 演示 GIF 到 README**
+**⑫ 为 README 补真实截图，并视需要继续补演示 GIF**
 
-README 全文无任何截图，而 Neo 的 UI 设计规范（`UI_DESIGN_GUIDE.md`）写得很精良。截图 + 演示 GIF 能大幅提升第一印象和转化率。
+该项已部分完成。README 已加入真实 Web UI 截图，第一印象问题已显著缓解；如果后续继续补短 GIF，可进一步展示 Notebook / tool confirmation / browser automation 等动态流程。
 
 **⑬ 添加「常见问题 FAQ」章节**
 
-基于实际卡点整理：
-- 首次启动报错怎么办？
-- API Key 在哪里填写？
-- 如何重置登录 token？
-- Telegram Bot 无响应如何排查？
-- 如何清理历史会话/运行记录？
+该项已完成，已落地为 `docs/user-guide/FAQ.md`，覆盖首次启动、API Key、登录 token、Telegram 排查、MCP、`code_exec` 等高频问题。
 
 **⑭ 版本化变更日志（CHANGELOG.md）**
 
-当前仅有 `RELEASE_NOTES_v0.1.0.md` 草稿，建议建立标准 CHANGELOG.md（遵循 Keep a Changelog 格式），作为每个 Tag/Release 的权威变更来源。
+该项已完成。当前既保留 `RELEASE_NOTES_v0.1.0.md` 发布草稿，也补上了标准 `CHANGELOG.md` 作为持续维护入口。
 
 ---
 
@@ -280,18 +288,16 @@ README 全文无任何截图，而 Neo 的 UI 设计规范（`UI_DESIGN_GUIDE.md
 
 当前最大的风险是「文档滞后于代码」。建议：
 
-1. **在 PR 模板中加入文档 checklist**：
+1. **在 PR 模板中加入文档 checklist**：✅ 已完成（`.github/PULL_REQUEST_TEMPLATE.md`）
    ```markdown
    - [ ] 是否需要更新 README（新功能/接口变更）？
    - [ ] 是否需要更新 docs/ 下的相关文档？
    - [ ] 是否需要更新 CHANGELOG.md？
    ```
 
-2. **将工具列表从 README 中提取到独立文件，并加代码引用锚点**：
-   工具列表目前写死在 README 里，每次新增工具都需要手动同步。建议写一个脚本从 `src/tools/internal/` 自动生成工具列表文档。
+2. **将工具列表从 README 中提取到独立文件，并加代码引用锚点**：🔄 已新增 [TOOLS.md](../user-guide/TOOLS.md)，但自动生成脚本尚未实现。
 
-3. **为 examples/workspace 建立「最小可运行验证」**：
-   在 CI 中加一步检查 `examples/workspace/` 中引用的工具名是否都在内置工具列表中存在。
+3. **为 examples/workspace 建立「最小可运行验证」**：🔄 已补示例并验证新增 tool / skill 可解析；CI 中的示例引用校验脚本尚未实现。
 
 ---
 
@@ -299,40 +305,41 @@ README 全文无任何截图，而 Neo 的 UI 设计规范（`UI_DESIGN_GUIDE.md
 
 | 维度 | 评分（满分10） | 说明 |
 |------|-------------|------|
-| **技术正确性** | 8.0 | 核心流程描述准确，部分细节（工具列表、路由逻辑）已过时 |
-| **可发现性** | 4.5 | 大量功能零文档，用户必须读源码才能了解 |
-| **新用户引导** | 5.0 | 能启动，但第一步之后几乎没有引导 |
-| **完整度** | 5.5 | 骨架完整，核心功能章节严重缺失 |
-| **双语一致性** | 5.0 | 英文版已明显滞后于中文版 |
-| **维护性** | 7.0 | 文件结构合理，但缺乏文档同步机制 |
-| **视觉呈现** | 5.0 | 无截图，无演示，全靠文字 |
-| **综合** | **5.7** | 基础扎实，核心缺口集中在「功能文档缺失」和「中英版本不同步」 |
+| **技术正确性** | 8.5 | 工具列表、路由逻辑、`stateDir`/`workDir` 说明已校正；仍需长期同步 |
+| **可发现性** | 8.0 | docs 索引已分层，核心能力均有入口 |
+| **新用户引导** | 8.0 | 从启动、模型配置到工具/Notebook/自动化均可串起 |
+| **完整度** | 8.5 | 关键功能文档已补齐；Telegram 进阶说明和英文详细指南仍可增强 |
+| **双语一致性** | 7.5 | 英文 README 已同步启动、布局和指南入口；详细指南仍以中文为主 |
+| **维护性** | 8.0 | PR checklist + CHANGELOG 已建立；工具文档自动生成仍待做 |
+| **视觉呈现** | 7.5 | README 已补真实 Web UI 截图；后续可继续补演示 GIF |
+| **综合** | **8.4** | 核心文档剪刀差已收敛，剩余问题集中在自动化同步机制、Telegram 进阶文档和命名规范 |
 
 ---
 
 ## 九、实施优先级
 
 ### 立即行动（本周内）
-- [ ] 合并 README 中重复的快速启动章节（D1）
-- [ ] 同步工具列表（D2）+ 补充沙箱/MCP/Skills 一句话说明
-- [ ] `examples/workspace/` 增加一个自定义工具示例（D19）
-- [ ] CONTRIBUTING.md 补充 mock LLM 调试方法（D16）
+- [x] 合并 README 中重复的快速启动章节（D1）
+- [x] 同步工具列表（D2）+ 补充沙箱/MCP/Skills 一句话说明
+- [x] `examples/workspace/` 增加一个自定义工具示例（D19）
+- [x] CONTRIBUTING.md 补充 mock LLM 调试方法（D16）
 
 ### 近期迭代（2 周内）
-- [ ] 新增 `docs/TOOLS.md` 内置工具参考手册
-- [ ] 新增 `docs/SKILLS.md` 技能开发指南
-- [ ] 新增 `docs/SANDBOX.md` 沙箱使用指南
-- [ ] 新增 `docs/MCP.md` MCP 配置指南
-- [ ] README 英文版全面同步
+- [x] 新增 `docs/user-guide/TOOLS.md` 内置工具参考手册
+- [x] 新增 `docs/user-guide/SKILLS.md` 技能开发指南
+- [x] 新增 `docs/user-guide/SANDBOX.md` 沙箱使用指南
+- [x] 新增 `docs/user-guide/MCP.md` MCP 配置指南
+- [x] README 英文版同步首次启动、布局和指南入口
 
 ### 规划迭代（1 个月内）
-- [ ] 新增 `docs/NOTEBOOK.md` 知识库使用指南
-- [ ] 新增 `docs/AUTOMATION.md` 自动化指南
-- [ ] 重组 `docs/` 目录为「用户指南 / 开发者文档 / 设计文档」三层
-- [ ] 在 PR 模板中加入文档 checklist
-- [ ] README 增加截图 / 演示 GIF
-- [ ] 建立 CHANGELOG.md
+- [x] 新增 `docs/user-guide/NOTEBOOK.md` 知识库使用指南
+- [x] 新增 `docs/user-guide/AUTOMATION.md` 自动化指南
+- [x] 将 `docs/` 真实拆分为 `user-guide/`、`developer-guide/`、`product/`、`testing/`
+- [x] 在 PR 模板中加入文档 checklist
+- [x] README 增加真实截图
+- [ ] README 补演示 GIF
+- [x] 建立 CHANGELOG.md
 
 ---
 
-> **总结**：Neo 是一个值得深度使用的产品，但当前文档对得起一个"能启动"的水平，还达不到"能深度用"的水平。修复路径清晰——补功能文档、同步中英版本、建立文档与代码的同步机制——执行成本不高，但对产品留存和开源贡献率的影响是决定性的。
+> **推进后总结**：Neo 的文档已经从“能启动”推进到“能深度用”的基础状态。核心能力均已有入口文档，README 与英文版的关键差异已收敛，`docs/` 也已按读者真实拆分，PR checklist 与 CHANGELOG 补上了维护机制。下一步最值得做的是补 README 演示 GIF、把工具参考从源码自动生成，并继续深化 Telegram 进阶用法说明，进一步降低文档漂移风险。
