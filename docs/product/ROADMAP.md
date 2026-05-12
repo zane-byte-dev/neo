@@ -85,6 +85,7 @@
 - [x] **Mini-app 托管**：每个用户可在 `{stateDir}/apps/` 下放置静态 Web 应用，侧边栏「应用」分组动态列出，支持 `manifest.json`（title/description/icon）；路由隔离，每个用户只能访问自己的应用
 - [x] **零配置首启**：首次启动时若无 `config.local.ts` 与 `USERS` 环境变量，自动在 `~/.neo/config.json` 生成默认单用户配置（随机 token/SESSION_SECRET、标准目录），并将登录 token 打印到控制台
 - [x] **模型路由可视化配置**：/models 展示 provider 在线状态（Ollama 探活、ACP 检查 CLI 路径、云端检查 key），支持在 UI 中覆盖路由层级（simple/standard/complex 各 tier），配置持久化到 `{stateDir}/routing.json`
+- [x] **文章批注 MVP**：文章编辑器支持选区批注，批注以独立 annotation 数据模型持久化，`NoteEditor` 内可查看、跳转、删除，并切换未解决 / 已解决状态
 
 ### 7. 工作流与自动化
 

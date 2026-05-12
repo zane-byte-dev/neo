@@ -51,6 +51,16 @@ Studio 产物类型：
 | `report` | 生成报告，可带 `subtype`、`title`、`customPrompt` |
 | `audio` | 生成播客 / 朗读脚本 |
 
+## 文章批注
+
+打开已保存文章后，可以直接在 `NoteEditor` 正文内选中文本，并点击气泡菜单中的“批注”按钮。Neo 会：
+
+1. 给选区应用高亮标记。
+2. 在正文上方打开轻量批注卡片。
+3. 保存 `quote + anchor + body` 到 `{stateDir}/notebooks/<notebook>/annotations/`。
+
+“文章批注”区会列出当前文章的全部批注。点击引用文本可跳回原文选区；每条批注支持删除，以及在“未解决 / 已解决”之间切换。独立 Notes 入口仍保留，用于整篇文章级整理。
+
 ## 引用模式
 
 Notebook 配置中有 `citationMode`：
@@ -75,6 +85,8 @@ Notebook 使用 SQLite FTS5 建立统一索引。英文、代码标识符等 tok
 | `GET /api/notebook?action=search&q=...` | 搜索条目 |
 | `POST /api/notebook/import` | 导入 URL / 文本 / 已解析文件 |
 | `GET /api/notebook/source?action=list-with-guides` | 列出 sources 与 guides |
+| `GET /api/notebook?action=annotations&notebook=...&articleId=...` | 列出文章批注 |
+| `POST /api/notebook/annotation` | 创建文章批注 |
 | `POST /api/notebook/artifact` | 生成 Studio 产物 |
 | `POST /api/notebook/note/quick-action` | 对选中 notes 执行 AI 快捷操作 |
 

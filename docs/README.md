@@ -65,6 +65,7 @@ docs/
 |------|-------|------|-------------|------|
 | 首次使用清单 | [brief.md](features/first-run-checklist/brief.md) | [plan.md](features/first-run-checklist/plan.md) | [test-report.md](features/first-run-checklist/test-report.md) | ✅ MVP 已实现 |
 | 设置引导与系统状态 | [brief.md](features/settings-guidance-and-system-status/brief.md) | [plan.md](features/settings-guidance-and-system-status/plan.md) | [test-report.md](features/settings-guidance-and-system-status/test-report.md) | ✅ Phase 1 已实现 |
+| 文章批注 | [brief.md](features/article-annotations/brief.md) | [plan.md](features/article-annotations/plan.md) | [test-report.md](features/article-annotations/test-report.md) | ✅ MVP 已实现 |
 | Web 语音输入 | [brief.md](features/web-voice-input/brief.md) | [plan.md](features/web-voice-input/plan.md) | — | ✅ Phase 1 已实现 |
 | Workflow 自动化引擎 | [brief.md](features/workflow-automation-engine/brief.md) | — | — | 📝 规划中 |
 | Agent 可恢复运行时 | — | [plan.md](features/agent-runtime/plan.md) | — | ✅ A1-D3 全完成，E2 待处理（附 [issues.md](features/agent-runtime/issues.md)） |

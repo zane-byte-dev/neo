@@ -36,6 +36,10 @@ import {
     nbListNotes,
     nbSaveNote,
     nbDeleteNote,
+    nbListAnnotations,
+    nbSaveAnnotation,
+    nbUpdateAnnotation,
+    nbDeleteAnnotation,
     nbConvertNoteToSource,
     nbGetSourceEntry,
     nbListSources,
@@ -48,6 +52,8 @@ import { generateAndSaveSourceGuide } from '../services/notebook-ai.js';
 import { calcUser } from '../services/user-service.js';
 import { getMonthlyUsage } from '../utils/token-tracker.js';
 import { trashArticle, trashNotebook } from '../services/trash-service.js';
+
+const MAX_ANNOTATION_CONTEXT_TEXT = 200;
 
 // ── GET /api/notebook — Read-only actions ───────────────────────────────────
 
@@ -111,6 +117,14 @@ export function notebookGet(router: Router): void {
                 const nb = q.notebook?.trim();
                 if (!nb) { ctx.status = 400; ctx.body = { error: 'notebook required' }; return; }
                 ctx.body = nbListNotes(workDir, nb, stateDir);
+                break;
+            }
+            case 'annotations': {
+                const nb = q.notebook?.trim();
+                const articleId = q.articleId?.trim();
+                if (!nb || !articleId) { ctx.status = 400; ctx.body = { error: 'notebook + articleId required' }; return; }
+                if (!nbGet(workDir, articleId)) { ctx.status = 404; ctx.body = { error: 'Article not found' }; return; }
+                ctx.body = nbListAnnotations(workDir, nb, articleId, stateDir);
                 break;
             }
             // ── Token usage ───────────────────────────────────────────────
@@ -291,6 +305,101 @@ export function notebookNoteDelete(router: Router): void {
         const id = q.id?.trim();
         if (!notebook || !id) { ctx.status = 400; ctx.body = { error: 'notebook + id required' }; return; }
         if (!nbDeleteNote(workDir, notebook, id, stateDir)) { ctx.status = 404; ctx.body = { error: 'Not found' }; return; }
+        ctx.body = { ok: true };
+    });
+}
+
+// ── Article annotations ─────────────────────────────────────────────────────
+
+function isAnnotationKind(value: unknown): value is 'highlight' | 'paragraph' {
+    return value === 'highlight' || value === 'paragraph';
+}
+
+function isAnnotationStatus(value: unknown): value is 'open' | 'resolved' {
+    return value === 'open' || value === 'resolved';
+}
+
+function truncateContextText(value: unknown): string | undefined {
+    return typeof value === 'string' ? value.slice(0, MAX_ANNOTATION_CONTEXT_TEXT) : undefined;
+}
+
+function parseAnchor(value: unknown) {
+    if (!value || typeof value !== 'object') return {};
+    const raw = value as Record<string, unknown>;
+    const beforeText = truncateContextText(raw.beforeText);
+    const afterText = truncateContextText(raw.afterText);
+    return {
+        ...(typeof raw.paragraphId === 'string' ? { paragraphId: raw.paragraphId } : {}),
+        ...(typeof raw.startOffset === 'number' && Number.isFinite(raw.startOffset) ? { startOffset: raw.startOffset } : {}),
+        ...(typeof raw.endOffset === 'number' && Number.isFinite(raw.endOffset) ? { endOffset: raw.endOffset } : {}),
+        ...(beforeText !== undefined ? { beforeText } : {}),
+        ...(afterText !== undefined ? { afterText } : {}),
+    };
+}
+
+export function notebookAnnotationSave(router: Router): void {
+    router.post('/api/notebook/annotation', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir, stateDir } = await calcUser(userId);
+        const body = ctx.request.body as Record<string, unknown>;
+
+        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
+        const articleId = typeof body.articleId === 'string' ? body.articleId.trim() : '';
+        const quote = typeof body.quote === 'string' ? body.quote.trim() : '';
+        const annotationBody = typeof body.body === 'string' ? body.body.trim() : '';
+        if (!notebook || !articleId || !quote || !annotationBody) {
+            ctx.status = 400; ctx.body = { error: 'notebook + articleId + quote + body required' }; return;
+        }
+        if (!isAnnotationKind(body.kind)) { ctx.status = 400; ctx.body = { error: 'invalid annotation kind' }; return; }
+        if (body.status !== undefined && !isAnnotationStatus(body.status)) { ctx.status = 400; ctx.body = { error: 'invalid annotation status' }; return; }
+        const article = nbGet(workDir, articleId);
+        if (!article || article.notebook !== notebook) { ctx.status = 404; ctx.body = { error: 'Article not found' }; return; }
+
+        ctx.body = nbSaveAnnotation(workDir, notebook, {
+            id: typeof body.id === 'string' ? body.id : undefined,
+            articleId,
+            kind: body.kind,
+            quote,
+            anchor: parseAnchor(body.anchor),
+            body: annotationBody,
+            status: body.status,
+            author: typeof body.author === 'string' && body.author.trim() ? body.author.trim() : null,
+        }, stateDir);
+    });
+}
+
+export function notebookAnnotationUpdate(router: Router): void {
+    router.patch('/api/notebook/annotation', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir, stateDir } = await calcUser(userId);
+        const body = ctx.request.body as Record<string, unknown>;
+
+        const notebook = typeof body.notebook === 'string' ? body.notebook.trim() : '';
+        const articleId = typeof body.articleId === 'string' ? body.articleId.trim() : '';
+        const id = typeof body.id === 'string' ? body.id.trim() : '';
+        if (!notebook || !articleId || !id) { ctx.status = 400; ctx.body = { error: 'notebook + articleId + id required' }; return; }
+        if (body.status !== undefined && !isAnnotationStatus(body.status)) { ctx.status = 400; ctx.body = { error: 'invalid annotation status' }; return; }
+        if (!nbGet(workDir, articleId)) { ctx.status = 404; ctx.body = { error: 'Article not found' }; return; }
+
+        const updated = nbUpdateAnnotation(workDir, notebook, articleId, id, {
+            ...(typeof body.body === 'string' ? { body: body.body.trim() } : {}),
+            ...(body.status !== undefined ? { status: body.status } : {}),
+        }, stateDir);
+        if (!updated) { ctx.status = 404; ctx.body = { error: 'Annotation not found' }; return; }
+        ctx.body = updated;
+    });
+}
+
+export function notebookAnnotationDelete(router: Router): void {
+    router.delete('/api/notebook/annotation', async (ctx) => {
+        const userId = ctx.state.userId as string;
+        const { workDir, stateDir } = await calcUser(userId);
+        const q = ctx.query as Record<string, string>;
+        const notebook = q.notebook?.trim();
+        const articleId = q.articleId?.trim();
+        const id = q.id?.trim();
+        if (!notebook || !articleId || !id) { ctx.status = 400; ctx.body = { error: 'notebook + articleId + id required' }; return; }
+        if (!nbDeleteAnnotation(workDir, notebook, articleId, id, stateDir)) { ctx.status = 404; ctx.body = { error: 'Annotation not found' }; return; }
         ctx.body = { ok: true };
     });
 }

@@ -36,9 +36,11 @@ import {
     Heading1, Heading2, Heading3,
     List, ListOrdered, Quote, Minus, Code2, Type,
     Sparkles, Wand2, ArrowUpRight, ArrowDownToLine, Scissors, CheckSquare,
-    Check, X as XIcon,
+    Check, X as XIcon, MessageSquarePlus,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+
+const ANNOTATION_CONTEXT_LENGTH = 200
 
 // ─── AI completion helper ─────────────────────────────────────────────────────
 
@@ -175,6 +177,48 @@ const BubbleButton: React.FC<BubbleButtonProps> = ({ mark, icon, title, onSelect
     )
 }
 
+interface SelectionAnnotation {
+    quote: string
+    anchor: {
+        startOffset: number
+        endOffset: number
+        beforeText?: string
+        afterText?: string
+    }
+}
+
+interface AnnotationBubbleButtonProps {
+    onAnnotateSelection?: (selection: SelectionAnnotation) => void
+}
+
+const AnnotationBubbleButton: React.FC<AnnotationBubbleButtonProps> = ({ onAnnotateSelection }) => {
+    const handleSelect = (ed: EditorInstance) => {
+        const { from, to } = ed.state.selection
+        if (from === to) return
+        const quote = ed.state.doc.textBetween(from, to, ' ').trim()
+        if (!quote) return
+        const beforeText = ed.state.doc.textBetween(Math.max(0, from - ANNOTATION_CONTEXT_LENGTH), from, ' ').trim()
+        const afterText = ed.state.doc.textBetween(to, Math.min(ed.state.doc.content.size, to + ANNOTATION_CONTEXT_LENGTH), ' ').trim()
+        ed.chain().focus().toggleHighlight().run()
+        onAnnotateSelection?.({
+            quote,
+            anchor: { startOffset: from, endOffset: to, beforeText, afterText },
+        })
+    }
+
+    return (
+        <EditorBubbleItem onSelect={handleSelect} className="p-0">
+            <button
+                title="添加批注"
+                disabled={!onAnnotateSelection}
+                className="w-7 h-7 flex items-center justify-center rounded-md text-text-secondary hover:bg-fill hover:text-primary-mint transition-colors disabled:opacity-40"
+            >
+                <MessageSquarePlus size={13} />
+            </button>
+        </EditorBubbleItem>
+    )
+}
+
 // ─── AI bubble button ─────────────────────────────────────────────────────────
 
 interface AIBubbleButtonProps {
@@ -293,6 +337,8 @@ interface NovelEditorProps {
     placeholder?: string
     /** Called on every change with the latest Markdown string */
     onChange?: (markdown: string) => void
+    onAnnotateSelection?: (selection: SelectionAnnotation) => void
+    focusRange?: { startOffset: number; endOffset: number; requestId: number } | null
     className?: string
 }
 
@@ -300,6 +346,8 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
     initialContent,
     placeholder = '开始写作…',
     onChange,
+    onAnnotateSelection,
+    focusRange,
     className,
 }) => {
     const [pending, setPending] = React.useState<AIPendingState | null>(null)
@@ -352,6 +400,18 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     ], [placeholder])
+
+    React.useEffect(() => {
+        const ed = editorRef.current
+        if (!ed || !focusRange) return
+        const max = ed.state.doc.content.size
+        const from = Math.max(1, Math.min(focusRange.startOffset, max))
+        const to = Math.max(from, Math.min(focusRange.endOffset, max))
+        ed.chain().focus().setTextSelection({ from, to }).run()
+        const dom = ed.view.domAtPos(from).node
+        const el = dom instanceof Element ? dom : dom.parentElement
+        el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, [focusRange])
 
     return (
         <AIStateContext.Provider value={{ pending, setPending }}>
@@ -420,6 +480,7 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
                             <BubbleButton mark="strike"    icon={<Strikethrough size={13} />} title="删除线" onSelect={(e) => e.chain().focus().toggleStrike().run()} />
                             <BubbleButton mark="code"      icon={<Code size={13} />}          title="代码"   onSelect={(e) => e.chain().focus().toggleCode().run()} />
                             <BubbleButton mark="highlight" icon={<span className="text-[11px] font-bold leading-none" style={{ fontFamily: 'serif' }}>A</span>} title="高亮" onSelect={(e) => e.chain().focus().toggleHighlight().run()} />
+                            <AnnotationBubbleButton onAnnotateSelection={onAnnotateSelection} />
                             {/* AI actions */}
                             <div className="w-px h-4 bg-border mx-0.5 shrink-0" />
                             <AIBubbleButton command="improve"  icon={<Wand2 size={13} />}           title="AI 改写" label="AI 改写" />
