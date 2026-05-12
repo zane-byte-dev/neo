@@ -39,6 +39,7 @@ docs/
 | [UI_DESIGN_GUIDE.md](developer-guide/UI_DESIGN_GUIDE.md) | Web UI 色彩、间距、圆角设计规范 | ✅ 已落地 |
 | [SMART_SCORING.md](developer-guide/SMART_SCORING.md) | 智能请求评分与模型自动路由设计 | ✅ 已落地 |
 | [COPILOT_AI_LOOP.md](developer-guide/COPILOT_AI_LOOP.md) | GitHub Copilot 驱动的产品→开发→测试→发布闭环 | ✅ 已落地 |
+| [FEATURE_first_run_checklist_PLAN.md](developer-guide/FEATURE_first_run_checklist_PLAN.md) | 首次使用清单开发计划 | ✅ MVP 已实现 |
 | [research.md](developer-guide/tools/research.md) | 内置 research 工具说明 | 📖 参考资料 |
 
 ## 产品与规划
@@ -52,10 +53,12 @@ docs/
 | [RELEASE_NOTES_v0.1.0.md](product/RELEASE_NOTES_v0.1.0.md) | v0.1.0 发布说明草稿 | 📝 待发布 |
 | [ROADMAP.md](product/ROADMAP.md) | 功能路线图（P0/P1/P2 三档） | 🔄 P0 全完成；P1 部分完成；P2 待规划 |
 | [NOTEBOOK_ROADMAP.md](product/NOTEBOOK_ROADMAP.md) | Notebook 重塑路线图（M1-M2 里程碑） | ✅ M1 全完成；M2 大部分完成 |
+| [FEATURE_first_run_checklist.md](product/FEATURE_first_run_checklist.md) | 首次使用清单 Product Brief | ✅ MVP 已实现 |
 
 ## 测试与质量
 
 | 文件 | 说明 | 状态 |
 |------|------|------|
 | [TEST_PLAN.md](testing/TEST_PLAN.md) | 测试策略、分层方案与各阶段用例规划 | ✅ 全部阶段已落地（90+ 测试文件） |
+| [FEATURE_first_run_checklist_TEST_REPORT.md](testing/FEATURE_first_run_checklist_TEST_REPORT.md) | 首次使用清单测试报告 | ✅ 验收通过 |
 | [../CHANGELOG.md](../CHANGELOG.md) | 版本化变更记录 | ✅ 已建立 |

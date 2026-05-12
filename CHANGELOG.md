@@ -8,6 +8,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Added
 
+- First-run checklist on the Chat welcome screen to guide model setup, first message, and Notebook note creation.
 - User guides for Tools, Skills, Sandbox, MCP, Notebook, Automation, Browser Extension, Agent Runtime, and FAQ.
 - Example user tool and Skill under `examples/tools/` and `examples/skills/`.
 - PR checklist entries for README, docs, and changelog updates.

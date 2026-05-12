@@ -41,6 +41,7 @@ Product Brief -> Dev Plan -> Implementation -> Test Review -> Release Closeout
 Product Brief 要回答“为什么做、给谁做、做到什么程度”。必须包含：
 
 - 背景与用户问题
+- 证据与新鲜度核验：旧文档只是线索，必须用当前代码、API、测试或 UI 状态确认问题仍然存在
 - 目标用户和核心场景
 - 目标与非目标
 - 用户流程或关键交互
@@ -49,6 +50,8 @@ Product Brief 要回答“为什么做、给谁做、做到什么程度”。必
 - 需要更新的文档或模块
 
 如果需求来自产品审查或竞品调研，应链接到 `docs/product/` 下的来源文档。
+
+如果来源文档与当前代码冲突，以当前代码和可运行行为为准，并在 Product Brief 中记录旧文档可能过期。
 
 ### 2. Dev Plan
 

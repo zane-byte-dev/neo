@@ -215,6 +215,8 @@ export interface AppState {
     // Confirm dangerous tools
     confirmDangerous: boolean
     setConfirmDangerous: (v: boolean) => void
+    firstRunChecklistDismissed: boolean
+    setFirstRunChecklistDismissed: (dismissed: boolean) => void
 
     // Notebook
     notebookEntries: NoteEntry[]

@@ -17,12 +17,22 @@ agent: "agent"
 
 输出或更新 `docs/product/FEATURE_<slug>.md`。如果已有合适文档，请更新原文档；否则新建一个聚焦的 feature brief。
 
+在写 Product Brief 前，先做事实核验：
+
+- 把产品文档当作线索，不要当作唯一事实来源。
+- 搜索当前代码、测试、API 路由和 UI 文案，确认需求是否已经实现、部分实现或已经过时。
+- 如果能访问当前运行中的 UI，可用浏览器快照辅助确认；如果不能访问，要写清楚限制。
+- 在 Product Brief 中加入 `## Evidence And Freshness Check`，列出核验来源和结论。
+- 如果旧文档与当前代码冲突，以当前代码和可运行行为为准，并把旧文档标为可能过期。
+
 文档必须包含：
 
 ```markdown
 # <Feature Name>
 
 ## Background
+
+## Evidence And Freshness Check
 
 ## User Problem
 
@@ -48,5 +58,6 @@ agent: "agent"
 - 不要开始写代码。
 - 验收标准要可测试。
 - 明确哪些内容本轮不做。
+- 不要只因为旧产品文档提到某问题就认定它仍然存在。
 - 如果信息不足，先写 Open Questions，同时给出一个保守的最小方案。
 - 最后说明建议的下一步 Dev Plan 输入文件。

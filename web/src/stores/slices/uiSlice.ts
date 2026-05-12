@@ -10,6 +10,8 @@ export interface UiSlice {
     /** When true, dangerous-tier tools pause for user confirmation. */
     confirmDangerous: boolean
     setConfirmDangerous: (v: boolean) => void
+    firstRunChecklistDismissed: boolean
+    setFirstRunChecklistDismissed: (dismissed: boolean) => void
 }
 
 export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
@@ -22,4 +24,6 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => (
     setLocale: (locale: Locale) => set({ locale }),
     confirmDangerous: true,
     setConfirmDangerous: (v: boolean) => set({ confirmDangerous: v }),
+    firstRunChecklistDismissed: false,
+    setFirstRunChecklistDismissed: (dismissed: boolean) => set({ firstRunChecklistDismissed: dismissed }),
 })

@@ -40,43 +40,29 @@ interface Props {
     onClose: () => void
 }
 
-// ── Section splitter (LLM-based) ─────────────────────────────────────────────
+// ── Section splitter (rule-based) ────────────────────────────────────────────
 
-/**
- * Ask the LLM to identify logical section boundaries in the document.
- * Returns an array of section strings preserving original text exactly.
- * Falls back to a simple blank-line split if the LLM call fails.
- */
-async function splitSectionsWithLLM(
-    text: string,
-    signal: AbortSignal,
-): Promise<string[]> {
-    const instruction =
-        '你是文章结构分析助手。请将以下文章拆分为逻辑段落，每个段落是一个独立语义单元（如：引言、一个论点、一个故事片段、结论等）。' +
-        '返回 JSON 数组，每个元素是原文中一段的完整文本，段落之间不要遗漏任何内容，拼接后必须与原文完全一致。' +
-        '只返回 JSON，不要任何解释。格式：["段落1", "段落2", ...]'
-    try {
-        const res = await fetch('/api/generate', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: text, command: 'zap', instruction }),
-            signal,
-        })
-        if (!res.ok) throw new Error('LLM split failed')
-        const raw = await res.text()
-        // Extract JSON array from response (may be wrapped in ```json ... ```)
-        const match = raw.match(/\[\s*[\s\S]*\]/)
-        if (!match) throw new Error('No JSON array found')
-        const sections: unknown = JSON.parse(match[0])
-        if (!Array.isArray(sections) || sections.length === 0) throw new Error('Empty array')
-        const valid = (sections as unknown[]).filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
-        if (valid.length > 0) return valid
-        throw new Error('No valid sections')
-    } catch {
-        // Fallback: split on blank lines
-        return text.split(/\n{2,}/).map(s => s.trim()).filter(s => s.length > 0)
+function buildChunks(text: string, maxChars = 6000): string[] {
+    const paragraphs = text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
+    if (paragraphs.length === 0) return text.trim() ? [text.trim()] : []
+
+    const chunks: string[] = []
+    let current = ''
+    for (const paragraph of paragraphs) {
+        if (!current) {
+            current = paragraph
+            continue
+        }
+        const next = `${current}\n\n${paragraph}`
+        if (next.length <= maxChars) {
+            current = next
+        } else {
+            chunks.push(current)
+            current = paragraph
+        }
     }
+    if (current) chunks.push(current)
+    return chunks
 }
 
 // ── Per-section polish ────────────────────────────────────────────────────────

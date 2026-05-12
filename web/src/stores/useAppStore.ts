@@ -5,9 +5,9 @@ import { createUiSlice } from './slices/uiSlice'
 import { createChatSlice } from './slices/chatSlice'
 import { createNotebookSlice } from './slices/notebookSlice'
 
-type PersistedAppStore = Pick<AppState, 'theme' | 'locale' | 'selectedModel' | 'confirmDangerous' | 'chats'>
+type PersistedAppStore = Pick<AppState, 'theme' | 'locale' | 'selectedModel' | 'confirmDangerous' | 'firstRunChecklistDismissed' | 'chats'>
 
-const WEB_STORE_VERSION = 3
+const WEB_STORE_VERSION = 4
 
 export const useAppStore = create<AppState>()(
     persist(
@@ -28,6 +28,7 @@ export const useAppStore = create<AppState>()(
                     return {
                         ...rest,
                         confirmDangerous: rest.confirmDangerous ?? true,
+                        firstRunChecklistDismissed: rest.firstRunChecklistDismissed ?? false,
                     } as PersistedAppStore
                 }
                 return state as PersistedAppStore
@@ -38,6 +39,7 @@ export const useAppStore = create<AppState>()(
                 locale: state.locale,
                 selectedModel: state.selectedModel,
                 confirmDangerous: state.confirmDangerous,
+                firstRunChecklistDismissed: state.firstRunChecklistDismissed,
                 chats: state.chats,
             }),
         }
