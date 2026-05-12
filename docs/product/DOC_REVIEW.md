@@ -129,7 +129,7 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 | 浏览器扩展配置指南 | 浏览器用户 | ✅ 已完成 | [BROWSER_EXTENSION.md](user-guide/BROWSER_EXTENSION.md) |
 | Agent 运行时说明 | 高级用户 | ✅ 已完成 | [AGENT_RUNTIME.md](user-guide/AGENT_RUNTIME.md) |
 | Web 语音输入指南 | 所有用户 | ✅ 已完成 | [VOICE_INPUT.md](user-guide/VOICE_INPUT.md) |
-| 功能级文档结构（features/） | 开发者用户 | ✅ 已完成 | [features/](features/)（web-voice-input / first-run-checklist / settings-guidance / agent-runtime / knowledge-index） |
+| 功能级文档结构（features/） | 开发者用户 | ✅ 已完成 | [features/](features/)（web-voice-input / first-run-checklist / settings-guidance-and-system-status / agent-runtime / knowledge-index / workflow-automation-engine） |
 
 ---
 
@@ -148,7 +148,7 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 8. 想接入 MCP 服务器 → `docs/user-guide/MCP.md` 说明 `mcp.json` 和工具前缀 ✅
 9. 遇到问题想查日志 → `docs/user-guide/FAQ.md` 和 CONTRIBUTING 调试章节有入口 ✅
 10. 想用语音输入 → `docs/user-guide/VOICE_INPUT.md` 说明录音、转写、权限与排查 ✅
-10. 想了解 Telegram Bot 如何工作 → README + FAQ 覆盖绑定、Token、userId 排查；命令列表仍可后续深化 🔄
+11. 想了解 Telegram Bot 如何工作 → README + FAQ 覆盖绑定、Token、userId 排查；命令列表仍可后续深化 🔄
 ```
 
 **推进后用户旅程成功率：10/10（常用旅程全覆盖；Telegram 进阶命令和英文详细指南仍可后续深化）**
@@ -248,7 +248,9 @@ docs/
 │   └── VOICE_INPUT.md
 ├── developer-guide/        # 开发者文档（面向贡献者）
 │   ├── UI_DESIGN_GUIDE.md
-│   └── SMART_SCORING.md
+│   ├── SMART_SCORING.md
+│   ├── COPILOT_AI_LOOP.md
+│   └── tools/
 ├── product/                # 产品 / 规划 / 审查文档
 │   ├── ROADMAP.md
 │   ├── DOC_REVIEW.md
@@ -261,7 +263,8 @@ docs/
     ├── first-run-checklist/
     ├── settings-guidance-and-system-status/
     ├── agent-runtime/
-    └── knowledge-index/
+    ├── knowledge-index/
+    └── workflow-automation-engine/
 ```
 
 **⑫ 为 README 补真实截图，并视需要继续补演示 GIF**
@@ -342,7 +345,7 @@ docs/
 - [x] 新增 `docs/user-guide/AUTOMATION.md` 自动化指南
 - [x] 将 `docs/` 真实拆分为 `user-guide/`、`developer-guide/`、`product/`、`testing/`
 - [x] 新增 `docs/user-guide/VOICE_INPUT.md` Web 语音输入指南
-- [x] 建立 `docs/features/` 功能文档结构（web-voice-input / first-run-checklist / settings-guidance / agent-runtime / knowledge-index）
+- [x] 建立 `docs/features/` 功能文档结构（web-voice-input / first-run-checklist / settings-guidance-and-system-status / agent-runtime / knowledge-index / workflow-automation-engine）
 - [x] 在 PR 模板中加入文档 checklist
 - [x] README 增加真实截图
 - [ ] README 补演示 GIF（Notebook / tool confirmation / browser automation）
