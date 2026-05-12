@@ -262,3 +262,5 @@ P1。该项不阻塞核心对话功能，但能显著改善移动端和长提示
 ```text
 docs/developer-guide/FEATURE_web_voice_input_PLAN.md
 ```
+
+> **2026-05-12 更新**：Phase 1 MVP 已实现并通过构建验证。Dev Plan 见 [FEATURE_web_voice_input_PLAN.md](../developer-guide/FEATURE_web_voice_input_PLAN.md)。

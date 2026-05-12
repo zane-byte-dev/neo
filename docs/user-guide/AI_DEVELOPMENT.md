@@ -33,6 +33,8 @@ Freshness Check -> Implementation -> Test Review
 
 但即使是简化流程，也不要跳过核验和验证。
 
+如果你不想手动逐段切换五个 prompt，也可以直接使用 [../../.github/prompts/full-feature-loop.prompt.md](../../.github/prompts/full-feature-loop.prompt.md)。这个 prompt 适合“需求已经比较清楚，希望 Copilot 从 Product Brief / Dev Plan 一路推进到实现、测试报告和文档回写”的场景；它的默认结束条件不是“代码写完”，而是“本轮闭环做完或明确写出阻塞”。
+
 ## 开始前的准备
 
 开始前确认下面几项：
@@ -174,6 +176,9 @@ docs/developer-guide/FEATURE_first_run_checklist_PLAN.md
 5. `release-closeout.prompt.md`
    输入：feature slug + test report
    输出：`docs/README.md`、`CHANGELOG.md` 等回写。
+
+如果你已经有较清晰的功能输入，也可以直接用 [../../.github/prompts/full-feature-loop.prompt.md](../../.github/prompts/full-feature-loop.prompt.md) 代替上面 2 到 5 步，让 Copilot 在一轮里继续推进到验证、测试报告和 closeout；如果中途被阻塞，它应该把阻塞写回对应文档，而不是提前停下。
+
 
 如果你不确定 AI 当前是否偏题，一个简单办法是检查仓库里是否真的出现了这三类文档：
 

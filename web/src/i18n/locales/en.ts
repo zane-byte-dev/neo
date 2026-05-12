@@ -163,6 +163,19 @@ const en = {
     shiftEnterNewline: 'newline',
     newChatShortcut: 'new chat',
 
+    // Voice input
+    voiceInput: 'Voice input',
+    voiceRecording: 'Recording… tap to stop',
+    voiceTranscribing: 'Transcribing…',
+    voiceCancel: 'Cancel recording',
+    voiceStop: 'Stop recording',
+    voiceErrorNoSupport: 'Your browser does not support audio recording.',
+    voiceErrorPermission: 'Microphone access denied. Please allow it in your browser site settings.',
+    voiceErrorInsecure: 'Voice input requires a secure connection (HTTPS or localhost).',
+    voiceErrorNoProvider: 'No transcription provider configured. Please add an OpenAI or Gemini API key in Settings.',
+    voiceErrorTooLong: 'Recording too long. Please keep it under {max} seconds.',
+    voiceErrorGeneric: 'Transcription failed. Please try again.',
+
     // WelcomeScreen
     neoTitle: 'Neo',
     welcomeSubtitle: 'Your local AI assistant with access to tools, files, and your knowledge base.',

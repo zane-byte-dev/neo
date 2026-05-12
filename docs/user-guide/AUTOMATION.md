@@ -51,7 +51,7 @@ curl -X POST http://localhost:3000/api/webhook/alice \
 
 ## Cron 定时任务
 
-Cron 任务保存于 `{stateDir}/memory/schedule.json`，也可以在 Web UI 的 Settings / Automations 中管理。
+Cron 任务保存于 `{stateDir}/memory/schedule.json`，也可以在 Web UI 的 `Settings / Advanced / Automations` 中管理。
 
 ```json
 [
@@ -95,4 +95,4 @@ Cron 任务保存于 `{stateDir}/memory/schedule.json`，也可以在 Web UI 的
 - Webhook 返回 404：检查 `userId` 是否存在、是否配置 `webhookSecret`。
 - Webhook 返回 401：检查请求体里的 `secret`。
 - Cron 不执行：检查 cron 表达式、`enabled`、时区，以及后端进程是否正在运行。
-- Telegram 不推送：确认 Models 页已配置 Telegram Bot Token，且 `telegramChatId` 正确。
+- Telegram 不推送：先看 `Settings / Basic / Overview` 的 Automation 卡片是否异常，再到 `Settings / Basic / Models` 确认 Telegram Bot Token 已配置，并检查 `telegramChatId` 是否正确。

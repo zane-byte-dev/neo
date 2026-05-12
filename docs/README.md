@@ -25,6 +25,7 @@ docs/
 | [AUTOMATION.md](user-guide/AUTOMATION.md) | Webhook 与 Cron 定时任务 | ✅ 已落地 |
 | [BROWSER_EXTENSION.md](user-guide/BROWSER_EXTENSION.md) | Chrome 扩展安装、权限、保存路径、排查 | ✅ 已落地 |
 | [AGENT_RUNTIME.md](user-guide/AGENT_RUNTIME.md) | runId、事件流、断线追补、磁盘布局 | ✅ 已落地 |
+| [VOICE_INPUT.md](user-guide/VOICE_INPUT.md) | Web Chat 语音输入：录音、转写、权限与常见问题 | ✅ 已落地 |
 
 ## 开发者指南
 

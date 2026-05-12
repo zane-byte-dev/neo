@@ -46,10 +46,21 @@ WEB_PORT=3001 npm run dev:bot
 
 ## Telegram Bot 无响应怎么办？
 
-1. 在 Models 页确认 Telegram Bot Token 已配置。
-2. 在 `USERS[].tenants` 中加入 `telegram:<userId>`。
-3. 给 bot 发消息后查看 `logs/YYYY-MM-DD.jsonl`。
-4. 不知道自己的 Telegram userId 时，可以先给任意 user-info bot 发消息查询，或临时查看 Neo 后端收到的 Telegram update 日志。
+1. 先打开 `Settings / Basic / Overview`，确认 Automation 卡片是否显示错误或未配置。
+2. 在 `Settings / Basic / Models` 确认 Telegram Bot Token 已配置。
+3. 在 `USERS[].tenants` 中加入 `telegram:<userId>`。
+4. 给 bot 发消息后查看 `logs/YYYY-MM-DD.jsonl`。
+5. 不知道自己的 Telegram userId 时，可以先给任意 user-info bot 发消息查询，或临时查看 Neo 后端收到的 Telegram update 日志。
+
+## 如何判断 Neo 是否已经准备好？
+
+打开 `Settings / Basic / Overview`。
+
+- 顶部显示 `Ready`，说明核心接口、账号和至少一个模型已经就绪。
+- 显示 `Needs attention` 时，优先按卡片按钮进入 Models 或 Automations 修复。
+- `技术详情` 会保留原始报错，适合排查后端 5xx、凭据缺失或配置格式错误。
+
+如果 Overview 的 Backend 卡片持续异常，优先查看 `logs/YYYY-MM-DD.jsonl` 或重启后端，再返回页面重试。
 
 ## 如何清理历史会话和运行记录？
 

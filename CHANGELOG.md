@@ -8,6 +8,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Added
 
+- **Web 语音输入**：Chat 输入区右下角新增麦克风按钮，支持录音、停止/取消、转写并回填到输入框。录音最长 90 秒，默认不自动发送。后端新增 `POST /api/transcribe` 转写路由，优先使用 OpenAI Whisper，无 OpenAI key 时 fallback 到 Gemini 1.5 Flash。权限拒绝、浏览器不支持、无可用 provider 等情况均有内联错误提示与修复说明。
 - Settings / Basic / Overview with a system status card for backend, account, model, and automation readiness.
 - First-run checklist on the Chat welcome screen to guide model setup, first message, and Notebook note creation.
 - User guides for Tools, Skills, Sandbox, MCP, Notebook, Automation, Browser Extension, Agent Runtime, and FAQ.

@@ -79,7 +79,7 @@
 - [x] **键盘快捷键**：Cmd+N 新建会话、Cmd+B 切换侧边栏
 - [x] **首次使用清单**：Chat 欢迎页新增“开始使用 Neo” checklist，引导完成模型配置、第一条消息和 Notebook 笔记创建，并支持完成状态自动刷新与关闭持久化
 - [x] **设置清晰度与系统状态**：设置页新增 Basic / Advanced 分层、Overview 系统状态卡片，以及模型、Telegram、MCP、自动化失败时的修复入口
-- [ ] **语音输入**：Web 端支持录音并转文字（可复用语音转文字能力）
+- [x] **语音输入**：Web 端支持录音并转文字；前端使用 MediaRecorder 采集音频 Blob，后端新增 POST /api/transcribe 统一转写接口（OpenAI Whisper 优先，Gemini 1.5 Flash fallback），转写结果回填到输入框，默认不自动发送；权限拒绝、浏览器不支持、无可用 provider 等场景均有错误提示
 
 ### 7. 工作流与自动化
 

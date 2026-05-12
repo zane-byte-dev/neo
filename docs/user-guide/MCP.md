@@ -1,6 +1,6 @@
 # MCP 配置指南
 
-Neo 支持通过 MCP stdio server 扩展工具能力。配置文件位于 `{workDir}/mcp.json`，也可以在 Web UI 的 Settings / MCP Servers 中管理。
+Neo 支持通过 MCP stdio server 扩展工具能力。配置文件位于 `{workDir}/mcp.json`，也可以在 Web UI 的 `Settings / Advanced / MCP Servers` 中管理。
 
 ## mcp.json 格式
 
@@ -73,12 +73,13 @@ mcp__<serverName>__<toolName>
 
 ## 生效方式
 
-- 修改 Settings / MCP Servers 会写入 `{workDir}/mcp.json` 并刷新用户缓存。
+- 修改 `Settings / Advanced / MCP Servers` 会写入 `{workDir}/mcp.json` 并刷新用户缓存。
 - 手动编辑 `mcp.json` 后，调用 `POST /api/reload` 或重启后端。
 - 启动或 reload 时，Neo 会尝试连接每个 server 并执行 `tools/list`；失败的 server 会被跳过，不会阻断其它工具加载。
 
 ## 排查
 
+- 如果 `Settings / Basic / Overview` 的系统状态显示需要处理，但 Models 正常，优先检查 MCP 页面里的命令、参数和工作目录是否可用。
 - 设置 `LOG_LEVEL=debug` 后查看 `logs/YYYY-MM-DD.jsonl` 和后端控制台。
 - 先在终端手动运行 `command + args`，确认 server 能启动。
 - 如果 Agent 找不到工具，检查工具名是否带有 `mcp__server__tool` 前缀。

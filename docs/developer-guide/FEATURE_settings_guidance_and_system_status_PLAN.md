@@ -1,10 +1,24 @@
 # Settings Guidance And System Status Dev Plan
 
+## Status
+
+Phase 1 is implemented and accepted as an MVP.
+
+Implemented in this slice:
+
+- Settings now defaults to `Basic / Overview` and groups navigation into Basic and Advanced.
+- Overview aggregates existing readiness data from `/api/me`, `/api/models`, `/api/preferences`, and `/api/crons`.
+- Sidebar bulk chat deletion uses `ConfirmDialog` instead of `window.confirm`.
+- Model loading, Telegram settings, MCP save/load, and automation save/load errors use actionable inline banners.
+- User-facing docs, product status, roadmap, changelog, and test report were updated.
+
+Test report: [FEATURE_settings_guidance_and_system_status_TEST_REPORT.md](../testing/FEATURE_settings_guidance_and_system_status_TEST_REPORT.md)
+
 ## Scope
 
-This plan implements the first usable slice of `docs/product/FEATURE_settings_guidance_and_system_status.md`.
+This plan describes the first usable slice of [FEATURE_settings_guidance_and_system_status.md](../product/FEATURE_settings_guidance_and_system_status.md).
 
-Phase 1 focuses on Web UX changes that can reuse current APIs:
+Phase 1 focused on Web UX changes that reuse current APIs:
 
 - Replace the remaining browser-native destructive confirmation with `ConfirmDialog`.
 - Add a `Settings / Basic / Overview` entry that aggregates existing readiness data.
@@ -12,7 +26,7 @@ Phase 1 focuses on Web UX changes that can reuse current APIs:
 - Add actionable inline errors for model loading, Telegram preferences, MCP save, and automation save failures.
 - Update user-facing docs for the new settings structure and readiness card.
 
-Out of scope for this slice:
+Still out of scope for this slice:
 
 - A new backend `GET /api/system-status` aggregator.
 - A full settings center redesign.
@@ -25,7 +39,7 @@ Out of scope for this slice:
 
 `web/src/components/SettingsPanel.tsx` owns the top-level settings routes.
 
-The route set becomes:
+The implemented route set is:
 
 - `/settings` and `/settings/overview`: Basic / Overview
 - `/settings/models`: Basic / Models
@@ -34,7 +48,7 @@ The route set becomes:
 - `/settings/mcp`: Advanced / MCP Servers
 - `/settings/automations`: Advanced / Automations
 
-The top navigation should display two compact groups: Basic and Advanced. Advanced tabs remain directly reachable by URL and by one click in the same bar.
+The top navigation displays two compact groups: Basic and Advanced. Advanced tabs remain directly reachable by URL and by one click in the same bar.
 
 ### System Status Card
 
@@ -53,13 +67,13 @@ The card shows:
 - Models: configured model count and provider health warnings
 - Automation: Telegram runtime and cron job count
 
-Each non-ready item provides one primary action, such as retrying, opening Models, or opening Automations.
+Each non-ready item provides a primary action, such as retrying, opening Models, or opening Automations.
 
 ### Actionable Errors
 
-Use persistent inline banners near the failing panel, while keeping toasts for short outcome feedback.
+The implementation uses persistent inline banners near the failing panel, while keeping toasts for short outcome feedback.
 
-Initial coverage:
+Implemented initial coverage:
 
 - Model data load failure: retry and open model setup.
 - Telegram preference load/toggle failure: open credential area and retry.
@@ -68,24 +82,33 @@ Initial coverage:
 
 ## Testing And Verification
 
-Automated coverage for Web components is not currently configured in this repo. For Phase 1, verification is:
+Automated coverage for Web components is not currently configured in this repo. Phase 1 verification used:
 
-- `npm --prefix web run build` for TypeScript and Vite build validation.
-- `npm run docs:check` for documentation links.
-- Browser smoke check on `/settings`, `/settings/models`, and `/settings/automations` when a healthy dev server is available.
+- `npm --prefix web run build`: passed.
+- `npm run docs:check`: passed.
+- Browser smoke check on `/settings`, `/settings/models`, and `/settings/automations`: passed for rendering and error recovery states.
+
+Note: the shared browser environment returned backend 500 / aborted API requests during smoke testing, so the healthy `Ready` visual state still needs one follow-up smoke check in a healthy runtime. The failure path was verified and is recorded in the test report.
 
 If later slices add `GET /api/system-status`, backend readiness mapping should receive unit tests under `src/**/__tests__`.
 
 ## Documentation Updates
 
-Update the following when implementation lands:
+Updated during implementation:
 
-- `docs/user-guide/AGENT_RUNTIME.md`: settings overview, readiness card, and repair entry points.
-- `README.md`: first-run instructions should point to Settings / Basic / Overview and Models.
-- `CHANGELOG.md`: record the UX change.
-- `docs/product/PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md`: mark the recommendation as in-progress or partially implemented.
-- `docs/product/ROADMAP.md`: note the P1 settings clarity/status slice.
+- [AGENT_RUNTIME.md](../user-guide/AGENT_RUNTIME.md): settings overview, readiness card, and repair entry points.
+- [README.md](../../README.md): first-run instructions now point to Settings / Basic / Overview and Models.
+- [CHANGELOG.md](../../CHANGELOG.md): records the UX change.
+- [PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md](../product/PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md): marks the recommendation as completed for the MVP slice.
+- [ROADMAP.md](../product/ROADMAP.md): records the P1 settings clarity/status slice.
+- [FEATURE_settings_guidance_and_system_status_TEST_REPORT.md](../testing/FEATURE_settings_guidance_and_system_status_TEST_REPORT.md): records acceptance coverage and residual risks.
 
 ## Follow-Up
 
 Phase 2 can add a backend `GET /api/system-status` endpoint with structured error codes, workspace path readiness, recent automation run health, and richer repair metadata.
+
+Recommended Phase 2 follow-ups:
+
+- Verify the Overview `Ready` state in a healthy runtime.
+- Split `SettingsOverview` out of `SettingsPanel.tsx` if readiness logic grows further.
+- Add backend tests when readiness moves from frontend aggregation to a dedicated system-status route.

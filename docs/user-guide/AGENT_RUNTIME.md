@@ -74,7 +74,32 @@ Web UI 的设置页现在分为两层：
 
 进入 `Settings / Basic / Overview` 可以看到系统状态卡片。首版状态由现有接口聚合而来：账号来自 `/api/me`，模型与 provider health 来自 `/api/models`，Telegram 运行态来自 `/api/preferences`，Cron 数量来自 `/api/crons`。
 
+Overview 顶部会显示总体状态：
+
+| 状态 | 含义 | 建议动作 |
+|------|------|------|
+| Ready | 核心接口可访问，当前账号可识别，且至少有一个已配置模型 | 直接开始使用，或继续补充 Skills / Automations |
+| Needs attention | 至少一项 readiness 失败，例如后端异常、账号不可识别、模型未配置 | 先点击对应卡片动作按钮，进入需要修复的设置页 |
+
+下方子卡片会按领域给出摘要和主动作：
+
+| 卡片 | 看到什么 | 去哪里修 |
+|------|------|------|
+| Backend | 核心 API 未全部响应 | 先重试；如果仍失败，查看 `logs/YYYY-MM-DD.jsonl` 或重启后端 |
+| Account | 当前账号无法确认 | 重新登录，或检查 `/api/me` 对应的认证状态 |
+| Models | 没有可用模型，或 provider health 有 warning | 进入 `Settings / Basic / Models` 补 API Key、检查 provider 连接 |
+| Automation | Telegram / Cron 状态无法读取或未配置 | 进入 `Settings / Advanced / Automations` 检查 Webhook、Cron、Telegram 相关配置 |
+
 当模型、Telegram、MCP 或自动化保存失败时，页面会保留内联错误提示，并给出重试、打开凭据区或检查必填字段等修复入口。Toast 只提示结果，具体排查信息放在页面内的“技术详情”中。
+
+常见修复入口如下：
+
+| 场景 | 页面内动作 |
+|------|------|
+| 模型数据加载失败 | 在 `Settings / Basic / Models` 点击重试，并优先检查 provider 配置与后端连通性 |
+| Telegram 开关或凭据失败 | 在 `Settings / Basic / Models` 的 Telegram 区域打开凭据编辑区，补全 Bot Token / Chat ID |
+| MCP 保存或加载失败 | 在 `Settings / Advanced / MCP Servers` 检查命令、参数、`cwd` 和 `mcp.json` |
+| Cron / Webhook 加载或保存失败 | 在 `Settings / Advanced / Automations` 检查必填字段、时区和后端服务状态 |
 
 ## 调试
 

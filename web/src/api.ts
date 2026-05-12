@@ -382,6 +382,29 @@ export async function uploadFiles(files: File[]): Promise<UploadedFile[]> {
     return data.files
 }
 
+// ── Audio transcription ───────────────────────────────────────────────────────
+
+/**
+ * Transcribe an audio Blob to text via POST /api/transcribe.
+ * Returns the transcribed string.
+ */
+export async function transcribeAudio(blob: Blob, filename = 'audio.webm'): Promise<string> {
+    const formData = new FormData()
+    formData.append('audio', blob, filename)
+    const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+    })
+    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error((body as Record<string, string>).error ?? `HTTP ${res.status}`)
+    }
+    const data = await res.json() as { text: string }
+    return data.text
+}
+
 export async function* streamChat(
     message: string,
     sessionId: string,

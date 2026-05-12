@@ -30,6 +30,7 @@ Product Brief -> Dev Plan -> Implementation -> Test Review -> Release Closeout
 |--------|------|
 | `product-brief.prompt.md` | 把原始想法整理成产品需求文档 |
 | `dev-plan-from-product.prompt.md` | 基于产品文档生成开发计划 |
+| `full-feature-loop.prompt.md` | 从产品文档直接推进到实现、验证、测试报告和回写 |
 | `implement-dev-plan.prompt.md` | 按开发计划完成代码和文档改动 |
 | `test-review.prompt.md` | 对照需求、计划和 diff 做测试审查 |
 | `release-closeout.prompt.md` | 更新 Roadmap、Changelog 和发布资料 |
@@ -140,6 +141,7 @@ docs/testing/FEATURE_copilot-ai-loop_TEST_REPORT.md
 
 完成一轮迭代前应满足：
 
+- 如果迭代起点是 Product Brief，或本轮改动会影响用户可见行为，Dev Plan 状态、测试报告、相关产品 / 用户 / 发布文档必须已更新，或明确记录阻塞 / 延后原因。
 - 代码或文档变更与 Dev Plan 对齐。
 - 验收标准被逐项验证或说明未覆盖原因。
 - 必要测试已新增或更新。

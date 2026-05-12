@@ -165,6 +165,19 @@ const zh: Record<TranslationKeys, string> = {
     shiftEnterNewline: '换行',
     newChatShortcut: '新对话',
 
+    // Voice input
+    voiceInput: '语音输入',
+    voiceRecording: '录音中… 点击停止',
+    voiceTranscribing: '转写中…',
+    voiceCancel: '取消录音',
+    voiceStop: '停止录音',
+    voiceErrorNoSupport: '当前浏览器不支持录音功能。',
+    voiceErrorPermission: '麦克风权限被拒绝，请在浏览器网站设置中开启。',
+    voiceErrorInsecure: '语音输入需要安全连接（HTTPS 或 localhost）。',
+    voiceErrorNoProvider: '没有可用的转写服务，请在设置中添加 OpenAI 或 Gemini API Key。',
+    voiceErrorTooLong: '录音超时，请控制在 {max} 秒以内。',
+    voiceErrorGeneric: '转写失败，请重试。',
+
     // WelcomeScreen
     neoTitle: 'Neo',
     welcomeSubtitle: '你的本地 AI 助手，可使用工具、文件和知识库。',

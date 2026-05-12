@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2, FolderOpen } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2, FolderOpen, Mic, MicOff } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -9,6 +9,7 @@ import {
     fetchPreferences,
     fetchMessages,
     uploadFiles,
+    transcribeAudio,
     confirmTool,
     fetchToolResult,
     cancelRun,
@@ -1746,6 +1747,145 @@ const ChatInput: React.FC<{
         }
     }
 
+    // ── Voice input state machine ───────────────────────────────────────────────
+    // States: idle | recording | transcribing
+    type VoiceState = 'idle' | 'recording' | 'transcribing'
+    const [voiceState, setVoiceState] = React.useState<VoiceState>('idle')
+    const [voiceError, setVoiceError] = React.useState<string | null>(null)
+    const [recordingSeconds, setRecordingSeconds] = React.useState(0)
+    const mediaRecorderRef = React.useRef<MediaRecorder | null>(null)
+    const audioChunksRef = React.useRef<Blob[]>([])
+    const recordingTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
+    const MAX_RECORDING_SECONDS = 90
+
+    const stopRecordingTimer = () => {
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current)
+            recordingTimerRef.current = null
+        }
+    }
+
+    const cancelRecording = React.useCallback(() => {
+        stopRecordingTimer()
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop())
+            mediaRecorderRef.current.stop()
+        }
+        mediaRecorderRef.current = null
+        audioChunksRef.current = []
+        setVoiceState('idle')
+        setRecordingSeconds(0)
+        setVoiceError(null)
+    }, [])
+
+    // Clean up on unmount
+    React.useEffect(() => () => cancelRecording(), [cancelRecording])
+
+    const handleVoiceClick = async () => {
+        // Cancel if recording
+        if (voiceState === 'recording') {
+            // Stopping triggers onstop → transcription
+            stopRecordingTimer()
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                mediaRecorderRef.current.stop()
+            }
+            return
+        }
+
+        // Ignore while transcribing
+        if (voiceState === 'transcribing') return
+
+        setVoiceError(null)
+
+        // Check browser support
+        if (typeof window === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+            setVoiceError(t('voiceErrorNoSupport'))
+            return
+        }
+
+        // Check secure context
+        if (!window.isSecureContext) {
+            setVoiceError(t('voiceErrorInsecure'))
+            return
+        }
+
+        let stream: MediaStream
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : ''
+            if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied') || msg.toLowerCase().includes('not allowed')) {
+                setVoiceError(t('voiceErrorPermission'))
+            } else {
+                setVoiceError(t('voiceErrorNoSupport'))
+            }
+            return
+        }
+
+        // Pick a supported MIME type
+        const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/mp4']
+            .find(m => MediaRecorder.isTypeSupported(m)) ?? ''
+
+        audioChunksRef.current = []
+        const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+        mediaRecorderRef.current = recorder
+
+        recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data)
+        }
+
+        recorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop())
+            const chunks = audioChunksRef.current
+            audioChunksRef.current = []
+            mediaRecorderRef.current = null
+            setRecordingSeconds(0)
+
+            if (chunks.length === 0) {
+                setVoiceState('idle')
+                return
+            }
+
+            setVoiceState('transcribing')
+            const blob = new Blob(chunks, { type: mimeType || 'audio/webm' })
+            const ext = (mimeType || 'audio/webm').split('/')[1]?.split(';')[0] ?? 'webm'
+            try {
+                const text = await transcribeAudio(blob, `recording.${ext}`)
+                const current = useAppStore.getState().inputValue
+                setInputValue(current ? `${current} ${text}` : text)
+                setVoiceState('idle')
+                // Re-focus textarea after inserting text
+                setTimeout(() => textareaRef.current?.focus(), 50)
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : ''
+                if (msg.toLowerCase().includes('no transcription provider') || msg.toLowerCase().includes('api key')) {
+                    setVoiceError(t('voiceErrorNoProvider'))
+                } else {
+                    setVoiceError(t('voiceErrorGeneric'))
+                }
+                setVoiceState('idle')
+            }
+        }
+
+        recorder.start(250) // collect chunks every 250ms
+        setVoiceState('recording')
+        setRecordingSeconds(0)
+
+        // Start timer, auto-stop at MAX_RECORDING_SECONDS
+        recordingTimerRef.current = setInterval(() => {
+            setRecordingSeconds((s) => {
+                const next = s + 1
+                if (next >= MAX_RECORDING_SECONDS) {
+                    stopRecordingTimer()
+                    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+                        mediaRecorderRef.current.stop()
+                    }
+                }
+                return next
+            })
+        }, 1000)
+    }
+
     // Auto-resize textarea
     React.useEffect(() => {
         if (textareaRef.current) {
@@ -1960,6 +2100,36 @@ const ChatInput: React.FC<{
                                     {t('pressEscToStop')}
                                 </span>
                             )}
+                            {/* Mic button — hidden while generating */}
+                            {!isGenerating && (
+                                <button
+                                    type="button"
+                                    onClick={() => void handleVoiceClick()}
+                                    disabled={voiceState === 'transcribing'}
+                                    className={cn(
+                                        'p-2 rounded-xl transition-all duration-200 cursor-pointer',
+                                        voiceState === 'recording'
+                                            ? 'bg-destructive/10 text-destructive hover:bg-destructive/20 animate-pulse'
+                                            : voiceState === 'transcribing'
+                                                ? 'bg-fill text-text-tertiary cursor-wait'
+                                                : 'text-text-tertiary hover:text-text-secondary hover:bg-fill'
+                                    )}
+                                    title={
+                                        voiceState === 'recording'
+                                            ? t('voiceStop')
+                                            : voiceState === 'transcribing'
+                                                ? t('voiceTranscribing')
+                                                : t('voiceInput')
+                                    }
+                                    aria-label={voiceState === 'recording' ? t('voiceStop') : t('voiceInput')}
+                                >
+                                    {voiceState === 'transcribing'
+                                        ? <Loader2 size={14} className="animate-spin" />
+                                        : voiceState === 'recording'
+                                            ? <MicOff size={14} />
+                                            : <Mic size={14} />}
+                                </button>
+                            )}
                             {isGenerating ? (
                                 <button
                                     onClick={handleStop}
@@ -1985,6 +2155,51 @@ const ChatInput: React.FC<{
                             )}
                         </div>
                     </div>
+                    {/* Voice status strip — recording indicator, elapsed time, error */}
+                    {(voiceState === 'recording' || voiceState === 'transcribing' || voiceError) && (
+                        <div className={cn(
+                            'flex items-center gap-2 px-3 py-1.5 mx-0 rounded-b-2xl text-xs',
+                            voiceError
+                                ? 'bg-destructive/8 text-destructive'
+                                : 'bg-primary-mint/8 text-primary-mint'
+                        )}>
+                            {voiceError ? (
+                                <>
+                                    <span className="flex-1">{voiceError}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setVoiceError(null)}
+                                        className="shrink-0 p-0.5 rounded hover:bg-destructive/10 transition-colors"
+                                        aria-label={t('cancel')}
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </>
+                            ) : voiceState === 'recording' ? (
+                                <>
+                                    <span className="w-2 h-2 rounded-full bg-destructive animate-pulse shrink-0" />
+                                    <span className="flex-1">{t('voiceRecording')}</span>
+                                    <span className="tabular-nums shrink-0">
+                                        {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={cancelRecording}
+                                        className="shrink-0 p-0.5 rounded hover:bg-primary-mint/10 transition-colors ml-1"
+                                        aria-label={t('voiceCancel')}
+                                        title={t('voiceCancel')}
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <Loader2 size={12} className="animate-spin shrink-0" />
+                                    <span>{t('voiceTranscribing')}</span>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
                 {/* Safety confirm + tool approval rules row */}
                 <div className="flex items-center gap-2 mt-1.5 px-1 flex-wrap">
