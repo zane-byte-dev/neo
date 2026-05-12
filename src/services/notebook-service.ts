@@ -11,6 +11,7 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlink
 import { join, resolve } from 'node:path';
 import { parseJsonLines, readJsonFileSyncOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
+import { generateId } from '../utils/id-generator.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -921,7 +922,7 @@ export function nbSaveAnnotation(workDir: string, notebook: string, data: Annota
     void workDir;
     const now = Date.now();
     const existing = readAnnotationFile(stateDir, notebook, data.articleId);
-    const id = data.id || `anno_${now}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = data.id || `anno_${generateId()}`;
     const prev = existing.find((a) => a.id === id);
     const annotation: NotebookAnnotation = {
         id,

@@ -53,6 +53,8 @@ import { calcUser } from '../services/user-service.js';
 import { getMonthlyUsage } from '../utils/token-tracker.js';
 import { trashArticle, trashNotebook } from '../services/trash-service.js';
 
+const MAX_ANNOTATION_CONTEXT_TEXT = 200;
+
 // ── GET /api/notebook — Read-only actions ───────────────────────────────────
 
 export function notebookGet(router: Router): void {
@@ -324,8 +326,8 @@ function parseAnchor(value: unknown) {
         ...(typeof raw.paragraphId === 'string' ? { paragraphId: raw.paragraphId } : {}),
         ...(typeof raw.startOffset === 'number' && Number.isFinite(raw.startOffset) ? { startOffset: raw.startOffset } : {}),
         ...(typeof raw.endOffset === 'number' && Number.isFinite(raw.endOffset) ? { endOffset: raw.endOffset } : {}),
-        ...(typeof raw.beforeText === 'string' ? { beforeText: raw.beforeText.slice(0, 200) } : {}),
-        ...(typeof raw.afterText === 'string' ? { afterText: raw.afterText.slice(0, 200) } : {}),
+        ...(typeof raw.beforeText === 'string' ? { beforeText: raw.beforeText.slice(0, MAX_ANNOTATION_CONTEXT_TEXT) } : {}),
+        ...(typeof raw.afterText === 'string' ? { afterText: raw.afterText.slice(0, MAX_ANNOTATION_CONTEXT_TEXT) } : {}),
     };
 }
 

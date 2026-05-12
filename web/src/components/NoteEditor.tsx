@@ -183,7 +183,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             .then((items) => { if (!cancelled) setAnnotations(items) })
             .catch(() => { if (!cancelled) setAnnotations([]) })
         return () => { cancelled = true }
-    }, [note?.id, note?.notebook, notebook])
+    }, [note, notebook])
 
     // Reset dirty flag on note change (remount via key=)
     React.useEffect(() => {

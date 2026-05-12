@@ -40,6 +40,8 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
+const ANNOTATION_CONTEXT_LENGTH = 120
+
 // ─── AI completion helper ─────────────────────────────────────────────────────
 
 type AICommand = 'continue' | 'improve' | 'shorter' | 'longer' | 'fix'
@@ -195,8 +197,8 @@ const AnnotationBubbleButton: React.FC<AnnotationBubbleButtonProps> = ({ onAnnot
         if (from === to) return
         const quote = ed.state.doc.textBetween(from, to, ' ').trim()
         if (!quote) return
-        const beforeText = ed.state.doc.textBetween(Math.max(0, from - 120), from, ' ').trim()
-        const afterText = ed.state.doc.textBetween(to, Math.min(ed.state.doc.content.size, to + 120), ' ').trim()
+        const beforeText = ed.state.doc.textBetween(Math.max(0, from - ANNOTATION_CONTEXT_LENGTH), from, ' ').trim()
+        const afterText = ed.state.doc.textBetween(to, Math.min(ed.state.doc.content.size, to + ANNOTATION_CONTEXT_LENGTH), ' ').trim()
         ed.chain().focus().toggleHighlight().run()
         onAnnotateSelection?.({
             quote,
