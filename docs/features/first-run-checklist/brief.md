@@ -1,6 +1,6 @@
 # First-run Checklist
 
-> Status update (2026-05-12): Chat 欢迎页的首次使用清单 MVP 已实现，当前覆盖模型配置、发送第一条消息、创建 Notebook 笔记三项任务。实现细节见 [FEATURE_first_run_checklist_PLAN.md](../developer-guide/FEATURE_first_run_checklist_PLAN.md)，验收结果见 [FEATURE_first_run_checklist_TEST_REPORT.md](../testing/FEATURE_first_run_checklist_TEST_REPORT.md)。
+> Status update (2026-05-12): Chat 欢迎页的首次使用清单 MVP 已实现，当前覆盖模型配置、发送第一条消息、创建 Notebook 笔记三项任务。实现细节见 [plan.md](plan.md)，验收结果见 [test-report.md](test-report.md)。
 
 ## Background
 
@@ -8,9 +8,9 @@ Neo 已经具备 Chat、Notebook、Skills、Tools、MCP、Automations、Apps、T
 
 相关来源：
 
-- [PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md](PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md)：P1 建议增加“首次使用清单（First-run Checklist）”。
-- [PM_AUDIT_REPORT.md](PM_AUDIT_REPORT.md)：多个空状态、设置项和高级能力暴露问题都指向同一个体验风险：能力强，但第一天不够容易形成正反馈。
-- [ROADMAP.md](ROADMAP.md)：Web UI 增强已完成大量基础能力，下一阶段应提升任务引导和配置可理解性。
+- [PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md](../../product/PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md)：P1 建议增加"首次使用清单（First-run Checklist）"。
+- [PM_AUDIT_REPORT.md](../../product/PM_AUDIT_REPORT.md)：多个空状态、设置项和高级能力暴露问题都指向同一个体验风险：能力强，但第一天不够容易形成正反馈。
+- [ROADMAP.md](../../product/ROADMAP.md)：Web UI 增强已完成大量基础能力，下一阶段应提升任务引导和配置可理解性。
 
 ## Evidence And Freshness Check
 
@@ -121,5 +121,5 @@ P1。该需求不阻塞核心功能，但能显著改善新用户首日体验，
 下一步进入 Dev Plan 阶段，建议输出：
 
 ```text
-docs/developer-guide/FEATURE_first_run_checklist_PLAN.md
+docs/features/first-run-checklist/plan.md
 ```

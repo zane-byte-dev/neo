@@ -2,7 +2,7 @@
 
 ## Product Input
 
-Product Brief: [FEATURE_first_run_checklist.md](../product/FEATURE_first_run_checklist.md)
+Product Brief: [brief.md](brief.md)
 
 Goal: add a lightweight, dismissible onboarding checklist to the empty Chat welcome state so new users can see the shortest path to value.
 

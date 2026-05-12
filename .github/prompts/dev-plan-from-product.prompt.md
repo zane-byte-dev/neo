@@ -15,7 +15,7 @@ agent: "agent"
 - [Test Plan](../../docs/testing/TEST_PLAN.md)
 - 与功能相关的 `docs/developer-guide/` 文档和代码
 
-输出或更新 `docs/developer-guide/FEATURE_<slug>_PLAN.md`。不要直接改业务代码，除非用户明确要求继续实现。
+输出或更新 `docs/features/<slug>/plan.md`。不要直接改业务代码，除非用户明确要求继续实现。
 
 文档必须包含：
 

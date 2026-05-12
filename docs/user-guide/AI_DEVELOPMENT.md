@@ -51,10 +51,10 @@ Freshness Check -> Implementation -> Test Review
 
 | 阶段 | 你给 Copilot 的输入 | 预期输出 | 默认落点 |
 |------|---------------------|----------|----------|
-| Product Brief | 功能想法、用户问题、旧文档、体验反馈 | 可交接的需求文档 | `docs/product/FEATURE_<slug>.md` |
-| Dev Plan | Product Brief | 可执行的工程计划 | `docs/developer-guide/FEATURE_<slug>_PLAN.md` |
+| Product Brief | 功能想法、用户问题、旧文档、体验反馈 | 可交接的需求文档 | `docs/features/<slug>/brief.md` |
+| Dev Plan | Product Brief | 可执行的工程计划 | `docs/features/<slug>/plan.md` |
 | Implementation | Dev Plan + 允许开始实现 | 代码、文档、验证结果 | `src/`、`web/`、`docs/` |
-| Test Review | Product Brief、Dev Plan、当前 diff | 测试报告、风险、补测建议 | `docs/testing/FEATURE_<slug>_TEST_REPORT.md` |
+| Test Review | Product Brief、Dev Plan、当前 diff | 测试报告、风险、补测建议 | `docs/features/<slug>/test-report.md` |
 | Release Closeout | 已通过验证的结果 | Roadmap、Changelog、文档回写 | `docs/`、`CHANGELOG.md` |
 
 ### 1. 先跑 Product Brief
@@ -89,7 +89,7 @@ Product Brief 确认后，在 Copilot Chat 中选择 [../../.github/prompts/dev-
 推荐输入方式：
 
 ```text
-请基于 docs/product/FEATURE_first_run_checklist.md 生成开发计划。
+请基于 docs/features/first-run-checklist/brief.md 生成开发计划。
 重点说明要改哪些文件、状态来源、测试计划和本轮不做的内容。
 ```
 
@@ -108,7 +108,7 @@ Dev Plan 不是 PRD 的重复版。它应该把产品语言翻译成工程约束
 推荐输入方式：
 
 ```text
-按 docs/developer-guide/FEATURE_first_run_checklist_PLAN.md 开始实现。
+按 docs/features/first-run-checklist/plan.md 开始实现。
 保持范围和计划一致，先做最小可行版本；如果发现计划和代码现实冲突，先说明调整理由。
 ```
 
@@ -125,8 +125,8 @@ Dev Plan 不是 PRD 的重复版。它应该把产品语言翻译成工程约束
 推荐输入方式：
 
 ```text
-请基于 docs/product/FEATURE_first_run_checklist.md、
-docs/developer-guide/FEATURE_first_run_checklist_PLAN.md
+请基于 docs/features/first-run-checklist/brief.md、
+docs/features/first-run-checklist/plan.md
 和当前 git diff 做测试审查。
 优先找验收缺口、回归风险和缺失测试。
 ```
@@ -140,7 +140,7 @@ docs/developer-guide/FEATURE_first_run_checklist_PLAN.md
 
 如果功能已经实现，但文档还停留在“建议中”或“待实现”，这应该被记为 finding，而不是可选优化。
 
-如果需要正式留档，测试报告应写入 `docs/testing/FEATURE_<slug>_TEST_REPORT.md`。
+如果需要正式留档，测试报告应写入 `docs/features/<slug>/test-report.md`。
 
 ### 5. 最后做 Release Closeout
 
@@ -163,16 +163,16 @@ docs/developer-guide/FEATURE_first_run_checklist_PLAN.md
 
 1. `product-brief.prompt.md`
    输入：欢迎页首次使用清单想法 + 要求核验当前代码。
-   输出：`docs/product/FEATURE_first_run_checklist.md`
+   输出：`docs/features/first-run-checklist/brief.md`
 2. `dev-plan-from-product.prompt.md`
-   输入：`docs/product/FEATURE_first_run_checklist.md`
-   输出：`docs/developer-guide/FEATURE_first_run_checklist_PLAN.md`
+   输入：`docs/features/first-run-checklist/brief.md`
+   输出：`docs/features/first-run-checklist/plan.md`
 3. `implement-dev-plan.prompt.md`
-   输入：`docs/developer-guide/FEATURE_first_run_checklist_PLAN.md`
+   输入：`docs/features/first-run-checklist/plan.md`
    输出：代码改动、i18n、store、验证结果。
 4. `test-review.prompt.md`
    输入：Product Brief + Dev Plan + 当前 diff
-   输出：`docs/testing/FEATURE_first_run_checklist_TEST_REPORT.md`
+   输出：`docs/features/first-run-checklist/test-report.md`
 5. `release-closeout.prompt.md`
    输入：feature slug + test report
    输出：`docs/README.md`、`CHANGELOG.md` 等回写。
@@ -182,9 +182,9 @@ docs/developer-guide/FEATURE_first_run_checklist_PLAN.md
 
 如果你不确定 AI 当前是否偏题，一个简单办法是检查仓库里是否真的出现了这三类文档：
 
-- `docs/product/FEATURE_<slug>.md`
-- `docs/developer-guide/FEATURE_<slug>_PLAN.md`
-- `docs/testing/FEATURE_<slug>_TEST_REPORT.md`
+- `docs/features/<slug>/brief.md`
+- `docs/features/<slug>/plan.md`
+- `docs/features/<slug>/test-report.md`
 
 缺任何一类，通常都说明流程还没有闭环。
 

@@ -19,7 +19,7 @@ agent: "agent"
 
 必要时补充或修改测试。不要修复与本次范围无关的问题。
 
-输出测试报告；如果需要落文档，写入 `docs/testing/FEATURE_<slug>_TEST_REPORT.md`：
+输出测试报告；如果需要落文档，写入 `docs/features/<slug>/test-report.md`：
 
 ```markdown
 # <Feature Name> Test Report

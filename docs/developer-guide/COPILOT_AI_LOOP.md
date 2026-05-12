@@ -16,10 +16,10 @@ Product Brief -> Dev Plan -> Implementation -> Test Review -> Release Closeout
 
 | 阶段 | Copilot 角色 | 主要输入 | 主要输出 | 建议位置 |
 |------|--------------|----------|----------|----------|
-| Product Brief | 产品经理 | 用户想法、竞品、Roadmap、体验报告 | 需求背景、目标、范围、验收标准 | `docs/product/FEATURE_<slug>.md` |
-| Dev Plan | 开发负责人 | Product Brief、开发者文档、现有代码 | 模块方案、任务拆分、测试策略 | `docs/developer-guide/FEATURE_<slug>_PLAN.md` |
+| Product Brief | 产品经理 | 用户想法、竞品、Roadmap、体验报告 | 需求背景、目标、范围、验收标准 | `docs/features/<slug>/brief.md` |
+| Dev Plan | 开发负责人 | Product Brief、开发者文档、现有代码 | 模块方案、任务拆分、测试策略 | `docs/features/<slug>/plan.md` |
 | Implementation | 编码 Agent | Dev Plan、相关代码、测试约束 | 代码变更、文档更新、自测结果 | `src/`、`web/`、`docs/` |
-| Test Review | 测试负责人 | Product Brief、Dev Plan、git diff、测试计划 | 测试报告、风险、补测建议 | `docs/testing/FEATURE_<slug>_TEST_REPORT.md` |
+| Test Review | 测试负责人 | Product Brief、Dev Plan、git diff、测试计划 | 测试报告、风险、补测建议 | `docs/features/<slug>/test-report.md` |
 | Release Closeout | 发布负责人 | 最终 diff、测试结果、产品验收 | Roadmap、Changelog、发布说明更新 | `docs/product/`、`CHANGELOG.md` |
 
 ## 推荐入口
@@ -110,20 +110,20 @@ Closeout 阶段负责把迭代结果写回项目记忆。根据改动范围更�
 
 ## 文件命名建议
 
-使用同一个 `<slug>` 串起一轮迭代：
+每个 feature 独立一个目录，三份文档放在一起：
 
 ```text
-docs/product/FEATURE_<slug>.md
-docs/developer-guide/FEATURE_<slug>_PLAN.md
-docs/testing/FEATURE_<slug>_TEST_REPORT.md
+docs/features/<slug>/brief.md
+docs/features/<slug>/plan.md
+docs/features/<slug>/test-report.md
 ```
 
 示例：
 
 ```text
-docs/product/FEATURE_copilot-ai-loop.md
-docs/developer-guide/FEATURE_copilot-ai-loop_PLAN.md
-docs/testing/FEATURE_copilot-ai-loop_TEST_REPORT.md
+docs/features/copilot-ai-loop/brief.md
+docs/features/copilot-ai-loop/plan.md
+docs/features/copilot-ai-loop/test-report.md
 ```
 
 ## 门禁定义

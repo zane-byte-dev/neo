@@ -15,7 +15,7 @@ agent: "agent"
 - [Competitive Research](../../docs/product/COMPETITIVE_RESEARCH.md)
 - 任何用户明确提到的文档或代码
 
-输出或更新 `docs/product/FEATURE_<slug>.md`。如果已有合适文档，请更新原文档；否则新建一个聚焦的 feature brief。
+输出或更新 `docs/features/<slug>/brief.md`。如果已有合适文档，请更新原文档；否则新建一个聚焦的 feature brief。
 
 在写 Product Brief 前，先做事实核验：
 

@@ -23,8 +23,8 @@ agent: "agent"
 2. 生成或更新对应的 Dev Plan。
 3. 按最小可行范围实现代码与文档改动。
 4. 运行最窄可执行验证；如果仓库缺少自动化测试，必须用 build、定向 test、docs check、browser smoke 等替代验证。
-5. 生成或更新 `docs/testing/FEATURE_<slug>_TEST_REPORT.md`。
-6. 回写必要文档：`docs/product/` 状态文档、`docs/user-guide/`、`README.md`、`CHANGELOG.md`、`docs/product/ROADMAP.md`、相关 `docs/developer-guide/` 文档。
+5. 生成或更新 `docs/features/<slug>/test-report.md`。
+6. 回写必要文档：`docs/features/<slug>/brief.md` 状态注记、`docs/user-guide/`、`README.md`、`CHANGELOG.md`、`docs/product/ROADMAP.md`、相关 `docs/developer-guide/` 文档。
 7. 把 Dev Plan 从“计划态”更新为当前实现状态，写明已完成项、验证结果和 follow-up。
 
 要求：

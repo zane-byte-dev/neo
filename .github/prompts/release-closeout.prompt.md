@@ -25,7 +25,7 @@ agent: "agent"
 - `docs/product/RELEASE_NOTES_*.md`
 - `docs/README.md`
 - 相关 `docs/user-guide/` 或 `docs/developer-guide/` 文档
-- 对应的 `docs/product/FEATURE_<slug>.md`、体验审查或历史状态文档（如果这些文档会因为本次实现而显得过期）
+- 对应的 `docs/features/<slug>/brief.md`、体验审查或历史状态文档（如果这些文档会因为本次实现而显得过期）
 
 要求：
 

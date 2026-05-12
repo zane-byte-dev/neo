@@ -88,7 +88,7 @@ Neo 已具备“可立即投入个人 AI 工作流”的产品底盘：
 
 ## 5.1 产品交互建议
 
-> 状态更新（2026-05-12）：下面第 1 条“首次使用清单”建议已以 MVP 形式落地到 Chat 欢迎页，详见 [FEATURE_first_run_checklist.md](FEATURE_first_run_checklist.md)。其余建议仍按本报告原始结论保留。
+> 状态更新（2026-05-12）：下面第 1 条"首次使用清单"建议已以 MVP 形式落地到 Chat 欢迎页，详见 [brief.md](../features/first-run-checklist/brief.md)。其余建议仍按本报告原始结论保留。
 
 1. **增加“首次使用清单（First-run Checklist）”**
    - 放在登录后首页显著位置，默认包含：
