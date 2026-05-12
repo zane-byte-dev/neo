@@ -1,10 +1,11 @@
 import React from 'react'
-import { ArrowLeft, Trash2, Check, Loader2 } from 'lucide-react'
+import { ArrowLeft, Trash2, Check, Loader2, History, MoreHorizontal, Link, Copy, Maximize2, Type, Download } from 'lucide-react'
 import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete } from '../api'
 import { cn } from '../lib/utils'
 import type { NoteEntry } from '../types'
 import { t } from '../i18n'
 import { NovelEditor } from './NovelEditor'
+import { HistoryDrawer } from './notebook/HistoryDrawer'
 
 interface NoteEditorProps {
     note: NoteEntry | null             // null = create new
@@ -12,6 +13,7 @@ interface NoteEditorProps {
     onBack: () => void
     onSaved: (entry: NoteEntry) => void
     onDeleted?: (id: string) => void
+    onDuplicated?: (entry: NoteEntry) => void
     /**
      * When true: enables Notion-style auto-save (debounce 1.5s after last change).
      * Hides the manual Save button; shows a subtle status indicator instead.
@@ -55,7 +57,7 @@ function formatRelativeTime(value: string | number | null | undefined): string {
     return `${Math.floor(diffMs / day)} 天前`
 }
 
-export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'personal', onBack, onSaved, onDeleted, autoSave = false }) => {
+export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'personal', onBack, onSaved, onDeleted, onDuplicated, autoSave = false }) => {
     const [title, setTitle] = React.useState(note?.title ?? '')
     const [author, setAuthor] = React.useState(note?.author ?? '')
     const [date] = React.useState(note?.date ?? new Date().toISOString().split('T')[0])
@@ -66,11 +68,18 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const [loading, setLoading] = React.useState(!!note)
     const [saving, setSaving] = React.useState(false)
     const [saveStatus, setSaveStatus] = React.useState<SaveStatus>('idle')
-    const [activityOpen, setActivityOpen] = React.useState(false)
+    const [menuOpen, setMenuOpen] = React.useState(false)
+    const [historyOpen, setHistoryOpen] = React.useState(false)
     const [confirmDelete, setConfirmDelete] = React.useState(false)
     const [currentDisplayName, setCurrentDisplayName] = React.useState<string | null>(null)
+    // Display preferences (localStorage persisted)
+    const [smallText, setSmallText] = React.useState(() => localStorage.getItem('neo:editor:smallText') === '1')
+    const [fullWidth, setFullWidth] = React.useState(() => localStorage.getItem('neo:editor:fullWidth') === '1')
+    // Action feedback
+    const [copyLinkDone, setCopyLinkDone] = React.useState(false)
+    const [duplicating, setDuplicating] = React.useState(false)
     const titleRef = React.useRef<HTMLTextAreaElement>(null)
-    const activityRef = React.useRef<HTMLDivElement>(null)
+    const menuRef = React.useRef<HTMLDivElement>(null)
     const autoSaveTimerRef = React.useRef<number | null>(null)
     const isDirtyRef = React.useRef(false)
     // Keep latest field values accessible in auto-save callback without stale closures
@@ -94,13 +103,13 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     }, [note])
 
     React.useEffect(() => {
-        if (!activityOpen) return
+        if (!menuOpen) return
         const handler = (e: MouseEvent) => {
-            if (activityRef.current && !activityRef.current.contains(e.target as Node)) setActivityOpen(false)
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
-    }, [activityOpen])
+    }, [menuOpen])
 
     // Auto-expand content textarea to fit content (avoids internal scroll in textarea)
     // Auto-focus title for new notes
@@ -194,6 +203,60 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         } catch { /* ignore */ }
     }
 
+    const handleCopyLink = async () => {
+        if (!note) return
+        const url = `${window.location.origin}/notebook/${encodeURIComponent(note.notebook ?? notebook)}?article=${encodeURIComponent(note.id)}`
+        await navigator.clipboard.writeText(url).catch(() => {})
+        setCopyLinkDone(true)
+        setTimeout(() => setCopyLinkDone(false), 2000)
+    }
+
+    const handleDuplicate = async () => {
+        if (!note) return
+        setDuplicating(true)
+        try {
+            const f = fieldsRef.current
+            const entry = await notebookCreate(note.notebook ?? notebook, {
+                title: `${f.title.trim()} 副本`,
+                author: f.author.trim() || null,
+                date: f.date || null,
+                source: f.source || null,
+                summary: f.summary || null,
+                tags: f.tags || null,
+                content: f.content,
+            })
+            onDuplicated?.(entry)
+        } catch { /* ignore */ } finally {
+            setDuplicating(false)
+            setMenuOpen(false)
+        }
+    }
+
+    const handleExport = () => {
+        if (!note) return
+        const f = fieldsRef.current
+        const lines: string[] = ['---']
+        if (f.title) lines.push(`title: "${f.title.replace(/"/g, '\\"')}"`)
+        if (f.author) lines.push(`author: ${f.author}`)
+        if (f.date) lines.push(`date: ${f.date}`)
+        lines.push('---', '', f.content)
+        const blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${f.title.trim() || 'article'}.md`
+        a.click()
+        URL.revokeObjectURL(url)
+        setMenuOpen(false)
+    }
+
+    const toggleSmallText = () => {
+        setSmallText((v) => { localStorage.setItem('neo:editor:smallText', v ? '' : '1'); return !v })
+    }
+    const toggleFullWidth = () => {
+        setFullWidth((v) => { localStorage.setItem('neo:editor:fullWidth', v ? '' : '1'); return !v })
+    }
+
     const creatorName = author.trim() || currentDisplayName || '未知'
     const editorName = currentDisplayName || creatorName
     const createdTime = note?.createdAt ?? date
@@ -235,62 +298,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
 
                 {/* Right: action buttons */}
                 <div className="shrink-0 flex items-center gap-0.5">
-                    <div className="relative" ref={activityRef}>
-                        <button
-                            onClick={() => setActivityOpen((v) => !v)}
-                            className={cn(
-                                'px-2 py-1 text-[11px] rounded-md transition-colors font-medium',
-                                activityOpen
-                                    ? 'text-primary-mint bg-primary-mint/10'
-                                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'
-                            )}
-                        >
-                            上次编辑 {formatRelativeTime(updatedTime)}
-                        </button>
-                        {activityOpen && (
-                            <div className="absolute right-0 top-full mt-2 w-[300px] rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#202020] shadow-2xl overflow-hidden z-50 animate-slide-up">
-                                <div className="px-4 py-3 border-b border-gray-100 dark:border-white/8 text-sm font-semibold text-gray-500 dark:text-gray-400">
-                                    活动
-                                </div>
-                                <div className="px-4 py-3 space-y-2.5">
-                                    <ActivityRow label="编辑者" name={editorName} time={formatRelativeTime(updatedTime)} />
-                                    <ActivityRow label="创建者" name={creatorName} time={formatShortDate(createdTime)} />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    {note && (
-                        confirmDelete ? (
-                            <div className="flex items-center gap-1 ml-1">
-                                <button
-                                    onClick={handleDelete}
-                                    className="px-2 py-1 text-[11px] bg-red-500 text-white rounded-md font-medium hover:bg-red-600 transition-colors"
-                                >
-                                    {t('confirmDelete')}
-                                </button>
-                                <button
-                                    onClick={() => setConfirmDelete(false)}
-                                    className="px-2 py-1 text-[11px] text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 rounded-md transition-colors"
-                                >
-                                    {t('cancel')}
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={() => setConfirmDelete(true)}
-                                className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
-                                title={t('delete')}
-                            >
-                                <Trash2 size={13} />
-                            </button>
-                        )
-                    )}
                     {!autoSave && (
                         <button
                             onClick={() => void handleSave()}
                             disabled={saving || !title.trim()}
                             className={cn(
-                                'flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md transition-colors font-medium ml-1',
+                                'flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md transition-colors font-medium',
                                 saving || !title.trim()
                                     ? 'bg-gray-100 dark:bg-white/10 text-gray-400 cursor-not-allowed'
                                     : 'bg-[#2ecc71] hover:bg-[#27ae60] text-white'
@@ -300,13 +313,132 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                             {saving ? t('saving') : t('save')}
                         </button>
                     )}
+                    {/* ··· menu */}
+                    <div className="relative" ref={menuRef}>
+                        <button
+                            onClick={() => { setMenuOpen((v) => !v); setConfirmDelete(false) }}
+                            className={cn(
+                                'w-7 h-7 flex items-center justify-center rounded-md transition-colors',
+                                menuOpen
+                                    ? 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300'
+                                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'
+                            )}
+                            title="更多操作"
+                        >
+                            <MoreHorizontal size={14} />
+                        </button>
+                        {menuOpen && (
+                            <div className="absolute right-0 top-full mt-1 w-[220px] rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-[#242424] shadow-2xl overflow-hidden z-50 animate-slide-up py-1">
+                                {/* Activity info */}
+                                {note && (
+                                    <>
+                                        <div className="px-3 pt-2 pb-1.5 flex flex-col gap-0.5">
+                                            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 mb-0.5">活动</span>
+                                            <ActivityRow label="编辑者" name={editorName} time={formatRelativeTime(updatedTime)} />
+                                            <ActivityRow label="创建者" name={creatorName} time={formatShortDate(createdTime)} />
+                                        </div>
+                                        <div className="my-1 border-t border-gray-100 dark:border-white/8" />
+                                        {/* Actions */}
+                                        <button
+                                            onClick={handleCopyLink}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                                        >
+                                            {copyLinkDone
+                                                ? <Check size={14} className="text-emerald-500 shrink-0" />
+                                                : <Link size={14} className="text-text-quaternary shrink-0" />
+                                            }
+                                            {copyLinkDone ? '已复制' : '拷贝链接'}
+                                        </button>
+                                        <button
+                                            onClick={handleDuplicate}
+                                            disabled={duplicating}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-50"
+                                        >
+                                            {duplicating
+                                                ? <Loader2 size={14} className="text-text-quaternary shrink-0 animate-spin" />
+                                                : <Copy size={14} className="text-text-quaternary shrink-0" />
+                                            }
+                                            创建副本
+                                        </button>
+                                        <div className="my-1 border-t border-gray-100 dark:border-white/8" />
+                                        {/* Display prefs */}
+                                        <button
+                                            onClick={toggleSmallText}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                                        >
+                                            <Type size={14} className="text-text-quaternary shrink-0" />
+                                            <span className="flex-1 text-left">小字号</span>
+                                            <ToggleSwitch on={smallText} />
+                                        </button>
+                                        <button
+                                            onClick={toggleFullWidth}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                                        >
+                                            <Maximize2 size={14} className="text-text-quaternary shrink-0" />
+                                            <span className="flex-1 text-left">全宽</span>
+                                            <ToggleSwitch on={fullWidth} />
+                                        </button>
+                                        <div className="my-1 border-t border-gray-100 dark:border-white/8" />
+                                        {/* Export */}
+                                        <button
+                                            onClick={handleExport}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                                        >
+                                            <Download size={14} className="text-text-quaternary shrink-0" />
+                                            导出 Markdown
+                                        </button>
+                                        <div className="my-1 border-t border-gray-100 dark:border-white/8" />
+                                        {/* Version history */}
+                                        <button
+                                            onClick={() => { setMenuOpen(false); setHistoryOpen(true) }}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                                        >
+                                            <History size={14} className="text-text-quaternary shrink-0" />
+                                            版本历史
+                                        </button>
+                                        <div className="my-1 border-t border-gray-100 dark:border-white/8" />
+                                        {/* Delete */}
+                                        {confirmDelete ? (
+                                            <div className="px-3 py-2 flex items-center gap-2">
+                                                <span className="text-[12px] text-text-secondary flex-1">确定删除？</span>
+                                                <button
+                                                    onClick={() => { void handleDelete(); setMenuOpen(false) }}
+                                                    className="px-2 py-1 text-[11px] bg-red-500 text-white rounded-md font-medium hover:bg-red-600 transition-colors"
+                                                >
+                                                    删除
+                                                </button>
+                                                <button
+                                                    onClick={() => setConfirmDelete(false)}
+                                                    className="px-2 py-1 text-[11px] text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 rounded-md transition-colors"
+                                                >
+                                                    取消
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => setConfirmDelete(true)}
+                                                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                                            >
+                                                <Trash2 size={14} className="shrink-0" />
+                                                移至垃圾箱
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
             {/* ── Document body: single full-width scroll container ── */}
             <div className="flex-1 overflow-y-auto">
-                {/* Centered content column — consistent with Notion's ~46rem prose width */}
-                <div className="w-full max-w-[46rem] mx-auto px-16 pt-14 pb-20">
+                {/* Centered content column — fullWidth removes max-w constraint */}
+                <div className={cn(
+                    'w-full mx-auto pt-14 pb-20',
+                    fullWidth ? 'px-12' : 'max-w-[46rem] px-16',
+                    smallText ? 'text-sm' : '',
+                )}>
 
                     {/* Title — part of the document flow */}
                     <textarea
@@ -320,8 +452,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         }}
                         placeholder="无标题"
                         rows={1}
-                        className="w-full bg-transparent text-[2rem] font-bold outline-none resize-none leading-[1.3] mb-1 placeholder:text-gray-200 dark:placeholder:text-white/15 text-[#1a1a1a] dark:text-[#e8e8e8] overflow-hidden"
-                        style={{ minHeight: '2.6rem' }}
+                        className={cn(
+                            'w-full bg-transparent font-bold outline-none resize-none leading-[1.3] mb-1 placeholder:text-gray-200 dark:placeholder:text-white/15 text-[#1a1a1a] dark:text-[#e8e8e8] overflow-hidden',
+                            smallText ? 'text-[1.5rem]' : 'text-[2rem]',
+                        )}
+                        style={{ minHeight: smallText ? '2rem' : '2.6rem' }}
                     />
 
                     {/* Divider between title and body — subtle, like Notion */}
@@ -348,14 +483,38 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                     )}
                 </div>
             </div>
+            {historyOpen && note && (
+                <HistoryDrawer
+                    note={note}
+                    currentContent={content}
+                    onClose={() => setHistoryOpen(false)}
+                    onRestored={(entry) => {
+                        setContent(entry.content ?? '')
+                        onSaved(entry)
+                        setHistoryOpen(false)
+                    }}
+                />
+            )}
         </div>
     )
 }
 
 const ActivityRow: React.FC<{ label: string; name: string; time: string }> = ({ label, name, time }) => (
-    <div className="flex items-center gap-3 text-[13px] leading-6">
-        <span className="w-12 shrink-0 font-semibold text-gray-500 dark:text-gray-400">{label}</span>
-        <span className="min-w-0 flex-1 truncate font-semibold text-gray-800 dark:text-gray-100">{name}</span>
-        <span className="shrink-0 font-semibold text-gray-400 dark:text-gray-500">{time}</span>
+    <div className="flex items-center gap-2 text-[11px] leading-5">
+        <span className="w-10 shrink-0 text-gray-400 dark:text-gray-500">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-gray-500 dark:text-gray-400">{name}</span>
+        <span className="shrink-0 text-gray-400 dark:text-gray-500">{time}</span>
+    </div>
+)
+
+const ToggleSwitch: React.FC<{ on: boolean }> = ({ on }) => (
+    <div className={cn(
+        'relative w-8 h-[18px] rounded-full transition-colors duration-200 shrink-0',
+        on ? 'bg-primary-mint' : 'bg-gray-200 dark:bg-white/20'
+    )}>
+        <div className={cn(
+            'absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform duration-200',
+            on ? 'translate-x-[18px]' : 'translate-x-[2px]'
+        )} />
     </div>
 )

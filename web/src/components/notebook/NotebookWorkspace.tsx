@@ -184,6 +184,10 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         setFullContent(entry.content ?? '')
     }, [setSelectedNote])
 
+    const handleDuplicated = React.useCallback((entry: NoteEntry) => {
+        setEntries((prev) => [entry, ...prev])
+    }, [])
+
     const handleEditorDeleted = (id: string) => {
         setEntries((prev) => prev.filter((e) => e.id !== id))
         setCreatingNew(false)
@@ -251,6 +255,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
             onBack={() => {}}
             onSaved={handleAutoSaved}
             onDeleted={handleEditorDeleted}
+            onDuplicated={handleDuplicated}
         />
     ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-text-quaternary gap-3 bg-white dark:bg-[#191919]">

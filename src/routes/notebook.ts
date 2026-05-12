@@ -19,6 +19,9 @@ export {
     notebookGenerateArtifact,
     notebookDeleteArtifact,
 } from './notebook-studio.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { join } from 'node:path';
 import type Router from '@koa/router';
 import {
     nbListNotebooks,
@@ -37,7 +40,10 @@ import {
     nbGetSourceEntry,
     nbListSources,
     nbRenameNotebook,
+    parseFrontmatter,
 } from '../services/notebook-service.js';
+
+const execFileAsync = promisify(execFile);
 import { generateAndSaveSourceGuide } from '../services/notebook-ai.js';
 import { calcUser } from '../services/user-service.js';
 import { getMonthlyUsage } from '../utils/token-tracker.js';
@@ -111,6 +117,51 @@ export function notebookGet(router: Router): void {
             case 'token-usage': {
                 const month = q.month?.trim() || undefined;
                 ctx.body = await getMonthlyUsage(month);
+                break;
+            }
+            // ── Version history (git log) ──────────────────────────────────
+            case 'history': {
+                const id = q.id?.trim();
+                if (!id) { ctx.status = 400; ctx.body = { error: 'id required' }; return; }
+                const filePath = join(workDir, id);
+                if (!filePath.startsWith(workDir + '/')) { ctx.status = 400; ctx.body = { error: 'Invalid id' }; return; }
+                try {
+                    const { stdout } = await execFileAsync(
+                        'git',
+                        ['-C', workDir, 'log', '--pretty=format:%H\t%aI\t%an\t%s', '--', id],
+                        { encoding: 'utf8' },
+                    );
+                    const commits = stdout.trim().split('\n').filter(Boolean).map((line) => {
+                        const [hash, date, author, ...msgParts] = line.split('\t');
+                        return { hash, date, author, message: msgParts.join('\t') };
+                    });
+                    ctx.body = commits;
+                } catch {
+                    ctx.body = [];
+                }
+                break;
+            }
+            // ── Article content at a specific commit ───────────────────────
+            case 'history-content': {
+                const id = q.id?.trim();
+                const commit = q.commit?.trim();
+                if (!id || !commit) { ctx.status = 400; ctx.body = { error: 'id and commit required' }; return; }
+                const filePath = join(workDir, id);
+                if (!filePath.startsWith(workDir + '/')) { ctx.status = 400; ctx.body = { error: 'Invalid id' }; return; }
+                // Allow only hex commit hashes (full or abbreviated)
+                if (!/^[0-9a-f]{7,40}$/i.test(commit)) { ctx.status = 400; ctx.body = { error: 'Invalid commit hash' }; return; }
+                try {
+                    const { stdout } = await execFileAsync(
+                        'git',
+                        ['-C', workDir, 'show', `${commit}:${id}`],
+                        { encoding: 'utf8' },
+                    );
+                    const { meta, body } = parseFrontmatter(stdout);
+                    ctx.body = { content: body, title: meta.title ?? '', date: meta.date ?? null, author: meta.author ?? null };
+                } catch {
+                    ctx.status = 404;
+                    ctx.body = { error: 'Not found at this commit' };
+                }
                 break;
             }
             default:

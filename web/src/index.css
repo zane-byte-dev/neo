@@ -73,6 +73,11 @@
     to   { transform: translateY(0);    opacity: 1; }
   }
 
+  @keyframes slide-in-right {
+    from { transform: translateX(24px); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+
   @keyframes thinking-pulse {
     0%, 100% { opacity: 0.4; }
     50%       { opacity: 1; }
@@ -99,6 +104,7 @@
   }
 
   --animate-activity-in: activity-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-slide-in-right: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ── Dark theme ──────────────────────────────────────────────────────────────── */

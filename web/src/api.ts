@@ -635,6 +635,21 @@ export function notebookRead(id: string) {
     return apiGet(`/api/notebook?action=read&id=${encodeURIComponent(id)}`)
 }
 
+export interface ArticleCommit {
+    hash: string
+    date: string
+    author: string
+    message: string
+}
+
+export function notebookHistory(id: string): Promise<ArticleCommit[]> {
+    return apiGet(`/api/notebook?action=history&id=${encodeURIComponent(id)}`)
+}
+
+export function notebookHistoryContent(id: string, commit: string): Promise<{ content: string; title: string; date: string | null; author: string | null }> {
+    return apiGet(`/api/notebook?action=history-content&id=${encodeURIComponent(id)}&commit=${encodeURIComponent(commit)}`)
+}
+
 export function notebookCreate(notebook: string, data: {
     title: string
     author?: string | null
