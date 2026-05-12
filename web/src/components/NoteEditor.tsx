@@ -1,11 +1,15 @@
 import React from 'react'
-import { ArrowLeft, Trash2, Check, Loader2, History, MoreHorizontal, Link, Copy, Maximize2, Type, Download } from 'lucide-react'
+import { ArrowLeft, Trash2, Check, Loader2, History, MoreHorizontal, Link, Copy, Maximize2, Type, Download, Layers, Languages, Sparkles, RefreshCw, EyeOff } from 'lucide-react'
 import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete } from '../api'
 import { cn } from '../lib/utils'
 import type { NoteEntry } from '../types'
 import { t } from '../i18n'
 import { NovelEditor } from './NovelEditor'
 import { HistoryDrawer } from './notebook/HistoryDrawer'
+import { DocDiffModal } from './notebook/DocDiffModal'
+import { ResourcesPanel } from './notebook/ResourcesPanel'
+import { EDIT_ACTIONS, INSIGHT_ACTIONS, type DocEditAction } from './notebook/docActions'
+import { useAppStore } from '../stores/useAppStore'
 
 interface NoteEditorProps {
     note: NoteEntry | null             // null = create new
@@ -78,6 +82,17 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     // Action feedback
     const [copyLinkDone, setCopyLinkDone] = React.useState(false)
     const [duplicating, setDuplicating] = React.useState(false)
+    // Resources panel (Studio overlay)
+    const [resourcesOpen, setResourcesOpen] = React.useState(false)
+    // Diff modal (AI edit actions from more menu)
+    const [diffAction, setDiffAction] = React.useState<{ action: DocEditAction; content: string } | null>(null)
+    // Inline summary state
+    type SummaryState = 'empty' | 'generating' | 'done'
+    const [summaryState, setSummaryState] = React.useState<SummaryState>(() => (note?.summary ?? '').trim() ? 'done' : 'empty')
+    const [summaryText, setSummaryText] = React.useState(note?.summary ?? '')
+    const [summaryCollapsed, setSummaryCollapsed] = React.useState(() =>
+        note ? localStorage.getItem(`neo:editor:summaryCollapsed:${note.id}`) === '1' : false
+    )
     const titleRef = React.useRef<HTMLTextAreaElement>(null)
     const menuRef = React.useRef<HTMLDivElement>(null)
     const autoSaveTimerRef = React.useRef<number | null>(null)
@@ -87,6 +102,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     React.useEffect(() => {
         fieldsRef.current = { title, author, date, source, summary, tags, content }
     })
+
+    const { setPendingQuickReply } = useAppStore()
 
     React.useEffect(() => {
         let cancelled = false
@@ -257,13 +274,73 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         setFullWidth((v) => { localStorage.setItem('neo:editor:fullWidth', v ? '' : '1'); return !v })
     }
 
+    // ── Inline summary ────────────────────────────────────────────────────────
+
+    const handleGenerateSummary = React.useCallback(async () => {
+        if (!note) return
+        setSummaryState('generating')
+        try {
+            const MAX = 6000
+            const truncated = fieldsRef.current.content.length > MAX
+                ? fieldsRef.current.content.slice(0, MAX) + '\n\n[内容已截断…]'
+                : fieldsRef.current.content
+            const prompt = `请为以下文章「${fieldsRef.current.title}」生成一段简洁的摘要（不超过 150 字），概括核心内容。只输出摘要文本，不要解释。\n\n---\n\n${truncated}`
+            const res = await fetch('/api/generate', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt, command: 'zap', instruction: '生成摘要' }),
+            })
+            if (!res.ok) throw new Error('请求失败')
+            const text = await res.text()
+            const trimmed = text.trim()
+            setSummaryText(trimmed)
+            setSummaryState('done')
+            setSummaryCollapsed(false)
+            // Persist to note
+            await notebookUpdate(note.id, { summary: trimmed })
+        } catch {
+            setSummaryState('empty')
+        }
+    }, [note])
+
+    const handleRegenerateSummary = () => {
+        setSummaryText('')
+        setSummaryState('empty')
+        void handleGenerateSummary()
+    }
+
+    const handleHideSummary = () => {
+        setSummaryCollapsed(true)
+        if (note) localStorage.setItem(`neo:editor:summaryCollapsed:${note.id}`, '1')
+    }
+
+    // ── AI edit actions (more menu) ───────────────────────────────────────────
+
+    const handleAiEditAction = (action: DocEditAction) => {
+        setMenuOpen(false)
+        setDiffAction({ action, content: fieldsRef.current.content })
+    }
+
+    const handleAiInsightTranslate = () => {
+        setMenuOpen(false)
+        const MAX = 6000
+        const truncated = fieldsRef.current.content.length > MAX
+            ? fieldsRef.current.content.slice(0, MAX) + '\n\n[内容已截断…]'
+            : fieldsRef.current.content
+        const insightAction = INSIGHT_ACTIONS.find(a => a.id === 'translate')
+        if (insightAction) {
+            setPendingQuickReply(insightAction.buildPrompt(fieldsRef.current.title, truncated))
+        }
+    }
+
     const creatorName = author.trim() || currentDisplayName || '未知'
     const editorName = currentDisplayName || creatorName
     const createdTime = note?.createdAt ?? date
     const updatedTime = note?.updatedAt ?? createdTime
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-[#191919]">
+        <div className="flex flex-col h-full bg-white dark:bg-[#191919] relative">
             {/* ── Top action bar ── */}
             <div className="shrink-0 flex items-center gap-2 px-4 h-10 border-b border-gray-100 dark:border-white/8">
                 {/* Left: back + title breadcrumb */}
@@ -311,6 +388,21 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         >
                             {saving ? <Loader2 size={11} className="animate-spin" /> : null}
                             {saving ? t('saving') : t('save')}
+                        </button>
+                    )}
+                    {/* Resources (Studio overlay) icon — only for saved notes */}
+                    {note && (
+                        <button
+                            onClick={() => setResourcesOpen((v) => !v)}
+                            className={cn(
+                                'w-7 h-7 flex items-center justify-center rounded-md transition-colors',
+                                resourcesOpen
+                                    ? 'bg-primary-mint/15 text-primary-mint'
+                                    : 'text-gray-400 hover:text-primary-mint hover:bg-primary-mint/10'
+                            )}
+                            title="资源"
+                        >
+                            <Layers size={14} />
                         </button>
                     )}
                     {/* ··· menu */}
@@ -397,6 +489,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                                             版本历史
                                         </button>
                                         <div className="my-1 border-t border-gray-100 dark:border-white/8" />
+                                        {/* AI actions */}
+                                        <div className="px-3 pt-1.5 pb-0.5">
+                                            <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">AI 助手</span>
+                                        </div>
+                                        {EDIT_ACTIONS.map((action) => (
+                                            <button
+                                                key={action.id}
+                                                onClick={() => handleAiEditAction(action)}
+                                                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                                            >
+                                                <action.icon size={14} className={cn(action.iconColor, 'shrink-0')} />
+                                                {action.label}
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={handleAiInsightTranslate}
+                                            className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-text-secondary hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+                                        >
+                                            <Languages size={14} className="text-amber-500 shrink-0" />
+                                            翻译英文
+                                        </button>
+                                        <div className="my-1 border-t border-gray-100 dark:border-white/8" />
                                         {/* Delete */}
                                         {confirmDelete ? (
                                             <div className="px-3 py-2 flex items-center gap-2">
@@ -462,6 +576,47 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                     {/* Divider between title and body — subtle, like Notion */}
                     <div className="mb-4 mt-2" />
 
+                    {/* ── Inline summary block ── */}
+                    {note && summaryState === 'empty' && (
+                        <button
+                            onClick={() => void handleGenerateSummary()}
+                            className="w-full mb-6 flex items-center gap-2 px-3 h-9 rounded-lg border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/3 text-text-quaternary hover:text-text-tertiary hover:border-gray-300 dark:hover:border-white/20 transition-colors text-[12px]"
+                        >
+                            <Sparkles size={12} className="text-primary-mint shrink-0" />
+                            生成摘要
+                            <span className="text-[11px] text-text-quaternary">· 点击获取 AI 概要</span>
+                        </button>
+                    )}
+                    {note && summaryState === 'generating' && (
+                        <div className="w-full mb-6 flex items-center gap-2 px-3 h-9 rounded-lg border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/3 text-text-quaternary text-[12px]">
+                            <Loader2 size={12} className="text-primary-mint shrink-0 animate-spin" />
+                            正在生成摘要…
+                        </div>
+                    )}
+                    {note && summaryState === 'done' && !summaryCollapsed && (
+                        <div className="w-full mb-6 rounded-xl bg-primary-mint/8 border-l-2 border-primary-mint pl-3 pr-3 py-2.5 flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5">
+                                <Sparkles size={11} className="text-primary-mint shrink-0" />
+                                <span className="text-[11px] font-semibold text-primary-mint flex-1">摘要</span>
+                                <button
+                                    onClick={handleRegenerateSummary}
+                                    className="p-1 rounded text-text-quaternary hover:text-text-secondary hover:bg-white/20 transition-colors"
+                                    title="重新生成"
+                                >
+                                    <RefreshCw size={11} />
+                                </button>
+                                <button
+                                    onClick={handleHideSummary}
+                                    className="p-1 rounded text-text-quaternary hover:text-text-secondary hover:bg-white/20 transition-colors"
+                                    title="隐藏"
+                                >
+                                    <EyeOff size={11} />
+                                </button>
+                            </div>
+                            <p className="text-[13px] text-text-secondary leading-relaxed">{summaryText}</p>
+                        </div>
+                    )}
+
                     {/* Content — Novel rich-text editor */}
                     {loading ? (
                         <div className="flex items-center gap-2 text-gray-300">
@@ -494,6 +649,37 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         setHistoryOpen(false)
                     }}
                 />
+            )}
+            {/* AI edit diff modal */}
+            {diffAction && note && (
+                <DocDiffModal
+                    note={note}
+                    actionLabel={diffAction.action.label}
+                    content={diffAction.content}
+                    instruction={diffAction.action.editInstruction}
+                    onApply={async (noteId, newContent) => {
+                        await notebookUpdate(noteId, { content: newContent })
+                        setContent(newContent)
+                    }}
+                    onClose={() => setDiffAction(null)}
+                />
+            )}
+            {/* Resources panel overlay */}
+            {resourcesOpen && note && (
+                <>
+                    {/* Backdrop */}
+                    <div
+                        className="absolute inset-0 z-30 bg-black/10"
+                        onClick={() => setResourcesOpen(false)}
+                    />
+                    {/* Panel */}
+                    <div className="absolute right-0 top-0 h-full w-[320px] z-40 shadow-2xl animate-slide-in-right">
+                        <ResourcesPanel
+                            notebook={note.notebook ?? notebook}
+                            onClose={() => setResourcesOpen(false)}
+                        />
+                    </div>
+                </>
             )}
         </div>
     )

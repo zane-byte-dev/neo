@@ -1,18 +1,15 @@
 /**
  * NotebookChatDrawer — 文档 AI 助手面板
  *
- * 两类快捷操作：
- *   「文档改写」(edit)   → 打开 DocDiffModal，流式生成 → 行级 Diff → 接受/拒绝 → 保存
- *   「内容分析」(insight) → setPendingQuickReply，结果显示在对话框
+ * 快捷操作（优化、翻译等）已迁移到 NoteEditor 的更多菜单和资源面板。
+ * 本组件仅保留：对话区域、生成内容面板、StudioActionModal。
  */
 import React from 'react'
-import { X, Wand2, AlignLeft, ListChecks, Languages, Minimize2, FileText, Sparkles, ChevronDown, ChevronUp, PenLine, Volume2, Brain, PenSquare, MessageSquareDot } from 'lucide-react'
+import { X, FileText, Sparkles, ChevronDown, ChevronUp, Volume2, Brain } from 'lucide-react'
 import { ChatArea } from '../ChatArea'
 import { StudioActionModal } from './StudioActionModal'
 import { ArtifactFloatPanel } from './ArtifactFloatPanel'
-import { DocDiffModal } from './DocDiffModal'
 import { useAppStore } from '../../stores/useAppStore'
-import { cn } from '../../lib/utils'
 import type { Artifact, NoteEntry } from '../../types'
 
 export interface SlashCommand {
@@ -29,113 +26,19 @@ export const NOTEBOOK_SLASH_COMMANDS: SlashCommand[] = [
     { id: 'overview', label: '概览',       icon: Sparkles,  description: '刷新笔记本摘要' },
 ]
 
-// ── 文档快捷操作 ──────────────────────────────────────────────────────────────
-interface DocAction {
-    id: string
-    label: string
-    icon: React.ComponentType<{ size?: number; className?: string }>
-    iconColor: string
-    bg: string
-    desc: string
-    /** 'edit' → opens DocDiffModal; 'insight' → sends to chat */
-    category: 'edit' | 'insight'
-    /**
-     * For 'edit' category: per-section instruction passed to /api/generate.
-     * The modal splits the doc into sections and polishes each one independently.
-     */
-    editInstruction?: string
-    /** For 'insight' category: builds the full chat prompt. */
-    buildPrompt: (title: string, content: string) => string
-}
-
-const DOC_ACTIONS: DocAction[] = [
-    // ── 文档改写（触发 Diff，段落分批处理）───────────────────────────────
-    {
-        id: 'polish',
-        label: '优化文档',
-        icon: Wand2,
-        iconColor: 'text-violet-500',
-        bg: 'bg-violet-500/10',
-        desc: '改善表达流畅度、逻辑结构与专业度',
-        category: 'edit',
-        editInstruction: '优化以下段落，改善表达流畅度、逻辑结构和整体专业度，保持原文意思和结构不变。只输出修改后的段落内容，不要解释。',
-        buildPrompt: () => '',
-    },
-    {
-        id: 'format',
-        label: '格式化',
-        icon: AlignLeft,
-        iconColor: 'text-blue-500',
-        bg: 'bg-blue-500/10',
-        desc: '规范 Markdown 格式、标题层级与排版',
-        category: 'edit',
-        editInstruction: '对以下段落进行 Markdown 格式规范化：统一标题层级、修正列表格式、整理代码块。只输出规范化后的内容，不要解释。',
-        buildPrompt: () => '',
-    },
-    {
-        id: 'expand',
-        label: '扩写改写',
-        icon: PenLine,
-        iconColor: 'text-teal-500',
-        bg: 'bg-teal-500/10',
-        desc: '补充细节，扩展内容或换一种写法',
-        category: 'edit',
-        editInstruction: '对以下段落进行扩写改写：补充细节、举例说明，使内容更丰富完整，保持原有观点和风格。只输出改写后的内容，不要解释。',
-        buildPrompt: () => '',
-    },
-    // ── 内容分析（发送到对话）────────────────────────────────────────────
-    {
-        id: 'keypoints',
-        label: '提取要点',
-        icon: ListChecks,
-        iconColor: 'text-emerald-500',
-        bg: 'bg-emerald-500/10',
-        desc: '列出文章核心论点与关键信息',
-        category: 'insight',
-        buildPrompt: (title, content) =>
-            `请从以下文章「${title}」中提取核心论点、关键数据和重要结论，以条目列表呈现。\n\n---\n\n${content}`,
-    },
-    {
-        id: 'translate',
-        label: '翻译英文',
-        icon: Languages,
-        iconColor: 'text-amber-500',
-        bg: 'bg-amber-500/10',
-        desc: '将文章翻译为英文（在对话中查看）',
-        category: 'insight',
-        buildPrompt: (title, content) =>
-            `请将以下文章「${title}」翻译为流畅自然的英文，保持原文结构与格式。\n\n---\n\n${content}`,
-    },
-    {
-        id: 'tldr',
-        label: 'TL;DR',
-        icon: Minimize2,
-        iconColor: 'text-rose-500',
-        bg: 'bg-rose-500/10',
-        desc: '生成简洁摘要（≤150 字）',
-        category: 'insight',
-        buildPrompt: (title, content) =>
-            `请为以下文章「${title}」生成一段简洁的 TL;DR 摘要（不超过 150 字），概括核心内容。\n\n---\n\n${content}`,
-    },
-]
-
 interface Props {
     notebook: string
     selectedNote?: NoteEntry | null
     fullContent?: string
     onClose: () => void
-    /** Called when user applies AI edits — updates note in parent. */
-    onNoteApply?: (noteId: string, newContent: string) => Promise<void>
 }
 
-export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, fullContent, onClose, onNoteApply }) => {
+export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, onClose }) => {
     const [modalAction, setModalAction] = React.useState<'audio' | 'mindmap' | 'report' | null>(null)
     const [artifacts, setArtifacts] = React.useState<Artifact[]>([])
     const [artifactsExpanded, setArtifactsExpanded] = React.useState(false)
-    // Pending edit action that opens the diff modal
-    const [diffAction, setDiffAction] = React.useState<{ action: DocAction; content: string } | null>(null)
 
-    const { notebookArtifacts, setPendingQuickReply, activeChatId } = useAppStore()
+    const { notebookArtifacts } = useAppStore()
 
     // Sync artifacts from store when drawer opens
     React.useEffect(() => {
@@ -152,29 +55,6 @@ export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, fu
         setArtifacts((prev) => [artifact, ...prev.filter((a) => a.id !== artifact.id)])
         setArtifactsExpanded(true)
     }
-
-    // Run a doc action — route to diff modal (edit) or chat (insight)
-    const runDocAction = (action: DocAction) => {
-        if (!selectedNote) return
-        const content = fullContent ?? selectedNote.content ?? ''
-
-        if (action.category === 'edit') {
-            // Pass full content — DocDiffModal splits into sections, no truncation needed
-            setDiffAction({ action, content })
-        } else {
-            if (!activeChatId) return
-            // Insight actions still use chat; truncate to avoid huge prompts
-            const MAX_CHARS = 6000
-            const truncated = content.length > MAX_CHARS
-                ? content.slice(0, MAX_CHARS) + '\n\n[内容已截断…]'
-                : content
-            setPendingQuickReply(action.buildPrompt(selectedNote.title, truncated))
-        }
-    }
-
-    const editActions = DOC_ACTIONS.filter(a => a.category === 'edit')
-    const insightActions = DOC_ACTIONS.filter(a => a.category === 'insight')
-    const hasDoc = Boolean(selectedNote)
 
     return (
         <div className="flex flex-col h-full bg-bg-container overflow-hidden">
@@ -196,38 +76,6 @@ export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, fu
                     <X size={12} />
                 </button>
             </div>
-
-            {/* ── Doc quick actions ────────────────────────────────────────── */}
-            {hasDoc && (
-                <div className="shrink-0 border-b border-border/60 bg-fill-secondary/30">
-                    <div className="px-2 pt-2 pb-2 space-y-2">
-                        {/* Edit group */}
-                        <div>
-                            <div className="flex items-center gap-1 px-1 mb-1">
-                                <PenSquare size={9} className="text-text-quaternary" />
-                                <span className="text-[9px] text-text-quaternary font-medium tracking-wide">文档改写 · 支持逐行确认</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1">
-                                {editActions.map((action) => (
-                                    <ActionButton key={action.id} action={action} onClick={() => runDocAction(action)} />
-                                ))}
-                            </div>
-                        </div>
-                        {/* Insight group */}
-                        <div>
-                            <div className="flex items-center gap-1 px-1 mb-1">
-                                <MessageSquareDot size={9} className="text-text-quaternary" />
-                                <span className="text-[9px] text-text-quaternary font-medium tracking-wide">内容分析 · 结果显示在对话</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1">
-                                {insightActions.map((action) => (
-                                    <ActionButton key={action.id} action={action} onClick={() => runDocAction(action)} />
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* ── Chat area ───────────────────────────────────────────────── */}
             <div className="flex-1 overflow-hidden min-h-0">
@@ -268,36 +116,6 @@ export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, fu
                     onGenerated={handleArtifactGenerated}
                 />
             )}
-
-            {/* ── Diff modal (edit actions) ───────────────────────────────── */}
-            {diffAction && selectedNote && (
-                <DocDiffModal
-                    note={selectedNote}
-                    actionLabel={diffAction.action.label}
-                    content={diffAction.content}
-                    instruction={diffAction.action.editInstruction ?? ''}
-                    onApply={async (noteId, newContent) => {
-                        if (onNoteApply) await onNoteApply(noteId, newContent)
-                    }}
-                    onClose={() => setDiffAction(null)}
-                />
-            )}
         </div>
     )
 }
-
-// ── Reusable action button ────────────────────────────────────────────────────
-
-const ActionButton: React.FC<{ action: DocAction; onClick: () => void }> = ({ action, onClick }) => (
-    <button
-        onClick={onClick}
-        title={action.desc}
-        className={cn(
-            'flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-left hover:opacity-80 active:scale-95 transition-all',
-            action.bg,
-        )}
-    >
-        <action.icon size={11} className={cn('shrink-0', action.iconColor)} />
-        <span className={cn('text-[11px] font-medium truncate', action.iconColor)}>{action.label}</span>
-    </button>
-)

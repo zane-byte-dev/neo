@@ -11,7 +11,7 @@ import { NotebookChatDrawer } from './NotebookChatDrawer'
 import { NoteEditor } from '../NoteEditor'
 import { useAppStore } from '../../stores/useAppStore'
 import { cn } from '../../lib/utils'
-import { notebookList, notebookRead, notebookSearch, notebookDelete, notebookUpdate } from '../../api'
+import { notebookList, notebookRead, notebookSearch, notebookDelete } from '../../api'
 import { NotebookSettingsModal, getNotebookSort, setNotebookSort } from './NotebookSettingsModal'
 import { confirm } from '../ConfirmDialog'
 import type { NoteEntry } from '../../types'
@@ -194,15 +194,6 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
         setSelectedNote(null)
     }
 
-    // Apply AI edits to a note (called from DocDiffModal via NotebookChatDrawer)
-    const handleNoteApply = React.useCallback(async (noteId: string, newContent: string) => {
-        await notebookUpdate(noteId, { content: newContent })
-        setFullContent(newContent)
-        setEntries((prev) => prev.map((e) => e.id === noteId ? { ...e, content: newContent } : e))
-        const current = useAppStore.getState().selectedNote
-        if (current?.id === noteId) setSelectedNote({ ...current, content: newContent })
-    }, [setSelectedNote])
-
     // ── Sub-views ──────────────────────────────────────────────────────────
 
     const handleDeleteEntry = async (entry: NoteEntry) => {
@@ -295,7 +286,7 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
                     className="absolute bottom-16 right-4 flex flex-col rounded-2xl border border-border bg-bg-container shadow-2xl z-30 overflow-hidden"
                     style={{ width: 340, height: 500 }}
                 >
-                    <NotebookChatDrawer notebook={notebook} selectedNote={selectedNote} fullContent={fullContent} onClose={() => setChatOpen(false)} onNoteApply={handleNoteApply} />
+                    <NotebookChatDrawer notebook={notebook} selectedNote={selectedNote} fullContent={fullContent} onClose={() => setChatOpen(false)} />
                 </div>
             )}
 
