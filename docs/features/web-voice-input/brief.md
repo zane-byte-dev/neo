@@ -8,9 +8,9 @@ Neo 的 Web Chat 已经具备较完整的文本输入、文件上传、图片理
 
 相关来源：
 
-- [ROADMAP.md](ROADMAP.md)：P1 Web UI 增强中明确列出“语音输入：Web 端支持录音并转文字（可复用语音转文字能力）”。
-- [ROADMAP.md](ROADMAP.md)：P0 多模态里曾单独提到“语音转文字”，但当前仍处于未落地状态。
-- [COMPETITIVE_RESEARCH.md](COMPETITIVE_RESEARCH.md)：竞品对话体验已普遍把音频作为自然输入方式之一。
+- [ROADMAP.md](../../product/ROADMAP.md)：P1 Web UI 增强中明确列出"语音输入：Web 端支持录音并转文字（可复用语音转文字能力）"。
+- [ROADMAP.md](../../product/ROADMAP.md)：P0 多模态里曾单独提到"语音转文字"，但当前仍处于未落地状态。
+- [COMPETITIVE_RESEARCH.md](../../product/COMPETITIVE_RESEARCH.md)：竞品对话体验已普遍把音频作为自然输入方式之一。
 
 ## Evidence And Freshness Check
 
@@ -260,7 +260,7 @@ P1。该项不阻塞核心对话功能，但能显著改善移动端和长提示
 下一步进入 Dev Plan 阶段，建议输出：
 
 ```text
-docs/developer-guide/FEATURE_web_voice_input_PLAN.md
+docs/features/web-voice-input/plan.md
 ```
 
-> **2026-05-12 更新**：Phase 1 MVP 已实现并通过构建验证。Dev Plan 见 [FEATURE_web_voice_input_PLAN.md](../developer-guide/FEATURE_web_voice_input_PLAN.md)。
+> **2026-05-12 更新**：Phase 1 MVP 已实现并通过构建验证。Dev Plan 见 [plan.md](plan.md)。

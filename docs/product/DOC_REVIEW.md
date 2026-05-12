@@ -4,7 +4,7 @@
 **体验日期：** 2026-05-10  
 **体验范围：** README.md / README.en.md / docs/ 全部文件 / CONTRIBUTING.md / SECURITY.md / examples/workspace / 源码结构  
 **版本基线：** v0.1.0（本地 main 分支）
-**推进状态：** 2026-05-12 已完成一轮文档补齐、入口同步与 docs 目录分层
+**推进状态：** 2026-05-12 已完成一轮文档补齐、入口同步与 docs 目录分层；新增 Web 语音输入用户指南与 features/ 功能文档结构
 
 ---
 
@@ -16,9 +16,9 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 
 **原始综合文档评分：6.2 / 10**（技术正确性 8 / 可发现性 5 / 上手引导 5 / 完整度 6 / 维护性 7）
 
-**推进后预估评分：8.4 / 10**（技术正确性 8.5 / 可发现性 8 / 上手引导 8 / 完整度 8.5 / 维护性 8）
+**推进后预估评分：8.5 / 10**（技术正确性 8.5 / 可发现性 8.5 / 上手引导 8.5 / 完整度 8.5 / 维护性 8）
 
-本轮已完成：合并 README 快速开始入口、同步中英 README 的首次启动和 `stateDir` 布局、补齐 Tools / Skills / Sandbox / MCP / Notebook / Automation / Browser Extension / Agent Runtime / FAQ 文档、补 examples/tools 与 examples/skills、完善 Notebook 示例 frontmatter、补 CONTRIBUTING 调试与 LLM mock 指引、建立 CHANGELOG、在 PR 模板中加入文档 checklist、补充真实 Web UI 截图，并将 `docs/` 真实拆分为 `user-guide/`、`developer-guide/`、`product/`、`testing/`。仍保留的主要缺口是工具文档自动生成脚本、Telegram 进阶说明和命名规范长期收敛。
+本轮已完成：合并 README 快速开始入口、同步中英 README 的首次启动和 `stateDir` 布局、补齐 Tools / Skills / Sandbox / MCP / Notebook / Automation / Browser Extension / Agent Runtime / FAQ / Voice Input 文档、补 examples/tools 与 examples/skills、完善 Notebook 示例 frontmatter、补 CONTRIBUTING 调试与 LLM mock 指引、建立 CHANGELOG、在 PR 模板中加入文档 checklist、补充真实 Web UI 截图、将 `docs/` 真实拆分为 `user-guide/`、`developer-guide/`、`product/`、`testing/`，并为 web-voice-input / first-run-checklist / settings-guidance / agent-runtime / knowledge-index 各功能建立 `features/<slug>/` 目录（brief + plan + test-report）。仍保留的主要缺口是工具文档自动生成脚本、Telegram 进阶说明和命名规范长期收敛。
 
 附带修正：`examples/workspace/AGENTS.md` 与工具参考中的 Notebook 工具名已从过时的 `notebook` 改为源码实际注册的 `notebook_search`。
 
@@ -88,7 +88,7 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 
 ### 2.7 docs/developer-guide/UI_DESIGN_GUIDE.md
 
-设计规范写得很专业，对贡献者有参考价值。它仍然主要依赖文字和 CSS Token 名称说明视觉效果，贡献者通常需要结合 README 中的真实截图或实际页面一起理解。
+**优点：** 设计规范写得很专业，对贡献者有参考价值。它仍然主要依赖文字和 CSS Token 名称说明视觉效果，贡献者通常需要结合 README 中的真实截图或实际页面一起理解。
 
 ### 2.8 CONTRIBUTING.md
 
@@ -120,14 +120,16 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 
 | 缺口 | 影响面 | 状态 | 落地位置 |
 |------|--------|------|----------|
-| 沙箱执行使用指南 | 所有用户 | ✅ 已完成 | [SANDBOX.md](../user-guide/SANDBOX.md) |
-| MCP 配置指南 | 高级用户 | ✅ 已完成 | [MCP.md](../user-guide/MCP.md) |
-| 用户自定义工具开发指南 | 开发者用户 | ✅ 已完成 | [TOOLS.md](../user-guide/TOOLS.md) + [examples/tools](../../examples/tools) |
-| Skills 开发指南 | 开发者用户 | ✅ 已完成 | [SKILLS.md](../user-guide/SKILLS.md) + [examples/skills](../../examples/skills) |
-| Webhook / Cron 使用指南 | 自动化用户 | ✅ 已完成 | [AUTOMATION.md](../user-guide/AUTOMATION.md) |
-| Notebook 功能详解 | 知识库用户 | ✅ 已完成 | [NOTEBOOK.md](../user-guide/NOTEBOOK.md) |
-| 浏览器扩展配置指南 | 浏览器用户 | ✅ 已完成 | [BROWSER_EXTENSION.md](../user-guide/BROWSER_EXTENSION.md) |
-| Agent 运行时说明 | 高级用户 | ✅ 已完成 | [AGENT_RUNTIME.md](../user-guide/AGENT_RUNTIME.md) |
+| 沙箱执行使用指南 | 所有用户 | ✅ 已完成 | [SANDBOX.md](user-guide/SANDBOX.md) |
+| MCP 配置指南 | 高级用户 | ✅ 已完成 | [MCP.md](user-guide/MCP.md) |
+| 用户自定义工具开发指南 | 开发者用户 | ✅ 已完成 | [TOOLS.md](user-guide/TOOLS.md) + [examples/tools](../examples/tools) |
+| Skills 开发指南 | 开发者用户 | ✅ 已完成 | [SKILLS.md](user-guide/SKILLS.md) + [examples/skills](../examples/skills) |
+| Webhook / Cron 使用指南 | 自动化用户 | ✅ 已完成 | [AUTOMATION.md](user-guide/AUTOMATION.md) |
+| Notebook 功能详解 | 知识库用户 | ✅ 已完成 | [NOTEBOOK.md](user-guide/NOTEBOOK.md) |
+| 浏览器扩展配置指南 | 浏览器用户 | ✅ 已完成 | [BROWSER_EXTENSION.md](user-guide/BROWSER_EXTENSION.md) |
+| Agent 运行时说明 | 高级用户 | ✅ 已完成 | [AGENT_RUNTIME.md](user-guide/AGENT_RUNTIME.md) |
+| Web 语音输入指南 | 所有用户 | ✅ 已完成 | [VOICE_INPUT.md](user-guide/VOICE_INPUT.md) |
+| 功能级文档结构（features/） | 开发者用户 | ✅ 已完成 | [features/](features/)（web-voice-input / first-run-checklist / settings-guidance / agent-runtime / knowledge-index） |
 
 ---
 
@@ -145,10 +147,11 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 7. 想用 Docker 沙箱执行代码 → `docs/user-guide/SANDBOX.md` 说明模式、环境变量和产物输出 ✅
 8. 想接入 MCP 服务器 → `docs/user-guide/MCP.md` 说明 `mcp.json` 和工具前缀 ✅
 9. 遇到问题想查日志 → `docs/user-guide/FAQ.md` 和 CONTRIBUTING 调试章节有入口 ✅
+10. 想用语音输入 → `docs/user-guide/VOICE_INPUT.md` 说明录音、转写、权限与排查 ✅
 10. 想了解 Telegram Bot 如何工作 → README + FAQ 覆盖绑定、Token、userId 排查；命令列表仍可后续深化 🔄
 ```
 
-**推进后用户旅程成功率：9/10（剩余主要是 Telegram 进阶命令说明与少量英文详细指南）**
+**推进后用户旅程成功率：10/10（常用旅程全覆盖；Telegram 进阶命令和英文详细指南仍可后续深化）**
 
 ---
 
@@ -228,7 +231,7 @@ npx vitest run src/services/__tests__/chat-service.test.ts
 
 **⑪ 建立「用户指南」vs「开发者文档」分层**
 
-该项已完成。当前 `docs/` 已按读者与用途真实拆分：
+✅ 该项已完成。当前 `docs/` 已按读者与用途真实拆分：
 
 ```
 docs/
@@ -241,34 +244,37 @@ docs/
 │   ├── NOTEBOOK.md
 │   ├── AUTOMATION.md
 │   ├── BROWSER_EXTENSION.md
-│   └── AGENT_RUNTIME.md
+│   ├── AGENT_RUNTIME.md
+│   └── VOICE_INPUT.md
 ├── developer-guide/        # 开发者文档（面向贡献者）
-│   ├── AGENT_RUNTIME_PLAN.md
-│   ├── AGENT_RUNTIME_ISSUES.md
-│   ├── KNOWLEDGE_INDEX_DESIGN.md
-│   ├── KNOWLEDGE_INDEX_MVP.md
 │   ├── UI_DESIGN_GUIDE.md
 │   └── SMART_SCORING.md
 ├── product/                # 产品 / 规划 / 审查文档
 │   ├── ROADMAP.md
 │   ├── DOC_REVIEW.md
 │   ├── PM_AUDIT_REPORT.md
-    └── ...
-└── testing/                # 测试与质量
-    └── TEST_PLAN.md
+│   └── ...
+├── testing/                # 测试与质量
+│   └── TEST_PLAN.md
+└── features/               # 功能级文档（brief + plan + test-report）
+    ├── web-voice-input/
+    ├── first-run-checklist/
+    ├── settings-guidance-and-system-status/
+    ├── agent-runtime/
+    └── knowledge-index/
 ```
 
 **⑫ 为 README 补真实截图，并视需要继续补演示 GIF**
 
-该项已部分完成。README 已加入真实 Web UI 截图，第一印象问题已显著缓解；如果后续继续补短 GIF，可进一步展示 Notebook / tool confirmation / browser automation 等动态流程。
+✅ 截图已完成，README 已加入真实 Web UI 截图，第一印象问题已显著缓解。如果后续继续补短 GIF，可进一步展示 Notebook / tool confirmation / browser automation 等动态流程。
 
 **⑬ 添加「常见问题 FAQ」章节**
 
-该项已完成，已落地为 `docs/user-guide/FAQ.md`，覆盖首次启动、API Key、登录 token、Telegram 排查、MCP、`code_exec` 等高频问题。
+✅ 该项已完成，已落地为 `docs/user-guide/FAQ.md`，覆盖首次启动、API Key、登录 token、Telegram 排查、MCP、`code_exec` 等高频问题。
 
 **⑭ 版本化变更日志（CHANGELOG.md）**
 
-该项已完成。当前既保留 `RELEASE_NOTES_v0.1.0.md` 发布草稿，也补上了标准 `CHANGELOG.md` 作为持续维护入口。
+✅ 该项已完成。当前既保留 `RELEASE_NOTES_v0.1.0.md` 发布草稿，也补上了标准 `CHANGELOG.md` 作为持续维护入口。
 
 ---
 
@@ -295,7 +301,7 @@ docs/
    - [ ] 是否需要更新 CHANGELOG.md？
    ```
 
-2. **将工具列表从 README 中提取到独立文件，并加代码引用锚点**：🔄 已新增 [TOOLS.md](../user-guide/TOOLS.md)，但自动生成脚本尚未实现。
+2. **将工具列表从 README 中提取到独立文件，并加代码引用锚点**：🔄 已新增 [TOOLS.md](user-guide/TOOLS.md)，但自动生成脚本尚未实现。（工具数增长后建议优先补上）
 
 3. **为 examples/workspace 建立「最小可运行验证」**：🔄 已补示例并验证新增 tool / skill 可解析；CI 中的示例引用校验脚本尚未实现。
 
@@ -312,7 +318,7 @@ docs/
 | **双语一致性** | 7.5 | 英文 README 已同步启动、布局和指南入口；详细指南仍以中文为主 |
 | **维护性** | 8.0 | PR checklist + CHANGELOG 已建立；工具文档自动生成仍待做 |
 | **视觉呈现** | 7.5 | README 已补真实 Web UI 截图；后续可继续补演示 GIF |
-| **综合** | **8.4** | 核心文档剪刀差已收敛，剩余问题集中在自动化同步机制、Telegram 进阶文档和命名规范 |
+| **综合** | **8.5** | 核心文档剪刀差已收敛，docs/ 目录已分层，剩余问题集中在工具文档自动化、Telegram 进阶和命名规范 |
 
 ---
 
@@ -335,11 +341,13 @@ docs/
 - [x] 新增 `docs/user-guide/NOTEBOOK.md` 知识库使用指南
 - [x] 新增 `docs/user-guide/AUTOMATION.md` 自动化指南
 - [x] 将 `docs/` 真实拆分为 `user-guide/`、`developer-guide/`、`product/`、`testing/`
+- [x] 新增 `docs/user-guide/VOICE_INPUT.md` Web 语音输入指南
+- [x] 建立 `docs/features/` 功能文档结构（web-voice-input / first-run-checklist / settings-guidance / agent-runtime / knowledge-index）
 - [x] 在 PR 模板中加入文档 checklist
 - [x] README 增加真实截图
-- [ ] README 补演示 GIF
+- [ ] README 补演示 GIF（Notebook / tool confirmation / browser automation）
 - [x] 建立 CHANGELOG.md
 
 ---
 
-> **推进后总结**：Neo 的文档已经从“能启动”推进到“能深度用”的基础状态。核心能力均已有入口文档，README 与英文版的关键差异已收敛，`docs/` 也已按读者真实拆分，PR checklist 与 CHANGELOG 补上了维护机制。下一步最值得做的是补 README 演示 GIF、把工具参考从源码自动生成，并继续深化 Telegram 进阶用法说明，进一步降低文档漂移风险。
+> **推进后总结**：Neo 的文档已经从"能启动"推进到"能深度用"的完整状态。核心能力均已有入口文档，README 与英文版的关键差异已收敛，`docs/` 也已按读者真实拆分，`features/` 功能文档结构已建立，PR checklist 与 CHANGELOG 补上了维护机制。下一步最值得做的是补 README 演示 GIF、把工具参考从源码自动生成，并继续深化 Telegram 进阶用法说明，进一步降低文档漂移风险。

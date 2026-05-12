@@ -2,7 +2,7 @@
 
 > 目标：在不推翻现有文件存储的前提下，先落一个可运行、可重建、可被 Notebook 和 Memory 共同消费的知识索引最小版本。
 >
-> 对应设计草案见 [KNOWLEDGE_INDEX_DESIGN.md](KNOWLEDGE_INDEX_DESIGN.md)。
+> 对应设计草案见 [design.md](design.md)。
 
 ---
 
@@ -32,10 +32,10 @@
 
 当前仓库里还没有 SQLite 相关依赖，Notebook 和 Memory 也都基于文件系统与内存检索：
 
-- [src/services/notebook-service.ts](../../src/services/notebook-service.ts) 明确仍是 file-system based service
-- [src/routes/chat.ts](../../src/routes/chat.ts) + [src/tools/internal/notebook-search.ts](../../src/tools/internal/notebook-search.ts) 承接 Notebook 模式下的对话入口、来源检索与引用注册
-- [src/memory/retriever.ts](../../src/memory/retriever.ts) 仍是 pure in-memory BM25-lite retriever
-- [package.json](../../package.json) 当前未包含 SQLite 驱动
+- [src/services/notebook-service.ts](../../../src/services/notebook-service.ts) 明确仍是 file-system based service
+- [src/routes/chat.ts](../../../src/routes/chat.ts) + [src/tools/internal/notebook-search.ts](../../../src/tools/internal/notebook-search.ts) 承接 Notebook 模式下的对话入口、来源检索与引用注册
+- [src/memory/retriever.ts](../../../src/memory/retriever.ts) 仍是 pure in-memory BM25-lite retriever
+- [package.json](../../../package.json) 当前未包含 SQLite 驱动
 
 所以 MVP 的正确路径不是直接上复杂向量库，而是先把下面三件事做稳：
 
@@ -140,8 +140,8 @@ src/indexing/
 
 来源：
 
-- [src/services/notebook-service.ts](../../src/services/notebook-service.ts) 中的 `nbListSources`
-- [src/services/notebook-service.ts](../../src/services/notebook-service.ts) 中的 `nbGetSourceEntry`
+- [src/services/notebook-service.ts](../../../src/services/notebook-service.ts) 中的 `nbListSources`
+- [src/services/notebook-service.ts](../../../src/services/notebook-service.ts) 中的 `nbGetSourceEntry`
 
 映射建议：
 
@@ -154,7 +154,7 @@ src/indexing/
 
 来源：
 
-- [src/services/notebook-service.ts](../../src/services/notebook-service.ts) 中的 `nbListNotes`
+- [src/services/notebook-service.ts](../../../src/services/notebook-service.ts) 中的 `nbListNotes`
 
 映射建议：
 
@@ -166,7 +166,7 @@ src/indexing/
 
 来源：
 
-- [src/memory/semantic-store.ts](../../src/memory/semantic-store.ts) 中的 `readFacts`
+- [src/memory/semantic-store.ts](../../../src/memory/semantic-store.ts) 中的 `readFacts`
 
 映射建议：
 
@@ -253,7 +253,7 @@ type KnowledgeHit = {
 
 ### 9.1 Notebook Chat
 
-当前 [src/routes/chat.ts](../../src/routes/chat.ts) 会在 Notebook 模式下触发 agent turn，而 [src/tools/internal/notebook-search.ts](../../src/tools/internal/notebook-search.ts) 负责：
+当前 [src/routes/chat.ts](../../../src/routes/chat.ts) 会在 Notebook 模式下触发 agent turn，而 [src/tools/internal/notebook-search.ts](../../../src/tools/internal/notebook-search.ts) 负责：
 
 1. 绑定当前 notebook / sourceIds
 2. 调用 `searchKnowledge()` 检索 `notebook_source` chunk
@@ -281,7 +281,7 @@ type ParsedCitation = {
 
 ### 9.2 Memory Recall
 
-当前 [src/memory/retriever.ts](../../src/memory/retriever.ts) 是内存检索。
+当前 [src/memory/retriever.ts](../../../src/memory/retriever.ts) 是内存检索。
 
 MVP 接法：
 
@@ -353,7 +353,7 @@ MVP 至少补以下测试：
 
 如果你要马上开始写代码，我建议就按下面顺序：
 
-1. 先落 [docs/KNOWLEDGE_INDEX_V1.sql](KNOWLEDGE_INDEX_V1.sql) 里的表结构和 `db.ts`
+1. 先落 [schema-v1.sql](schema-v1.sql) 里的表结构和 `db.ts`
 2. 再写 `chunker.ts`
 3. 再写 ingest
 4. 然后只先接 Notebook Chat

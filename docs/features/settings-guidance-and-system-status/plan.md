@@ -12,11 +12,11 @@ Implemented in this slice:
 - Model loading, Telegram settings, MCP save/load, and automation save/load errors use actionable inline banners.
 - User-facing docs, product status, roadmap, changelog, and test report were updated.
 
-Test report: [FEATURE_settings_guidance_and_system_status_TEST_REPORT.md](../testing/FEATURE_settings_guidance_and_system_status_TEST_REPORT.md)
+Test report: [test-report.md](test-report.md)
 
 ## Scope
 
-This plan describes the first usable slice of [FEATURE_settings_guidance_and_system_status.md](../product/FEATURE_settings_guidance_and_system_status.md).
+This plan describes the first usable slice of [brief.md](brief.md).
 
 Phase 1 focused on Web UX changes that reuse current APIs:
 
@@ -96,12 +96,12 @@ If later slices add `GET /api/system-status`, backend readiness mapping should r
 
 Updated during implementation:
 
-- [AGENT_RUNTIME.md](../user-guide/AGENT_RUNTIME.md): settings overview, readiness card, and repair entry points.
-- [README.md](../../README.md): first-run instructions now point to Settings / Basic / Overview and Models.
-- [CHANGELOG.md](../../CHANGELOG.md): records the UX change.
-- [PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md](../product/PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md): marks the recommendation as completed for the MVP slice.
-- [ROADMAP.md](../product/ROADMAP.md): records the P1 settings clarity/status slice.
-- [FEATURE_settings_guidance_and_system_status_TEST_REPORT.md](../testing/FEATURE_settings_guidance_and_system_status_TEST_REPORT.md): records acceptance coverage and residual risks.
+- [AGENT_RUNTIME.md](../../user-guide/AGENT_RUNTIME.md): settings overview, readiness card, and repair entry points.
+- [README.md](../../../README.md): first-run instructions now point to Settings / Basic / Overview and Models.
+- [CHANGELOG.md](../../../CHANGELOG.md): records the UX change.
+- [PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md](../../product/PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md): marks the recommendation as completed for the MVP slice.
+- [ROADMAP.md](../../product/ROADMAP.md): records the P1 settings clarity/status slice.
+- [test-report.md](test-report.md): records acceptance coverage and residual risks.
 
 ## Follow-Up
 

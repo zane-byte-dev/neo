@@ -2,9 +2,9 @@
 
 ## Scope
 
-验证 [Settings Guidance And System Status](../product/FEATURE_settings_guidance_and_system_status.md) 的 Phase 1 MVP：危险确认统一、设置页 Basic / Advanced 分层、Settings Overview 系统状态卡片，以及模型、Telegram、MCP、自动化失败时的可行动修复提示。
+验证 [Settings Guidance And System Status](brief.md) 的 Phase 1 MVP：危险确认统一、设置页 Basic / Advanced 分层、Settings Overview 系统状态卡片，以及模型、Telegram、MCP、自动化失败时的可行动修复提示。
 
-对应开发计划见 [FEATURE_settings_guidance_and_system_status_PLAN.md](../developer-guide/FEATURE_settings_guidance_and_system_status_PLAN.md)。
+对应开发计划见 [plan.md](plan.md)。
 
 ## Acceptance Criteria Coverage
 

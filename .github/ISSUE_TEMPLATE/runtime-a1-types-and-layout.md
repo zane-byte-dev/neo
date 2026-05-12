@@ -15,7 +15,7 @@ assignees: []
 - [src/services/agent-runner.ts](../../src/services/agent-runner.ts)
 - [src/routes/chat.ts](../../src/routes/chat.ts)
 - [src/services/cron-agent.ts](../../src/services/cron-agent.ts)
-- [docs/developer-guide/AGENT_RUNTIME_PLAN.md](../../docs/developer-guide/AGENT_RUNTIME_PLAN.md)
+- [docs/features/agent-runtime/plan.md](../../docs/features/agent-runtime/plan.md)
 
 ## 里程碑
 

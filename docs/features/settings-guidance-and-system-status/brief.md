@@ -15,9 +15,9 @@ Neo 当前已经具备较完整的模型配置、技能、应用、MCP、自动�
 
 相关来源：
 
-- [PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md](PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md)：提出统一危险确认、设置分层、错误修复建议和系统状态卡片。
-- [PM_AUDIT_REPORT.md](PM_AUDIT_REPORT.md)：指出设置密度、空状态、运行控制与配置混杂等问题。
-- [ROADMAP.md](ROADMAP.md)：P1 Web UI 增强仍强调降低新手认知负担和提升配置可理解性。
+- [PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md](../../product/PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md)：提出统一危险确认、设置分层、错误修复建议和系统状态卡片。
+- [PM_AUDIT_REPORT.md](../../product/PM_AUDIT_REPORT.md)：指出设置密度、空状态、运行控制与配置混杂等问题。
+- [ROADMAP.md](../../product/ROADMAP.md)：P1 Web UI 增强仍强调降低新手认知负担和提升配置可理解性。
 
 ## Evidence And Freshness Check
 
@@ -250,5 +250,5 @@ Neo 当前已经具备较完整的模型配置、技能、应用、MCP、自动�
 下一步进入 Dev Plan 阶段，建议输出：
 
 ```text
-docs/developer-guide/FEATURE_settings_guidance_and_system_status_PLAN.md
+docs/features/settings-guidance-and-system-status/plan.md
 ```

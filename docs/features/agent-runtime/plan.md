@@ -4,7 +4,7 @@
 >
 > 最后更新：2026-04-27
 
-配套 issue 拆分见：[AGENT_RUNTIME_ISSUES.md](AGENT_RUNTIME_ISSUES.md)
+配套 issue 拆分见：[issues.md](issues.md)
 
 > 实施状态快照（2026-04-27）
 >
@@ -18,11 +18,11 @@
 
 当前的核心执行链路已经可用，但它仍然是“请求内执行”的模型：
 
-- [src/services/agent-runner.ts](../../src/services/agent-runner.ts) 负责一次完整的 user -> assistant turn
-- [src/routes/chat.ts](../../src/routes/chat.ts) 通过 SSE 把流式 chunk 直接推给前端
-- [src/services/cron-agent.ts](../../src/services/cron-agent.ts) 通过构造新的 `sessionId` 触发后台任务
-- [src/utils/pending-confirm.ts](../../src/utils/pending-confirm.ts) 用内存 Map 暂存危险工具确认状态
-- [src/routes/tool-confirm.ts](../../src/routes/tool-confirm.ts) 仅能解析当前进程内仍然存活的确认请求
+- [src/services/agent-runner.ts](../../../src/services/agent-runner.ts) 负责一次完整的 user -> assistant turn
+- [src/routes/chat.ts](../../../src/routes/chat.ts) 通过 SSE 把流式 chunk 直接推给前端
+- [src/services/cron-agent.ts](../../../src/services/cron-agent.ts) 通过构造新的 `sessionId` 触发后台任务
+- [src/utils/pending-confirm.ts](../../../src/utils/pending-confirm.ts) 用内存 Map 暂存危险工具确认状态
+- [src/routes/tool-confirm.ts](../../../src/routes/tool-confirm.ts) 仅能解析当前进程内仍然存活的确认请求
 
 这个模型的优点是简单，已经足够支撑即时对话；但它有几个明显上限：
 
@@ -124,7 +124,7 @@ queued -> running -> completed
 
 ### 3.4 最小 JSON 示例
 
-对应代码定义见 [src/runtime/types.ts](../../src/runtime/types.ts)。
+对应代码定义见 [src/runtime/types.ts](../../../src/runtime/types.ts)。
 
 `run.json` 最小示例：
 
@@ -211,7 +211,7 @@ queued -> running -> completed
 
 任务清单：
 
-1. [x] 将 [src/services/agent-runner.ts](../../src/services/agent-runner.ts) 拆成：
+1. [x] 将 [src/services/agent-runner.ts](../../../src/services/agent-runner.ts) 拆成：
    - `prepareRunContext()`
    - `executeRunLoop()`
    - `resumeRun()`
@@ -221,12 +221,12 @@ queued -> running -> completed
 
 验收标准：
 
-1. 现有 [src/routes/chat.ts](../../src/routes/chat.ts) 无需改协议即可继续工作。
+1. 现有 [src/routes/chat.ts](../../../src/routes/chat.ts) 无需改协议即可继续工作。
 2. 单次 turn 执行完成后，run 目录中可看到完整事件流和最终状态。
 
 ## Phase 2：把工具确认从内存态改为持久化阻塞点
 
-目标：解决当前 [src/utils/pending-confirm.ts](../../src/utils/pending-confirm.ts) 仅在单进程内有效的问题。
+目标：解决当前 [src/utils/pending-confirm.ts](../../../src/utils/pending-confirm.ts) 仅在单进程内有效的问题。
 
 状态：已完成持久化确认对象、运行时事件接线，以及磁盘态批准后的自动恢复执行。
 
@@ -234,7 +234,7 @@ queued -> running -> completed
 
 1. [x] 用 `pending_action` 替代纯内存 Map，保留内存索引只作性能缓存。
 2. [x] `confirm_requested` 事件写入 run，并把 `run.status` 改为 `waiting_confirm`。
-3. [x] [src/routes/tool-confirm.ts](../../src/routes/tool-confirm.ts) 改为基于 `runId/actionId` 定位，而不是仅靠内存 `confirmId`。
+3. [x] [src/routes/tool-confirm.ts](../../../src/routes/tool-confirm.ts) 改为基于 `runId/actionId` 定位，而不是仅靠内存 `confirmId`。
 4. [x] 超时、拒绝、断线都统一走 `confirm_resolved` 事件，并恢复执行或结束 run。
 
 验收标准：
@@ -250,8 +250,8 @@ queued -> running -> completed
 
 任务清单：
 
-1. [src/routes/chat.ts](../../src/routes/chat.ts) 改为“创建 run + 订阅事件流”。
-2. [src/services/cron-agent.ts](../../src/services/cron-agent.ts) 不再直接只关心返回文本，而是消费 `run_completed` 事件和产物。
+1. [src/routes/chat.ts](../../../src/routes/chat.ts) 改为“创建 run + 订阅事件流”。
+2. [src/services/cron-agent.ts](../../../src/services/cron-agent.ts) 不再直接只关心返回文本，而是消费 `run_completed` 事件和产物。
 3. Telegram 和 webhook 入口增加 `entrypoint` 元数据，区分来源，并在完成后读取 runtime outcome。
 4. 将 `sessionId`、`notebook`、`triggerType`、`parentRunId` 纳入 run 元数据，便于审计与追踪。
 
@@ -292,7 +292,7 @@ queued -> running -> completed
 - `POST /api/runs/:id/cancel`：取消 run
 - `POST /api/runs/:id/actions/:actionId`：确认/拒绝 pending action
 
-现有 [src/routes/chat.ts](../../src/routes/chat.ts) 可以继续保留，但其职责应收敛为：
+现有 [src/routes/chat.ts](../../../src/routes/chat.ts) 可以继续保留，但其职责应收敛为：
 
 1. 创建 run
 2. 将事件桥接到 SSE

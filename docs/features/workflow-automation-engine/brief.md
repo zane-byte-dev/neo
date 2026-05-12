@@ -8,9 +8,9 @@ Neo 已经具备自动化的基础底座：Webhook 可以主动触发 Agent，Cr
 
 相关来源：
 
-- [ROADMAP.md](ROADMAP.md)：P1 明确列出工作流与自动化的五项未完成能力。
-- [COMPETITIVE_RESEARCH.md](COMPETITIVE_RESEARCH.md)：建议 Neo 在现有 Skill 基础上扩展轻量 Workflow，而不是只保留纯 Agent 模式。
-- [../user-guide/AUTOMATION.md](../user-guide/AUTOMATION.md)：当前公开的自动化能力仍仅覆盖 Webhook 与 Cron。
+- [ROADMAP.md](../../product/ROADMAP.md)：P1 明确列出工作流与自动化的五项未完成能力。
+- [COMPETITIVE_RESEARCH.md](../../product/COMPETITIVE_RESEARCH.md)：建议 Neo 在现有 Skill 基础上扩展轻量 Workflow，而不是只保留纯 Agent 模式。
+- [../user-guide/AUTOMATION.md](../../user-guide/AUTOMATION.md)：当前公开的自动化能力仍仅覆盖 Webhook 与 Cron。
 
 ## Evidence And Freshness Check
 
@@ -18,22 +18,22 @@ Neo 已经具备自动化的基础底座：Webhook 可以主动触发 Agent，Cr
 
 ### 1. 现有自动化能力只有单步触发
 
-- [../../src/services/cron-agent.ts](../../src/services/cron-agent.ts) 当前从 `memory/schedule.json` 读取任务，并在到点时调用一次 `runAgentTurn(...)`。
+- [../../src/services/cron-agent.ts](../../../src/services/cron-agent.ts) 当前从 `memory/schedule.json` 读取任务，并在到点时调用一次 `runAgentTurn(...)`。
 - 每个 Cron 任务当前只有一条 `message`，本质上是“定时发一段话给 Agent”，不是多步骤流程。
-- [../../src/routes/webhook.ts](../../src/routes/webhook.ts) 当前也只是接收 `message + secret + sessionId`，然后触发一次 Agent turn。
+- [../../src/routes/webhook.ts](../../../src/routes/webhook.ts) 当前也只是接收 `message + secret + sessionId`，然后触发一次 Agent turn。
 
 结论：当前自动化是“单条指令触发 Agent”，不是“工作流执行引擎”。
 
 ### 2. Web UI 和文档已经覆盖了 Cron / Webhook 管理，但没有 Workflow 概念
 
-- [../user-guide/AUTOMATION.md](../user-guide/AUTOMATION.md) 当前只介绍 Webhook 与 Cron。
-- [PM_AUDIT_REPORT.md](PM_AUDIT_REPORT.md) 已确认 Webhook/Cron 管理 UI 已实现。
+- [../user-guide/AUTOMATION.md](../../user-guide/AUTOMATION.md) 当前只介绍 Webhook 与 Cron。
+- [PM_AUDIT_REPORT.md](../../product/PM_AUDIT_REPORT.md) 已确认 Webhook/Cron 管理 UI 已实现。
 
 结论：现有产品已经解决了“基础自动化入口缺失”，但还没有“工作流定义、运行、追踪”的产品层。
 
 ### 3. 任务历史字段目前只是占位，没有真实执行历史
 
-- [../../src/routes/cron.ts](../../src/routes/cron.ts) 的 `GET /api/crons` 已返回 `last_status / last_error / last_finished_at` 等字段。
+- [../../src/routes/cron.ts](../../../src/routes/cron.ts) 的 `GET /api/crons` 已返回 `last_status / last_error / last_finished_at` 等字段。
 - 但这些字段当前是固定 `null` 或 `0`，并没有真实持久化的任务执行状态。
 
 结论：产品已经隐约需要“执行历史 / 日志”这层能力，但实现尚未补上。
@@ -45,7 +45,7 @@ Neo 已经具备自动化的基础底座：Webhook 可以主动触发 Agent，Cr
 
 ### 5. 竞品方向与当前代码状态能够形成清晰增量路径
 
-- [COMPETITIVE_RESEARCH.md](COMPETITIVE_RESEARCH.md) 已提出：在现有 Skill 基础上扩展轻量 Workflow，支持 cron / webhook / 手动 / 事件触发。
+- [COMPETITIVE_RESEARCH.md](../../product/COMPETITIVE_RESEARCH.md) 已提出：在现有 Skill 基础上扩展轻量 Workflow，支持 cron / webhook / 手动 / 事件触发。
 - 当前 Neo 已有 Skill、Agent Runtime、Cron、Webhook、SSE、Tool、Notebook 等底座，说明该需求不是纯探索型概念，而是可落在现有架构之上的下一层产品能力。
 
 结论：当前最合理的产品方向不是继续堆更多单点自动化按钮，而是把已有自动化底层提升为“Workflow Automation Engine”。
@@ -224,10 +224,10 @@ Phase 3：触发器与连接器扩展
 
 如果该功能实施，以下文档需要同步：
 
-- [../user-guide/AUTOMATION.md](../user-guide/AUTOMATION.md)：从“Webhook / Cron 使用指南”升级为“Workflow / Triggers / Runs 使用指南”。
-- [../../README.md](../../README.md)：更新自动化能力描述，不再只强调 Cron / Webhook。
-- [../../CHANGELOG.md](../../CHANGELOG.md)：记录 Workflow 能力上线。
-- [ROADMAP.md](ROADMAP.md)：将工作流与自动化条目标记为进行中或拆分状态。
+- [../user-guide/AUTOMATION.md](../../user-guide/AUTOMATION.md)：从"Webhook / Cron 使用指南"升级为"Workflow / Triggers / Runs 使用指南"。
+- [../../README.md](../../../README.md)：更新自动化能力描述，不再只强调 Cron / Webhook。
+- [../../CHANGELOG.md](../../../CHANGELOG.md)：记录 Workflow 能力上线。
+- [ROADMAP.md](../../product/ROADMAP.md)：将工作流与自动化条目标记为进行中或拆分状态。
 - 如首版采用声明式文件定义，还需要补一份 `docs/developer-guide/` 文档说明 Workflow schema 与运行时模型。
 
 ## Acceptance Criteria
@@ -268,5 +268,5 @@ P1。原因不是它最先影响新手体验，而是它最能把 Neo 从“可�
 下一步进入 Dev Plan 阶段，建议输出：
 
 ```text
-docs/developer-guide/FEATURE_workflow_automation_engine_PLAN.md
+docs/features/workflow-automation-engine/plan.md
 ```

@@ -33,12 +33,6 @@ docs/
 | 文件 | 说明 | 状态 |
 |------|------|------|
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | 开发环境、测试、Mock LLM、调试指南 | ✅ 已更新 |
-| [AGENT_RUNTIME_PLAN.md](developer-guide/AGENT_RUNTIME_PLAN.md) | Agent 可恢复运行时演进计划 | ✅ 除 E2（自动化测试）外全部完成 |
-| [AGENT_RUNTIME_ISSUES.md](developer-guide/AGENT_RUNTIME_ISSUES.md) | Agent 运行时 Issue 拆分（Epic → Issue 粒度） | ✅ A1-D3 全完成，E2 待处理 |
-| [AGENT_RUNTIME_GITHUB_ISSUES.md](developer-guide/AGENT_RUNTIME_GITHUB_ISSUES.md) | Agent 运行时前 5 个 Issue 的 GitHub 正文模板 | 📝 模板备用 |
-| [KNOWLEDGE_INDEX_DESIGN.md](developer-guide/KNOWLEDGE_INDEX_DESIGN.md) | 统一知识索引层架构设计草案 | ✅ FTS5 底座已落地；embedding 向量检索待做 |
-| [KNOWLEDGE_INDEX_MVP.md](developer-guide/KNOWLEDGE_INDEX_MVP.md) | 统一知识索引 MVP 实施方案 | ✅ 已落地 |
-| [KNOWLEDGE_INDEX_V1.sql](developer-guide/KNOWLEDGE_INDEX_V1.sql) | SQLite + FTS5 表结构参考 | 📖 参考资料 |
 | [UI_DESIGN_GUIDE.md](developer-guide/UI_DESIGN_GUIDE.md) | Web UI 色彩、间距、圆角设计规范 | ✅ 已落地 |
 | [SMART_SCORING.md](developer-guide/SMART_SCORING.md) | 智能请求评分与模型自动路由设计 | ✅ 已落地 |
 | [COPILOT_AI_LOOP.md](developer-guide/COPILOT_AI_LOOP.md) | GitHub Copilot 驱动的产品→开发→测试→发布闭环 | ✅ 已落地 |
@@ -70,3 +64,8 @@ docs/
 | 功能 | Brief | Plan | Test Report | 状态 |
 |------|-------|------|-------------|------|
 | 首次使用清单 | [brief.md](features/first-run-checklist/brief.md) | [plan.md](features/first-run-checklist/plan.md) | [test-report.md](features/first-run-checklist/test-report.md) | ✅ MVP 已实现 |
+| 设置引导与系统状态 | [brief.md](features/settings-guidance-and-system-status/brief.md) | [plan.md](features/settings-guidance-and-system-status/plan.md) | [test-report.md](features/settings-guidance-and-system-status/test-report.md) | ✅ Phase 1 已实现 |
+| Web 语音输入 | [brief.md](features/web-voice-input/brief.md) | [plan.md](features/web-voice-input/plan.md) | — | ✅ Phase 1 已实现 |
+| Workflow 自动化引擎 | [brief.md](features/workflow-automation-engine/brief.md) | — | — | 📝 规划中 |
+| Agent 可恢复运行时 | — | [plan.md](features/agent-runtime/plan.md) | — | ✅ A1-D3 全完成，E2 待处理（附 [issues.md](features/agent-runtime/issues.md)） |
+| 统一知识索引 | [design.md](features/knowledge-index/design.md) | [plan.md](features/knowledge-index/plan.md) | — | ✅ Phase 0-2 完成；Phase 3（embedding）待做 |
