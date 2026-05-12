@@ -8,6 +8,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Added
 
+- Settings / Basic / Overview with a system status card for backend, account, model, and automation readiness.
 - First-run checklist on the Chat welcome screen to guide model setup, first message, and Notebook note creation.
 - User guides for Tools, Skills, Sandbox, MCP, Notebook, Automation, Browser Extension, Agent Runtime, and FAQ.
 - Example user tool and Skill under `examples/tools/` and `examples/skills/`.
@@ -15,6 +16,8 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Changed
 
+- Settings navigation now separates Basic (Overview, Models, Skills) from Advanced (Apps, MCP, Automations), and high-frequency settings errors include repair actions.
+- Sidebar bulk chat deletion now uses the shared confirmation dialog instead of the browser-native confirm prompt.
 - Chinese README now has one Quick Start path and an updated built-in tools table.
 - English README now matches first-launch bootstrap behavior and current `stateDir` layout.
 

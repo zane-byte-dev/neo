@@ -1,6 +1,6 @@
 import React from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Cpu, Zap, LayoutGrid, ExternalLink, Upload, Trash2, Plus, X, Loader2, Server, Clock } from 'lucide-react'
+import { Cpu, Zap, LayoutGrid, ExternalLink, Upload, Trash2, Plus, X, Loader2, Server, Clock, Activity, AlertTriangle, CheckCircle2, RefreshCw, UserRound, Bot } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
 import {
@@ -14,14 +14,216 @@ import {
     cronSave,
     cronDelete,
     fetchMe,
+    fetchModels,
+    fetchPreferences,
     type UserAppInfo,
     type McpServerConfig,
+    type MeInfo,
+    type ModelsResponse,
+    type PreferencesResponse,
 } from '../api'
 import type { CronJobInfo } from '../types'
 import { ModelPanel } from './ModelPanel'
 import { SkillsPanel } from './SkillsPanel'
 import { toast } from './Toast'
 import { confirm as confirmDialog } from './ConfirmDialog'
+import { ActionableErrorBanner } from './ActionableErrorBanner'
+
+const errorMessage = (error: unknown, fallback: string): string => error instanceof Error ? error.message : fallback
+
+type OverviewState = {
+    me: PromiseSettledResult<MeInfo>
+    models: PromiseSettledResult<ModelsResponse>
+    preferences: PromiseSettledResult<PreferencesResponse>
+    crons: PromiseSettledResult<CronJobInfo[]>
+    loadedAt: number
+}
+
+const StatusTile: React.FC<{
+    icon: React.ReactNode
+    title: string
+    status: string
+    summary: string
+    tone: 'ok' | 'warning' | 'neutral'
+    actionLabel?: string
+    onAction?: () => void
+}> = ({ icon, title, status, summary, tone, actionLabel, onAction }) => {
+    const toneClass = tone === 'ok'
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+        : tone === 'warning'
+            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+            : 'bg-fill text-text-secondary'
+
+    return (
+        <div className="rounded-xl border border-border bg-bg-container p-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
+            <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-fill text-text-tertiary">
+                        {icon}
+                    </span>
+                    <div className="min-w-0">
+                        <h3 className="truncate text-sm font-semibold text-text">{title}</h3>
+                        <p className="mt-0.5 text-[11px] text-text-tertiary">{status}</p>
+                    </div>
+                </div>
+                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', toneClass)}>
+                    {status}
+                </span>
+            </div>
+            <p className="min-h-[2.5rem] text-xs leading-relaxed text-text-secondary">{summary}</p>
+            {actionLabel && onAction && (
+                <button
+                    type="button"
+                    onClick={onAction}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-border bg-fill px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-fill-secondary"
+                >
+                    {actionLabel}
+                </button>
+            )}
+        </div>
+    )
+}
+
+const SettingsOverview: React.FC = () => {
+    const t = useT()
+    const navigate = useNavigate()
+    const [state, setState] = React.useState<OverviewState | null>(null)
+    const [loading, setLoading] = React.useState(true)
+
+    const load = React.useCallback(() => {
+        setLoading(true)
+        Promise.allSettled([fetchMe(), fetchModels(), fetchPreferences(), cronList()])
+            .then(([me, models, preferences, crons]) => {
+                setState({ me, models, preferences, crons, loadedAt: Date.now() })
+            })
+            .finally(() => setLoading(false))
+    }, [])
+
+    React.useEffect(() => { load() }, [load])
+
+    const backendOk = Boolean(state && [state.me, state.models, state.preferences].every((item) => item.status === 'fulfilled'))
+    const accountOk = state?.me.status === 'fulfilled' && Boolean(state.me.value.userId)
+    const configuredModels = state?.models.status === 'fulfilled'
+        ? state.models.value.models.filter((model) => model.configured).length
+        : 0
+    const providerWarnings = state?.models.status === 'fulfilled'
+        ? state.models.value.providerStatus.filter((provider) => !provider.ok).length
+        : 0
+    const modelsOk = configuredModels > 0
+    const telegramConfigured = state?.preferences.status === 'fulfilled' ? state.preferences.value.telegram.configured : false
+    const telegramActive = state?.preferences.status === 'fulfilled' ? state.preferences.value.telegram.active : false
+    const cronCount = state?.crons.status === 'fulfilled' ? state.crons.value.length : 0
+    const ready = backendOk && accountOk && modelsOk
+    const firstError = state
+        ? [state.me, state.models, state.preferences, state.crons].find((item) => item.status === 'rejected') as PromiseRejectedResult | undefined
+        : undefined
+
+    return (
+        <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 md:px-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                        <h1 className="text-lg font-bold text-text">{t('settingsOverview')}</h1>
+                        <p className="mt-1 text-xs leading-relaxed text-text-tertiary">{t('settingsOverviewSubtitle')}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={load}
+                        disabled={loading}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-fill px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-fill-secondary disabled:opacity-50"
+                    >
+                        <RefreshCw size={13} className={cn(loading && 'animate-spin')} />
+                        {t('refresh')}
+                    </button>
+                </div>
+
+                <section className="rounded-xl border border-border bg-bg-container p-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className={cn(
+                                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                                ready ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                            )}>
+                                {ready ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-text">{ready ? t('systemStatusReady') : t('systemStatusNeedsAttention')}</p>
+                                <p className="mt-0.5 text-xs text-text-tertiary">
+                                    {state ? t('systemStatusLastChecked', { time: new Date(state.loadedAt).toLocaleTimeString() }) : t('loading')}
+                                </p>
+                            </div>
+                        </div>
+                        {!modelsOk && !loading && (
+                            <button
+                                type="button"
+                                onClick={() => navigate('/settings/models')}
+                                className="inline-flex items-center justify-center rounded-lg bg-primary-mint px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                            >
+                                {t('systemStatusConfigureModels')}
+                            </button>
+                        )}
+                    </div>
+                </section>
+
+                {firstError && (
+                    <ActionableErrorBanner
+                        title={t('systemStatusLoadFailed')}
+                        message={t('systemStatusLoadFailedHint')}
+                        detail={errorMessage(firstError.reason, t('loadFailed'))}
+                        detailsLabel={t('technicalDetails')}
+                        actionLabel={t('retry')}
+                        onAction={load}
+                    />
+                )}
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <StatusTile
+                        icon={<Server size={15} />}
+                        title={t('systemStatusBackend')}
+                        status={backendOk ? t('systemStatusReadyShort') : t('systemStatusAttentionShort')}
+                        summary={backendOk ? t('systemStatusBackendReady') : t('systemStatusBackendFailed')}
+                        tone={backendOk ? 'ok' : 'warning'}
+                        actionLabel={!backendOk ? t('retry') : undefined}
+                        onAction={!backendOk ? load : undefined}
+                    />
+                    <StatusTile
+                        icon={<UserRound size={15} />}
+                        title={t('systemStatusAccount')}
+                        status={accountOk ? t('systemStatusReadyShort') : t('systemStatusAttentionShort')}
+                        summary={state?.me.status === 'fulfilled'
+                            ? t('systemStatusAccountReady', { name: state.me.value.displayName ?? state.me.value.userId ?? '-' })
+                            : t('systemStatusAccountFailed')}
+                        tone={accountOk ? 'ok' : 'warning'}
+                        actionLabel={!accountOk ? t('retry') : undefined}
+                        onAction={!accountOk ? load : undefined}
+                    />
+                    <StatusTile
+                        icon={<Cpu size={15} />}
+                        title={t('systemStatusModels')}
+                        status={modelsOk ? t('systemStatusReadyShort') : t('systemStatusAttentionShort')}
+                        summary={modelsOk
+                            ? t('systemStatusModelsReady', { count: configuredModels, warnings: providerWarnings })
+                            : t('systemStatusModelsMissing')}
+                        tone={modelsOk ? (providerWarnings > 0 ? 'neutral' : 'ok') : 'warning'}
+                        actionLabel={!modelsOk || providerWarnings > 0 ? t('systemStatusOpenModels') : undefined}
+                        onAction={!modelsOk || providerWarnings > 0 ? () => navigate('/settings/models') : undefined}
+                    />
+                    <StatusTile
+                        icon={<Bot size={15} />}
+                        title={t('systemStatusAutomation')}
+                        status={state?.preferences.status === 'fulfilled' && state?.crons.status === 'fulfilled' ? t('systemStatusReadyShort') : t('systemStatusAttentionShort')}
+                        summary={state?.preferences.status === 'fulfilled' && state?.crons.status === 'fulfilled'
+                            ? t('systemStatusAutomationReady', { telegram: telegramActive ? t('enabled') : (telegramConfigured ? t('disabled') : t('systemStatusNotConfigured')), count: cronCount })
+                            : t('systemStatusAutomationFailed')}
+                        tone={state?.preferences.status === 'fulfilled' && state?.crons.status === 'fulfilled' ? 'neutral' : 'warning'}
+                        actionLabel={t('systemStatusOpenAutomations')}
+                        onAction={() => navigate('/settings/automations')}
+                    />
+                </div>
+            </div>
+        </div>
+    )
+}
 
 // ── Apps Tab ─────────────────────────────────────────────────────────────────
 
@@ -246,18 +448,24 @@ const McpTab: React.FC = () => {
     const [servers, setServers] = React.useState<Record<string, McpServerConfig>>({})
     const [loading, setLoading] = React.useState(true)
     const [saving, setSaving] = React.useState(false)
+    const [loadError, setLoadError] = React.useState<string | null>(null)
+    const [saveError, setSaveError] = React.useState<string | null>(null)
     const [editingName, setEditingName] = React.useState('')
     const [command, setCommand] = React.useState('')
     const [args, setArgs] = React.useState('')
     const [cwd, setCwd] = React.useState('')
     const [env, setEnv] = React.useState('')
+    const nameInputRef = React.useRef<HTMLInputElement>(null)
+    const commandInputRef = React.useRef<HTMLInputElement>(null)
 
     const reload = () => {
         setLoading(true)
+        setLoadError(null)
         mcpList()
             .then((res) => setServers(res.servers))
-            .catch(() => {
+            .catch((error: unknown) => {
                 setServers({})
+                setLoadError(errorMessage(error, t('mcpLoadFailed')))
                 toast.error(t('mcpLoadFailed'))
             })
             .finally(() => setLoading(false))
@@ -285,6 +493,7 @@ const McpTab: React.FC = () => {
         const name = editingName.trim()
         if (!name || !command.trim()) return
         setSaving(true)
+        setSaveError(null)
         try {
             await mcpSave(name, {
                 command: command.trim(),
@@ -296,7 +505,8 @@ const McpTab: React.FC = () => {
             resetForm()
             reload()
         } catch (e) {
-            toast.error(e instanceof Error ? e.message : t('mcpSaveFailed'))
+            setSaveError(errorMessage(e, t('mcpSaveFailed')))
+            toast.error(t('mcpSaveFailed'))
         } finally {
             setSaving(false)
         }
@@ -320,11 +530,31 @@ const McpTab: React.FC = () => {
                 <p className="text-xs text-text-tertiary mt-0.5">{t('mcpServersSubtitle')}</p>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-4">
+                {loadError && (
+                    <ActionableErrorBanner
+                        title={t('mcpLoadFailed')}
+                        message={t('mcpLoadRecoveryHint')}
+                        detail={loadError}
+                        detailsLabel={t('technicalDetails')}
+                        actionLabel={t('retry')}
+                        onAction={reload}
+                    />
+                )}
+                {saveError && (
+                    <ActionableErrorBanner
+                        title={t('mcpSaveFailed')}
+                        message={t('mcpSaveRecoveryHint')}
+                        detail={saveError}
+                        detailsLabel={t('technicalDetails')}
+                        actionLabel={t('mcpFixRequiredFields')}
+                        onAction={() => (editingName.trim() ? commandInputRef : nameInputRef).current?.focus()}
+                    />
+                )}
                 <div className="bg-bg-container border border-border rounded-xl p-4 space-y-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
                     <h3 className="text-sm font-semibold text-text">{editingName && servers[editingName] ? t('editMcpServer') : t('newMcpServer')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input value={editingName} onChange={(e) => setEditingName(e.target.value)} placeholder={t('mcpNamePlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
-                        <input value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t('mcpCommandPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
+                        <input ref={nameInputRef} value={editingName} onChange={(e) => setEditingName(e.target.value)} placeholder={t('mcpNamePlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
+                        <input ref={commandInputRef} value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t('mcpCommandPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
                         <input value={args} onChange={(e) => setArgs(e.target.value)} placeholder={t('mcpArgsPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
                         <input value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder={t('mcpCwdPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
                         <textarea value={env} onChange={(e) => setEnv(e.target.value)} placeholder={t('mcpEnvPlaceholder')} rows={3} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2 font-mono" />
@@ -366,23 +596,33 @@ const AutomationsTab: React.FC = () => {
     const [userId, setUserId] = React.useState<string | null>(null)
     const [loading, setLoading] = React.useState(true)
     const [saving, setSaving] = React.useState(false)
+    const [loadError, setLoadError] = React.useState<string | null>(null)
+    const [saveError, setSaveError] = React.useState<string | null>(null)
     const [name, setName] = React.useState('')
     const [schedule, setSchedule] = React.useState('0 8 * * *')
     const [message, setMessage] = React.useState('')
     const [enabled, setEnabled] = React.useState(true)
     const [timezone, setTimezone] = React.useState('Asia/Shanghai')
+    const nameInputRef = React.useRef<HTMLInputElement>(null)
+    const scheduleInputRef = React.useRef<HTMLInputElement>(null)
+    const messageInputRef = React.useRef<HTMLTextAreaElement>(null)
 
     const reload = () => {
         setLoading(true)
+        setLoadError(null)
         Promise.allSettled([cronList(), fetchMe()])
             .then(([jobsResult, meResult]) => {
                 if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value)
                 else {
                     setJobs([])
+                    setLoadError(errorMessage(jobsResult.reason, t('automationsLoadFailed')))
                     toast.error(t('automationsLoadFailed'))
                 }
                 if (meResult.status === 'fulfilled') setUserId(meResult.value.userId)
-                else toast.error(t('automationsLoadFailed'))
+                else {
+                    setLoadError(errorMessage(meResult.reason, t('automationsLoadFailed')))
+                    toast.error(t('automationsLoadFailed'))
+                }
             })
             .finally(() => setLoading(false))
     }
@@ -399,6 +639,7 @@ const AutomationsTab: React.FC = () => {
     const save = async () => {
         if (!name.trim() || !schedule.trim() || !message.trim()) return
         setSaving(true)
+        setSaveError(null)
         try {
             await cronSave(name.trim(), { cron: schedule.trim(), message, enabled, timezone: timezone.trim() || undefined })
             toast.success(t('cronSaved'))
@@ -406,7 +647,8 @@ const AutomationsTab: React.FC = () => {
             setMessage('')
             reload()
         } catch (e) {
-            toast.error(e instanceof Error ? e.message : t('cronSaveFailed'))
+            setSaveError(errorMessage(e, t('cronSaveFailed')))
+            toast.error(t('cronSaveFailed'))
         } finally {
             setSaving(false)
         }
@@ -430,6 +672,30 @@ const AutomationsTab: React.FC = () => {
                 <p className="text-xs text-text-tertiary mt-0.5">{t('automationsSubtitle')}</p>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-4">
+                {loadError && (
+                    <ActionableErrorBanner
+                        title={t('automationsLoadFailed')}
+                        message={t('automationsLoadRecoveryHint')}
+                        detail={loadError}
+                        detailsLabel={t('technicalDetails')}
+                        actionLabel={t('retry')}
+                        onAction={reload}
+                    />
+                )}
+                {saveError && (
+                    <ActionableErrorBanner
+                        title={t('cronSaveFailed')}
+                        message={t('cronSaveRecoveryHint')}
+                        detail={saveError}
+                        detailsLabel={t('technicalDetails')}
+                        actionLabel={t('cronFixRequiredFields')}
+                        onAction={() => {
+                            if (!name.trim()) nameInputRef.current?.focus()
+                            else if (!schedule.trim()) scheduleInputRef.current?.focus()
+                            else messageInputRef.current?.focus()
+                        }}
+                    />
+                )}
                 <div className="bg-bg-container border border-border rounded-xl p-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
                     <h3 className="text-sm font-semibold text-text mb-2">{t('webhook')}</h3>
                     <p className="text-xs text-text-tertiary mb-2">{t('webhookDescription')}</p>
@@ -440,10 +706,10 @@ const AutomationsTab: React.FC = () => {
                 <div className="bg-bg-container border border-border rounded-xl p-4 space-y-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
                     <h3 className="text-sm font-semibold text-text">{t('cronJobs')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('cronNamePlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
-                        <input value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 8 * * *" className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 font-mono" />
+                        <input ref={nameInputRef} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('cronNamePlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
+                        <input ref={scheduleInputRef} value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 8 * * *" className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 font-mono" />
                         <input value={timezone} onChange={(e) => setTimezone(e.target.value)} placeholder="Asia/Shanghai" className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
-                        <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t('cronMessagePlaceholder')} rows={3} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                        <textarea ref={messageInputRef} value={message} onChange={(e) => setMessage(e.target.value)} placeholder={t('cronMessagePlaceholder')} rows={3} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
                     </div>
                     <label className="flex items-center gap-2 text-xs text-text-secondary">
                         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
@@ -480,20 +746,28 @@ const AutomationsTab: React.FC = () => {
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
-type TabId = 'models' | 'skills' | 'apps' | 'mcp' | 'automations'
+type TabId = 'overview' | 'models' | 'skills' | 'apps' | 'mcp' | 'automations'
+type TabGroup = 'basic' | 'advanced'
 
 interface TabDef {
     id: TabId
-    labelKey: 'models' | 'skills' | 'apps' | 'mcpServers' | 'automations'
+    labelKey: 'settingsOverview' | 'models' | 'skills' | 'apps' | 'mcpServers' | 'automations'
+    group: TabGroup
     icon: React.ReactNode
 }
 
 const TABS: TabDef[] = [
-    { id: 'models', labelKey: 'models', icon: <Cpu size={14} /> },
-    { id: 'skills', labelKey: 'skills', icon: <Zap size={14} /> },
-    { id: 'apps',   labelKey: 'apps',   icon: <LayoutGrid size={14} /> },
-    { id: 'mcp', labelKey: 'mcpServers', icon: <Server size={14} /> },
-    { id: 'automations', labelKey: 'automations', icon: <Clock size={14} /> },
+    { id: 'overview', labelKey: 'settingsOverview', group: 'basic', icon: <Activity size={14} /> },
+    { id: 'models', labelKey: 'models', group: 'basic', icon: <Cpu size={14} /> },
+    { id: 'skills', labelKey: 'skills', group: 'basic', icon: <Zap size={14} /> },
+    { id: 'apps',   labelKey: 'apps', group: 'advanced', icon: <LayoutGrid size={14} /> },
+    { id: 'mcp', labelKey: 'mcpServers', group: 'advanced', icon: <Server size={14} /> },
+    { id: 'automations', labelKey: 'automations', group: 'advanced', icon: <Clock size={14} /> },
+]
+
+const TAB_GROUPS: Array<{ id: TabGroup; labelKey: 'settingsGroupBasic' | 'settingsGroupAdvanced' }> = [
+    { id: 'basic', labelKey: 'settingsGroupBasic' },
+    { id: 'advanced', labelKey: 'settingsGroupAdvanced' },
 ]
 
 // ── Main Panel ────────────────────────────────────────────────────────────────
@@ -503,7 +777,7 @@ export const SettingsPanel: React.FC = () => {
     const navigate = useNavigate()
     const params = useParams<{ tab?: string }>()
 
-    const activeTab: TabId = TABS.some(tab => tab.id === params.tab) ? params.tab as TabId : 'models'
+    const activeTab: TabId = TABS.some(tab => tab.id === params.tab) ? params.tab as TabId : 'overview'
 
     const switchTab = (id: TabId) => {
         navigate(`/settings/${id}`)
@@ -512,28 +786,36 @@ export const SettingsPanel: React.FC = () => {
     return (
         <div className="flex flex-col h-full">
             {/* Tab bar */}
-            <div className="flex items-center gap-1 px-4 pt-3 pb-0 border-b border-border shrink-0">
-                {TABS.map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => switchTab(tab.id)}
-                        className={cn(
-                            'flex items-center gap-1.5 px-3 py-2 text-[13px] rounded-t-lg transition-colors border-b-2 -mb-px',
-                            activeTab === tab.id
-                                ? 'border-primary-mint text-text font-medium'
-                                : 'border-transparent text-text-secondary hover:text-text hover:bg-fill/50'
-                        )}
-                    >
-                        <span className={cn(activeTab === tab.id ? 'text-primary-mint' : 'text-text-tertiary')}>
-                            {tab.icon}
+            <div className="flex flex-wrap items-end gap-x-5 gap-y-2 px-4 pt-3 pb-0 border-b border-border shrink-0">
+                {TAB_GROUPS.map((group) => (
+                    <div key={group.id} className="flex items-end gap-1">
+                        <span className="mb-2 mr-1 text-[10px] font-semibold uppercase text-text-quaternary">
+                            {t(group.labelKey)}
                         </span>
-                        {t(tab.labelKey)}
-                    </button>
+                        {TABS.filter((tab) => tab.group === group.id).map((tab) => (
+                            <button
+                                key={tab.id}
+                                onClick={() => switchTab(tab.id)}
+                                className={cn(
+                                    'flex items-center gap-1.5 px-3 py-2 text-[13px] rounded-t-lg transition-colors border-b-2 -mb-px',
+                                    activeTab === tab.id
+                                        ? 'border-primary-mint text-text font-medium'
+                                        : 'border-transparent text-text-secondary hover:text-text hover:bg-fill/50'
+                                )}
+                            >
+                                <span className={cn(activeTab === tab.id ? 'text-primary-mint' : 'text-text-tertiary')}>
+                                    {tab.icon}
+                                </span>
+                                {t(tab.labelKey)}
+                            </button>
+                        ))}
+                    </div>
                 ))}
             </div>
 
             {/* Tab content */}
             <div className="flex-1 min-h-0 overflow-hidden">
+                {activeTab === 'overview' && <SettingsOverview />}
                 {activeTab === 'models' && <ModelPanel />}
                 {activeTab === 'skills' && <SkillsPanel />}
                 {activeTab === 'apps'   && <AppsTab />}

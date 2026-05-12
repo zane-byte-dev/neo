@@ -63,6 +63,19 @@ GET /api/runs/:id/events?cursor=N
 
 危险工具会创建 pending action。用户批准后，Neo 会记录 `confirm_resolved`，并从 checkpoint 恢复执行。对于已经完成、失败、取消或过期的 run，取消 API 会返回 no-op 成功。
 
+## 设置与系统状态
+
+Web UI 的设置页现在分为两层：
+
+| 分层 | 页面 | 用途 |
+|------|------|------|
+| Basic | Overview / Models / Skills | 查看系统是否 ready、配置模型、管理常用技能 |
+| Advanced | Apps / MCP Servers / Automations | 管理应用、MCP 工具服务器、Webhook 与 Cron 自动化 |
+
+进入 `Settings / Basic / Overview` 可以看到系统状态卡片。首版状态由现有接口聚合而来：账号来自 `/api/me`，模型与 provider health 来自 `/api/models`，Telegram 运行态来自 `/api/preferences`，Cron 数量来自 `/api/crons`。
+
+当模型、Telegram、MCP 或自动化保存失败时，页面会保留内联错误提示，并给出重试、打开凭据区或检查必填字段等修复入口。Toast 只提示结果，具体排查信息放在页面内的“技术详情”中。
+
 ## 调试
 
 - 查看 `{stateDir}/runs/<runId>/events.jsonl` 可以复盘工具调用和模型输出。

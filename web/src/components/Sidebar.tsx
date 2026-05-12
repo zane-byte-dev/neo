@@ -6,6 +6,7 @@ import { cn } from '../lib/utils'
 import { logout, fetchMe, fetchSessions, patchSession, deleteSessionApi, notebookListNotebooks, notebookDeleteFolder, notebookRenameFolder, initializeWorkspace, importChatApi, notebookList, type MeInfo } from '../api'
 import { useT, LOCALE_OPTIONS } from '../i18n'
 import { toast } from './Toast'
+import { confirm as confirmDialog } from './ConfirmDialog'
 import { NotebookSettingsModal, getNotebookSort, applySortToEntries } from './notebook/NotebookSettingsModal'
 import { TrashPanel } from './TrashPanel'
 import type { Theme, NoteEntry } from '../types'
@@ -170,7 +171,11 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const handleBulkDelete = async () => {
         const ids = Array.from(selectedChatIds)
         if (ids.length === 0) return
-        const confirmed = window.confirm(t('bulkDeleteConfirm').replace('{n}', String(ids.length)))
+        const confirmed = await confirmDialog(t('bulkDeleteConfirm', { n: ids.length }), {
+            confirmText: t('delete'),
+            cancelText: t('cancel'),
+            destructive: true,
+        })
         if (!confirmed) return
         for (const id of ids) {
             deleteSessionApi(id).catch(() => {})
@@ -532,7 +537,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                                 <span>{t('newChat')}</span>
                             </button>
                             <Link
-                                to="/settings/models"
+                                to="/settings"
                                 onClick={() => { explicitHomeRef.current = false; onNavigate?.() }}
                                 className="flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] text-text-secondary hover:bg-sidebar-hover hover:text-text transition-all duration-150"
                             >

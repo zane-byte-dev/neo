@@ -27,6 +27,7 @@ import {
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
 import type { TranslationKeys } from '../i18n/locales/en'
+import { ActionableErrorBanner } from './ActionableErrorBanner'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -163,7 +164,8 @@ const TelegramControlCard: React.FC<{
     error: string | null
     t: T
     onToggle: () => void
-}> = ({ preferences, runtime, loading, saving, error, t, onToggle }) => {
+    onRepair: () => void
+}> = ({ preferences, runtime, loading, saving, error, t, onToggle, onRepair }) => {
     const enabled = Boolean(preferences.telegramBotEnabled)
     const disabled = loading || saving
 
@@ -191,9 +193,6 @@ const TelegramControlCard: React.FC<{
                     <p className="text-xs text-text-tertiary leading-relaxed">
                         {t('telegramBotDescription')}
                     </p>
-                    {error && (
-                        <p className="text-[11px] text-destructive mt-2">{error}</p>
-                    )}
                 </div>
 
                 <button
@@ -217,6 +216,18 @@ const TelegramControlCard: React.FC<{
                     />
                 </button>
             </div>
+            {error && (
+                <div className="mt-3">
+                    <ActionableErrorBanner
+                        title={t('telegramBotToggleFailed')}
+                        message={t('telegramBotRecoveryHint')}
+                        detail={error}
+                        detailsLabel={t('technicalDetails')}
+                        actionLabel={t('telegramBotRepairAction')}
+                        onAction={onRepair}
+                    />
+                </div>
+            )}
         </div>
     )
 }
@@ -1087,6 +1098,7 @@ export const ModelPanel: React.FC = () => {
     const [savingSecretKey, setSavingSecretKey] = React.useState<SecretKey | null>(null)
     const [modelConfigOpen, setModelConfigOpen] = React.useState(false)
     const [activeTab, setActiveTab] = React.useState<'config' | 'history' | 'bots'>('config')
+    const telegramCredentialsRef = React.useRef<HTMLDivElement>(null)
 
     const load = async (requestedMonth = month) => {
         setLoading(true)
@@ -1223,12 +1235,16 @@ export const ModelPanel: React.FC = () => {
 
     if (error && !data) {
         return (
-            <div className="flex-1 flex items-center justify-center">
-                <div className="text-center">
-                    <p className="text-text-secondary text-sm mb-3">{error}</p>
-                    <button onClick={() => { void load() }} className="px-4 py-2 bg-primary-mint text-white rounded-lg text-xs font-medium hover:opacity-90">
-                        {t('retry')}
-                    </button>
+            <div className="flex-1 overflow-y-auto px-4 py-8 md:px-6">
+                <div className="mx-auto max-w-3xl">
+                    <ActionableErrorBanner
+                        title={t('loadFailed')}
+                        message={t('modelLoadRecoveryHint')}
+                        detail={error}
+                        detailsLabel={t('technicalDetails')}
+                        actionLabel={t('retry')}
+                        onAction={() => { void load() }}
+                    />
                 </div>
             </div>
         )
@@ -1408,10 +1424,11 @@ export const ModelPanel: React.FC = () => {
                                 error={prefsError}
                                 t={t}
                                 onToggle={toggleTelegramBot}
+                                onRepair={() => telegramCredentialsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                             />
                         </section>
 
-                        <section>
+                        <section ref={telegramCredentialsRef}>
                             <CredentialsCard
                                 title={t('telegramCredentials')}
                                 description={t('telegramCredentialsDescription')}
