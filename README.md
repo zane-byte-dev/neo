@@ -40,7 +40,7 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 | 模块 | 说明 |
 |------|------|
 | **AI 对话** | 基于 Gemini 的多轮对话，支持流式输出、函数调用、子 agent 派生 |
-| **Notebook** | 文章/知识条目管理，含全文搜索 |
+| **Notebook** | 文章/知识条目管理，含全文搜索、文章批注和文章内资源预览 |
 | **Skills** | Markdown 定义的可复用 AI 技能，支持参数插值与代码块执行 |
 | **Tools** | 内置工具 + 用户自定义工具（`{stateDir}/tools/` 自动加载） |
 | **Telegram Bot** | Telegraf 长轮询接入，支持 Markdown 渲染、图片发送 |

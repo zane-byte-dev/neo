@@ -403,6 +403,8 @@ describe('artifact primitives', () => {
             type: 'report',
             title: 'Weekly Report',
             data: { markdown: '# Weekly Report' },
+            sourceIds: ['article-a'],
+            primaryArticleId: 'notebooks/artifacts-nb/article-a.md',
         });
         nbSaveArtifact(workDir, 'artifacts-nb', {
             id: 'mindmap1',
@@ -411,7 +413,10 @@ describe('artifact primitives', () => {
             data: { markdown: '# Mind Map' },
         });
 
-        expect(nbGetArtifact(workDir, 'artifacts-nb', 'report1')?.title).toBe('Weekly Report');
+        const report = nbGetArtifact(workDir, 'artifacts-nb', 'report1');
+        expect(report?.title).toBe('Weekly Report');
+        expect(report?.sourceIds).toEqual(['article-a']);
+        expect(report?.primaryArticleId).toBe('notebooks/artifacts-nb/article-a.md');
         expect(nbListArtifacts(workDir, 'artifacts-nb')).toHaveLength(2);
         expect(nbListArtifacts(workDir, 'artifacts-nb', 'report').map((artifact) => artifact.id)).toEqual(['report1']);
 

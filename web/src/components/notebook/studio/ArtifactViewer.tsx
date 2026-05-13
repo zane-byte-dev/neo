@@ -67,7 +67,7 @@ export const ArtifactViewer: React.FC<{
     onRegenerate?: (type: 'audio' | 'mindmap' | 'report') => void
 }> = ({ artifact, onBack, onRegenerate }) => {
     const markdown = typeof artifact.data.markdown === 'string' ? artifact.data.markdown : ''
-    const script = Array.isArray(artifact.data.script) ? (artifact.data.script as AudioLine[]) : []
+    const script = getAudioScript(artifact)
 
     const download = (format: 'md' | 'json' | 'txt' | 'html') => {
         let content = ''
@@ -180,4 +180,17 @@ ${htmlContent}
             </div>
         </div>
     )
+}
+
+function getAudioScript(artifact: Artifact): AudioLine[] {
+    const value = Array.isArray(artifact.data.script)
+        ? artifact.data.script
+        : Array.isArray(artifact.data.segments)
+            ? artifact.data.segments
+            : []
+    return value.filter((line): line is AudioLine => {
+        if (!line || typeof line !== 'object') return false
+        const candidate = line as Record<string, unknown>
+        return (candidate.speaker === 'A' || candidate.speaker === 'B') && typeof candidate.text === 'string'
+    })
 }

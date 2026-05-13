@@ -1008,6 +1008,8 @@ export interface Artifact {
     title: string;
     data: unknown;            // type-specific payload
     createdAt: number;
+    sourceIds?: string[];
+    primaryArticleId?: string;
 }
 
 export function nbListArtifacts(workDir: string, notebook: string, type?: ArtifactType, stateDir = workDir): Artifact[] {
@@ -1033,6 +1035,8 @@ export interface ArtifactSaveInput {
     subtype?: string;
     title: string;
     data: unknown;
+    sourceIds?: string[];
+    primaryArticleId?: string;
 }
 
 export function nbSaveArtifact(workDir: string, notebook: string, input: ArtifactSaveInput, stateDir = workDir): Artifact {
@@ -1048,6 +1052,8 @@ export function nbSaveArtifact(workDir: string, notebook: string, input: Artifac
         title: input.title,
         data: input.data,
         createdAt: now,
+        ...(input.sourceIds?.length ? { sourceIds: [...new Set(input.sourceIds.filter(Boolean))] } : {}),
+        ...(input.primaryArticleId ? { primaryArticleId: input.primaryArticleId } : {}),
     };
     writeFileSync(notebookArtifactFilePath(stateDir, notebook, id), JSON.stringify(artifact, null, 2), 'utf8');
     return artifact;

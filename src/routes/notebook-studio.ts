@@ -94,19 +94,22 @@ export function notebookGenerateArtifact(router: Router): void {
         if (!notebook || !type) { ctx.status = 400; ctx.body = { error: 'notebook + type required' }; return; }
 
         const sourceIds = Array.isArray(body.sourceIds) ? (body.sourceIds as string[]) : undefined;
+        const primaryArticleId = typeof body.primaryArticleId === 'string' && body.primaryArticleId.trim()
+            ? body.primaryArticleId.trim()
+            : undefined;
 
         try {
             let artifact;
             if (type === 'mindmap') {
                 const topic = typeof body.topic === 'string' ? body.topic : undefined;
-                artifact = await generateMindMap(workDir, notebook, sourceIds, topic, extractModel(body), stateDir);
+                artifact = await generateMindMap(workDir, notebook, sourceIds, topic, extractModel(body), stateDir, { primaryArticleId });
             } else if (type === 'report') {
                 const subtype = (typeof body.subtype === 'string' ? body.subtype : 'briefing') as ReportType;
                 const customPrompt = typeof body.customPrompt === 'string' ? body.customPrompt : undefined;
                 const title = typeof body.title === 'string' ? body.title : undefined;
-                artifact = await generateReport(workDir, notebook, subtype, { sourceIds, customPrompt, title, model: extractModel(body) }, stateDir);
+                artifact = await generateReport(workDir, notebook, subtype, { sourceIds, customPrompt, title, model: extractModel(body), primaryArticleId }, stateDir);
             } else if (type === 'audio') {
-                artifact = await generateAudioScript(workDir, notebook, sourceIds, extractModel(body), stateDir);
+                artifact = await generateAudioScript(workDir, notebook, sourceIds, extractModel(body), stateDir, { primaryArticleId });
             } else {
                 ctx.status = 400; ctx.body = { error: `Unknown artifact type: ${type}` }; return;
             }

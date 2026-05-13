@@ -34,9 +34,12 @@ interface Props {
     open: boolean
     onClose: () => void
     onGenerated: (artifact: Artifact) => void
+    sourceIdsOverride?: string[]
+    primaryArticleIdOverride?: string
+    sourceScopeLabel?: string
 }
 
-export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClose, onGenerated }) => {
+export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClose, onGenerated, sourceIdsOverride, primaryArticleIdOverride, sourceScopeLabel }) => {
     const { selectedSourceIds, sources } = useAppStore()
     const [generating, setGenerating] = React.useState(false)
     const [error, setError] = React.useState('')
@@ -75,10 +78,12 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
         setError('')
         setGeneratePhase('planning')
         try {
+            const scopedSourceIds = sourceIdsOverride ?? (selectedSourceIds.length ? selectedSourceIds : undefined)
             const payload: GenerateArtifactPayload = {
                 notebook,
                 type,
-                sourceIds: selectedSourceIds.length ? selectedSourceIds : undefined,
+                sourceIds: scopedSourceIds,
+                primaryArticleId: primaryArticleIdOverride,
             }
 
             if (type === 'audio') {
@@ -123,7 +128,9 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
     const title = type === 'audio' ? '自定义音频概览' : type === 'mindmap' ? '自定义思维导图' : '自定义报告'
     const Icon = type === 'audio' ? Volume2 : type === 'mindmap' ? Brain : FileText
     const iconColor = type === 'audio' ? 'text-green-600' : type === 'mindmap' ? 'text-purple-600' : 'text-blue-600'
-    const canGenerate = sources.length > 0 && !generating &&
+    const sourceCount = sourceIdsOverride ? sourceIdsOverride.length : selectedSourceIds.length || sources.length
+    const hasSources = sourceIdsOverride ? sourceIdsOverride.length > 0 : sources.length > 0
+    const canGenerate = hasSources && !generating &&
         (type !== 'report' || reportSubtype !== 'custom' || reportCustom.trim().length > 0)
 
     return (
@@ -244,7 +251,7 @@ export const StudioActionModal: React.FC<Props> = ({ notebook, type, open, onClo
 
                     {/* Source count hint */}
                     <p className="text-xs text-text-tertiary">
-                        将基于 {selectedSourceIds.length || sources.length} 个来源生成
+                        将基于 {sourceScopeLabel ?? `${sourceCount} 个来源`} 生成
                     </p>
 
                     {/* Generation progress */}

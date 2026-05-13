@@ -209,6 +209,7 @@ export async function generateMindMap(
     topic?: string,
     model?: string,
     stateDir = workDir,
+    options?: { primaryArticleId?: string },
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
@@ -236,6 +237,8 @@ ${joined}`;
         type: 'mindmap',
         title: topic ? `思维导图：${topic}` : `思维导图：${notebook}`,
         data: { markdown },
+        sourceIds,
+        primaryArticleId: options?.primaryArticleId,
     }, stateDir);
 }
 
@@ -275,7 +278,7 @@ export async function generateReport(
     workDir: string,
     notebook: string,
     type: ReportType,
-    options?: { sourceIds?: string[]; customPrompt?: string; title?: string; model?: string },
+    options?: { sourceIds?: string[]; customPrompt?: string; title?: string; model?: string; primaryArticleId?: string },
     stateDir = workDir,
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, options?.sourceIds);
@@ -316,6 +319,8 @@ ${joined}`;
         subtype: type,
         title: options?.title || `${titleMap[type]}：${notebook}`,
         data: { markdown },
+        sourceIds: options?.sourceIds,
+        primaryArticleId: options?.primaryArticleId,
     }, stateDir);
 }
 
@@ -332,6 +337,7 @@ export async function generateAudioScript(
     sourceIds?: string[],
     model?: string,
     stateDir = workDir,
+    options?: { primaryArticleId?: string },
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
@@ -375,7 +381,9 @@ ${joined}`;
     return nbSaveArtifact(workDir, notebook, {
         type: 'audio',
         title: `音频概览：${notebook}`,
-        data: { segments: fallback },
+        data: { script: fallback },
+        sourceIds,
+        primaryArticleId: options?.primaryArticleId,
     }, stateDir);
 }
 

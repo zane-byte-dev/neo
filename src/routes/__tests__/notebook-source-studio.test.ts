@@ -360,6 +360,31 @@ describe('POST /api/notebook/artifact', () => {
         expect(res.body.id).toBe('m1');
     });
 
+    it('passes article affinity to artifact generation', async () => {
+        const notebookAi = await import('../../services/notebook-ai.js');
+        const { notebookGenerateArtifact } = await import('../notebook-studio.js');
+        const { app, router, mount } = createTestApp();
+        notebookGenerateArtifact(router); mount();
+        const res = await request(app.callback())
+            .post('/api/notebook/artifact')
+            .set('Cookie', cookie()).send({
+                notebook: 'nb',
+                type: 'mindmap',
+                sourceIds: ['s1'],
+                primaryArticleId: 'notebooks/nb/s1.md',
+            });
+        expect(res.status).toBe(200);
+        expect(notebookAi.generateMindMap).toHaveBeenLastCalledWith(
+            workDir,
+            'nb',
+            ['s1'],
+            undefined,
+            undefined,
+            undefined,
+            { primaryArticleId: 'notebooks/nb/s1.md' },
+        );
+    });
+
     it('audio ok', async () => {
         const { notebookGenerateArtifact } = await import('../notebook-studio.js');
         const { app, router, mount } = createTestApp();

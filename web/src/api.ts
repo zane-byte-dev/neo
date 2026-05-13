@@ -891,6 +891,7 @@ export interface GenerateArtifactPayload {
     notebook: string
     type: ArtifactType
     sourceIds?: string[]
+    primaryArticleId?: string
     // mindmap
     topic?: string
     // report

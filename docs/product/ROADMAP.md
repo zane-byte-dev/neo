@@ -86,6 +86,7 @@
 - [x] **零配置首启**：首次启动时若无 `config.local.ts` 与 `USERS` 环境变量，自动在 `~/.neo/config.json` 生成默认单用户配置（随机 token/SESSION_SECRET、标准目录），并将登录 token 打印到控制台
 - [x] **模型路由可视化配置**：/models 展示 provider 在线状态（Ollama 探活、ACP 检查 CLI 路径、云端检查 key），支持在 UI 中覆盖路由层级（simple/standard/complex 各 tier），配置持久化到 `{stateDir}/routing.json`
 - [x] **文章批注 MVP**：文章编辑器支持选区批注，批注以独立 annotation 数据模型持久化，`NoteEditor` 内可查看、跳转、删除，并切换未解决 / 已解决状态
+- [x] **文章内资源 MVP**：文章编辑器标题区域显示相关资源状态，正文底部展示本篇音频、导图、报告预览；新生成 artifact 会记录 `sourceIds` / `primaryArticleId`，资源面板继续承担 notebook 级浏览与管理
 
 ### 7. 工作流与自动化
 

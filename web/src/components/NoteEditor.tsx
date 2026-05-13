@@ -1,14 +1,17 @@
 import React from 'react'
 import { ArrowLeft, Trash2, Check, Loader2, History, MoreHorizontal, Link, Copy, Maximize2, Type, Download, Layers, Languages, Sparkles, RefreshCw, EyeOff, MessageSquarePlus, MessageSquare, CircleDot } from 'lucide-react'
-import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete, notebookListAnnotations, notebookSaveAnnotation, notebookUpdateAnnotation, notebookDeleteAnnotation } from '../api'
+import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete, notebookListAnnotations, notebookSaveAnnotation, notebookUpdateAnnotation, notebookDeleteAnnotation, notebookListArtifacts } from '../api'
 import { cn } from '../lib/utils'
-import type { NoteEntry, NotebookAnnotation, NotebookAnnotationAnchor } from '../types'
+import type { Artifact, NoteEntry, NotebookAnnotation, NotebookAnnotationAnchor } from '../types'
 import { t } from '../i18n'
 import { NovelEditor } from './NovelEditor'
 import { HistoryDrawer } from './notebook/HistoryDrawer'
 import { DocDiffModal } from './notebook/DocDiffModal'
 import { ResourcesPanel } from './notebook/ResourcesPanel'
+import { StudioActionModal } from './notebook/StudioActionModal'
+import { ArtifactViewer } from './notebook/studio/ArtifactViewer'
 import { EDIT_ACTIONS, INSIGHT_ACTIONS, type DocEditAction } from './notebook/docActions'
+import { ArticleResourceSection, ArticleResourceStatusStrip, filterArticleArtifacts, sourceIdFromArticleId, type ArticleResourceType } from './notebook/ArticleResources'
 import { useAppStore } from '../stores/useAppStore'
 
 interface NoteEditorProps {
@@ -71,7 +74,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const [author, setAuthor] = React.useState(note?.author ?? '')
     const [date] = React.useState(note?.date ?? new Date().toISOString().split('T')[0])
     const [source] = React.useState(note?.source ?? '')
-    const [summary] = React.useState(note?.summary ?? '')
+    const [summary, setSummary] = React.useState(note?.summary ?? '')
     const [tags] = React.useState(note?.tags ?? '')
     const [content, setContent] = React.useState('')
     const [loading, setLoading] = React.useState(!!note)
@@ -89,6 +92,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const [duplicating, setDuplicating] = React.useState(false)
     // Resources panel (Studio overlay)
     const [resourcesOpen, setResourcesOpen] = React.useState(false)
+    const [artifactsLoading, setArtifactsLoading] = React.useState(false)
+    const [allArtifacts, setAllArtifacts] = React.useState<Artifact[]>([])
+    const [viewingArticleArtifact, setViewingArticleArtifact] = React.useState<Artifact | null>(null)
+    const [articleResourceAction, setArticleResourceAction] = React.useState<ArticleResourceType | null>(null)
     // Diff modal (AI edit actions from more menu)
     const [diffAction, setDiffAction] = React.useState<{ action: DocEditAction; content: string } | null>(null)
     const [annotations, setAnnotations] = React.useState<NotebookAnnotation[]>([])
@@ -109,6 +116,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const menuRef = React.useRef<HTMLDivElement>(null)
     const autoSaveTimerRef = React.useRef<number | null>(null)
     const isDirtyRef = React.useRef(false)
+    const wasResourcesOpenRef = React.useRef(false)
     // Keep latest field values accessible in auto-save callback without stale closures
     const fieldsRef = React.useRef({ title, author, date, source, summary, tags, content })
     React.useEffect(() => {
@@ -185,6 +193,34 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             .catch(() => { if (!cancelled) setAnnotations([]) })
         return () => { cancelled = true }
     }, [note, notebook])
+
+    const loadArtifacts = React.useCallback(async () => {
+        if (!note) {
+            setAllArtifacts([])
+            setArtifactsLoading(false)
+            return
+        }
+        setArtifactsLoading(true)
+        try {
+            const artifacts = await notebookListArtifacts(note.notebook ?? notebook)
+            setAllArtifacts(artifacts)
+        } catch {
+            setAllArtifacts([])
+        } finally {
+            setArtifactsLoading(false)
+        }
+    }, [note, notebook])
+
+    React.useEffect(() => {
+        void loadArtifacts()
+    }, [loadArtifacts])
+
+    React.useEffect(() => {
+        if (wasResourcesOpenRef.current && !resourcesOpen) {
+            void loadArtifacts()
+        }
+        wasResourcesOpenRef.current = resourcesOpen
+    }, [resourcesOpen, loadArtifacts])
 
     // Reset dirty flag on note change (remount via key=)
     React.useEffect(() => {
@@ -319,6 +355,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             const text = await res.text()
             const trimmed = text.trim()
             setSummaryText(trimmed)
+            setSummary(trimmed)
             setSummaryState('done')
             setSummaryCollapsed(false)
             // Persist to note
@@ -330,6 +367,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
 
     const handleRegenerateSummary = () => {
         setSummaryText('')
+        setSummary('')
         setSummaryState('empty')
         void handleGenerateSummary()
     }
@@ -337,6 +375,11 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const handleHideSummary = () => {
         setSummaryCollapsed(true)
         if (note) localStorage.setItem(`neo:editor:summaryCollapsed:${note.id}`, '1')
+    }
+
+    const handleShowSummary = () => {
+        setSummaryCollapsed(false)
+        if (note) localStorage.removeItem(`neo:editor:summaryCollapsed:${note.id}`)
     }
 
     // ── AI edit actions (more menu) ───────────────────────────────────────────
@@ -409,6 +452,28 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         if (typeof startOffset !== 'number' || typeof endOffset !== 'number') return
         focusRequestIdRef.current += 1
         setFocusRange({ startOffset, endOffset, requestId: focusRequestIdRef.current })
+    }, [])
+
+    const articleSourceId = React.useMemo(() => sourceIdFromArticleId(note?.id), [note?.id])
+    const articleArtifacts = React.useMemo(() => filterArticleArtifacts(allArtifacts, note?.id), [allArtifacts, note?.id])
+    const libraryArtifactCount = Math.max(0, allArtifacts.length - articleArtifacts.length)
+
+    const handleOpenArticleArtifact = React.useCallback((artifact: Artifact) => {
+        setResourcesOpen(false)
+        setViewingArticleArtifact(artifact)
+    }, [])
+
+    const handleGenerateArticleArtifact = React.useCallback((type: ArticleResourceType) => {
+        if (!articleSourceId) return
+        setResourcesOpen(false)
+        setViewingArticleArtifact(null)
+        setArticleResourceAction(type)
+    }, [articleSourceId])
+
+    const handleArticleArtifactGenerated = React.useCallback((artifact: Artifact) => {
+        setAllArtifacts((items) => [artifact, ...items.filter((item) => item.id !== artifact.id)])
+        setViewingArticleArtifact(artifact)
+        setArticleResourceAction(null)
     }, [])
 
     const creatorName = author.trim() || currentDisplayName || '未知'
@@ -695,6 +760,20 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                     )}
 
                     {note && (
+                        <ArticleResourceStatusStrip
+                            summaryState={summaryState}
+                            articleArtifacts={articleArtifacts}
+                            libraryArtifactCount={libraryArtifactCount}
+                            loading={artifactsLoading}
+                            onShowSummary={handleShowSummary}
+                            onGenerateSummary={() => void handleGenerateSummary()}
+                            onOpenArtifact={handleOpenArticleArtifact}
+                            onGenerateArtifact={handleGenerateArticleArtifact}
+                            onOpenLibrary={() => setResourcesOpen(true)}
+                        />
+                    )}
+
+                    {note && (
                         <ArticleAnnotationsBlock
                             annotations={annotations}
                             expanded={annotationsExpanded}
@@ -719,18 +798,30 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                             <span className="typing-dot" style={{ width: 5, height: 5 }} />
                         </div>
                     ) : (
-                        <NovelEditor
-                            key={note?.id ?? 'new'}
-                            initialContent={content}
-                            placeholder="开始写作… 输入 / 插入块"
-                            onChange={(md) => {
-                                setContent(md)
-                                scheduleAutoSave()
-                            }}
-                            onAnnotateSelection={note ? handleAnnotateSelection : undefined}
-                            focusRange={focusRange}
-                            className="pb-20"
-                        />
+                        <>
+                            <NovelEditor
+                                key={note?.id ?? 'new'}
+                                initialContent={content}
+                                placeholder="开始写作… 输入 / 插入块"
+                                onChange={(md) => {
+                                    setContent(md)
+                                    scheduleAutoSave()
+                                }}
+                                onAnnotateSelection={note ? handleAnnotateSelection : undefined}
+                                focusRange={focusRange}
+                                className="pb-8"
+                            />
+                            {note && (
+                                <ArticleResourceSection
+                                    articleArtifacts={articleArtifacts}
+                                    libraryArtifactCount={libraryArtifactCount}
+                                    loading={artifactsLoading}
+                                    onOpenArtifact={handleOpenArticleArtifact}
+                                    onGenerateArtifact={handleGenerateArticleArtifact}
+                                    onOpenLibrary={() => setResourcesOpen(true)}
+                                />
+                            )}
+                        </>
                     )}
                 </div>
             </div>
@@ -776,6 +867,36 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         />
                     </div>
                 </>
+            )}
+            {viewingArticleArtifact && (
+                <>
+                    <div
+                        className="absolute inset-0 z-30 bg-black/10"
+                        onClick={() => setViewingArticleArtifact(null)}
+                    />
+                    <div className="absolute right-0 top-0 h-full w-full sm:w-[640px] z-40 shadow-2xl animate-slide-in-right bg-bg-container">
+                        <ArtifactViewer
+                            artifact={viewingArticleArtifact}
+                            onBack={() => setViewingArticleArtifact(null)}
+                            onRegenerate={(type) => {
+                                setViewingArticleArtifact(null)
+                                setArticleResourceAction(type as ArticleResourceType)
+                            }}
+                        />
+                    </div>
+                </>
+            )}
+            {articleResourceAction && note && articleSourceId && (
+                <StudioActionModal
+                    notebook={note.notebook ?? notebook}
+                    type={articleResourceAction}
+                    open={true}
+                    onClose={() => setArticleResourceAction(null)}
+                    onGenerated={handleArticleArtifactGenerated}
+                    sourceIdsOverride={[articleSourceId]}
+                    primaryArticleIdOverride={note.id}
+                    sourceScopeLabel="本篇文章"
+                />
             )}
         </div>
     )

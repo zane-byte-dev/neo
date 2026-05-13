@@ -42,6 +42,7 @@ tags: [neo, notebook]
 - **Sources**：原始来源，适合保存文章、网页、PDF 解析文本、YouTube 文本等。
 - **Notes**：你或 AI 生成的整理笔记，支持保存、删除、转换为 source。
 - **Studio**：围绕一个 notebook 或一组选中的 sources 生成 overview、mindmap、report、audio script 等产物。
+- **文章内资源**：打开单篇文章时，标题下方会显示本篇摘要、音频、导图、报告状态；正文底部会显示本篇资源的轻量预览。
 
 Studio 产物类型：
 
@@ -50,6 +51,15 @@ Studio 产物类型：
 | `mindmap` | 生成思维导图结构 |
 | `report` | 生成报告，可带 `subtype`、`title`、`customPrompt` |
 | `audio` | 生成播客 / 朗读脚本 |
+
+## 文章内资源
+
+文章页内的资源层用于消费当前文章相关的 AI 生成物，资源面板仍用于浏览和管理 notebook 全量资源。
+
+- 标题区域的“相关资源”状态带会显示摘要、音频概览、思维导图和报告的存在状态。
+- 正文底部的“本篇资源”区会展示音频、导图、报告预览卡；点击卡片会直接打开完整 viewer。
+- 从文章内生成资源时，Neo 会把当前文章记录为 `primaryArticleId`，并把当前文章 source id 写入 artifact 的 `sourceIds`。
+- 旧 artifact 或 notebook 级 artifact 不会默认铺进正文，可继续从资源面板查看、删除或重新生成。
 
 ## 文章批注
 

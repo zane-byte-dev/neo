@@ -29,7 +29,7 @@
 | Module | Description |
 |--------|-------------|
 | **AI chat** | Multi-turn streaming chat with function calling and sub-agent spawning |
-| **Notebook** | Article / knowledge-item store with full-text search (SQLite FTS5) |
+| **Notebook** | Article / knowledge-item store with full-text search, annotations, and in-article resource previews |
 | **Skills** | Markdown-defined reusable AI skills with parameter interpolation |
 | **Tools** | Built-in tools + user-defined tools auto-loaded from `{stateDir}/tools/` |
 | **Telegram bot** | Telegraf long-polling, Markdown rendering, image / video sending |

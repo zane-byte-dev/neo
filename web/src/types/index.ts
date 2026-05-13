@@ -327,7 +327,8 @@ export interface Artifact {
     title: string
     data: Record<string, unknown>  // mindmap: { markdown }; report: { markdown }; audio: { script: [{speaker,text}] }
     createdAt: string
-    sourceIds: string[]
+    sourceIds?: string[]
+    primaryArticleId?: string
 }
 
 export interface ParsedCitation {
