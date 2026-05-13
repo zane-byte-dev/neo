@@ -449,7 +449,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                 type: 'audio',
                 sourceIds: [articleSourceId],
                 primaryArticleId: note.id,
-                customPrompt: '请生成忠实于当前文章内容的单人朗读脚本，适合直接转语音播放；不做双人访谈，不扩展来源外事实。',
+                audioMode: 'single',
+                customPrompt: '请保持忠实于当前文章内容，适合直接转语音播放，不扩展来源外事实。',
             })
             setResourcesOpen(false)
             setViewingArticleArtifact(artifact)

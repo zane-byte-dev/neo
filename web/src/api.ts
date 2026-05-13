@@ -892,6 +892,7 @@ export interface GenerateArtifactPayload {
     type: ArtifactType
     sourceIds?: string[]
     primaryArticleId?: string
+    audioMode?: 'dialogue' | 'single'
     // mindmap
     topic?: string
     // report

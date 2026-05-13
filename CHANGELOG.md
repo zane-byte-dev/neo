@@ -19,7 +19,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Changed
 
-- Article resources no longer render a separate status strip or bottom resource-card area; generated mind maps normalize before insertion/display, audio generation uses the article toolbar icon, and audio format/custom prompt settings pass through to backend generation.
+- Article resources no longer render a separate status strip or bottom resource-card area; notebook generation now resolves to an available provider before falling back to local models, generated mind maps/reports strip previously inserted resource blocks from prompts to avoid empty artifacts, article mind maps now render inline as embedded markmap blocks instead of raw Markdown text, and article toolbar audio now requests single-speaker narration instead of A/B dialogue.
 - Article annotations now use underline markers with hover popovers; deleting an annotation also removes its underline marker from the article body.
 - Settings navigation now separates Basic (Overview, Models, Skills) from Advanced (Apps, MCP, Automations), and high-frequency settings errors include repair actions.
 - Sidebar bulk chat deletion now uses the shared confirmation dialog instead of the browser-native confirm prompt.

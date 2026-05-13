@@ -38,11 +38,14 @@
   - 保持旧 artifact JSON 兼容，字段可选。
 - `src/services/notebook-ai.ts`
   - `generateMindMap`、`generateReport`、`generateAudioScript` 写入生成时的 `sourceIds` 与可选 `primaryArticleId`。
+  - 默认模型解析改为 provider-aware：优先显式传入模型，其次选择已配置云 provider / Gemini ACP，最后才回退本地 `gemma`，避免未配置 Gemini 时生成空 artifact。
+  - 构造 prompt 前会剥离正文里已插入的 `<details data-neo-generated-block>` 模块，避免导图 / 报告 / 音频把旧生成内容再次当作原文上下文。
   - 将 audio artifact 的脚本字段统一写为 `data.script`，viewer 仍兼容旧 `data.segments`。
+  - `generateAudioScript` 支持 `audioMode`，文章工具栏入口固定走单人朗读模式，资源库级入口仍可保留对话式脚本能力。
   - mindmap 生成结果保存前规整为 markmap 可读 Markdown，兼容 JSON 树、列表和代码围栏输出。
   - audio artifact 写入 `durationSeconds`，并继续保存 `segments` 兼容旧消费路径。
 - `src/routes/notebook-studio.ts`
-  - `POST /api/notebook/artifact` 接收可选 `primaryArticleId` 并传给生成层。
+  - `POST /api/notebook/artifact` 接收可选 `primaryArticleId`、`audioMode` 并传给生成层。
 
 ## Frontend Changes
 
@@ -57,7 +60,7 @@
   - slash command 新增“生成思维导图”“生成报告”，先插入生成中模块，再用生成结果替换。
 - `web/src/components/NoteEditor.tsx`
   - 保留摘要块，隐藏后以轻量“摘要”按钮恢复。
-  - 新增文章工具栏音频 icon，直接基于当前文章生成朗读音频。
+  - 新增文章工具栏音频 icon，直接基于当前文章生成单人朗读音频。
   - 向 `NovelEditor` 注入导图 / 报告生成回调，生成结果插入正文折叠模块。
   - 不再渲染“相关资源”状态带和正文底部资源预览区。
 - `web/src/index.css`

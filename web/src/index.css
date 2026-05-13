@@ -576,6 +576,28 @@
   white-space: pre-wrap;
 }
 
+.novel-editor-body .neo-generated-block-body-mindmap {
+  padding: 0.75rem;
+}
+
+.novel-editor-body .neo-generated-block-mindmap {
+  width: 100%;
+  min-height: 18rem;
+  height: 22rem;
+}
+
+.novel-editor-body .neo-generated-block-body-text {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+
 /* AI highlight — pending AI-generated content */
 .novel-editor-body mark.ai-highlight {
     border-radius: 3px;

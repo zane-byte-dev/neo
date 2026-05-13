@@ -14,6 +14,12 @@
 
 import { LLMClient } from '../llm/client.js';
 import {
+    getAnthropicApiKey,
+    getDeepseekApiKey,
+    getGeminiApiKey,
+    getOpenAIApiKey,
+} from '../config.js';
+import {
     nbListSources,
     nbGetSourceEntry,
     nbSaveSourceGuide,
@@ -26,15 +32,16 @@ import {
     type Artifact,
     type NotebookEntry,
 } from './notebook-service.js';
+import { checkGeminiAcp } from '../llm/provider-status.js';
 import { parseJsonOr } from '../utils/json.js';
 
-// Default model for non-tool generation — cheap & good at structured output.
-const DEFAULT_MODEL = 'gemma';
+const LAST_RESORT_MODEL = 'gemma';
 
 // Max characters fed into a single generation prompt (budgeted context window)
 const CTX_MAX = 60_000;
 // Per-source slice cap when combining multiple sources
 const PER_SOURCE_SLICE = 8_000;
+const GENERATED_BLOCK_RE = /<details\b[^>]*data-neo-generated-block[^>]*>[\s\S]*?<\/details>/gi;
 
 let _client: LLMClient | null = null;
 function getClient(): LLMClient {
@@ -42,7 +49,25 @@ function getClient(): LLMClient {
     return _client;
 }
 
+async function resolveNotebookModel(model?: string): Promise<string> {
+    const explicit = typeof model === 'string' ? model.trim() : '';
+    if (explicit) return explicit;
+    if (getGeminiApiKey()) return 'flash';
+    if (getDeepseekApiKey()) return 'deepseek';
+    if (getOpenAIApiKey()) return 'gpt-4o-mini';
+    if (getAnthropicApiKey()) return 'claude-haiku';
+    if ((await checkGeminiAcp()).ok) return 'gemini-acp';
+    return LAST_RESORT_MODEL;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function sanitizeSourceContent(content: string): string {
+    return content
+        .replace(GENERATED_BLOCK_RE, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
 
 function loadSourceContents(
     workDir: string,
@@ -57,11 +82,12 @@ function loadSourceContents(
     const results: Array<{ id: string; title: string; content: string }> = [];
     for (const src of targets) {
         const entry = nbGetSourceEntry(workDir, notebook, src.id);
-        if (!entry?.content) continue;
+        const content = entry?.content ? sanitizeSourceContent(entry.content) : '';
+        if (!content) continue;
         results.push({
             id: src.id,
             title: src.title,
-            content: entry.content.slice(0, PER_SOURCE_SLICE),
+            content: content.slice(0, PER_SOURCE_SLICE),
         });
     }
     return results;
@@ -200,6 +226,7 @@ export async function generateSourceGuide(
     model?: string,
 ): Promise<SourceGuide> {
     const content = (entry.content ?? '').slice(0, CTX_MAX);
+    const resolvedModel = await resolveNotebookModel(model);
     const prompt = `你在分析一份用户导入的来源文档，请严格以 JSON 输出（不要任何额外说明文字、不要代码围栏）：
 
 {
@@ -216,7 +243,7 @@ ${content}
 """`;
 
     const out = await getClient().generate(prompt, {
-        model: model || DEFAULT_MODEL,
+        model: resolvedModel,
         temperature: 0.3,
     });
     const parsed = tryParseJson<{
@@ -259,6 +286,7 @@ export async function generateNotebookOverview(
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     if (!sources.length) return '';
 
+    const resolvedModel = await resolveNotebookModel(model);
     const joined = joinSourcesForPrompt(sources);
     const prompt = `以下是笔记本【${notebook}】中的来源文档集合。请用中文生成一段综合性的笔记本概览（200-400 字），说明这些来源覆盖的主要议题、关联与脉络。
 
@@ -267,7 +295,7 @@ ${joined}
 请直接输出概览正文，不需要标题或格式化前缀。`;
 
     const out = await getClient().generate(prompt, {
-        model: model || DEFAULT_MODEL,
+        model: resolvedModel,
         temperature: 0.4,
         workDir,
     });
@@ -297,6 +325,7 @@ export async function generateMindMap(
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
+    const resolvedModel = await resolveNotebookModel(model);
 
     const prompt = `请基于以下来源文档生成一个思维导图。输出格式：纯 Markdown 标题层级（# / ## / ### / ####），不要代码围栏，不要额外说明。
 - 根节点用 # ，是笔记本/主题的标题
@@ -310,7 +339,7 @@ ${topic ? `- 重点围绕主题："${topic}"` : ''}
 ${joined}`;
 
     const out = await getClient().generate(prompt, {
-        model: model || DEFAULT_MODEL,
+        model: resolvedModel,
         temperature: 0.4,
         workDir,
     });
@@ -369,6 +398,7 @@ export async function generateReport(
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, options?.sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
+    const resolvedModel = await resolveNotebookModel(options?.model);
 
     const instruction = type === 'custom'
         ? (options?.customPrompt ?? '请基于来源生成一份结构化报告。')
@@ -385,7 +415,7 @@ export async function generateReport(
 ${joined}`;
 
     const out = await getClient().generate(prompt, {
-        model: options?.model || DEFAULT_MODEL,
+        model: resolvedModel,
         temperature: 0.5,
         workDir,
     });
@@ -417,18 +447,42 @@ export interface AudioSegment {
     text: string;
 }
 
+export type AudioMode = 'dialogue' | 'single';
+
 export async function generateAudioScript(
     workDir: string,
     notebook: string,
     sourceIds?: string[],
     model?: string,
     stateDir = workDir,
-    options?: { primaryArticleId?: string; customPrompt?: string },
+    options?: { primaryArticleId?: string; customPrompt?: string; audioMode?: AudioMode },
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
+    const resolvedModel = await resolveNotebookModel(model);
+    const audioMode = options?.audioMode === 'single' ? 'single' : 'dialogue';
 
-    const prompt = `你是一位播客节目编剧。基于以下来源，写一段 5-10 分钟、通俗易懂、引人入胜的双人对话脚本，适合配音朗读。
+    const prompt = audioMode === 'single'
+        ? `你是一位中文朗读稿编辑。请基于以下来源，写一段适合单人配音朗读的脚本。
+
+要求：
+- 只使用一个角色：A
+- 不要使用主持人与嘉宾的对话结构，不要写成采访或播客串场
+- 忠实于来源原文，不补充来源外事实
+- 保持自然、连贯、适合直接转语音播放的旁白节奏
+- 每段 1-3 句，整体时长控制在 3-6 分钟
+${options?.customPrompt ? `- 用户补充要求：${options.customPrompt}` : ''}
+
+严格以 JSON 数组输出（不要任何说明文字、不要代码围栏）：
+
+[
+  {"speaker": "A", "text": "..."},
+  {"speaker": "A", "text": "..."}
+]
+
+来源内容：
+${joined}`
+        : `你是一位播客节目编剧。基于以下来源，写一段 5-10 分钟、通俗易懂、引人入胜的双人对话脚本，适合配音朗读。
 
 要求：
 - 两个角色：A 是主持人（好奇、承上启下），B 是专家嘉宾（提供事实与分析）
@@ -449,7 +503,7 @@ ${options?.customPrompt ? `- 用户补充要求：${options.customPrompt}` : ''}
 ${joined}`;
 
     const out = await getClient().generate(prompt, {
-        model: model || DEFAULT_MODEL,
+        model: resolvedModel,
         temperature: 0.7,
         workDir,
     });
@@ -485,6 +539,7 @@ export async function runNoteQuickAction(
     model?: string,
 ): Promise<string> {
     if (!notes.length) return '';
+    const resolvedModel = await resolveNotebookModel(model);
     const joined = notes
         .map((n, i) => `[笔记 ${i + 1}: ${n.title}]\n${n.content}`)
         .join('\n\n---\n\n')
@@ -498,7 +553,7 @@ export async function runNoteQuickAction(
     };
 
     const out = await getClient().generate(prompts[action], {
-        model: model || DEFAULT_MODEL,
+        model: resolvedModel,
         temperature: 0.5,
     });
     return (out ?? '').trim();

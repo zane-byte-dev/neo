@@ -6,6 +6,7 @@
  * (e.g. key={note?.id ?? 'new'}) so React remounts when switching notes.
  */
 import React from 'react'
+import { createRoot } from 'react-dom/client'
 import { Node as TiptapNode } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import {
@@ -42,6 +43,7 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { NotebookAnnotation } from '../types'
+import { MindMap } from './notebook/MindMap'
 
 const ANNOTATION_CONTEXT_LENGTH = 200
 const ANNOTATION_HIGHLIGHT_COLOR = 'neo-annotation'
@@ -64,6 +66,39 @@ interface GeneratedResourceBlockAttrs extends GeneratedResourceBlockData {
 const RESOURCE_LABEL: Record<GeneratedResourceType, string> = {
     mindmap: '思维导图',
     report: '报告',
+}
+
+const GeneratedResourceBlockPreview: React.FC<{ attrs: GeneratedResourceBlockAttrs }> = ({ attrs }) => {
+    const body = attrs.body || generatedResourceFallback(attrs.status)
+    const isMindMap = attrs.type === 'mindmap' && attrs.status === 'ready' && body.trim().length > 0
+
+    return (
+        <details
+            data-neo-generated-block=""
+            data-id={attrs.id}
+            data-type={attrs.type}
+            data-status={attrs.status}
+            className="neo-generated-block"
+            open
+        >
+            <summary className="neo-generated-block-summary">{generatedResourceSummary(attrs)}</summary>
+            <div
+                data-neo-generated-body=""
+                className={cn(
+                    'neo-generated-block-body',
+                    isMindMap && 'neo-generated-block-body-mindmap',
+                )}
+            >
+                {isMindMap ? (
+                    <div className="neo-generated-block-mindmap">
+                        <MindMap markdown={body} />
+                    </div>
+                ) : (
+                    <pre className="neo-generated-block-body-text">{body}</pre>
+                )}
+            </div>
+        </details>
+    )
 }
 
 const GeneratedResourceBlock = TiptapNode.create({
@@ -130,6 +165,40 @@ const GeneratedResourceBlock = TiptapNode.create({
             },
         }
     },
+
+    addNodeView() {
+        return ({ node }: { node: ProseMirrorNode }) => {
+            const dom = document.createElement('div')
+            dom.className = 'neo-generated-block-node'
+            dom.setAttribute('contenteditable', 'false')
+
+            const root = createRoot(dom)
+            const render = (currentNode: ProseMirrorNode) => {
+                root.render(
+                    <GeneratedResourceBlockPreview
+                        attrs={normalizeGeneratedResourceAttrs(currentNode.attrs as Partial<GeneratedResourceBlockAttrs>)}
+                    />,
+                )
+            }
+
+            render(node)
+
+            return {
+                dom,
+                update(updatedNode: ProseMirrorNode) {
+                    if (updatedNode.type !== node.type) return false
+                    render(updatedNode)
+                    return true
+                },
+                ignoreMutation() {
+                    return true
+                },
+                destroy() {
+                    root.unmount()
+                },
+            }
+        }
+    },
 })
 
 function normalizeGeneratedResourceAttrs(attrs: Partial<GeneratedResourceBlockAttrs>): GeneratedResourceBlockAttrs {
@@ -147,7 +216,11 @@ function normalizeGeneratedResourceAttrs(attrs: Partial<GeneratedResourceBlockAt
 function generatedResourceSummary(attrs: GeneratedResourceBlockAttrs): string {
     if (attrs.status === 'loading') return `正在生成${RESOURCE_LABEL[attrs.type]}...`
     if (attrs.status === 'error') return `${RESOURCE_LABEL[attrs.type]}生成失败`
-    return `${RESOURCE_LABEL[attrs.type]}：${attrs.title}`
+    const title = attrs.title.trim()
+    if (title.startsWith(`${RESOURCE_LABEL[attrs.type]}：`) || title.startsWith(`${RESOURCE_LABEL[attrs.type]}:`)) {
+        return title
+    }
+    return `${RESOURCE_LABEL[attrs.type]}：${title}`
 }
 
 function generatedResourceFallback(status: GeneratedResourceStatus): string {

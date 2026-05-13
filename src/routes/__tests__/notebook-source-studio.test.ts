@@ -408,6 +408,7 @@ describe('POST /api/notebook/artifact', () => {
                 sourceIds: ['s1'],
                 primaryArticleId: 'notebooks/nb/s1.md',
                 customPrompt: '更像摘要节目',
+                audioMode: 'single',
             });
         expect(res.status).toBe(200);
         expect(notebookAi.generateAudioScript).toHaveBeenLastCalledWith(
@@ -416,7 +417,7 @@ describe('POST /api/notebook/artifact', () => {
             ['s1'],
             undefined,
             undefined,
-            { primaryArticleId: 'notebooks/nb/s1.md', customPrompt: '更像摘要节目' },
+            { primaryArticleId: 'notebooks/nb/s1.md', customPrompt: '更像摘要节目', audioMode: 'single' },
         );
     });
 });

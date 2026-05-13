@@ -31,6 +31,10 @@ afterEach(async () => {
     await waitForNotebookIndexIdle();
     await fs.rm(workDir, { recursive: true, force: true });
     vi.restoreAllMocks();
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.DEEPSEEK_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
 });
 
 describe('generateSourceGuide', () => {
@@ -179,6 +183,45 @@ describe('generateReport', () => {
             expect(a.subtype).toBe(type);
         }
     });
+
+    it('prefers a configured provider before the local gemma fallback', async () => {
+        process.env.DEEPSEEK_API_KEY = 'deepseek-test';
+        mockGenerate('报告内容');
+
+        nbImportSource(workDir, 'provider-nb', { title: 'Source', content: 'Actual source content.', type: 'text' });
+
+        await generateReport(workDir, 'provider-nb', 'briefing');
+
+        expect(_mockGenerate).toHaveBeenLastCalledWith(
+            expect.any(String),
+            expect.objectContaining({ model: 'deepseek' }),
+        );
+    });
+
+    it('excludes generated resource blocks from source prompts', async () => {
+        mockGenerate('报告内容');
+
+        nbImportSource(workDir, 'sanitized-nb', {
+            title: 'Article',
+            content: [
+                '原始正文。',
+                '<details data-neo-generated-block data-id="x" data-type="report" data-status="ready" open>',
+                '<summary>报告：旧内容</summary>',
+                '<pre data-neo-generated-body>暂无内容</pre>',
+                '</details>',
+                '结尾。',
+            ].join('\n'),
+            type: 'text',
+        });
+
+        await generateReport(workDir, 'sanitized-nb', 'briefing');
+
+        const prompt = _mockGenerate.mock.lastCall?.[0] as string;
+        expect(prompt).toContain('原始正文。');
+        expect(prompt).toContain('结尾。');
+        expect(prompt).not.toContain('data-neo-generated-block');
+        expect(prompt).not.toContain('暂无内容');
+    });
 });
 
 describe('generateAudioScript', () => {
@@ -207,6 +250,22 @@ describe('generateAudioScript', () => {
         const artifact = await generateAudioScript(workDir, 'audio-bad');
         expect(artifact.type).toBe('audio');
         expect(artifact.data.segments.length).toBeGreaterThan(0);
+    });
+
+    it('uses single-speaker prompt for article narration mode', async () => {
+        mockGenerate(JSON.stringify([{ speaker: 'A', text: '单人朗读内容' }]));
+
+        nbImportSource(workDir, 'audio-single', { title: 'Audio Src', content: 'Plain article content.', type: 'text' });
+
+        await generateAudioScript(workDir, 'audio-single', undefined, undefined, workDir, {
+            audioMode: 'single',
+            customPrompt: '语气平实',
+        });
+
+        const prompt = _mockGenerate.mock.lastCall?.[0] as string;
+        expect(prompt).toContain('只使用一个角色：A');
+        expect(prompt).not.toContain('两个角色：A 是主持人');
+        expect(prompt).toContain('用户补充要求：语气平实');
     });
 });
 
