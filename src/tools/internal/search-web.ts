@@ -147,16 +147,25 @@ async function searchViaDuckDuckGo(query: string, maxResults: number): Promise<s
         const html = await res.text();
         const results: SearchResult[] = [];
 
-        // Parse DuckDuckGo Lite HTML results
-        // Each result has a link and a snippet in the table structure
+        // Parse DuckDuckGo Lite HTML results.
+        // DDG Lite now wraps real URLs in redirect: //duckduckgo.com/l/?uddg=<encoded_url>&rut=...
+        // Snippet td uses single-quoted class attribute.
         const linkRegex = /<a[^>]+rel="nofollow"[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g;
-        const snippetRegex = /<td[^>]*class="result-snippet"[^>]*>([\s\S]*?)<\/td>/g;
+        const snippetRegex = /<td[^>]*class=['"]result-snippet['"][^>]*>([\s\S]*?)<\/td>/g;
 
         const links: { url: string; title: string }[] = [];
         let match: RegExpExecArray | null;
         while ((match = linkRegex.exec(html)) !== null) {
-            const url = match[1].trim();
+            const rawHref = decodeHtmlEntities(match[1].trim());
             const title = decodeHtmlEntities(stripHtml(match[2].trim()));
+            // Extract real URL from DDG redirect parameter
+            const uddgMatch = /[?&]uddg=([^&]+)/.exec(rawHref);
+            let url: string;
+            if (uddgMatch) {
+                url = decodeURIComponent(uddgMatch[1]);
+            } else {
+                url = rawHref.startsWith('//') ? `https:${rawHref}` : rawHref;
+            }
             if (url.startsWith('http://') || url.startsWith('https://')) {
                 links.push({ url, title });
             }

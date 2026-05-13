@@ -32,10 +32,13 @@ describe('search_web tool', () => {
     });
 
     it('falls back to DuckDuckGo when SearXNG fails', async () => {
+        // DDG Lite now wraps real URLs in redirect: //duckduckgo.com/l/?uddg=<encoded>&rut=...
+        // Snippet td uses single-quoted class attribute.
+        const encodedUrl = encodeURIComponent('https://ddg.example/x');
         const ddgHtml = `
             <html><body>
-            <a rel="nofollow" href="https://ddg.example/x">DDG Title</a>
-            <td class="result-snippet">DDG snippet</td>
+            <a rel="nofollow" href="//duckduckgo.com/l/?uddg=${encodedUrl}&amp;rut=abc123" class='result-link'>DDG Title</a>
+            <td class='result-snippet'>DDG snippet</td>
             </body></html>`;
         const fetchMock = vi.spyOn(globalThis, 'fetch')
             .mockResolvedValueOnce(new Response('boom', { status: 500 })) // searxng fail
