@@ -7,6 +7,8 @@
  */
 import React from 'react'
 import { createRoot } from 'react-dom/client'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Node as TiptapNode } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import {
@@ -71,6 +73,7 @@ const RESOURCE_LABEL: Record<GeneratedResourceType, string> = {
 const GeneratedResourceBlockPreview: React.FC<{ attrs: GeneratedResourceBlockAttrs }> = ({ attrs }) => {
     const body = attrs.body || generatedResourceFallback(attrs.status)
     const isMindMap = attrs.type === 'mindmap' && attrs.status === 'ready' && body.trim().length > 0
+    const isReport = attrs.type === 'report' && attrs.status === 'ready' && body.trim().length > 0
 
     return (
         <details
@@ -87,11 +90,16 @@ const GeneratedResourceBlockPreview: React.FC<{ attrs: GeneratedResourceBlockAtt
                 className={cn(
                     'neo-generated-block-body',
                     isMindMap && 'neo-generated-block-body-mindmap',
+                    isReport && 'neo-generated-block-body-report',
                 )}
             >
                 {isMindMap ? (
                     <div className="neo-generated-block-mindmap">
                         <MindMap markdown={body} />
+                    </div>
+                ) : isReport ? (
+                    <div className="neo-generated-block-markdown markdown-content text-sm">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
                     </div>
                 ) : (
                     <pre className="neo-generated-block-body-text">{body}</pre>

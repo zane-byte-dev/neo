@@ -580,10 +580,18 @@
   padding: 0.75rem;
 }
 
+.novel-editor-body .neo-generated-block-body-report {
+  padding: 0.9rem 1rem;
+}
+
 .novel-editor-body .neo-generated-block-mindmap {
   width: 100%;
   min-height: 18rem;
   height: 22rem;
+}
+
+.novel-editor-body .neo-generated-block-markdown > :last-child {
+  margin-bottom: 0;
 }
 
 .novel-editor-body .neo-generated-block-body-text {
