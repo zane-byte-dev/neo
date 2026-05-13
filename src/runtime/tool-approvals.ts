@@ -4,12 +4,15 @@ import { dirname, join, resolve } from 'node:path';
 import { generateId } from '../utils/id-generator.js';
 import type { JsonObject, JsonValue, ToolApprovalScope } from './types.js';
 
-const TOOL_APPROVALS_VERSION = 2;
+const TOOL_APPROVALS_VERSION = 3;
+
+export type ToolApprovalMatchMode = 'exact' | 'tool';
 
 export interface ToolApprovalRule {
     id: string;
     toolName: string;
     policyKey: string;
+    matchMode: ToolApprovalMatchMode;
     scope: Exclude<ToolApprovalScope, 'once'>;
     createdAt: string;
     updatedAt: string;
@@ -17,9 +20,18 @@ export interface ToolApprovalRule {
     args?: JsonObject;
 }
 
+interface StoredToolApprovalRule extends Omit<ToolApprovalRule, 'matchMode'> {
+    matchMode?: ToolApprovalMatchMode;
+}
+
 interface ToolApprovalStore {
     version: number;
     rules: ToolApprovalRule[];
+}
+
+interface StoredToolApprovalStore {
+    version?: number;
+    rules?: StoredToolApprovalRule[];
 }
 
 interface MatchApprovalInput {
@@ -30,6 +42,7 @@ interface MatchApprovalInput {
 
 interface SaveApprovalInput extends MatchApprovalInput {
     scope: Exclude<ToolApprovalScope, 'once'>;
+    matchMode?: ToolApprovalMatchMode;
 }
 
 function approvalsFilePath(stateDir: string): string {
@@ -45,6 +58,22 @@ function normalizeArgs(toolName: string, args: Record<string, unknown>): JsonObj
         normalized.command = normalized.command.trim();
     }
     return normalized;
+}
+
+function resolveMatchMode(toolName: string, requested?: ToolApprovalMatchMode): ToolApprovalMatchMode {
+    if (requested === 'exact' || requested === 'tool') return requested;
+    return toolName === 'bash' ? 'tool' : 'exact';
+}
+
+function normalizeStoredRule(rule: StoredToolApprovalRule): ToolApprovalRule {
+    const matchMode = resolveMatchMode(rule.toolName, rule.matchMode);
+    const args = rule.args ? normalizeArgs(rule.toolName, rule.args as Record<string, unknown>) : undefined;
+    return {
+        ...rule,
+        matchMode,
+        policyKey: buildToolApprovalPolicyKey(rule.toolName, args ?? {}, matchMode),
+        ...(args !== undefined ? { args } : {}),
+    };
 }
 
 function normalizeJsonValue(value: unknown): JsonValue {
@@ -75,8 +104,23 @@ function stableSerialize(value: JsonValue): string {
     return JSON.stringify(value);
 }
 
-export function buildToolApprovalPolicyKey(toolName: string, args: Record<string, unknown>): string {
+export function buildToolApprovalPolicyKey(
+    toolName: string,
+    args: Record<string, unknown>,
+    matchMode: ToolApprovalMatchMode = 'exact',
+): string {
+    if (matchMode === 'tool') return `${toolName}:*`;
     return `${toolName}:${stableSerialize(normalizeArgs(toolName, args))}`;
+}
+
+function matchesToolApprovalRule(
+    rule: ToolApprovalRule,
+    toolName: string,
+    policyKey: string,
+): boolean {
+    if (rule.toolName !== toolName) return false;
+    if (rule.matchMode === 'tool') return true;
+    return rule.policyKey === policyKey;
 }
 
 export async function matchToolApprovalScope(
@@ -87,16 +131,14 @@ export async function matchToolApprovalScope(
     const policyKey = buildToolApprovalPolicyKey(input.toolName, input.args);
     const hasAlways = store.rules.some((rule) => (
         rule.scope === 'always'
-        && rule.toolName === input.toolName
-        && rule.policyKey === policyKey
+        && matchesToolApprovalRule(rule, input.toolName, policyKey)
     ));
     if (hasAlways) return 'always';
     if (!input.sessionId) return null;
     const hasSession = store.rules.some((rule) => (
         rule.scope === 'session'
         && rule.sessionId === input.sessionId
-        && rule.toolName === input.toolName
-        && rule.policyKey === policyKey
+        && matchesToolApprovalRule(rule, input.toolName, policyKey)
     ));
     return hasSession ? 'session' : null;
 }
@@ -108,11 +150,21 @@ export async function saveToolApproval(
     const store = await loadToolApprovalStore(stateDir);
     const now = new Date().toISOString();
     const normalizedArgs = normalizeArgs(input.toolName, input.args);
-    const policyKey = `${input.toolName}:${stableSerialize(normalizedArgs)}`;
+    const matchMode = resolveMatchMode(input.toolName, input.matchMode);
+    const policyKey = buildToolApprovalPolicyKey(input.toolName, normalizedArgs, matchMode);
+    if (matchMode === 'tool') {
+        store.rules = store.rules.filter((rule) => !(
+            rule.toolName === input.toolName
+            && rule.scope === input.scope
+            && (input.scope !== 'session' || rule.sessionId === input.sessionId)
+            && rule.matchMode !== 'tool'
+        ));
+    }
     const existingIndex = store.rules.findIndex((rule) => (
         rule.scope === input.scope
         && rule.toolName === input.toolName
         && rule.policyKey === policyKey
+        && rule.matchMode === matchMode
         && (input.scope !== 'session' || rule.sessionId === input.sessionId)
     ));
 
@@ -121,6 +173,8 @@ export async function saveToolApproval(
         store.rules[existingIndex] = {
             ...existing,
             updatedAt: now,
+            matchMode,
+            policyKey,
             args: normalizedArgs,
         };
     } else {
@@ -128,6 +182,7 @@ export async function saveToolApproval(
             id: `approval_${generateId()}`,
             toolName: input.toolName,
             policyKey,
+            matchMode,
             scope: input.scope,
             createdAt: now,
             updatedAt: now,
@@ -163,10 +218,23 @@ async function loadToolApprovalStore(stateDir: string): Promise<ToolApprovalStor
     }
     try {
         const raw = await readFile(filePath, 'utf8');
-        const parsed = JSON.parse(raw) as Partial<ToolApprovalStore>;
+        const parsed = JSON.parse(raw) as StoredToolApprovalStore;
         return {
             version: typeof parsed.version === 'number' ? parsed.version : TOOL_APPROVALS_VERSION,
-            rules: Array.isArray(parsed.rules) ? parsed.rules : [],
+            rules: Array.isArray(parsed.rules)
+                ? parsed.rules
+                    .filter((rule): rule is StoredToolApprovalRule => (
+                        typeof rule === 'object'
+                        && rule !== null
+                        && typeof rule.id === 'string'
+                        && typeof rule.toolName === 'string'
+                        && typeof rule.policyKey === 'string'
+                        && typeof rule.scope === 'string'
+                        && typeof rule.createdAt === 'string'
+                        && typeof rule.updatedAt === 'string'
+                    ))
+                    .map((rule) => normalizeStoredRule(rule))
+                : [],
         };
     } catch {
         return { version: TOOL_APPROVALS_VERSION, rules: [] };

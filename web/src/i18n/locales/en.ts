@@ -141,6 +141,7 @@ const en = {
     toolApprovalScopeSession: 'This chat',
     toolApprovalScopeCurrentChat: 'Current chat',
     toolApprovalScopeAlways: 'Always',
+    toolApprovalMatchTool: 'Tool-wide',
     toolApprovalUpdatedAt: 'Updated',
     toolApprovalChatLabel: 'Chat',
     removeToolApproval: 'Remove',

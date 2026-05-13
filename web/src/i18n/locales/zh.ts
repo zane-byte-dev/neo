@@ -143,6 +143,7 @@ const zh: Record<TranslationKeys, string> = {
     toolApprovalScopeSession: '某个会话',
     toolApprovalScopeCurrentChat: '当前会话',
     toolApprovalScopeAlways: '始终放行',
+    toolApprovalMatchTool: '整个工具',
     toolApprovalUpdatedAt: '更新时间',
     toolApprovalChatLabel: '会话',
     removeToolApproval: '移除',

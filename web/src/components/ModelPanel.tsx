@@ -422,6 +422,11 @@ const ToolApprovalsCard: React.FC<{
                                         )}>
                                             {rule.scope === 'always' ? t('approvalScopeAlways') : t('approvalScopeSession')}
                                         </span>
+                                        {rule.matchMode === 'tool' && (
+                                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary-mint/10 text-primary-mint border border-primary-mint/20">
+                                                {t('toolApprovalMatchTool')}
+                                            </span>
+                                        )}
                                     </div>
                                     <pre className="whitespace-pre-wrap break-words text-text-secondary font-mono text-[11px] leading-relaxed bg-bg-container border border-border-secondary rounded-lg p-2.5">
                                         {renderSummary(rule)}

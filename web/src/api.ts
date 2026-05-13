@@ -244,6 +244,7 @@ export interface ToolApprovalRule {
     id: string
     toolName: string
     policyKey: string
+    matchMode?: 'exact' | 'tool'
     scope: 'session' | 'always'
     createdAt: string
     updatedAt: string
@@ -428,13 +429,22 @@ export async function* streamChat(
     }
     let runId: string | undefined
     let lastCursor = -1
+    let deliveredCursor = -1
     let streamError: unknown = null
     let terminal = false
+
+    const acceptChunk = (chunk: StreamChunk): boolean => {
+        if (typeof chunk.cursor !== 'number') return true
+        if (chunk.cursor <= deliveredCursor) return false
+        deliveredCursor = chunk.cursor
+        lastCursor = Math.max(lastCursor, chunk.cursor)
+        return true
+    }
 
     try {
         for await (const chunk of createSSEStream<StreamChunk>('/api/chat', requestBody, { signal })) {
             if (chunk.type === 'run' && chunk.runId) runId = chunk.runId
-            if (typeof chunk.cursor === 'number') lastCursor = Math.max(lastCursor, chunk.cursor)
+            if (!acceptChunk(chunk)) continue
             terminal = terminal || isTerminalChunk(chunk)
             yield chunk
         }
@@ -461,6 +471,7 @@ export async function* streamChat(
                 for (const event of events) {
                     const chunk = mapRunEventToStreamChunk(event, state)
                     if (!chunk) continue
+                    if (!acceptChunk(chunk)) continue
                     terminal = terminal || isTerminalChunk(chunk)
                     yield chunk
                     if (terminal) return

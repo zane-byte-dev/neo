@@ -359,7 +359,7 @@ Notebook 知识库、Webhook/Cron 自动化和可恢复 Agent 运行时分别见
 ├── skills/             # 用户自定义 Skill
 ├── tools/              # 用户自定义工具（tool.yaml + run.py）
 ├── routing.json        # Models 页保存的路由覆盖
-├── tool-approvals.json # 工具确认 session/always 放行规则
+├── tool-approvals.json # 危险工具放行规则（bash 的 session/always 按工具级生效）
 └── usage.jsonl         # 按日调用量与成本记录
 ```
 

@@ -68,6 +68,25 @@ describe('executeTool confirmCallback', () => {
         expect(result).toContain('hello');
     });
 
+    it('reuses a bash session approval across later commands in the same chat', async () => {
+        const confirmCallback = vi.fn(async () => false);
+        await saveToolApproval(workDir, {
+            sessionId: 's',
+            toolName: 'bash',
+            args: { command: 'echo seeded approval' },
+            scope: 'session',
+        });
+
+        const result = await executeTool(
+            'bash', { command: 'printf approved-again' }, workDir, new Map(), {
+                userId: 'u', sessionId: 's', workDir, stateDir: workDir, systemInstruction: '', confirmCallback,
+            },
+        );
+
+        expect(confirmCallback).not.toHaveBeenCalled();
+        expect(result).toContain('approved-again');
+    });
+
     it('consults registry meta.permission for custom tools', async () => {
         const confirmCallback = vi.fn(async () => false);
         const customTool: Tool = {

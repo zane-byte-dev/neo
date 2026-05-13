@@ -886,6 +886,11 @@ const ToolApprovalsModal: React.FC<{
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="text-sm font-semibold text-text">{rule.toolName}</span>
                                                     <ToolApprovalBadge scope={rule.scope} currentSessionId={currentSessionId} ruleSessionId={rule.sessionId} />
+                                                    {rule.matchMode === 'tool' && (
+                                                        <span className="px-2 py-0.5 rounded-full border border-primary-mint/20 bg-primary-mint/8 text-[10px] font-medium text-primary-mint">
+                                                            {t('toolApprovalMatchTool')}
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {preview && (
                                                     <div className="mt-2 font-mono text-xs text-text-secondary whitespace-pre-wrap break-words">

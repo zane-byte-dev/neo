@@ -19,6 +19,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Changed
 
+- Dangerous-tool confirmations now de-duplicate replayed runtime events in Web Chat, so reconnect/replay no longer renders the same safety prompt twice; bash session/always approvals are now reused at the tool level instead of exact-command matching, which reduces repeated confirmations inside the same workflow.
 - Article resources no longer render a separate status strip or bottom resource-card area; notebook generation now resolves to an available provider before falling back to local models, generated mind maps/reports strip previously inserted resource blocks from prompts to avoid empty artifacts, article mind maps now render inline as embedded markmap blocks, article reports now render inline as structured Markdown content instead of raw text, and article toolbar audio now requests single-speaker narration instead of A/B dialogue.
 - Article annotations now use underline markers with hover popovers; deleting an annotation also removes its underline marker from the article body.
 - Settings navigation now separates Basic (Overview, Models, Skills) from Advanced (Apps, MCP, Automations), and high-frequency settings errors include repair actions.

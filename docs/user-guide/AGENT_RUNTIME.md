@@ -63,6 +63,9 @@ GET /api/runs/:id/events?cursor=N
 
 危险工具会创建 pending action。用户批准后，Neo 会记录 `confirm_resolved`，并从 checkpoint 恢复执行。对于已经完成、失败、取消或过期的 run，取消 API 会返回 no-op 成功。
 
+- Web Chat 在 SSE 中断后会按 event `cursor` 追补，并对已消费的事件做去重；同一个 pending action 不会因为重连或追补而重复出现两张确认卡片。
+- 对 `bash` 选择“本会话放行”或“始终放行”时，规则会按工具级别保存，而不是只绑定触发当下的那一条命令。规则列表里会显示“整个工具”标签，表示后续 `bash` 命令会直接复用这条放行规则。
+
 ## 设置与系统状态
 
 Web UI 的设置页现在分为两层：

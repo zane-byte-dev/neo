@@ -292,6 +292,39 @@ export const createChatSlice: StateCreator<AppState, [], [], ChatSlice> = (set) 
             if (msgs[i].role === 'assistant') {
                 const currentLog = [...(msgs[i].activityLog ?? [])]
                 const currentParts = [...(msgs[i].parts ?? [])]
+                if (item.type === 'tool_confirm' && item.confirmId) {
+                    const existingIdx = currentLog.findIndex(
+                        (entry) => entry.type === 'tool_confirm' && entry.confirmId === item.confirmId,
+                    )
+                    if (existingIdx >= 0) {
+                        const existing = currentLog[existingIdx]
+                        const confirmStatus = existing.confirmStatus && existing.confirmStatus !== 'pending'
+                            ? existing.confirmStatus
+                            : item.confirmStatus ?? existing.confirmStatus
+                        const nextItem: ActivityItem = {
+                            ...existing,
+                            ...item,
+                            ...(confirmStatus ? { confirmStatus } : {}),
+                            ...(item.approvalScope !== undefined
+                                ? { approvalScope: item.approvalScope }
+                                : existing.approvalScope !== undefined
+                                    ? { approvalScope: existing.approvalScope }
+                                    : {}),
+                            timestamp: existing.timestamp,
+                        }
+                        currentLog[existingIdx] = nextItem
+                        msgs[i] = {
+                            ...msgs[i],
+                            activityLog: currentLog,
+                            parts: currentParts.map((part) => {
+                                if (part.type !== 'activity') return part
+                                if (part.item.type !== 'tool_confirm' || part.item.confirmId !== item.confirmId) return part
+                                return { type: 'activity', item: nextItem }
+                            }),
+                        }
+                        break
+                    }
+                }
                 const lastLog = currentLog[currentLog.length - 1]
                 const lastPart = currentParts[currentParts.length - 1]
                 if (

@@ -67,6 +67,7 @@ describe('GET/DELETE /api/tool-approvals', () => {
         expect(res.body.rules).toHaveLength(1);
         expect(res.body.rules[0].toolName).toBe('bash');
         expect(res.body.rules[0].scope).toBe('always');
+        expect(res.body.rules[0].matchMode).toBe('tool');
         expect(res.body.rules[0].args.command).toBe('echo hello');
     });
 
