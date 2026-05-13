@@ -42,6 +42,7 @@ export function buildBuiltinToolsGuide(toolRegistry: Map<string, Tool>): string 
         update_now:           '更新当前关注点/近况记忆',
         update_user_profile:  '更新用户档案 USER.md',
         save_memory:          '保存长期记忆',
+        manage_skill:         '创建/更新可复用 skill（把当前对话沉淀成 skill）',
         subagent:             '派生子任务给子 agent',
         ask_user:             '向用户提问确认',
         enter_plan_mode:      '进入计划模式',
@@ -68,6 +69,7 @@ export function buildBuiltinToolsGuide(toolRegistry: Map<string, Tool>): string 
         // memory & profile
         'notebook_search', 'update_now', 'update_user_profile', 'save_memory', 'get_chat_history',
         // agent control
+        'manage_skill',
         'todo', 'ask_user', 'enter_plan_mode', 'exit_plan_mode',
         'subagent', 'run_skill', 'list_skills',
     ];

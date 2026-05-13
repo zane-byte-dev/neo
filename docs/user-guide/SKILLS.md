@@ -2,6 +2,21 @@
 
 Skill 是一个 Markdown 文件：frontmatter 定义名称、描述和参数，正文定义可复用提示词。Neo 会从 `{stateDir}/skills/` 加载 Skill，并通过 `run_skill` 工具执行。
 
+## 通过对话沉淀 Skill
+
+除了在 Settings / Skills 里手动创建和编辑，你也可以直接在对话里让 Neo 把当前对话沉淀成一个可复用 Skill。
+
+推荐说法：
+
+- “把我们刚才这套回复套路保存成一个 skill，名字叫 `brief_reply`。”
+- “根据当前对话生成一个可复用的审校 skill，下次我只要提供原文就能直接调用。”
+
+Neo 会通过内置的 `manage_skill` 工具把 Skill 写入 `{stateDir}/skills/`。保存成功后：
+
+- 当前会话里可立刻通过 `list_skills` 看到它。
+- 后续对话可直接调用 `run_skill` 复用。
+- Settings / Skills 页面也会显示同一份 Skill 文件。
+
 ## 文件位置
 
 支持两种布局：
@@ -78,5 +93,12 @@ print("Hello, {{name}}")
 ## 最小示例
 
 可直接复制 [examples/skills/my-first-skill.skill.md](../../examples/skills/my-first-skill.skill.md) 到 `{stateDir}/skills/`，然后让 Agent 调用 `run_skill`。
+
+如果你希望 Neo 直接基于一段已经完成的对话生成 Skill，优先在提示里说明这 4 件事：
+
+- 这个 Skill 的用途
+- 想要的 Skill 名称
+- 未来调用时希望传入哪些参数
+- 输出应该长什么样
 
 修改 Skill 后调用 `/api/reload` 或重启后端，让注册表重新加载。

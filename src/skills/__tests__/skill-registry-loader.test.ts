@@ -18,12 +18,15 @@ do something
 `;
 
 describe('SkillRegistry class', () => {
-    it('register/get/list/size work', () => {
+    it('register/get/unregister/list/size work', () => {
         const r = new SkillRegistry();
         const sk = { frontmatter: { name: 'foo' } } as unknown as SkillDefinition;
         r.register(sk);
         expect(r.size).toBe(1);
         expect(r.get('foo')).toBe(sk);
+        expect(r.unregister('foo')).toBe(true);
+        expect(r.unregister('foo')).toBe(false);
+        r.register(sk);
         expect(r.list()).toEqual([sk]);
         expect(r.get('missing')).toBeUndefined();
     });

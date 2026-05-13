@@ -38,6 +38,7 @@
 - [x] **工具重试与容错**：新增 `withRetry` 指数退避工具；已应用于 fetch_url、search_web（仅对 5xx/429/网络错误重试）
 - [x] **工具使用统计**：记录每个工具的调用频率、成功率、平均耗时，供优化参考（`GET /api/tool-stats`）
 - [x] **扩展内置工具**：新增 `subagent`（委托子 Agent 完成复杂子任务）、`research`（自动多步调研汇总）、`todo`（任务清单管理）、`ask_user`（会话中征询用户输入）
+- [x] **对话沉淀为 Skill**：新增 `manage_skill` 内置工具，Agent 可把当前对话整理为用户 Skill 并写入 `{stateDir}/skills/`；保存后当前上下文立即可 `list_skills` / `run_skill` 复用，Settings / Skills 继续复用同一份存储。
 - [x] **工具循环防护**：按 toolName 跟踪连续失败签名，同一工具连续失败 3 次后自动短路并提示换源；finishReason 为 tool-calls 且无有效文本时触发 synthesis 兜底回答
 
 ---

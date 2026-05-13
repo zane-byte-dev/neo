@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2, FolderOpen, Mic, MicOff } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2, FolderOpen, Mic, MicOff, Terminal, Globe, Wrench, BrainCircuit } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -36,18 +36,88 @@ import { confirm as confirmDialog } from './ConfirmDialog'
 import { ProjectPicker } from './ProjectPicker'
 import { CitationRenderer } from './notebook/CitationRenderer'
 
+// ── Tool display name map ────────────────────────────────────────────────────
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+    bash:                '执行命令',
+    read_file:           '读取文件',
+    write_file:          '写入文件',
+    list_dir:            '列出目录',
+    edit_file:           '编辑文件',
+    glob:                '查找文件',
+    grep:                '搜索内容',
+    fetch_url:           '抓取网页',
+    search_web:          '搜索网络',
+    browser_command:     '操控浏览器',
+    get_datetime:        '获取时间',
+    get_weather:         '获取天气',
+    generate_video:      '生成视频',
+    notebook_search:     '检索知识库',
+    todo:                '管理任务',
+    update_now:          '更新近况',
+    update_user_profile: '更新档案',
+    save_memory:         '保存记忆',
+    manage_skill:        '管理技能',
+    subagent:            '派发子任务',
+    ask_user:            '请求确认',
+    enter_plan_mode:     '进入计划模式',
+    exit_plan_mode:      '退出计划模式',
+    research:            '深度调研',
+    run_skill:           '执行技能',
+    list_skills:         '列出技能',
+    code_exec:           '执行代码',
+    get_chat_history:    '查看历史',
+}
+
+function toolDisplayName(toolName: string): string {
+    return TOOL_DISPLAY_NAMES[toolName] ?? toolName
+}
+
+// ── Tool icon selector ───────────────────────────────────────────────────────
+const FILE_TOOLS = new Set(['read_file', 'write_file', 'edit_file', 'list_dir', 'glob', 'grep'])
+const WEB_TOOLS  = new Set(['search_web', 'fetch_url', 'research', 'browser_command'])
+const RUN_TOOLS  = new Set(['bash', 'code_exec'])
+
+function ToolIcon({ toolName, className }: { toolName: string; className?: string }) {
+    if (RUN_TOOLS.has(toolName))  return <Terminal size={11} className={className} />
+    if (FILE_TOOLS.has(toolName)) return <FileText  size={11} className={className} />
+    if (WEB_TOOLS.has(toolName))  return <Globe     size={11} className={className} />
+    return <Wrench size={11} className={className} />
+}
+
 function activityPreviewText(item: ActivityItem): string {
     if (typeof item.args?.command === 'string') return item.args.command
     if (item.type === 'tool_result') return item.result ?? ''
     return item.args ? JSON.stringify(item.args) : ''
 }
 
-/** Human-readable single-line summary of tool args for collapsed card header. */
+/** Human-readable single-line summary of tool args. */
 function semanticPreview(item: ActivityItem, max = 120): string {
     if (item.type === 'tool_result') return ''
-    if (typeof item.args?.command === 'string') return compactPreview(item.args.command, max)
-    if (!item.args || Object.keys(item.args).length === 0) return ''
-    const pairs = Object.entries(item.args)
+    const args = item.args ?? {}
+    const toolName = item.toolName
+    // Path-based tools: show only the filename
+    if (FILE_TOOLS.has(toolName)) {
+        if (typeof args.path === 'string') {
+            return args.path.split('/').pop() ?? args.path
+        }
+        if (typeof args.pattern === 'string') return compactPreview(args.pattern, max)
+        if (typeof args.query === 'string') return compactPreview(`"${args.query}"`, max)
+    }
+    // Shell command
+    if (typeof args.command === 'string') return compactPreview(args.command, max)
+    // Web / research tools
+    if (toolName === 'search_web' && typeof args.query === 'string') return compactPreview(args.query, max)
+    if (toolName === 'fetch_url' && typeof args.url === 'string') return compactPreview(args.url, max)
+    if (toolName === 'research' && typeof args.topic === 'string') return compactPreview(args.topic, max)
+    // Skill tools
+    if (toolName === 'run_skill' && typeof args.skill_name === 'string') return args.skill_name
+    if (toolName === 'manage_skill' && typeof args.name === 'string') return args.name
+    // Subagent
+    if (toolName === 'subagent' && typeof args.task === 'string') return compactPreview(args.task, max)
+    // Generic fallback
+    if (!args || Object.keys(args).length === 0) return ''
+    const pairs = Object.entries(args)
+        .filter(([k]) => !['content', 'old_str', 'new_str'].includes(k))
         .map(([k, v]) => {
             const val = typeof v === 'string'
                 ? v
@@ -74,6 +144,7 @@ type ActivityDisplayItem = {
 type RenderPart =
     | { type: 'text'; content: string }
     | { type: 'activity'; item: ActivityItem; resultItem?: ActivityItem }
+    | { type: 'activity-batch'; items: ActivityDisplayItem[] }
 
 function canMergeActivityItems(current: ActivityItem, next: ActivityItem): boolean {
     if (next.type !== 'tool_result') return false
@@ -95,13 +166,39 @@ function mergeActivityItems(items: ActivityItem[]): ActivityDisplayItem[] {
     return merged
 }
 
+function generateBatchSummary(items: ActivityDisplayItem[]): string {
+    const counts: Record<string, number> = {}
+    for (const { item } of items) counts[item.toolName] = (counts[item.toolName] ?? 0) + 1
+    const toolNames = Object.keys(counts)
+    const total = items.length
+    if (total === 1) {
+        const { item } = items[0]
+        const label = toolDisplayName(item.toolName)
+        const preview = semanticPreview(item, 60)
+        return preview ? `${label}  ${preview}` : label
+    }
+    const fileCount = toolNames.filter(t => FILE_TOOLS.has(t)).reduce((s, t) => s + counts[t], 0)
+    const webCount  = toolNames.filter(t => WEB_TOOLS.has(t)).reduce((s, t) => s + counts[t], 0)
+    const runCount  = toolNames.filter(t => RUN_TOOLS.has(t)).reduce((s, t) => s + counts[t], 0)
+    if (toolNames.length === 1) {
+        const n = counts[toolNames[0]]
+        return `${toolDisplayName(toolNames[0])} × ${n}`
+    }
+    if (fileCount > 0 && webCount === 0 && runCount === 0 && toolNames.every(t => FILE_TOOLS.has(t)))
+        return `查看了 ${fileCount} 个文件`
+    if (webCount > 0 && fileCount === 0 && runCount === 0 && toolNames.every(t => WEB_TOOLS.has(t)))
+        return `搜索了 ${webCount} 次`
+    if (fileCount > 0 && webCount > 0 && runCount === 0)
+        return `搜索并查看了 ${fileCount + webCount} 个资源`
+    if (runCount > 0 && fileCount === 0 && webCount === 0)
+        return `执行了 ${runCount} 次命令`
+    return `执行了 ${total} 次操作`
+}
+
 function mergeMessageParts(parts: MessagePart[]): RenderPart[] {
-    // Render parts in their original order so the narrative is chronological:
-    // text the AI produced before calling a tool appears before the tool card,
-    // and text produced after appears after. Consecutive text chunks are merged
-    // to avoid split-markdown artifacts (e.g. unclosed code fences that span
-    // multiple streaming chunks). Tool-call/result pairs are still collapsed
-    // into a single activity card.
+    // Render parts in their original order so the narrative is chronological.
+    // Consecutive text chunks are merged to avoid split-markdown artifacts.
+    // Consecutive tool-call/result pairs are batched into a single activity-batch card.
     const merged: RenderPart[] = []
     for (const part of parts) {
         if (part.type === 'text') {
@@ -113,14 +210,34 @@ function mergeMessageParts(parts: MessagePart[]): RenderPart[] {
             }
             continue
         }
+        // Try to merge tool_result onto the previous tool_call in the current batch
         const last = merged[merged.length - 1]
-        if (last?.type === 'activity' && !last.resultItem && canMergeActivityItems(last.item, part.item)) {
-            last.resultItem = part.item
+        if (last?.type === 'activity-batch') {
+            const batchLast = last.items[last.items.length - 1]
+            if (batchLast && !batchLast.resultItem && canMergeActivityItems(batchLast.item, part.item)) {
+                batchLast.resultItem = part.item
+                continue
+            }
+            // Another tool call: append to current batch
+            last.items.push({ item: part.item })
             continue
         }
-        merged.push({ type: 'activity', item: part.item })
+        if (last?.type === 'activity' && !last.resultItem && canMergeActivityItems(last.item, part.item)) {
+            // Promote the previous single activity into a batch before adding the result
+            merged[merged.length - 1] = { type: 'activity-batch', items: [{ item: last.item, resultItem: part.item }] }
+            continue
+        }
+        // Start a new batch with this item
+        merged.push({ type: 'activity-batch', items: [{ item: part.item }] })
     }
-    return merged
+    // Flatten single-item batches back to individual activity for backward compat
+    return merged.map(p => {
+        if (p.type === 'activity-batch' && p.items.length === 1) {
+            const { item, resultItem } = p.items[0]
+            return { type: 'activity' as const, item, resultItem }
+        }
+        return p
+    })
 }
 
 // ── Export chat as Markdown ───────────────────────────────────────────────────
@@ -498,7 +615,7 @@ const AskUserCard: React.FC<{ item: ActivityItem }> = ({ item }) => {
 
 // ── Activity panel (live tool call log) ───────────────────────────────────────
 
-const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem; sessionId?: string | null }> = ({ item, resultItem, sessionId }) => {
+const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem; sessionId?: string | null; compact?: boolean }> = ({ item, resultItem, sessionId, compact }) => {
     const [expandedResult, setExpandedResult] = React.useState<string | null>(null)
     const [expanding, setExpanding] = React.useState(false)
     const [showDetails, setShowDetails] = React.useState(false)
@@ -509,23 +626,22 @@ const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem
     const outputText = targetResult ? (expandedResult ?? targetResult.result ?? '') : ''
     const preview = semanticPreview(item) || compactPreview(outputText, 120)
     const needsDetails = Boolean(inputText || outputText)
+    const isBlocked = targetResult?.result?.startsWith('[BLOCKED]') || status === 'denied'
     const tone = status === 'pending'
         ? 'border-warning/30 bg-warning/5'
-        : targetResult?.result?.startsWith('[BLOCKED]') || status === 'denied'
+        : isBlocked
             ? 'border-warning/20 bg-warning/5'
-            : 'border-border/70 bg-fill-secondary/35'
-    const icon = status === 'pending'
-        ? '⚠'
-        : targetResult || item.type === 'tool_result' || status === 'approved'
-            ? '✓'
-            : '↳'
-    const iconTone = status === 'pending'
-        ? 'text-warning'
-        : targetResult?.result?.startsWith('[BLOCKED]') || status === 'denied'
-            ? 'text-warning'
+            : compact
+                ? 'border-transparent bg-transparent'
+                : 'border-border/50 bg-fill-secondary/25'
+    // Status icon
+    const StatusIcon = status === 'pending'
+        ? () => <span className="shrink-0 text-[11px] text-warning">⚠</span>
+        : isBlocked
+            ? () => <span className="shrink-0 text-[11px] text-warning">⚠</span>
             : targetResult || item.type === 'tool_result' || status === 'approved'
-                ? 'text-success'
-                : 'text-primary-mint'
+                ? () => <CheckCircle2 size={11} className="shrink-0 text-success" />
+                : () => <Loader2 size={11} className="shrink-0 text-primary-mint animate-spin" />
 
     const handleConfirm = async (confirmId: string, approved: boolean, approvalScope: 'once' | 'session' | 'always' = 'once') => {
         if (!sessionId) return
@@ -586,13 +702,14 @@ const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem
     if (item.type === 'tool_confirm') {
         return (
             <div
-                className={cn('my-2 rounded-xl px-3 py-2 text-xs transition-colors duration-150', tone, needsDetails && 'cursor-pointer hover:brightness-95 dark:hover:brightness-110')}
+                className={cn('my-1.5 rounded-xl px-3 py-2 text-xs transition-colors duration-150 border', tone, needsDetails && 'cursor-pointer hover:brightness-95 dark:hover:brightness-110')}
                 style={{ boxShadow: 'var(--shadow-soft)' }}
                 onClick={needsDetails ? toggleDetails : undefined}
             >
                 <div className="flex items-center gap-2 min-w-0">
-                    <span className={cn('shrink-0 text-[11px]', iconTone)}>{icon}</span>
-                    <span className="font-medium text-text-secondary shrink-0">{item.toolName}</span>
+                    <StatusIcon />
+                    <ToolIcon toolName={item.toolName} className="shrink-0 text-text-tertiary" />
+                    <span className="font-medium text-text-secondary shrink-0">{toolDisplayName(item.toolName)}</span>
                     {preview && <span className="min-w-0 flex-1 truncate text-text-tertiary">{preview}</span>}
                     {needsDetails && (
                         <ChevronDown size={11} className={cn('shrink-0 text-text-quaternary transition-transform duration-200', showDetails && 'rotate-180')} />
@@ -652,13 +769,14 @@ const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem
 
     return (
         <div
-            className={cn('my-2 rounded-xl px-3 py-2 text-xs transition-colors duration-150', tone, needsDetails && 'cursor-pointer hover:brightness-95 dark:hover:brightness-110')}
-            style={{ boxShadow: 'var(--shadow-soft)' }}
+            className={cn('my-1.5 rounded-xl px-3 py-2 text-xs transition-colors duration-150 border', tone, needsDetails && 'cursor-pointer hover:brightness-95 dark:hover:brightness-110')}
+            style={compact ? undefined : { boxShadow: 'var(--shadow-soft)' }}
             onClick={needsDetails ? toggleDetails : undefined}
         >
             <div className="flex items-center gap-2 min-w-0">
-                <span className={cn('shrink-0 text-[10px]', iconTone)}>{icon}</span>
-                <span className="font-medium text-text-secondary shrink-0">{item.toolName}</span>
+                <StatusIcon />
+                <ToolIcon toolName={item.toolName} className="shrink-0 text-text-tertiary" />
+                <span className="font-medium text-text-secondary shrink-0">{toolDisplayName(item.toolName)}</span>
                 {preview && <span className="min-w-0 flex-1 truncate text-text-tertiary">{preview}</span>}
                 {needsDetails && (
                     <ChevronDown size={11} className={cn('shrink-0 text-text-quaternary transition-transform duration-200', showDetails && 'rotate-180')} />
@@ -696,6 +814,55 @@ const ActivityFeed: React.FC<{ items: ActivityItem[]; sessionId?: string | null 
         ))}
     </div>
 )
+
+// ── Activity batch card (groups consecutive tool calls) ───────────────────────────────
+const ActivityBatchCard: React.FC<{ items: ActivityDisplayItem[]; sessionId?: string | null }> = ({ items, sessionId }) => {
+    const [expanded, setExpanded] = React.useState(false)
+    const summary = generateBatchSummary(items)
+    const hasConfirm  = items.some(d => d.item.type === 'tool_confirm' && (!d.item.confirmStatus || d.item.confirmStatus === 'pending'))
+    const hasBlocked  = items.some(d => d.resultItem?.result?.startsWith('[BLOCKED]'))
+    const allSettled  = items.every(d => d.resultItem || d.item.type === 'tool_result' ||
+        (d.item.type === 'tool_confirm' && d.item.confirmStatus && d.item.confirmStatus !== 'pending'))
+    const tone = hasConfirm ? 'border-warning/30 bg-warning/5'
+        : hasBlocked ? 'border-warning/20 bg-warning/5'
+        : 'border-border/50 bg-fill-secondary/25'
+    return (
+        <div className={cn('my-2 rounded-xl border text-xs overflow-hidden transition-colors duration-150', tone)}
+             style={{ boxShadow: 'var(--shadow-soft)' }}>
+            <button
+                type="button"
+                className="w-full flex items-center gap-2 px-3 py-2 hover:brightness-95 dark:hover:brightness-110 transition-colors min-w-0"
+                onClick={() => setExpanded(e => !e)}
+            >
+                {hasConfirm ? (
+                    <span className="shrink-0 text-[11px] text-warning">⚠</span>
+                ) : allSettled ? (
+                    <CheckCircle2 size={11} className="shrink-0 text-success" />
+                ) : (
+                    <Loader2 size={11} className="shrink-0 text-primary-mint animate-spin" />
+                )}
+                <span className="flex-1 text-left font-medium text-text-secondary min-w-0 truncate">{summary}</span>
+                {items.length > 1 && (
+                    <span className="shrink-0 tabular-nums text-[10px] text-text-quaternary bg-fill-tertiary px-1.5 py-0.5 rounded-full">{items.length}</span>
+                )}
+                <ChevronDown size={11} className={cn('shrink-0 text-text-quaternary transition-transform duration-200', expanded && 'rotate-180')} />
+            </button>
+            {expanded && (
+                <div className="border-t border-border/40 px-2 py-1.5 space-y-0.5" onClick={e => e.stopPropagation()}>
+                    {items.map(({ item, resultItem }, idx) => (
+                        <ActivityItemCard
+                            key={`${item.type}-${item.confirmId ?? item.resultId ?? item.timestamp}-${resultItem?.resultId ?? 'none'}-${idx}`}
+                            item={item}
+                            resultItem={resultItem}
+                            sessionId={sessionId}
+                            compact
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
+    )
+}
 
 // ── Todo panel (inline progress tracker) ──────────────────────────────────────
 
@@ -1269,6 +1436,7 @@ const ChatInput: React.FC<{
         confirmDangerous, setConfirmDangerous,
     } = useAppStore()
     const isGenerating = useAppStore(s => activeChatId ? !!s.generatingBySession[activeChatId] : false)
+    const activeRunId = useAppStore(s => activeChatId ? (s.currentRunIdBySession[activeChatId] ?? null) : null)
 
     // Restore per-chat model when switching chats
     const prevChatIdRef = React.useRef<string | null>(null)
@@ -1293,8 +1461,10 @@ const ChatInput: React.FC<{
     const [pendingImages, setPendingImages] = React.useState<string[]>([])
     const [pendingDocs, setPendingDocs] = React.useState<PendingDocument[]>([])
     const [isUploading, setIsUploading] = React.useState(false)
+    const [isStopPending, setIsStopPending] = React.useState(false)
     const [availableModels, setAvailableModels] = React.useState<string[]>([])
     const [slashDropdownIdx, setSlashDropdownIdx] = React.useState(-1)
+    const stopRequestKeyRef = React.useRef<string | null>(null)
 
     // Filtered slash commands based on current input
     const slashQuery = inputValue.startsWith('/') && !inputValue.includes(' ')
@@ -1335,6 +1505,17 @@ const ChatInput: React.FC<{
             setSelectedModel('auto')
         }
     }, [availableModels, selectedModel, setSelectedModel])
+
+    const currentStopKey = activeChatId
+        ? (activeRunId ? `run:${activeRunId}` : `session:${activeChatId}`)
+        : null
+
+    React.useEffect(() => {
+        if (!isGenerating || stopRequestKeyRef.current !== currentStopKey) {
+            stopRequestKeyRef.current = null
+            setIsStopPending(false)
+        }
+    }, [currentStopKey, isGenerating])
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files
@@ -1495,7 +1676,15 @@ const ChatInput: React.FC<{
                 if (chunk.type === 'error') throw new Error(chunk.text ?? 'Unknown error')
                 if (chunk.type === 'thought') {
                     thinkingAccum += chunk.text ?? ''
+                    // Real-time thinking display
+                    updateLastAssistantThinking(sid, thinkingAccum)
                 } else if (chunk.type === 'tool_call') {
+                    // Update status bar with current tool name
+                    const toolLabel = toolDisplayName(chunk.toolName ?? 'tool')
+                    const toolPreview = chunk.args
+                        ? semanticPreview({ type: 'tool_call', toolName: chunk.toolName ?? 'tool', args: chunk.args, timestamp: Date.now() }, 50)
+                        : ''
+                    setThinkingStatus(sid, toolPreview ? `${toolLabel}  ${toolPreview}` : toolLabel)
                     appendToLastAssistantActivity(sid, {
                         type: 'tool_call',
                         toolName: chunk.toolName ?? 'tool',
@@ -1558,6 +1747,10 @@ const ChatInput: React.FC<{
         if (!activeChatId) return
         const sid = activeChatId
         const runId = useAppStore.getState().currentRunIdBySession[sid]
+        const stopKey = runId ? `run:${runId}` : `session:${sid}`
+        if (stopRequestKeyRef.current === stopKey) return
+        stopRequestKeyRef.current = stopKey
+        setIsStopPending(true)
         if (runId) {
             try {
                 await cancelRun(runId)
@@ -1566,7 +1759,13 @@ const ChatInput: React.FC<{
                 // Fall back to local abort when cancel API is unavailable.
             }
         }
-        useAppStore.getState().abortControllerBySession[sid]?.abort()
+        const controller = useAppStore.getState().abortControllerBySession[sid]
+        if (controller) {
+            controller.abort()
+            return
+        }
+        stopRequestKeyRef.current = null
+        setIsStopPending(false)
     }
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -2138,10 +2337,18 @@ const ChatInput: React.FC<{
                             {isGenerating ? (
                                 <button
                                     onClick={handleStop}
-                                    className="p-2 bg-text text-bg-container rounded-xl hover:opacity-80 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer"
+                                    disabled={isStopPending}
+                                    className={cn(
+                                        'p-2 bg-text text-bg-container rounded-xl transition-all duration-200',
+                                        isStopPending
+                                            ? 'opacity-60 cursor-not-allowed'
+                                            : 'hover:opacity-80 hover:scale-105 active:scale-95 cursor-pointer',
+                                    )}
                                     title={t('stopEsc')}
                                 >
-                                    <Square size={14} fill="currentColor" />
+                                    {isStopPending
+                                        ? <Loader2 size={14} className="animate-spin" />
+                                        : <Square size={14} fill="currentColor" />}
                                 </button>
                             ) : (
                                 <button
@@ -2530,37 +2737,63 @@ export const ChatArea: React.FC<{
                             ) : (
                                 <div className="w-full px-1 py-1 text-sm leading-relaxed">
                                     {msg.thinking && (
-                                        <details className="mb-3 group">
-                                            <summary className="cursor-pointer text-xs text-text-tertiary hover:text-text-secondary select-none flex items-center gap-1.5 py-1">
-                                                <ChevronRight size={12} className="transition-transform duration-200 group-open:rotate-90" />
-                                                {t('thinkingLabel')}
-                                            </summary>
-                                            <div className="mt-2 pl-4 border-l-2 border-border/60 text-xs text-text-secondary leading-relaxed whitespace-pre-wrap">
-                                                {msg.thinking}
-                                            </div>
-                                        </details>
+                                        <div className="mb-3">
+                                            {/* Show first paragraph inline as a progress note; rest goes in a details */}
+                                            {(() => {
+                                                const lines = msg.thinking.trim().split('\n')
+                                                const firstPara = lines[0]?.trim() ?? ''
+                                                const rest = lines.slice(1).join('\n').trim()
+                                                return (
+                                                    <div className="text-xs text-text-secondary leading-relaxed">
+                                                        <div className="flex items-start gap-1.5 mb-1">
+                                                            <BrainCircuit size={12} className="shrink-0 mt-0.5 text-text-quaternary" />
+                                                            <span className="flex-1">{firstPara}</span>
+                                                        </div>
+                                                        {rest && (
+                                                            <details className="group ml-5">
+                                                                <summary className="cursor-pointer text-[11px] text-text-quaternary hover:text-text-tertiary select-none list-none flex items-center gap-1 py-0.5">
+                                                                    <ChevronRight size={10} className="transition-transform duration-200 group-open:rotate-90" />
+                                                                    {t('thinkingLabel')}
+                                                                </summary>
+                                                                <div className="mt-1.5 pl-3 border-l-2 border-border/50 text-[11px] text-text-tertiary whitespace-pre-wrap">{rest}</div>
+                                                            </details>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })()}
+                                        </div>
                                     )}
                                     {msg.todos && msg.todos.length > 0 && (
                                         <TodoPanel todos={msg.todos} />
                                     )}
                                     {msg.parts && msg.parts.length > 0 ? (
                                         <div>
-                                            {mergeMessageParts(msg.parts).map((part, idx) => part.type === 'text' ? (
-                                                <div key={`${msg.id}-text-${idx}`} className="mb-3 last:mb-0">
-                                                    {activeChat?.mode === 'notebook' ? (
-                                                        <CitationRenderer content={part.content} sources={msg.citations} />
-                                                    ) : (
-                                                        <MD content={part.content} />
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <ActivityItemCard
-                                                    key={`${msg.id}-activity-${part.item.confirmId ?? part.item.resultId ?? part.item.timestamp}-${part.resultItem?.resultId ?? 'none'}-${idx}`}
-                                                    item={part.item}
-                                                    resultItem={part.resultItem}
-                                                    sessionId={activeChatId}
-                                                />
-                                            ))}
+                                            {mergeMessageParts(msg.parts).map((part, idx) => {
+                                                if (part.type === 'text') return (
+                                                    <div key={`${msg.id}-text-${idx}`} className="mb-3 last:mb-0">
+                                                        {activeChat?.mode === 'notebook' ? (
+                                                            <CitationRenderer content={part.content} sources={msg.citations} />
+                                                        ) : (
+                                                            <MD content={part.content} />
+                                                        )}
+                                                    </div>
+                                                )
+                                                if (part.type === 'activity-batch') return (
+                                                    <ActivityBatchCard
+                                                        key={`${msg.id}-batch-${idx}`}
+                                                        items={part.items}
+                                                        sessionId={activeChatId}
+                                                    />
+                                                )
+                                                return (
+                                                    <ActivityItemCard
+                                                        key={`${msg.id}-activity-${part.item.confirmId ?? part.item.resultId ?? part.item.timestamp}-${part.resultItem?.resultId ?? 'none'}-${idx}`}
+                                                        item={part.item}
+                                                        resultItem={part.resultItem}
+                                                        sessionId={activeChatId}
+                                                    />
+                                                )
+                                            })}
                                             {isGenerating && !msg.parts.some((part) => part.type === 'text' && part.content.trim()) && (
                                                 <TypingIndicator />
                                             )}

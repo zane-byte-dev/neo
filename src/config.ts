@@ -103,7 +103,7 @@ export const getTelegramBotToken = (): string => getSecret('TELEGRAM_BOT_TOKEN')
 export const getTelegramChatId   = (): string => getSecret('TELEGRAM_CHAT_ID');
 
 /** Maximum agentic tool-call iterations before forcing stop */
-export const MAX_TOOL_ITERATIONS = 15;
+export const MAX_TOOL_ITERATIONS = 25;
 
 /** Maximum tool-call iterations for subagent tasks */
 export const MAX_SUBAGENT_STEPS = 10;

@@ -26,6 +26,11 @@ export class SkillRegistry {
         this._skills.set(skill.frontmatter.name, skill);
     }
 
+    /** Remove a skill from the registry. */
+    unregister(name: string): boolean {
+        return this._skills.delete(name);
+    }
+
     /** Look up a skill by its name. */
     get(name: string): SkillDefinition | undefined {
         return this._skills.get(name);

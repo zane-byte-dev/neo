@@ -11,6 +11,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 - **文章内资源 MVP**：文章编辑器新增低干扰生成入口，摘要保留为正文前轻量块，音频通过工具栏 icon 基于当前文章生成，思维导图和报告可通过 `/` 插入为折叠模块；新 artifact 会持久化 `sourceIds` / `primaryArticleId`，`ResourcesPanel` 继续作为 notebook 级资源库与管理入口。
 - **文章批注 MVP**：文章编辑器选区气泡菜单新增批注入口，支持保存划线批注、在 `NoteEditor` 内查看全部批注、跳转原文选区、删除，以及 `open / resolved` 状态切换。后端新增独立 annotation 数据模型与 API。
 - **Web 语音输入**：Chat 输入区右下角新增麦克风按钮，支持录音、停止/取消、转写并回填到输入框。录音最长 90 秒，默认不自动发送。后端新增 `POST /api/transcribe` 转写路由，优先使用 OpenAI Whisper，无 OpenAI key 时 fallback 到 Gemini 1.5 Flash。权限拒绝、浏览器不支持、无可用 provider 等情况均有内联错误提示与修复说明。
+- **对话沉淀 Skill**：Agent 新增 `manage_skill` 内置工具，可把当前对话整理成可复用 Skill 并保存到用户 `stateDir/skills/`；保存后当前上下文会立即更新，后续可直接 `list_skills` / `run_skill` 复用，同一份 Skill 也会出现在 Settings / Skills。
 - Settings / Basic / Overview with a system status card for backend, account, model, and automation readiness.
 - First-run checklist on the Chat welcome screen to guide model setup, first message, and Notebook note creation.
 - User guides for Tools, Skills, Sandbox, MCP, Notebook, Automation, Browser Extension, Agent Runtime, and FAQ.
@@ -19,9 +20,10 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Changed
 
-- Dangerous-tool confirmations now de-duplicate replayed runtime events in Web Chat, so reconnect/replay no longer renders the same safety prompt twice; bash session/always approvals are now reused at the tool level instead of exact-command matching, which reduces repeated confirmations inside the same workflow.
+- Dangerous-tool confirmations now de-duplicate replayed runtime events in Web Chat, so reconnect/replay no longer renders the same safety prompt twice; bash session/always approvals are now reused at the tool level instead of exact-command matching, which reduces repeated confirmations inside the same workflow. Chat stop/cancel is also now one-shot per active run, avoiding bursts of duplicate cancel requests from repeated clicks or Esc key repeats.
 - Article resources no longer render a separate status strip or bottom resource-card area; notebook generation now resolves to an available provider before falling back to local models, generated mind maps/reports strip previously inserted resource blocks from prompts to avoid empty artifacts, article mind maps now render inline as embedded markmap blocks, article reports now render inline as structured Markdown content instead of raw text, and article toolbar audio now requests single-speaker narration instead of A/B dialogue.
 - Article annotations now use underline markers with hover popovers; deleting an annotation also removes its underline marker from the article body.
+- Skills REST routes now reuse a shared skill storage service, so Web Settings and chat-driven skill authoring share the same validation, enabled-state patching, and flat/nested file discovery.
 - Settings navigation now separates Basic (Overview, Models, Skills) from Advanced (Apps, MCP, Automations), and high-frequency settings errors include repair actions.
 - Sidebar bulk chat deletion now uses the shared confirmation dialog instead of the browser-native confirm prompt.
 - Chinese README now has one Quick Start path and an updated built-in tools table.
