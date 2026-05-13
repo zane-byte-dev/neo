@@ -109,6 +109,90 @@ function tryParseJson<T>(text: string): T | null {
     return parseJsonOr<T | null>(body.slice(0, endIndex + 1), null);
 }
 
+function stripGeneratedFence(text: string): string {
+    return text
+        .replace(/^\s*```(?:json|markdown|md)?\s*/i, '')
+        .replace(/\s*```\s*$/i, '')
+        .trim();
+}
+
+function firstNonEmptyString(...values: unknown[]): string {
+    for (const value of values) {
+        if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return '';
+}
+
+function mindMapTreeToMarkdown(value: unknown, depth = 1): string {
+    if (!value) return '';
+    if (typeof value === 'string') return normalizeMindMapMarkdown(value, '思维导图');
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => mindMapTreeToMarkdown(item, depth))
+            .filter(Boolean)
+            .join('\n');
+    }
+    if (typeof value !== 'object') return '';
+
+    const node = value as Record<string, unknown>;
+    const label = firstNonEmptyString(node.label, node.title, node.name, node.text, node.topic);
+    const children = [node.children, node.items, node.nodes, node.branches]
+        .find((candidate) => Array.isArray(candidate)) as unknown[] | undefined;
+
+    const lines: string[] = [];
+    if (label) lines.push(`${'#'.repeat(Math.min(depth, 6))} ${label}`);
+    const childDepth = label ? depth + 1 : depth;
+    for (const child of children ?? []) {
+        const childMarkdown = mindMapTreeToMarkdown(child, childDepth);
+        if (childMarkdown) lines.push(childMarkdown);
+    }
+    return lines.join('\n');
+}
+
+function normalizeMindMapMarkdown(text: string, fallbackTitle: string): string {
+    const cleaned = stripGeneratedFence(text);
+    if (!cleaned) return '';
+
+    const parsed = tryParseJson<unknown>(cleaned);
+    const treeMarkdown = mindMapTreeToMarkdown(parsed);
+    if (treeMarkdown) return treeMarkdown;
+
+    if (/^#{1,6}\s+\S/m.test(cleaned)) return cleaned;
+
+    const lines = cleaned
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+    if (lines.some((line) => /^[-*+]\s+\S/.test(line) || /^\d+[.)]\s+\S/.test(line))) {
+        return [`# ${fallbackTitle}`, ...lines].join('\n');
+    }
+
+    return [
+        `# ${fallbackTitle}`,
+        ...lines.slice(0, 12).map((line) => `## ${line.replace(/^[-*+]\s+/, '').replace(/^\d+[.)]\s+/, '')}`),
+    ].join('\n');
+}
+
+function fallbackMindMapMarkdown(notebook: string, topic: string | undefined, sources: Array<{ title: string; content: string }>): string {
+    const root = topic?.trim() || notebook;
+    const lines = [`# ${root}`];
+    for (const source of sources.slice(0, 8)) {
+        lines.push(`## ${source.title}`);
+        const excerpt = source.content
+            .split(/\n+/)
+            .map((line) => line.trim())
+            .find(Boolean);
+        if (excerpt) lines.push(`### ${excerpt.slice(0, 30)}`);
+    }
+    return lines.join('\n');
+}
+
+function estimateAudioDurationSeconds(script: AudioSegment[]): number {
+    const characters = script.reduce((total, line) => total + line.text.length, 0);
+    if (characters <= 0) return 0;
+    return Math.max(60, Math.ceil((characters / 260) * 60));
+}
+
 // ── Source guide ─────────────────────────────────────────────────────────────
 
 export async function generateSourceGuide(
@@ -231,7 +315,9 @@ ${joined}`;
         workDir,
     });
 
-    const markdown = (out ?? '').replace(/^\s*```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+    const fallbackTitle = topic?.trim() || notebook;
+    const markdown = normalizeMindMapMarkdown(out ?? '', fallbackTitle)
+        || fallbackMindMapMarkdown(notebook, topic, sources);
 
     return nbSaveArtifact(workDir, notebook, {
         type: 'mindmap',
@@ -303,7 +389,7 @@ ${joined}`;
         temperature: 0.5,
         workDir,
     });
-    const markdown = (out ?? '').replace(/^\s*```(?:markdown)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+    const markdown = stripGeneratedFence(out ?? '');
 
     const titleMap: Record<ReportType, string> = {
         faq: '常见问题解答',
@@ -337,7 +423,7 @@ export async function generateAudioScript(
     sourceIds?: string[],
     model?: string,
     stateDir = workDir,
-    options?: { primaryArticleId?: string },
+    options?: { primaryArticleId?: string; customPrompt?: string },
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
@@ -349,6 +435,7 @@ export async function generateAudioScript(
 - 覆盖来源中的关键要点；避免杜撰来源外的事实
 - 每段台词 1-3 句；整体节奏明快；可以有适度的类比与举例
 - 以主持人的开场白开始，以主持人的收束结尾
+${options?.customPrompt ? `- 用户补充要求：${options.customPrompt}` : ''}
 
 严格以 JSON 数组输出（不要任何说明文字、不要代码围栏）：
 
@@ -377,11 +464,12 @@ ${joined}`;
     const fallback = segments.length === 0 && out
         ? [{ speaker: 'A' as const, text: out.trim().slice(0, 2000) }]
         : segments;
+    const durationSeconds = estimateAudioDurationSeconds(fallback);
 
     return nbSaveArtifact(workDir, notebook, {
         type: 'audio',
         title: `音频概览：${notebook}`,
-        data: { script: fallback },
+        data: { script: fallback, segments: fallback, durationSeconds },
         sourceIds,
         primaryArticleId: options?.primaryArticleId,
     }, stateDir);

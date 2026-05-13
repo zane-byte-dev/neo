@@ -131,6 +131,19 @@ describe('generateMindMap', () => {
         expect(artifact.title).toContain('测试主题');
         expect(artifact.data.markdown).toContain('# 主题');
     });
+
+    it('normalizes JSON tree output into markdown', async () => {
+        mockGenerate(JSON.stringify({
+            label: '根主题',
+            children: [{ label: '分支一' }, { label: '分支二' }],
+        }));
+
+        nbImportSource(workDir, 'mm-json-nb', { title: 'Source', content: 'Content for mindmap.', type: 'text' });
+
+        const artifact = await generateMindMap(workDir, 'mm-json-nb', undefined);
+        expect(artifact.data.markdown).toContain('# 根主题');
+        expect(artifact.data.markdown).toContain('## 分支一');
+    });
 });
 
 describe('generateReport', () => {
@@ -180,8 +193,10 @@ describe('generateAudioScript', () => {
 
         const artifact = await generateAudioScript(workDir, 'audio-nb');
         expect(artifact.type).toBe('audio');
+        expect(artifact.data.script).toHaveLength(3);
         expect(artifact.data.segments).toHaveLength(3);
         expect(artifact.data.segments[0].speaker).toBe('A');
+        expect(artifact.data.durationSeconds).toBeGreaterThan(0);
     });
 
     it('falls back to raw text on malformed JSON', async () => {

@@ -1,17 +1,16 @@
 import React from 'react'
-import { ArrowLeft, Trash2, Check, Loader2, History, MoreHorizontal, Link, Copy, Maximize2, Type, Download, Layers, Languages, Sparkles, RefreshCw, EyeOff, MessageSquarePlus, MessageSquare, CircleDot } from 'lucide-react'
-import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete, notebookListAnnotations, notebookSaveAnnotation, notebookUpdateAnnotation, notebookDeleteAnnotation, notebookListArtifacts } from '../api'
+import { ArrowLeft, Trash2, Check, Loader2, History, MoreHorizontal, Link, Copy, Maximize2, Type, Download, Layers, Languages, Sparkles, RefreshCw, EyeOff, MessageSquarePlus, MessageSquare, CircleDot, Volume2 } from 'lucide-react'
+import { fetchMe, notebookRead, notebookUpdate, notebookCreate, notebookDelete, notebookListAnnotations, notebookSaveAnnotation, notebookUpdateAnnotation, notebookDeleteAnnotation, notebookGenerateArtifact } from '../api'
 import { cn } from '../lib/utils'
 import type { Artifact, NoteEntry, NotebookAnnotation, NotebookAnnotationAnchor } from '../types'
 import { t } from '../i18n'
-import { NovelEditor } from './NovelEditor'
+import { NovelEditor, type GeneratedResourceBlockData, type GeneratedResourceType, type NovelEditorHandle } from './NovelEditor'
 import { HistoryDrawer } from './notebook/HistoryDrawer'
 import { DocDiffModal } from './notebook/DocDiffModal'
 import { ResourcesPanel } from './notebook/ResourcesPanel'
-import { StudioActionModal } from './notebook/StudioActionModal'
 import { ArtifactViewer } from './notebook/studio/ArtifactViewer'
 import { EDIT_ACTIONS, INSIGHT_ACTIONS, type DocEditAction } from './notebook/docActions'
-import { ArticleResourceSection, ArticleResourceStatusStrip, filterArticleArtifacts, sourceIdFromArticleId, type ArticleResourceType } from './notebook/ArticleResources'
+import { getArtifactMarkdown, getMindMapMarkdown } from './notebook/artifact-utils'
 import { useAppStore } from '../stores/useAppStore'
 
 interface NoteEditorProps {
@@ -69,6 +68,13 @@ function formatRelativeTime(value: string | number | null | undefined): string {
     return `${Math.floor(diffMs / day)} 天前`
 }
 
+function sourceIdFromArticleId(articleId: string | null | undefined): string | null {
+    if (!articleId) return null
+    const last = articleId.split('/').pop()
+    if (!last) return null
+    return last.replace(/\.md$/, '')
+}
+
 export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'personal', onBack, onSaved, onDeleted, onDuplicated, autoSave = false }) => {
     const [title, setTitle] = React.useState(note?.title ?? '')
     const [author, setAuthor] = React.useState(note?.author ?? '')
@@ -92,10 +98,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const [duplicating, setDuplicating] = React.useState(false)
     // Resources panel (Studio overlay)
     const [resourcesOpen, setResourcesOpen] = React.useState(false)
-    const [artifactsLoading, setArtifactsLoading] = React.useState(false)
-    const [allArtifacts, setAllArtifacts] = React.useState<Artifact[]>([])
     const [viewingArticleArtifact, setViewingArticleArtifact] = React.useState<Artifact | null>(null)
-    const [articleResourceAction, setArticleResourceAction] = React.useState<ArticleResourceType | null>(null)
+    const [audioGenerating, setAudioGenerating] = React.useState(false)
     // Diff modal (AI edit actions from more menu)
     const [diffAction, setDiffAction] = React.useState<{ action: DocEditAction; content: string } | null>(null)
     const [annotations, setAnnotations] = React.useState<NotebookAnnotation[]>([])
@@ -113,10 +117,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         note ? localStorage.getItem(`neo:editor:summaryCollapsed:${note.id}`) === '1' : false
     )
     const titleRef = React.useRef<HTMLTextAreaElement>(null)
+    const editorRef = React.useRef<NovelEditorHandle>(null)
     const menuRef = React.useRef<HTMLDivElement>(null)
     const autoSaveTimerRef = React.useRef<number | null>(null)
     const isDirtyRef = React.useRef(false)
-    const wasResourcesOpenRef = React.useRef(false)
     // Keep latest field values accessible in auto-save callback without stale closures
     const fieldsRef = React.useRef({ title, author, date, source, summary, tags, content })
     React.useEffect(() => {
@@ -193,34 +197,6 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             .catch(() => { if (!cancelled) setAnnotations([]) })
         return () => { cancelled = true }
     }, [note, notebook])
-
-    const loadArtifacts = React.useCallback(async () => {
-        if (!note) {
-            setAllArtifacts([])
-            setArtifactsLoading(false)
-            return
-        }
-        setArtifactsLoading(true)
-        try {
-            const artifacts = await notebookListArtifacts(note.notebook ?? notebook)
-            setAllArtifacts(artifacts)
-        } catch {
-            setAllArtifacts([])
-        } finally {
-            setArtifactsLoading(false)
-        }
-    }, [note, notebook])
-
-    React.useEffect(() => {
-        void loadArtifacts()
-    }, [loadArtifacts])
-
-    React.useEffect(() => {
-        if (wasResourcesOpenRef.current && !resourcesOpen) {
-            void loadArtifacts()
-        }
-        wasResourcesOpenRef.current = resourcesOpen
-    }, [resourcesOpen, loadArtifacts])
 
     // Reset dirty flag on note change (remount via key=)
     React.useEffect(() => {
@@ -407,6 +383,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         setAnnotationsExpanded(true)
     }, [])
 
+    const handleCancelAnnotationDraft = React.useCallback(() => {
+        if (annotationDraft) editorRef.current?.removeAnnotationMark(annotationDraft)
+        setAnnotationDraft(null)
+        setAnnotationBody('')
+    }, [annotationDraft])
+
     const handleSaveAnnotation = React.useCallback(async () => {
         if (!note || !annotationDraft || !annotationBody.trim()) return
         setAnnotationSaving(true)
@@ -442,6 +424,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         if (!note) return
         try {
             await notebookDeleteAnnotation(note.notebook ?? notebook, note.id, annotation.id)
+            editorRef.current?.removeAnnotationMark(annotation)
             setAnnotations((items) => items.filter((item) => item.id !== annotation.id))
         } catch { /* ignore */ }
     }, [note, notebook])
@@ -455,26 +438,47 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     }, [])
 
     const articleSourceId = React.useMemo(() => sourceIdFromArticleId(note?.id), [note?.id])
-    const articleArtifacts = React.useMemo(() => filterArticleArtifacts(allArtifacts, note?.id), [allArtifacts, note?.id])
-    const libraryArtifactCount = Math.max(0, allArtifacts.length - articleArtifacts.length)
+    const articleNotebook = note?.notebook ?? notebook
 
-    const handleOpenArticleArtifact = React.useCallback((artifact: Artifact) => {
-        setResourcesOpen(false)
-        setViewingArticleArtifact(artifact)
-    }, [])
+    const handleGenerateArticleAudio = React.useCallback(async () => {
+        if (!note || !articleSourceId || audioGenerating) return
+        setAudioGenerating(true)
+        try {
+            const artifact = await notebookGenerateArtifact({
+                notebook: articleNotebook,
+                type: 'audio',
+                sourceIds: [articleSourceId],
+                primaryArticleId: note.id,
+                customPrompt: '请生成忠实于当前文章内容的单人朗读脚本，适合直接转语音播放；不做双人访谈，不扩展来源外事实。',
+            })
+            setResourcesOpen(false)
+            setViewingArticleArtifact(artifact)
+        } catch {
+            // keep the toolbar quiet; the user can retry from the same icon
+        } finally {
+            setAudioGenerating(false)
+        }
+    }, [articleNotebook, articleSourceId, audioGenerating, note])
 
-    const handleGenerateArticleArtifact = React.useCallback((type: ArticleResourceType) => {
-        if (!articleSourceId) return
-        setResourcesOpen(false)
-        setViewingArticleArtifact(null)
-        setArticleResourceAction(type)
-    }, [articleSourceId])
-
-    const handleArticleArtifactGenerated = React.useCallback((artifact: Artifact) => {
-        setAllArtifacts((items) => [artifact, ...items.filter((item) => item.id !== artifact.id)])
-        setViewingArticleArtifact(artifact)
-        setArticleResourceAction(null)
-    }, [])
+    const handleGenerateInlineResource = React.useCallback(async (type: GeneratedResourceType): Promise<GeneratedResourceBlockData | null> => {
+        if (!note || !articleSourceId) return null
+        const articleTitle = fieldsRef.current.title.trim() || note.title || ''
+        const artifactLabel = type === 'report' ? '报告' : '思维导图'
+        const artifact = await notebookGenerateArtifact({
+            notebook: articleNotebook,
+            type,
+            sourceIds: [articleSourceId],
+            primaryArticleId: note.id,
+            topic: articleTitle || artifactLabel,
+            title: articleTitle ? `${articleTitle} · ${artifactLabel}` : undefined,
+            customPrompt: type === 'report' ? '请生成可直接插入文章正文的结构化报告，保留清晰小标题和要点。' : undefined,
+        })
+        return {
+            type,
+            title: artifact.title,
+            body: type === 'mindmap' ? getMindMapMarkdown(artifact) : getArtifactMarkdown(artifact),
+        }
+    }, [articleNotebook, articleSourceId, note])
 
     const creatorName = author.trim() || currentDisplayName || '未知'
     const editorName = currentDisplayName || creatorName
@@ -530,6 +534,21 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         >
                             {saving ? <Loader2 size={11} className="animate-spin" /> : null}
                             {saving ? t('saving') : t('save')}
+                        </button>
+                    )}
+                    {note && articleSourceId && (
+                        <button
+                            onClick={() => void handleGenerateArticleAudio()}
+                            disabled={audioGenerating}
+                            className={cn(
+                                'w-7 h-7 flex items-center justify-center rounded-md transition-colors disabled:cursor-wait',
+                                audioGenerating
+                                    ? 'bg-primary-mint/10 text-primary-mint'
+                                    : 'text-gray-400 hover:text-primary-mint hover:bg-primary-mint/10'
+                            )}
+                            title="生成语音朗读"
+                        >
+                            {audioGenerating ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
                         </button>
                     )}
                     {/* Resources (Studio overlay) icon — only for saved notes */}
@@ -758,19 +777,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                             <p className="text-[13px] text-text-secondary leading-relaxed">{summaryText}</p>
                         </div>
                     )}
-
-                    {note && (
-                        <ArticleResourceStatusStrip
-                            summaryState={summaryState}
-                            articleArtifacts={articleArtifacts}
-                            libraryArtifactCount={libraryArtifactCount}
-                            loading={artifactsLoading}
-                            onShowSummary={handleShowSummary}
-                            onGenerateSummary={() => void handleGenerateSummary()}
-                            onOpenArtifact={handleOpenArticleArtifact}
-                            onGenerateArtifact={handleGenerateArticleArtifact}
-                            onOpenLibrary={() => setResourcesOpen(true)}
-                        />
+                    {note && summaryState === 'done' && summaryCollapsed && (
+                        <button
+                            onClick={handleShowSummary}
+                            className="mb-4 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-text-quaternary hover:bg-fill-secondary/60 hover:text-primary-mint transition-colors"
+                        >
+                            <Sparkles size={12} />
+                            摘要
+                        </button>
                     )}
 
                     {note && (
@@ -783,7 +797,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                             onToggleExpanded={() => setAnnotationsExpanded((v) => !v)}
                             onBodyChange={setAnnotationBody}
                             onSave={() => void handleSaveAnnotation()}
-                            onCancelDraft={() => { setAnnotationDraft(null); setAnnotationBody('') }}
+                            onCancelDraft={handleCancelAnnotationDraft}
                             onJump={handleJumpToAnnotation}
                             onToggleStatus={(annotation) => void handleToggleAnnotationStatus(annotation)}
                             onDelete={(annotation) => void handleDeleteAnnotation(annotation)}
@@ -800,6 +814,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                     ) : (
                         <>
                             <NovelEditor
+                                ref={editorRef}
                                 key={note?.id ?? 'new'}
                                 initialContent={content}
                                 placeholder="开始写作… 输入 / 插入块"
@@ -808,19 +823,14 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                                     scheduleAutoSave()
                                 }}
                                 onAnnotateSelection={note ? handleAnnotateSelection : undefined}
+                                annotations={annotations}
+                                onAnnotationJump={handleJumpToAnnotation}
+                                onAnnotationToggleStatus={(annotation) => void handleToggleAnnotationStatus(annotation)}
+                                onAnnotationDelete={(annotation) => void handleDeleteAnnotation(annotation)}
+                                onGenerateInlineResource={note && articleSourceId ? handleGenerateInlineResource : undefined}
                                 focusRange={focusRange}
                                 className="pb-8"
                             />
-                            {note && (
-                                <ArticleResourceSection
-                                    articleArtifacts={articleArtifacts}
-                                    libraryArtifactCount={libraryArtifactCount}
-                                    loading={artifactsLoading}
-                                    onOpenArtifact={handleOpenArticleArtifact}
-                                    onGenerateArtifact={handleGenerateArticleArtifact}
-                                    onOpenLibrary={() => setResourcesOpen(true)}
-                                />
-                            )}
                         </>
                     )}
                 </div>
@@ -878,25 +888,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         <ArtifactViewer
                             artifact={viewingArticleArtifact}
                             onBack={() => setViewingArticleArtifact(null)}
-                            onRegenerate={(type) => {
-                                setViewingArticleArtifact(null)
-                                setArticleResourceAction(type as ArticleResourceType)
-                            }}
                         />
                     </div>
                 </>
-            )}
-            {articleResourceAction && note && articleSourceId && (
-                <StudioActionModal
-                    notebook={note.notebook ?? notebook}
-                    type={articleResourceAction}
-                    open={true}
-                    onClose={() => setArticleResourceAction(null)}
-                    onGenerated={handleArticleArtifactGenerated}
-                    sourceIdsOverride={[articleSourceId]}
-                    primaryArticleIdOverride={note.id}
-                    sourceScopeLabel="本篇文章"
-                />
             )}
         </div>
     )
@@ -931,91 +925,79 @@ const ArticleAnnotationsBlock: React.FC<{
 }) => {
     const openCount = annotations.filter((annotation) => annotation.status === 'open').length
     if (!draft && annotations.length === 0) {
-        return (
-            <div className="mb-5 flex items-center gap-2 rounded-xl border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/3 px-3 py-2 text-[12px] text-text-quaternary">
-                <MessageSquarePlus size={13} className="text-primary-mint shrink-0" />
-                选中正文后点击气泡菜单里的“批注”，即可把想法贴回原文。
-            </div>
-        )
+        return null
     }
 
     return (
-        <div className="mb-5 rounded-xl border border-primary-mint/20 bg-primary-mint/6 overflow-hidden">
-            <button
-                onClick={onToggleExpanded}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-primary-mint/6 transition-colors"
-            >
-                <MessageSquare size={13} className="text-primary-mint shrink-0" />
-                <span className="text-[12px] font-semibold text-text flex-1">文章批注</span>
-                <span className="text-[11px] text-text-tertiary" aria-label={`${annotations.length} 条批注，${openCount} 条未解决`}>
-                    {annotations.length} 条 · {openCount} 未解决
-                </span>
-            </button>
-            {(expanded || draft) && (
-                <div className="border-t border-primary-mint/15 px-3 py-3 space-y-3">
-                    {draft && (
-                        <div className="rounded-lg bg-white/70 dark:bg-black/10 border border-primary-mint/20 p-3">
-                            <div className="text-[11px] font-semibold text-primary-mint mb-1">新批注</div>
-                            <blockquote className="text-[12px] text-text-secondary border-l-2 border-primary-mint/50 pl-2 line-clamp-2">
-                                {draft.quote}
-                            </blockquote>
-                            <textarea
-                                value={body}
-                                onChange={(e) => onBodyChange(e.target.value)}
-                                placeholder="写下你的想法、问题或判断…"
-                                rows={3}
-                                className="mt-2 w-full resize-none rounded-lg border border-border bg-bg-container px-2.5 py-2 text-[13px] text-text outline-none focus:border-primary-mint"
-                                autoFocus
-                            />
-                            <div className="mt-2 flex justify-end gap-2">
-                                <button
-                                    onClick={onCancelDraft}
-                                    className="px-2.5 py-1.5 text-[12px] text-text-tertiary hover:bg-fill rounded-md transition-colors"
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    onClick={onSave}
-                                    disabled={saving || !body.trim()}
-                                    className="px-3 py-1.5 text-[12px] rounded-md bg-primary-mint text-white font-medium disabled:opacity-50 transition-opacity"
-                                >
-                                    {saving ? '保存中…' : '保存批注'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    {annotations.map((annotation) => (
-                        <div
-                            key={annotation.id}
-                            className={cn(
-                                'rounded-lg border p-3 bg-bg-container',
-                                annotation.status === 'resolved'
-                                    ? 'border-border opacity-70'
-                                    : 'border-primary-mint/20'
-                            )}
+        <div className="mb-4 space-y-2">
+            {draft && (
+                <div className="rounded-lg border border-border bg-bg-container shadow-sm px-3 py-3">
+                    <div className="flex items-center gap-2 text-[12px] font-semibold text-text">
+                        <MessageSquarePlus size={13} className="text-primary-mint shrink-0" />
+                        新批注
+                    </div>
+                    <blockquote className="mt-2 text-[12px] text-text-tertiary border-l-2 border-primary-mint/50 pl-2 line-clamp-2">
+                        {draft.quote}
+                    </blockquote>
+                    <textarea
+                        value={body}
+                        onChange={(e) => onBodyChange(e.target.value)}
+                        placeholder="写下你的想法、问题或判断…"
+                        rows={3}
+                        className="mt-2 w-full resize-none rounded-md border border-border bg-bg-container px-2.5 py-2 text-[13px] text-text outline-none focus:border-primary-mint"
+                        autoFocus
+                    />
+                    <div className="mt-2 flex justify-end gap-2">
+                        <button
+                            onClick={onCancelDraft}
+                            className="px-2.5 py-1.5 text-[12px] text-text-tertiary hover:bg-fill rounded-md transition-colors"
                         >
+                            取消
+                        </button>
+                        <button
+                            onClick={onSave}
+                            disabled={saving || !body.trim()}
+                            className="px-3 py-1.5 text-[12px] rounded-md bg-primary-mint text-white font-medium disabled:opacity-50 transition-opacity"
+                        >
+                            {saving ? '保存中…' : '保存批注'}
+                        </button>
+                    </div>
+                </div>
+            )}
+            {annotations.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 text-[12px] text-text-tertiary">
+                    <button
+                        onClick={onToggleExpanded}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-bg-container px-2.5 hover:border-primary-mint/35 hover:text-primary-mint transition-colors"
+                    >
+                        <MessageSquare size={12} className="text-primary-mint" />
+                        批注 {annotations.length}
+                        {openCount > 0 && <span className="text-[11px] text-text-quaternary">{openCount} 未解决</span>}
+                    </button>
+                    {expanded && annotations.map((annotation) => (
+                        <div key={annotation.id} className="relative group">
                             <button
                                 onClick={() => onJump(annotation)}
-                                className="w-full text-left text-[12px] text-text-secondary border-l-2 border-primary-mint/50 pl-2 line-clamp-2 hover:text-primary-mint transition-colors"
+                                className={cn(
+                                    'h-7 max-w-[180px] truncate rounded-md border bg-bg-container px-2.5 text-[12px] underline decoration-primary-mint/70 underline-offset-4 hover:text-primary-mint transition-colors',
+                                    annotation.status === 'resolved' ? 'border-border text-text-quaternary decoration-text-quaternary/50' : 'border-primary-mint/20 text-text-secondary'
+                                )}
                             >
                                 {annotation.quote}
                             </button>
-                            <p className="mt-2 text-[13px] text-text leading-relaxed whitespace-pre-wrap">{annotation.body}</p>
-                            <div className="mt-2 flex items-center gap-2 text-[11px] text-text-quaternary">
-                                <CircleDot size={10} className={annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
-                                <span className="flex-1">{annotation.status === 'open' ? '未解决' : '已解决'}</span>
-                                <button
-                                    onClick={() => onToggleStatus(annotation)}
-                                    className="hover:text-primary-mint transition-colors"
-                                >
-                                    {annotation.status === 'open' ? '标记已解决' : '重新打开'}
-                                </button>
-                                <button
-                                    onClick={() => onDelete(annotation)}
-                                    className="hover:text-red-500 transition-colors"
-                                >
-                                    删除
-                                </button>
+                            <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-72 -translate-x-1/2 rounded-lg border border-border bg-bg-container px-3 py-2.5 text-left shadow-float opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 transition-opacity">
+                                <div className="text-[11px] text-text-tertiary line-clamp-2 border-l-2 border-primary-mint/50 pl-2">{annotation.quote}</div>
+                                <p className="mt-2 text-[13px] leading-relaxed text-text whitespace-pre-wrap">{annotation.body}</p>
+                                <div className="mt-2 flex items-center gap-2 text-[11px] text-text-quaternary">
+                                    <CircleDot size={10} className={annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
+                                    <span className="flex-1">{annotation.status === 'open' ? '未解决' : '已解决'}</span>
+                                    <button onClick={() => onToggleStatus(annotation)} className="hover:text-primary-mint transition-colors">
+                                        {annotation.status === 'open' ? '解决' : '打开'}
+                                    </button>
+                                    <button onClick={() => onDelete(annotation)} className="hover:text-red-500 transition-colors">
+                                        删除
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}

@@ -13,10 +13,11 @@ interface Props { markdown: string }
 export const MindMap: React.FC<Props> = ({ markdown }) => {
     const svgRef = React.useRef<SVGSVGElement>(null)
     const mmRef = React.useRef<Markmap | null>(null)
+    const hasContent = markdown.trim().length > 0
 
     React.useEffect(() => {
         if (!svgRef.current) return
-        const { root } = transformer.transform(markdown || '# (empty)')
+        const { root } = transformer.transform(hasContent ? markdown : '# 暂无导图内容')
         if (!mmRef.current) {
             mmRef.current = Markmap.create(svgRef.current, {
                 autoFit: true,
@@ -26,7 +27,7 @@ export const MindMap: React.FC<Props> = ({ markdown }) => {
             mmRef.current.setData(root)
             mmRef.current.fit()
         }
-    }, [markdown])
+    }, [hasContent, markdown])
 
     React.useEffect(() => () => {
         mmRef.current?.destroy()
@@ -60,7 +61,7 @@ export const MindMap: React.FC<Props> = ({ markdown }) => {
 
     const handleReset = () => {
         if (!mmRef.current) return
-        const { root } = transformer.transform(markdown || '# (empty)')
+        const { root } = transformer.transform(hasContent ? markdown : '# 暂无导图内容')
         mmRef.current.setData(root)
         mmRef.current.fit()
     }
@@ -68,6 +69,11 @@ export const MindMap: React.FC<Props> = ({ markdown }) => {
     return (
         <div className="w-full h-full relative bg-bg-container rounded-lg overflow-hidden group">
             <svg ref={svgRef} className="w-full h-full" />
+            {!hasContent && (
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-text-tertiary pointer-events-none">
+                    暂无导图内容
+                </div>
+            )}
             {/* Floating control bar */}
             <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-bg-container/90 border border-border rounded-xl px-2 py-1.5 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
                 <button onClick={handleZoomIn} className="p-1.5 hover:bg-fill-secondary rounded-lg transition-colors" title="放大">

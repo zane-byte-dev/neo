@@ -6,6 +6,8 @@
  * (e.g. key={note?.id ?? 'new'}) so React remounts when switching notes.
  */
 import React from 'react'
+import { Node as TiptapNode } from '@tiptap/core'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import {
     EditorRoot,
     EditorContent,
@@ -36,11 +38,140 @@ import {
     Heading1, Heading2, Heading3,
     List, ListOrdered, Quote, Minus, Code2, Type,
     Sparkles, Wand2, ArrowUpRight, ArrowDownToLine, Scissors, CheckSquare,
-    Check, X as XIcon, MessageSquarePlus,
+    Check, X as XIcon, MessageSquarePlus, Trash2, CircleDot, Brain, FileText,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+import type { NotebookAnnotation } from '../types'
 
 const ANNOTATION_CONTEXT_LENGTH = 200
+const ANNOTATION_HIGHLIGHT_COLOR = 'neo-annotation'
+
+export type GeneratedResourceType = 'mindmap' | 'report'
+
+export interface GeneratedResourceBlockData {
+    type: GeneratedResourceType
+    title: string
+    body: string
+}
+
+type GeneratedResourceStatus = 'loading' | 'ready' | 'error'
+
+interface GeneratedResourceBlockAttrs extends GeneratedResourceBlockData {
+    id: string
+    status: GeneratedResourceStatus
+}
+
+const RESOURCE_LABEL: Record<GeneratedResourceType, string> = {
+    mindmap: '思维导图',
+    report: '报告',
+}
+
+const GeneratedResourceBlock = TiptapNode.create({
+    name: 'generatedResourceBlock',
+    group: 'block',
+    atom: true,
+    selectable: true,
+
+    addAttributes() {
+        return {
+            id: { default: '' },
+            type: { default: 'report' },
+            title: { default: '生成模块' },
+            body: { default: '' },
+            status: { default: 'ready' },
+        }
+    },
+
+    parseHTML() {
+        return [{
+            tag: 'details[data-neo-generated-block]',
+            getAttrs: (element: HTMLElement | string) => {
+                if (!(element instanceof HTMLElement)) return false
+                const type = element.getAttribute('data-type') === 'mindmap' ? 'mindmap' : 'report'
+                const title = element.querySelector('summary')?.textContent?.trim() || RESOURCE_LABEL[type]
+                const body = element.querySelector('[data-neo-generated-body]')?.textContent ?? ''
+                const status = element.getAttribute('data-status') === 'error' ? 'error' : 'ready'
+                return {
+                    id: element.getAttribute('data-id') || `resource-${Date.now()}`,
+                    type,
+                    title: title.replace(/^思维导图：|^报告：/, ''),
+                    body,
+                    status,
+                }
+            },
+        }]
+    },
+
+    renderHTML({ node }: { node: ProseMirrorNode; HTMLAttributes: Record<string, any> }) {
+        const attrs = normalizeGeneratedResourceAttrs(node.attrs as Partial<GeneratedResourceBlockAttrs>)
+        return [
+            'details',
+            {
+                'data-neo-generated-block': '',
+                'data-id': attrs.id,
+                'data-type': attrs.type,
+                'data-status': attrs.status,
+                class: 'neo-generated-block',
+                open: '',
+            },
+            ['summary', { class: 'neo-generated-block-summary' }, generatedResourceSummary(attrs)],
+            ['pre', { 'data-neo-generated-body': '', class: 'neo-generated-block-body' }, attrs.body || generatedResourceFallback(attrs.status)],
+        ]
+    },
+
+    addStorage() {
+        return {
+            markdown: {
+                serialize(state: { write: (text: string) => void; closeBlock: (node: unknown) => void }, node: { attrs: GeneratedResourceBlockAttrs }) {
+                    state.write(serializeGeneratedResourceBlock(normalizeGeneratedResourceAttrs(node.attrs)))
+                    state.closeBlock(node)
+                },
+                parse: {},
+            },
+        }
+    },
+})
+
+function normalizeGeneratedResourceAttrs(attrs: Partial<GeneratedResourceBlockAttrs>): GeneratedResourceBlockAttrs {
+    const type: GeneratedResourceType = attrs.type === 'mindmap' ? 'mindmap' : 'report'
+    const status: GeneratedResourceStatus = attrs.status === 'loading' || attrs.status === 'error' ? attrs.status : 'ready'
+    return {
+        id: attrs.id || `resource-${Date.now()}`,
+        type,
+        title: attrs.title || RESOURCE_LABEL[type],
+        body: attrs.body || '',
+        status,
+    }
+}
+
+function generatedResourceSummary(attrs: GeneratedResourceBlockAttrs): string {
+    if (attrs.status === 'loading') return `正在生成${RESOURCE_LABEL[attrs.type]}...`
+    if (attrs.status === 'error') return `${RESOURCE_LABEL[attrs.type]}生成失败`
+    return `${RESOURCE_LABEL[attrs.type]}：${attrs.title}`
+}
+
+function generatedResourceFallback(status: GeneratedResourceStatus): string {
+    return status === 'loading' ? '请稍候...' : '暂无内容'
+}
+
+function serializeGeneratedResourceBlock(attrs: GeneratedResourceBlockAttrs): string {
+    const status = attrs.status === 'loading' ? 'ready' : attrs.status
+    return [
+        `<details data-neo-generated-block data-id="${escapeHtml(attrs.id)}" data-type="${attrs.type}" data-status="${status}" open>`,
+        `<summary>${escapeHtml(generatedResourceSummary({ ...attrs, status }))}</summary>`,
+        '',
+        `<pre data-neo-generated-body>${escapeHtml(attrs.body || generatedResourceFallback(status))}</pre>`,
+        '</details>',
+    ].join('\n')
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+}
 
 // ─── AI completion helper ─────────────────────────────────────────────────────
 
@@ -76,7 +207,7 @@ const AIStateContext = React.createContext<{
 
 // ─── Slash-command suggestion items ──────────────────────────────────────────
 
-const SUGGESTION_ITEMS: SuggestionItem[] = createSuggestionItems([
+const BASE_SUGGESTION_ITEMS: SuggestionItem[] = createSuggestionItems([
     {
         title: '正文',
         description: '普通段落文本',
@@ -151,6 +282,84 @@ const SUGGESTION_ITEMS: SuggestionItem[] = createSuggestionItems([
     },
 ])
 
+type GenerateInlineResource = (type: GeneratedResourceType) => Promise<GeneratedResourceBlockData | null>
+
+function createGeneratedResourceItems(onGenerateInlineResource?: GenerateInlineResource): SuggestionItem[] {
+    if (!onGenerateInlineResource) return []
+    return createSuggestionItems([
+        {
+            title: '生成思维导图',
+            description: '基于当前文章插入可折叠导图模块',
+            searchTerms: ['mindmap', 'map', '导图', '思维导图'],
+            icon: <Brain size={16} />,
+            command: ({ editor, range }) => insertGeneratedResourceBlock(editor, range, 'mindmap', onGenerateInlineResource),
+        },
+        {
+            title: '生成报告',
+            description: '基于当前文章插入可折叠报告模块',
+            searchTerms: ['report', 'briefing', '报告', '总结'],
+            icon: <FileText size={16} />,
+            command: ({ editor, range }) => insertGeneratedResourceBlock(editor, range, 'report', onGenerateInlineResource),
+        },
+    ])
+}
+
+function insertGeneratedResourceBlock(
+    editor: EditorInstance,
+    range: { from: number; to: number },
+    type: GeneratedResourceType,
+    onGenerateInlineResource: GenerateInlineResource,
+): void {
+    const id = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const loadingAttrs: GeneratedResourceBlockAttrs = {
+        id,
+        type,
+        title: RESOURCE_LABEL[type],
+        body: '请稍候...',
+        status: 'loading',
+    }
+    editor.chain().focus().deleteRange(range).insertContent({ type: 'generatedResourceBlock', attrs: loadingAttrs }).run()
+
+    void onGenerateInlineResource(type)
+        .then((result) => {
+            replaceGeneratedResourceBlock(editor, id, result
+                ? { id, type: result.type, title: result.title, body: result.body, status: 'ready' }
+                : { id, type, title: RESOURCE_LABEL[type], body: '没有生成可插入内容。', status: 'error' })
+        })
+        .catch(() => {
+            replaceGeneratedResourceBlock(editor, id, {
+                id,
+                type,
+                title: RESOURCE_LABEL[type],
+                body: '生成失败，请稍后重试。',
+                status: 'error',
+            })
+        })
+}
+
+function replaceGeneratedResourceBlock(editor: EditorInstance, id: string, attrs: GeneratedResourceBlockAttrs): void {
+    const nodeType = editor.schema.nodes.generatedResourceBlock
+    if (!nodeType) return
+
+    const found = findGeneratedResourceBlock(editor, id)
+    if (!found) return
+
+    const transaction = editor.state.tr.replaceWith(found.pos, found.pos + found.size, nodeType.create(attrs))
+    editor.view.dispatch(transaction)
+}
+
+function findGeneratedResourceBlock(editor: EditorInstance, id: string): { pos: number; size: number } | null {
+    let result: { pos: number; size: number } | null = null
+    editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'generatedResourceBlock' && node.attrs.id === id) {
+            result = { pos, size: node.nodeSize }
+            return false
+        }
+        return true
+    })
+    return result
+}
+
 // ─── Bubble menu button ───────────────────────────────────────────────────────
 
 interface BubbleButtonProps {
@@ -187,6 +396,18 @@ interface SelectionAnnotation {
     }
 }
 
+type AnnotationSelectionLike = {
+    quote?: string
+    anchor?: {
+        startOffset?: number
+        endOffset?: number
+    }
+}
+
+export interface NovelEditorHandle {
+    removeAnnotationMark: (selection: AnnotationSelectionLike) => void
+}
+
 interface AnnotationBubbleButtonProps {
     onAnnotateSelection?: (selection: SelectionAnnotation) => void
 }
@@ -199,7 +420,7 @@ const AnnotationBubbleButton: React.FC<AnnotationBubbleButtonProps> = ({ onAnnot
         if (!quote) return
         const beforeText = ed.state.doc.textBetween(Math.max(0, from - ANNOTATION_CONTEXT_LENGTH), from, ' ').trim()
         const afterText = ed.state.doc.textBetween(to, Math.min(ed.state.doc.content.size, to + ANNOTATION_CONTEXT_LENGTH), ' ').trim()
-        ed.chain().focus().toggleHighlight().run()
+        ed.chain().focus().setHighlight({ color: ANNOTATION_HIGHLIGHT_COLOR }).run()
         onAnnotateSelection?.({
             quote,
             anchor: { startOffset: from, endOffset: to, beforeText, afterText },
@@ -338,20 +559,74 @@ interface NovelEditorProps {
     /** Called on every change with the latest Markdown string */
     onChange?: (markdown: string) => void
     onAnnotateSelection?: (selection: SelectionAnnotation) => void
+    annotations?: NotebookAnnotation[]
+    onAnnotationJump?: (annotation: NotebookAnnotation) => void
+    onAnnotationToggleStatus?: (annotation: NotebookAnnotation) => void
+    onAnnotationDelete?: (annotation: NotebookAnnotation) => void
+    onGenerateInlineResource?: GenerateInlineResource
     focusRange?: { startOffset: number; endOffset: number; requestId: number } | null
     className?: string
 }
 
-export const NovelEditor: React.FC<NovelEditorProps> = ({
+export const NovelEditor = React.forwardRef<NovelEditorHandle, NovelEditorProps>(function NovelEditor({
     initialContent,
     placeholder = '开始写作…',
     onChange,
     onAnnotateSelection,
+    annotations = [],
+    onAnnotationJump,
+    onAnnotationToggleStatus,
+    onAnnotationDelete,
+    onGenerateInlineResource,
     focusRange,
     className,
-}) => {
+}, ref) {
     const [pending, setPending] = React.useState<AIPendingState | null>(null)
+    const [annotationPopup, setAnnotationPopup] = React.useState<{ annotation: NotebookAnnotation; left: number; top: number } | null>(null)
     const editorRef = React.useRef<EditorInstance | null>(null)
+    const annotationPopupTimerRef = React.useRef<number | null>(null)
+
+    const clearAnnotationPopupTimer = React.useCallback(() => {
+        if (annotationPopupTimerRef.current) {
+            window.clearTimeout(annotationPopupTimerRef.current)
+            annotationPopupTimerRef.current = null
+        }
+    }, [])
+
+    const scheduleAnnotationPopupHide = React.useCallback(() => {
+        clearAnnotationPopupTimer()
+        annotationPopupTimerRef.current = window.setTimeout(() => setAnnotationPopup(null), 140)
+    }, [clearAnnotationPopupTimer])
+
+    const removeAnnotationMark = React.useCallback((selection: AnnotationSelectionLike) => {
+        const ed = editorRef.current
+        if (!ed) return
+
+        let from = typeof selection.anchor?.startOffset === 'number' ? selection.anchor.startOffset : null
+        let to = typeof selection.anchor?.endOffset === 'number' ? selection.anchor.endOffset : null
+        const docMax = ed.state.doc.content.size
+
+        if (from !== null && to !== null && from < to) {
+            from = Math.max(1, Math.min(from, docMax))
+            to = Math.max(from, Math.min(to, docMax))
+            ed.chain().focus().setTextSelection({ from, to }).unsetHighlight().run()
+            return
+        }
+
+        const quote = selection.quote?.trim()
+        if (!quote) return
+        let found: { from: number; to: number } | null = null
+        ed.state.doc.descendants((node, pos) => {
+            if (found || !node.isText) return false
+            const text = node.text ?? ''
+            const index = text.indexOf(quote)
+            if (index >= 0) found = { from: pos + index, to: pos + index + quote.length }
+            return !found
+        })
+        if (found) ed.chain().focus().setTextSelection(found).unsetHighlight().run()
+    }, [])
+
+    React.useImperativeHandle(ref, () => ({ removeAnnotationMark }), [removeAnnotationMark])
 
     const handleAccept = React.useCallback(() => {
         if (editorRef.current) removeAIHighlight(editorRef.current)
@@ -372,14 +647,20 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
 
     // Build extensions fresh when placeholder changes (remount via parent key)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const suggestionItems = React.useMemo(
+        () => [...BASE_SUGGESTION_ITEMS, ...createGeneratedResourceItems(onGenerateInlineResource)],
+        [onGenerateInlineResource],
+    )
+
     const extensions = React.useMemo((): any[] => [
         StarterKit.configure({
             heading: { levels: [1, 2, 3] },
         }),
-        AIHighlight,
-        HighlightExtension,
+        GeneratedResourceBlock,
+        AIHighlight.configure({ HTMLAttributes: { class: 'ai-highlight' } }),
+        HighlightExtension.configure({ multicolor: true }),
         Markdown.configure({
-            html: false,
+            html: true,
             transformPastedText: true,
             transformCopiedText: true,
         }),
@@ -388,18 +669,18 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
             suggestion: {
                 items: ({ query }: { query: string }) =>
                     query
-                        ? SUGGESTION_ITEMS.filter(
+                        ? suggestionItems.filter(
                               (item) =>
                                   item.title.toLowerCase().includes(query.toLowerCase()) ||
                                   item.description?.toLowerCase().includes(query.toLowerCase()) ||
                                   item.searchTerms?.some((t) => t.includes(query.toLowerCase()))
                           )
-                        : SUGGESTION_ITEMS,
+                        : suggestionItems,
                 render: renderItems,
             },
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    ], [placeholder])
+    ], [placeholder, suggestionItems])
 
     React.useEffect(() => {
         const ed = editorRef.current
@@ -412,6 +693,54 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
         const el = dom instanceof Element ? dom : dom.parentElement
         el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     }, [focusRange])
+
+    const findAnnotationForText = React.useCallback((text: string): NotebookAnnotation | null => {
+        const normalizedText = normalizeAnnotationText(text)
+        if (!normalizedText) return null
+        return [...annotations]
+            .sort((a, b) => b.quote.length - a.quote.length)
+            .find((annotation) => {
+                const quote = normalizeAnnotationText(annotation.quote)
+                return !!quote && (normalizedText.includes(quote) || quote.includes(normalizedText))
+            }) ?? null
+    }, [annotations])
+
+    React.useEffect(() => {
+        const root = editorRef.current?.view.dom
+        if (!root || annotations.length === 0) return
+
+        const handleMouseOver = (event: MouseEvent) => {
+            const target = event.target instanceof Element
+                ? event.target.closest(`mark[data-color="${ANNOTATION_HIGHLIGHT_COLOR}"]`) as HTMLElement | null
+                : null
+            if (!target || !root.contains(target)) return
+            const annotation = findAnnotationForText(target.textContent ?? '')
+            if (!annotation) return
+            const rect = target.getBoundingClientRect()
+            clearAnnotationPopupTimer()
+            setAnnotationPopup({
+                annotation,
+                left: Math.max(144, Math.min(window.innerWidth - 144, rect.left + rect.width / 2)),
+                top: Math.min(window.innerHeight - 150, rect.bottom + 8),
+            })
+        }
+
+        const handleMouseOut = (event: MouseEvent) => {
+            const target = event.target instanceof Element
+                ? event.target.closest(`mark[data-color="${ANNOTATION_HIGHLIGHT_COLOR}"]`)
+                : null
+            if (target && root.contains(target)) scheduleAnnotationPopupHide()
+        }
+
+        root.addEventListener('mouseover', handleMouseOver)
+        root.addEventListener('mouseout', handleMouseOut)
+        return () => {
+            root.removeEventListener('mouseover', handleMouseOver)
+            root.removeEventListener('mouseout', handleMouseOut)
+        }
+    }, [annotations.length, clearAnnotationPopupTimer, findAnnotationForText, scheduleAnnotationPopupHide])
+
+    React.useEffect(() => () => clearAnnotationPopupTimer(), [clearAnnotationPopupTimer])
 
     return (
         <AIStateContext.Provider value={{ pending, setPending }}>
@@ -445,7 +774,7 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
                                 无匹配命令
                             </EditorCommandEmpty>
                             <EditorCommandList>
-                                {SUGGESTION_ITEMS.map((item, i) => (
+                                {suggestionItems.map((item, i) => (
                                     <EditorCommandItem
                                         key={`${item.title}-${i}`}
                                         value={item.title}
@@ -500,7 +829,58 @@ export const NovelEditor: React.FC<NovelEditorProps> = ({
                         onReject={handleReject}
                     />
                 )}
+                {annotationPopup && (
+                    <div
+                        className="fixed z-[140] w-72 -translate-x-1/2 rounded-lg border border-border bg-bg-container shadow-float px-3 py-2.5 text-left animate-slide-up"
+                        style={{ left: annotationPopup.left, top: annotationPopup.top }}
+                        onMouseEnter={clearAnnotationPopupTimer}
+                        onMouseLeave={scheduleAnnotationPopupHide}
+                    >
+                        <div className="text-[11px] text-text-tertiary line-clamp-2 border-l-2 border-primary-mint/50 pl-2">
+                            {annotationPopup.annotation.quote}
+                        </div>
+                        <p className="mt-2 text-[13px] leading-relaxed text-text whitespace-pre-wrap">
+                            {annotationPopup.annotation.body}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2 text-[11px] text-text-quaternary">
+                            <CircleDot size={10} className={annotationPopup.annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
+                            <span className="flex-1">{annotationPopup.annotation.status === 'open' ? '未解决' : '已解决'}</span>
+                            {onAnnotationJump && (
+                                <button
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => { onAnnotationJump(annotationPopup.annotation); setAnnotationPopup(null) }}
+                                    className="hover:text-primary-mint transition-colors"
+                                >
+                                    定位
+                                </button>
+                            )}
+                            {onAnnotationToggleStatus && (
+                                <button
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => { onAnnotationToggleStatus(annotationPopup.annotation); setAnnotationPopup(null) }}
+                                    className="hover:text-primary-mint transition-colors"
+                                >
+                                    {annotationPopup.annotation.status === 'open' ? '解决' : '打开'}
+                                </button>
+                            )}
+                            {onAnnotationDelete && (
+                                <button
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => { onAnnotationDelete(annotationPopup.annotation); setAnnotationPopup(null) }}
+                                    className="inline-flex items-center gap-1 hover:text-red-500 transition-colors"
+                                >
+                                    <Trash2 size={10} />
+                                    删除
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
         </AIStateContext.Provider>
     )
+})
+
+function normalizeAnnotationText(text: string): string {
+    return text.replace(/\s+/g, '').trim()
 }

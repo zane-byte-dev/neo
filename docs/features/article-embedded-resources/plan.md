@@ -2,20 +2,21 @@
 
 ## Scope
 
-本轮实现一个可发布的文章内资源 MVP，覆盖 Brief 的 Phase 1 与 Phase 2：
+本轮实现一个可发布的低干扰文章资源入口，覆盖 Brief 的低干扰入口与 Slash 插入模块：
 
-- 在文章标题与摘要附近增加“相关资源”状态带，展示摘要、音频、导图、报告的当前状态。
-- 在正文底部增加“本篇资源”预览区，提供音频、导图、报告的轻量卡片。
-- 点击文章内资源直接打开完整 `ArtifactViewer`，不需要先进入 `ResourcesPanel` 列表。
+- 移除文章标题附近的“相关资源”状态带。
+- 移除正文底部“本篇资源”预览区。
+- 音频改为文章工具栏 icon：基于当前文章生成朗读脚本，并直接打开 `ArtifactViewer`。
+- 思维导图和报告改为 `/` 命令：生成后插入正文中的可折叠模块。
 - 保留 `ResourcesPanel` 作为 notebook 级资源库与管理入口。
-- 为新生成的 artifact 记录来源关联，使文章页能区分“本篇资源”和“资源库资源”。
+- 为新生成的 artifact 记录来源关联，使资源库仍可追踪文章来源。
 
 ## Current System
 
 - `NoteEditor` 已经在正文区域内渲染摘要与文章批注，并通过顶部 `Layers` 按钮打开 `ResourcesPanel` overlay。
 - `ResourcesPanel` 仍按资源库方式组织“内容生成 / 已生成 / 笔记”，适合管理 notebook 级资源。
-- `StudioActionModal` 会把当前 `selectedSourceIds` 传给生成接口，但后端 `nbSaveArtifact` 尚未持久化 `sourceIds`。
-- `ArtifactViewer` 已能承载 mindmap、report、audio 的完整消费，但文章页缺少轻量预览与直接打开路径。
+- `ArtifactViewer` 已能承载 mindmap、report、audio 的完整消费；音频 icon 复用它做结果查看。
+- `NovelEditor` 已有 slash command 基础能力，适合承接导图 / 报告的正文插入入口。
 
 ## Data Model
 
@@ -24,11 +25,11 @@
 - `sourceIds?: string[]`：本次生成使用的 source id 列表。
 - `primaryArticleId?: string`：当 artifact 从文章内入口生成时，记录主关联文章的 `NoteEntry.id`。
 
-判定规则：
+使用规则：
 
-- `primaryArticleId === note.id` 的 artifact 是强绑定“本篇资源”。
-- 没有 `primaryArticleId` 但 `sourceIds` 仅包含当前文章 source id 的 artifact 也视为本篇资源，用于兼容单来源生成。
-- 旧 artifact 或 notebook 级 artifact 继续留在资源库层，不默认塞入文章底部预览。
+- 文章工具栏音频 icon 与 slash 命令都传入当前文章 source id 与 `primaryArticleId`。
+- `ResourcesPanel` 继续展示 notebook 全量 artifact；文章正文不再按 article affinity 渲染资源卡。
+- 旧 artifact 或 notebook 级 artifact 继续留在资源库层，不默认塞入文章正文。
 
 ## Backend Changes
 
@@ -38,6 +39,8 @@
 - `src/services/notebook-ai.ts`
   - `generateMindMap`、`generateReport`、`generateAudioScript` 写入生成时的 `sourceIds` 与可选 `primaryArticleId`。
   - 将 audio artifact 的脚本字段统一写为 `data.script`，viewer 仍兼容旧 `data.segments`。
+  - mindmap 生成结果保存前规整为 markmap 可读 Markdown，兼容 JSON 树、列表和代码围栏输出。
+  - audio artifact 写入 `durationSeconds`，并继续保存 `segments` 兼容旧消费路径。
 - `src/routes/notebook-studio.ts`
   - `POST /api/notebook/artifact` 接收可选 `primaryArticleId` 并传给生成层。
 
@@ -48,19 +51,21 @@
   - 资源库入口仍沿用当前 `selectedSourceIds` 行为。
 - `web/src/components/notebook/studio/ArtifactViewer.tsx`
   - audio viewer 同时支持 `data.script` 与旧 `data.segments`。
-- `web/src/components/notebook/ArticleResources.tsx`
-  - 新增文章内资源 UI 组件：状态带、底部预览区、预览提取 helper。
-  - 只展示本篇强相关 artifact；资源库数量以独立入口提示。
+  - mindmap / report viewer 兼容多种内容字段，音频 viewer 显示估算时长。
+- `web/src/components/NovelEditor.tsx`
+  - 新增可序列化的折叠生成模块节点，使用 `<details data-neo-generated-block>` 持久化。
+  - slash command 新增“生成思维导图”“生成报告”，先插入生成中模块，再用生成结果替换。
 - `web/src/components/NoteEditor.tsx`
-  - 加载 notebook artifacts，并按当前文章过滤。
-  - 在摘要附近渲染资源状态带。
-  - 在正文底部渲染本篇资源预览区。
-  - 支持从状态 chip / 预览卡直接打开 `ArtifactViewer` overlay。
-  - 支持从文章内入口生成音频、导图、报告，并写入 `primaryArticleId`。
+  - 保留摘要块，隐藏后以轻量“摘要”按钮恢复。
+  - 新增文章工具栏音频 icon，直接基于当前文章生成朗读音频。
+  - 向 `NovelEditor` 注入导图 / 报告生成回调，生成结果插入正文折叠模块。
+  - 不再渲染“相关资源”状态带和正文底部资源预览区。
+- `web/src/index.css`
+  - 为生成插入模块补充轻量折叠样式。
 
 ## Documentation Updates
 
-- `docs/user-guide/NOTEBOOK.md`：补充文章内资源层与资源库层的区别。
+- `docs/user-guide/NOTEBOOK.md`：补充音频 icon 与 slash 插入模块。
 - `docs/README.md`：功能文档索引加入 Article Embedded Resources。
 - `docs/product/ROADMAP.md`：Web UI 增强增加文章内资源消费状态。
 - `CHANGELOG.md`：Unreleased 增加本功能条目。
@@ -70,7 +75,7 @@
 
 - 后端单测：扩展 notebook artifact primitive，覆盖 `sourceIds` / `primaryArticleId` 持久化。
 - 后端路由单测：覆盖 artifact 生成请求可携带 `primaryArticleId` 的传递路径。
-- 前端构建：`npm --prefix web run build` 覆盖 TypeScript 与 Vite bundle。
+- 前端构建：`npm --prefix web run build` 覆盖 TypeScript 与 Vite bundle，包含自定义 Tiptap 节点与 slash 命令。
 - 后端构建：`npm run build` 覆盖服务端 TypeScript。
 - 文档链接：`npm run docs:check`。
 
@@ -80,4 +85,5 @@
 - 不迁移历史 artifact；旧资源默认保持资源库级。
 - 不把完整 `ArtifactViewer` 默认嵌进正文。
 - 不删除或弱化 `ResourcesPanel` 的管理能力。
+- 不恢复文章资源状态带或底部资源卡。
 - 不实现段落级资源入口。

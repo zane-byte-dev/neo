@@ -394,6 +394,31 @@ describe('POST /api/notebook/artifact', () => {
             .set('Cookie', cookie()).send({ notebook: 'nb', type: 'audio' });
         expect(res.status).toBe(200);
     });
+
+    it('passes audio custom prompt to artifact generation', async () => {
+        const notebookAi = await import('../../services/notebook-ai.js');
+        const { notebookGenerateArtifact } = await import('../notebook-studio.js');
+        const { app, router, mount } = createTestApp();
+        notebookGenerateArtifact(router); mount();
+        const res = await request(app.callback())
+            .post('/api/notebook/artifact')
+            .set('Cookie', cookie()).send({
+                notebook: 'nb',
+                type: 'audio',
+                sourceIds: ['s1'],
+                primaryArticleId: 'notebooks/nb/s1.md',
+                customPrompt: '更像摘要节目',
+            });
+        expect(res.status).toBe(200);
+        expect(notebookAi.generateAudioScript).toHaveBeenLastCalledWith(
+            workDir,
+            'nb',
+            ['s1'],
+            undefined,
+            undefined,
+            { primaryArticleId: 'notebooks/nb/s1.md', customPrompt: '更像摘要节目' },
+        );
+    });
 });
 
 describe('DELETE /api/notebook/artifact', () => {

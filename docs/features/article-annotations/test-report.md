@@ -17,7 +17,8 @@
 ## Manual / UI Coverage
 
 - Web build 覆盖 `NoteEditor` 与 `NovelEditor` 的 TypeScript 类型。
-- UI smoke：选中文章正文后，气泡菜单新增批注按钮；保存后批注卡片留在 `NoteEditor` 内。
+- UI smoke：选中文章正文后，气泡菜单新增批注按钮；保存后正文以轻量下划线标记批注，hover 下划线会显示小弹窗。
+- UI smoke：从批注弹窗或紧凑列表删除批注后，会同步移除正文下划线标记。
 - Screenshot: <https://github.com/user-attachments/assets/a9c5ecad-fd02-4dc5-a055-f0e563e70d6c>
 
 ## Validation Commands
@@ -32,4 +33,4 @@
 ## Known Gaps
 
 - 全量 `npm test` 当前仍有 3 个既有删除路由相关失败，和本功能无关；本轮使用 targeted Vitest 覆盖新增 annotation 路径。
-- 本轮尚未实现段落 hover 入口和 annotation id 级高亮绑定。
+- 本轮尚未实现段落 hover 入口和 annotation id 级强绑定 mark；当前删除样式恢复依赖保存时记录的 anchor 区间，文章大幅改写后仍可能需要后续漂移修复。

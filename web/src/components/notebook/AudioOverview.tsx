@@ -4,12 +4,11 @@
  */
 import React from 'react'
 import { Play, Pause, SkipForward, Volume2 } from 'lucide-react'
+import { formatDuration, type AudioLine } from './artifact-utils'
 
-export interface AudioLine { speaker: 'A' | 'B'; text: string }
+interface Props { script: AudioLine[]; title?: string; durationSeconds?: number }
 
-interface Props { script: AudioLine[]; title?: string }
-
-export const AudioOverview: React.FC<Props> = ({ script, title }) => {
+export const AudioOverview: React.FC<Props> = ({ script, title, durationSeconds = 0 }) => {
     const [playing, setPlaying] = React.useState(false)
     const [idx, setIdx] = React.useState(0)
     const [rate, setRate] = React.useState(1.0)
@@ -49,6 +48,7 @@ export const AudioOverview: React.FC<Props> = ({ script, title }) => {
     }, [script, rate, voices, voiceA, voiceB])
 
     const toggle = () => {
+        if (script.length === 0) return
         if (playing) {
             window.speechSynthesis.pause()
             setPlaying(false)
@@ -63,6 +63,7 @@ export const AudioOverview: React.FC<Props> = ({ script, title }) => {
     }
 
     const skip = () => {
+        if (script.length === 0) return
         window.speechSynthesis.cancel()
         const next = Math.min(idx + 1, script.length - 1)
         setIdx(next)
@@ -81,13 +82,15 @@ export const AudioOverview: React.FC<Props> = ({ script, title }) => {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={toggle}
-                        className="w-10 h-10 rounded-full bg-primary-mint text-white flex items-center justify-center hover:bg-primary-mint/90"
+                        disabled={script.length === 0}
+                        className="w-10 h-10 rounded-full bg-primary-mint text-white flex items-center justify-center hover:bg-primary-mint/90 disabled:opacity-45 disabled:cursor-not-allowed"
                     >
                         {playing ? <Pause size={16} /> : <Play size={16} />}
                     </button>
                     <button
                         onClick={skip}
-                        className="w-8 h-8 rounded-full bg-fill-secondary hover:bg-fill flex items-center justify-center"
+                        disabled={script.length === 0}
+                        className="w-8 h-8 rounded-full bg-fill-secondary hover:bg-fill flex items-center justify-center disabled:opacity-45 disabled:cursor-not-allowed"
                     >
                         <SkipForward size={14} />
                     </button>
@@ -102,8 +105,8 @@ export const AudioOverview: React.FC<Props> = ({ script, title }) => {
                         <option value={1.5}>1.5x</option>
                         <option value={2}>2x</option>
                     </select>
-                    <span className="text-xs text-text-tertiary ml-auto">
-                        {Math.min(idx + 1, script.length)} / {script.length}
+                    <span className="text-xs text-text-tertiary ml-auto whitespace-nowrap">
+                        {formatDuration(durationSeconds)} · {script.length ? Math.min(idx + 1, script.length) : 0} / {script.length}
                     </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mt-2">
@@ -123,6 +126,11 @@ export const AudioOverview: React.FC<Props> = ({ script, title }) => {
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-2">
+                {script.length === 0 && (
+                    <div className="rounded-lg border border-dashed border-border bg-fill-secondary/25 px-3 py-4 text-sm text-text-tertiary">
+                        暂无可播放的音频脚本。
+                    </div>
+                )}
                 {script.map((line, i) => (
                     <div
                         key={i}

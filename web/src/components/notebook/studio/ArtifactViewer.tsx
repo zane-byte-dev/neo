@@ -4,7 +4,8 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Artifact } from '../../../types'
 import { MindMap } from '../MindMap'
-import { AudioOverview, type AudioLine } from '../AudioOverview'
+import { AudioOverview } from '../AudioOverview'
+import { getArtifactMarkdown, getAudioDurationSeconds, getAudioScript, getMindMapMarkdown } from '../artifact-utils'
 
 // ── Markdown → HTML export utilities ────────────────────────────────────────
 
@@ -66,8 +67,10 @@ export const ArtifactViewer: React.FC<{
     onBack: () => void
     onRegenerate?: (type: 'audio' | 'mindmap' | 'report') => void
 }> = ({ artifact, onBack, onRegenerate }) => {
-    const markdown = typeof artifact.data.markdown === 'string' ? artifact.data.markdown : ''
+    const markdown = getArtifactMarkdown(artifact)
+    const mindMapMarkdown = getMindMapMarkdown(artifact)
     const script = getAudioScript(artifact)
+    const durationSeconds = getAudioDurationSeconds(artifact, script)
 
     const download = (format: 'md' | 'json' | 'txt' | 'html') => {
         let content = ''
@@ -170,8 +173,8 @@ ${htmlContent}
                 </div>
             </div>
             <div className="flex-1 overflow-hidden">
-                {artifact.type === 'mindmap' && <MindMap markdown={markdown} />}
-                {artifact.type === 'audio' && <AudioOverview script={script} title={artifact.title} />}
+                {artifact.type === 'mindmap' && <MindMap markdown={mindMapMarkdown} />}
+                {artifact.type === 'audio' && <AudioOverview script={script} title={artifact.title} durationSeconds={durationSeconds} />}
                 {artifact.type === 'report' && (
                     <div className="h-full overflow-y-auto custom-scrollbar p-4 md:p-6 markdown-content text-sm">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
@@ -180,17 +183,4 @@ ${htmlContent}
             </div>
         </div>
     )
-}
-
-function getAudioScript(artifact: Artifact): AudioLine[] {
-    const value = Array.isArray(artifact.data.script)
-        ? artifact.data.script
-        : Array.isArray(artifact.data.segments)
-            ? artifact.data.segments
-            : []
-    return value.filter((line): line is AudioLine => {
-        if (!line || typeof line !== 'object') return false
-        const candidate = line as Record<string, unknown>
-        return (candidate.speaker === 'A' || candidate.speaker === 'B') && typeof candidate.text === 'string'
-    })
 }

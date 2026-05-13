@@ -109,7 +109,8 @@ export function notebookGenerateArtifact(router: Router): void {
                 const title = typeof body.title === 'string' ? body.title : undefined;
                 artifact = await generateReport(workDir, notebook, subtype, { sourceIds, customPrompt, title, model: extractModel(body), primaryArticleId }, stateDir);
             } else if (type === 'audio') {
-                artifact = await generateAudioScript(workDir, notebook, sourceIds, extractModel(body), stateDir, { primaryArticleId });
+                const customPrompt = typeof body.customPrompt === 'string' ? body.customPrompt : undefined;
+                artifact = await generateAudioScript(workDir, notebook, sourceIds, extractModel(body), stateDir, { primaryArticleId, customPrompt });
             } else {
                 ctx.status = 400; ctx.body = { error: `Unknown artifact type: ${type}` }; return;
             }
