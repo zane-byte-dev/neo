@@ -18,6 +18,7 @@
 import { LLMClient } from '../llm/client.js';
 import type { StreamChunk, ToolContext } from '../llm/types.js';
 import { resolveSmartRoute } from '../llm/model-router.js';
+import { rememberTurn } from '../memory/index.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
 import { citationsFromText, disposeRegistry } from './notebook-citation-registry.js';
@@ -610,6 +611,13 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                 contentLength: output.length,
                 ...(previewText(output) !== undefined && { contentPreview: previewText(output)! }),
             });
+            // Persist this turn to episodic memory (best-effort, non-blocking)
+            void rememberTurn(projectRoot, {
+                sessionId: session.id,
+                userId,
+                userMsg: message,
+                assistantMsg: output,
+            }, stateDir);
         }
         if (citations.length > 0) {
             await appendRunEventSafe(stateDir, runId, 'notebook_citations', { citations });

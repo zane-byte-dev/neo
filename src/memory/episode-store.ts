@@ -22,17 +22,32 @@ export async function appendEpisode(stateDir: string, card: EpisodeCard): Promis
 }
 
 async function readEpisodeShards(stateDir: string, limit?: number): Promise<EpisodeCard[]> {
-    const dir = join(stateDir, 'memory', 'episodes');
-    let entries: string[];
-    try {
-        entries = (await fs.readdir(dir)).filter((n) => n.endsWith('.jsonl'));
-    } catch {
-        return [];
+    // Primary path (current layout): {stateDir}/memory/episodes/
+    // Legacy fallback path (pre-refactor layout): {stateDir}/episodes/
+    const dirs = [
+        join(stateDir, 'memory', 'episodes'),
+        join(stateDir, 'episodes'),
+    ];
+
+    const seen = new Set<string>();
+    const allEntries: { dir: string; name: string }[] = [];
+
+    for (const dir of dirs) {
+        try {
+            const names = (await fs.readdir(dir)).filter((n) => n.endsWith('.jsonl'));
+            for (const name of names) {
+                if (!seen.has(name)) {
+                    seen.add(name);
+                    allEntries.push({ dir, name });
+                }
+            }
+        } catch { /* directory doesn't exist, skip */ }
     }
-    entries.sort().reverse();
-    const picked = limit === undefined ? entries : entries.slice(0, limit);
+
+    allEntries.sort((a, b) => b.name.localeCompare(a.name));
+    const picked = limit === undefined ? allEntries : allEntries.slice(0, limit);
     const out: EpisodeCard[] = [];
-    for (const name of picked) {
+    for (const { dir, name } of picked) {
         try {
             const raw = await fs.readFile(join(dir, name), 'utf8');
             out.push(...parseJsonLines<EpisodeCard>(raw));

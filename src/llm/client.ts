@@ -27,6 +27,7 @@ import type {
     Tool,
     ToolContext,
 } from './types.js';
+import { recall, renderHits } from '../memory/index.js';
 
 export type {
     StreamChunk,
@@ -269,7 +270,7 @@ export class LLMClient {
         log.info('AgentRuntime', `Initialized (AI SDK). Model: ${this.modelId}`);
     }
 
-    private async buildPrompt(message: string, workDir: string, stateDir: string, history?: string): Promise<string> {
+    private async buildPrompt(message: string, workDir: string, stateDir: string, history?: string, sessionId?: string): Promise<string> {
         const now = new Date().toLocaleString('zh-CN');
         let prompt = `[Runtime Context]\n- Current Time: ${now}\n`;
 
@@ -282,6 +283,20 @@ export class LLMClient {
                     `${nowMd.trim()}\n`;
             }
         } catch { /* NOW.md not found */ }
+
+        // Inject relevant memory recall hits (episodic + semantic)
+        try {
+            const hits = await recall(workDir, message, {
+                topK: 5,
+                budgetTokens: 1200,
+                stateDir,
+                sessionId,
+            });
+            const rendered = renderHits(hits);
+            if (rendered) {
+                prompt += `\n[Relevant Memory]\n${rendered}\n`;
+            }
+        } catch { /* memory recall is best-effort */ }
 
         if (history?.trim()) {
             prompt += `\n[Previous Conversation History]\n${history}\n`;
@@ -326,7 +341,7 @@ export class LLMClient {
 
         if (useMessages) {
             // Use structured messages — build prompt without embedded history
-            const runtimePrompt = await this.buildPrompt(message, workDir, stateDir);
+            const runtimePrompt = await this.buildPrompt(message, workDir, stateDir, undefined, context.sessionId);
             for (const msg of conversationHistory as Array<{ role: string; content: string }>) {
                 messages.push({
                     role: msg.role === 'assistant' ? 'assistant' : 'user',
@@ -348,7 +363,7 @@ export class LLMClient {
         } else {
             // Fallback: embed history as a string in the prompt
             const historyStr = typeof conversationHistory === 'string' ? conversationHistory : '';
-            prompt = await this.buildPrompt(message, workDir, stateDir, historyStr || undefined);
+            prompt = await this.buildPrompt(message, workDir, stateDir, historyStr || undefined, context.sessionId);
         }
 
         const startedAt = Date.now();
@@ -361,7 +376,7 @@ export class LLMClient {
 
             // ── ACP shortcut: bypass AI SDK, use Gemini CLI directly ──────
             if (isAcpModel(effectiveModel)) {
-                const runtimePrompt = await this.buildPrompt(message, workDir, stateDir);
+                const runtimePrompt = await this.buildPrompt(message, workDir, stateDir, undefined, context.sessionId);
                 const fullPrompt = systemInstruction
                     ? `${systemInstruction}\n\n${runtimePrompt}`
                     : runtimePrompt;
