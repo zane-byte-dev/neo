@@ -1,13 +1,22 @@
 /**
- * src/sandbox/host-runner.ts — Legacy "run on host" backend.
+ * src/sandbox/host-runner.ts — Host execution backend with optional OS isolation.
  *
  * Uses a dedicated process group so timeout/abort can terminate shell children
- * reliably on Linux CI. No filesystem isolation — relies on the existing
- * DANGEROUS_PATTERNS regex (applied at the bash-tool layer) for basic safety.
+ * reliably on Linux CI.
+ *
+ * When OS isolation is available (macOS Seatbelt / Linux bubblewrap), commands
+ * are wrapped so that write access is restricted to workDir and /tmp at the
+ * kernel level — regardless of what the command string contains (closes the
+ * `cd /etc && rm` bypass that regex-only filtering cannot catch).
+ *
+ * Set SANDBOX_OS_ISOLATION=0 to opt-out (e.g. inside Docker where the outer
+ * container already provides isolation).
  */
 
 import { spawn } from 'node:child_process';
+import { log } from '../utils/logger.js';
 import { SANDBOX_DEFAULT_TIMEOUT_MS, SANDBOX_MAX_TIMEOUT_MS } from './config.js';
+import { buildOsSandboxSpawnArgs, isOsSandboxAvailable } from './os-sandbox.js';
 import type { SandboxResult, SandboxRunOptions } from './types.js';
 
 const FORCE_KILL_AFTER_MS = 500;
@@ -32,8 +41,18 @@ function killCommand(proc: ReturnType<typeof spawn>, signal: NodeJS.Signals): vo
 export async function runOnHost(command: string, opts: SandboxRunOptions): Promise<SandboxResult> {
     const timeoutMs = Math.min(opts.timeoutMs ?? SANDBOX_DEFAULT_TIMEOUT_MS, SANDBOX_MAX_TIMEOUT_MS);
     const startedAt = Date.now();
+
+    const useOsSandbox = isOsSandboxAvailable();
+    const spawnTarget = useOsSandbox
+        ? buildOsSandboxSpawnArgs(command, opts.workDir)
+        : { cmd: 'sh', args: ['-c', command] };
+
+    if (useOsSandbox) {
+        log.debug('sandbox', `OS isolation active (${process.platform === 'darwin' ? 'seatbelt' : 'bwrap'})`, { workDir: opts.workDir });
+    }
+
     return await new Promise<SandboxResult>((resolve, reject) => {
-        const proc = spawn('sh', ['-c', command], {
+        const proc = spawn(spawnTarget.cmd, spawnTarget.args, {
             cwd: opts.workDir,
             detached: process.platform !== 'win32',
             stdio: ['ignore', 'pipe', 'pipe'],

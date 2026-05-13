@@ -12,6 +12,10 @@
  *   SANDBOX_MAX_TIMEOUT_MS hard timeout cap  (default: 300000)
  *   SANDBOX_READONLY       "1" mounts workspace as read-only (default: rw)
  *   SANDBOX_OUTPUT_DIR     relative subdir auto-collected as artifacts (default: .outputs)
+ *   SANDBOX_OS_ISOLATION   "0" to disable OS-level filesystem isolation (default: enabled)
+ *                          macOS uses Seatbelt (sandbox-exec), Linux uses bubblewrap (bwrap).
+ *                          Restricts write access to workDir + /tmp at kernel level,
+ *                          closing bypass paths like `cd /etc && rm file`.
  */
 
 export type SandboxMode = 'host' | 'docker';
