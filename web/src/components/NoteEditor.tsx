@@ -12,6 +12,7 @@ import { ArtifactViewer } from './notebook/studio/ArtifactViewer'
 import { EDIT_ACTIONS, INSIGHT_ACTIONS, type DocEditAction } from './notebook/docActions'
 import { getArtifactMarkdown, getMindMapMarkdown } from './notebook/artifact-utils'
 import { useAppStore } from '../stores/useAppStore'
+import { toast } from './Toast'
 
 interface NoteEditorProps {
     note: NoteEntry | null             // null = create new
@@ -165,7 +166,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         const handler = (e: KeyboardEvent) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault()
-                if (fieldsRef.current.title.trim()) void handleSave()
+                if (fieldsRef.current.title.trim()) void handleSave(true)
             }
         }
         window.addEventListener('keydown', handler)
@@ -209,7 +210,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
     }, [])
 
-    const handleSave = React.useCallback(async () => {
+    const handleSave = React.useCallback(async (showFeedback = !autoSave) => {
         const f = fieldsRef.current
         if (!f.title.trim()) return
         setSaving(true)
@@ -230,14 +231,16 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
             isDirtyRef.current = false
             setSaveStatus('saved')
             onSaved(result)
+            if (showFeedback) toast.success(t('noteSaved'))
             // Fade "saved" indicator after 2.5s
             setTimeout(() => setSaveStatus('idle'), 2500)
         } catch {
             setSaveStatus('error')
+            if (showFeedback) toast.error(t('noteSaveFailed'))
         } finally {
             setSaving(false)
         }
-    }, [note, notebook, onSaved])
+    }, [autoSave, note, notebook, onSaved])
 
     // Schedule auto-save after field changes
     const scheduleAutoSave = React.useCallback(() => {
@@ -245,7 +248,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         isDirtyRef.current = true
         setSaveStatus('idle')
         if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current)
-        autoSaveTimerRef.current = window.setTimeout(() => void handleSave(), 1500)
+        autoSaveTimerRef.current = window.setTimeout(() => void handleSave(false), 1500)
     }, [autoSave, note, handleSave])
 
     const handleDelete = async () => {
@@ -524,7 +527,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                 <div className="shrink-0 flex items-center gap-0.5">
                     {!autoSave && (
                         <button
-                            onClick={() => void handleSave()}
+                            onClick={() => void handleSave(true)}
                             disabled={saving || !title.trim()}
                             className={cn(
                                 'flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-md transition-colors font-medium',

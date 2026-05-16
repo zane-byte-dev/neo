@@ -32,6 +32,7 @@
 | **Notebook** | Article / knowledge-item store with full-text search, annotations, and in-article resource previews |
 | **Skills** | Markdown-defined reusable AI skills with parameter interpolation |
 | **Tools** | Built-in tools + user-defined tools auto-loaded from `{stateDir}/tools/` |
+| **Automation** | Webhook / Cron / Workflow triggers with serial steps, run history, and manual runs |
 | **Telegram bot** | Telegraf long-polling, Markdown rendering, image / video sending |
 | **Browser extension** | Chrome extension for clipping selections, X.com threads, Gemini chats, Lark wiki pages |
 | **Web UI** | React 19 + Vite + Tailwind CSS, Chat / Notebook panels |
@@ -162,7 +163,7 @@ More user guides:
 - [docs/user-guide/SANDBOX.md](docs/user-guide/SANDBOX.md) — sandbox and `code_exec`
 - [docs/user-guide/MCP.md](docs/user-guide/MCP.md) — MCP server configuration
 - [docs/user-guide/NOTEBOOK.md](docs/user-guide/NOTEBOOK.md) — Notebook sources, notes, Studio, citations
-- [docs/user-guide/AUTOMATION.md](docs/user-guide/AUTOMATION.md) — Webhook and Cron
+- [docs/user-guide/AUTOMATION.md](docs/user-guide/AUTOMATION.md) — Webhook, Cron, and Workflow automation
 - [docs/user-guide/AGENT_RUNTIME.md](docs/user-guide/AGENT_RUNTIME.md) — runs, event logs, resume, cancellation
 - [docs/user-guide/BROWSER_EXTENSION.md](docs/user-guide/BROWSER_EXTENSION.md) — Chrome extension
 

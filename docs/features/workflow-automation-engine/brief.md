@@ -1,5 +1,7 @@
 # Workflow Automation Engine
 
+> Status update (2026-05-16): Phase 1 MVP 已落地。实现范围见 [plan.md](plan.md)，验证结果见 [test-report.md](test-report.md)。
+
 ## Background
 
 Neo 已经具备自动化的基础底座：Webhook 可以主动触发 Agent，Cron 可以定时触发 Agent，设置页也已有 Automations 管理入口。但路线图里“工作流引擎 / 事件触发器 / Skill 编排 / 定时任务增强 / 外部服务集成”这一整组能力仍未真正落地。

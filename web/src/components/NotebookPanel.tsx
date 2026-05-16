@@ -235,6 +235,13 @@ export const NotebookPanel: React.FC<{
                         <BookOpen size={20} className="text-text-quaternary" />
                     </div>
                     <span>{t('selectArticle')}</span>
+                    <button
+                        onClick={() => setEditing('new')}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-mint text-white text-xs font-medium hover:opacity-90 transition-opacity"
+                    >
+                        <Plus size={13} />
+                        {t('newArticle')}
+                    </button>
                 </div>
             )
 
@@ -563,10 +570,12 @@ const NotebookList: React.FC<{
                     )}
                 >
                     <div className="text-sm font-medium text-text truncate mb-1">{entry.title}</div>
-                    <div className="flex items-center gap-2 text-xs text-text-tertiary">
-                        {entry.date && <span>{entry.date}</span>}
-                        {entry.source && <span>· {entry.source}</span>}
-                    </div>
+                    {(entry.date || entry.source) && (
+                        <div className="flex items-center gap-2 text-xs text-text-tertiary">
+                            {entry.date && <span>{entry.date}</span>}
+                            {entry.source && <span>{entry.date ? `· ${entry.source}` : entry.source}</span>}
+                        </div>
+                    )}
                     {entry.summary && (
                         <p className="text-xs text-text-tertiary mt-1.5 line-clamp-2 leading-relaxed">{entry.summary}</p>
                     )}

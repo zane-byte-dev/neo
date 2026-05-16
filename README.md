@@ -43,6 +43,7 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 | **Notebook** | 文章/知识条目管理，含全文搜索、文章批注和文章内资源预览 |
 | **Skills** | Markdown 定义的可复用 AI 技能，支持参数插值与代码块执行 |
 | **Tools** | 内置工具 + 用户自定义工具（`{stateDir}/tools/` 自动加载） |
+| **自动化** | Webhook / Cron / Workflow 触发 Agent，支持串行步骤、运行历史和手动运行 |
 | **Telegram Bot** | Telegraf 长轮询接入，支持 Markdown 渲染、图片发送 |
 | **浏览器扩展** | Chrome 划词保存，支持 X.com 推文、Gemini 对话、飞书 Wiki |
 | **Web UI** | React 前端，提供 Chat / Notebook 面板 |

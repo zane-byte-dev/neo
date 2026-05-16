@@ -235,6 +235,8 @@ const en = {
     tags: 'Tags',
     tagsPlaceholder: 'JSON e.g. ["tag1","tag2"]',
     summary: 'Summary',
+    noteSaved: 'Note saved',
+    noteSaveFailed: 'Failed to save note',
 
     // ModelPanel
     settingsOverview: 'Overview',
@@ -490,6 +492,23 @@ const en = {
     cronDeleteFailed: 'Failed to delete cron job',
     cronDeleteConfirm: 'Delete cron job "{name}"?',
     cronEmpty: 'No cron jobs configured yet',
+    workflows: 'Workflows',
+    workflowsDescription: 'Define serial automation steps with manual, webhook, or cron triggers.',
+    newWorkflow: 'New Workflow',
+    workflowIdPlaceholder: 'Workflow id, e.g. morning-brief',
+    workflowSaved: 'Workflow saved',
+    workflowSaveFailed: 'Failed to save workflow',
+    workflowSaveRecoveryHint: 'Check the workflow id and JSON definition. Each workflow needs at least one valid step.',
+    workflowFixJson: 'Review JSON',
+    workflowDeleted: 'Workflow deleted',
+    workflowDeleteFailed: 'Failed to delete workflow',
+    workflowDeleteConfirm: 'Delete workflow "{name}"?',
+    workflowEmpty: 'No workflows configured yet',
+    workflowSteps: 'steps',
+    workflowLastRun: 'Last run',
+    runNow: 'Run',
+    workflowRunSuccess: 'Workflow completed',
+    workflowRunFailed: 'Workflow failed',
 
     // Trash bin
     trash: 'Trash',

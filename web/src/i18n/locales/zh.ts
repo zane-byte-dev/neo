@@ -237,6 +237,8 @@ const zh: Record<TranslationKeys, string> = {
     tags: '标签',
     tagsPlaceholder: 'JSON 如 ["标签1","标签2"]',
     summary: '摘要',
+    noteSaved: '笔记已保存',
+    noteSaveFailed: '保存笔记失败',
 
     // ModelPanel
     settingsOverview: '概览',
@@ -492,6 +494,23 @@ const zh: Record<TranslationKeys, string> = {
     cronDeleteFailed: '删除定时任务失败',
     cronDeleteConfirm: '删除定时任务 "{name}"？',
     cronEmpty: '暂无定时任务',
+    workflows: '工作流',
+    workflowsDescription: '用手动、Webhook 或 Cron 触发串行自动化步骤。',
+    newWorkflow: '新建工作流',
+    workflowIdPlaceholder: '工作流 ID，例如 morning-brief',
+    workflowSaved: '工作流已保存',
+    workflowSaveFailed: '保存工作流失败',
+    workflowSaveRecoveryHint: '请检查工作流 ID 和 JSON 定义；每个工作流至少需要一个有效步骤。',
+    workflowFixJson: '检查 JSON',
+    workflowDeleted: '工作流已删除',
+    workflowDeleteFailed: '删除工作流失败',
+    workflowDeleteConfirm: '删除工作流 "{name}"？',
+    workflowEmpty: '暂无工作流',
+    workflowSteps: '步',
+    workflowLastRun: '最近运行',
+    runNow: '运行',
+    workflowRunSuccess: '工作流已完成',
+    workflowRunFailed: '工作流运行失败',
 
     // Trash bin
     trash: '垃圾箱',

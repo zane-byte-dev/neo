@@ -120,16 +120,16 @@ Neo 是一个功能密度极高、架构思路清晰的个人 AI 运行时项目
 
 | 缺口 | 影响面 | 状态 | 落地位置 |
 |------|--------|------|----------|
-| 沙箱执行使用指南 | 所有用户 | ✅ 已完成 | [SANDBOX.md](user-guide/SANDBOX.md) |
-| MCP 配置指南 | 高级用户 | ✅ 已完成 | [MCP.md](user-guide/MCP.md) |
-| 用户自定义工具开发指南 | 开发者用户 | ✅ 已完成 | [TOOLS.md](user-guide/TOOLS.md) + [examples/tools](../examples/tools) |
-| Skills 开发指南 | 开发者用户 | ✅ 已完成 | [SKILLS.md](user-guide/SKILLS.md) + [examples/skills](../examples/skills) |
-| Webhook / Cron 使用指南 | 自动化用户 | ✅ 已完成 | [AUTOMATION.md](user-guide/AUTOMATION.md) |
-| Notebook 功能详解 | 知识库用户 | ✅ 已完成 | [NOTEBOOK.md](user-guide/NOTEBOOK.md) |
-| 浏览器扩展配置指南 | 浏览器用户 | ✅ 已完成 | [BROWSER_EXTENSION.md](user-guide/BROWSER_EXTENSION.md) |
-| Agent 运行时说明 | 高级用户 | ✅ 已完成 | [AGENT_RUNTIME.md](user-guide/AGENT_RUNTIME.md) |
-| Web 语音输入指南 | 所有用户 | ✅ 已完成 | [VOICE_INPUT.md](user-guide/VOICE_INPUT.md) |
-| 功能级文档结构（features/） | 开发者用户 | ✅ 已完成 | [features/](features/)（web-voice-input / first-run-checklist / settings-guidance-and-system-status / agent-runtime / knowledge-index / workflow-automation-engine） |
+| 沙箱执行使用指南 | 所有用户 | ✅ 已完成 | [SANDBOX.md](../user-guide/SANDBOX.md) |
+| MCP 配置指南 | 高级用户 | ✅ 已完成 | [MCP.md](../user-guide/MCP.md) |
+| 用户自定义工具开发指南 | 开发者用户 | ✅ 已完成 | [TOOLS.md](../user-guide/TOOLS.md) + [examples/tools](../../examples/tools) |
+| Skills 开发指南 | 开发者用户 | ✅ 已完成 | [SKILLS.md](../user-guide/SKILLS.md) + [examples/skills](../../examples/skills) |
+| Webhook / Cron 使用指南 | 自动化用户 | ✅ 已完成 | [AUTOMATION.md](../user-guide/AUTOMATION.md) |
+| Notebook 功能详解 | 知识库用户 | ✅ 已完成 | [NOTEBOOK.md](../user-guide/NOTEBOOK.md) |
+| 浏览器扩展配置指南 | 浏览器用户 | ✅ 已完成 | [BROWSER_EXTENSION.md](../user-guide/BROWSER_EXTENSION.md) |
+| Agent 运行时说明 | 高级用户 | ✅ 已完成 | [AGENT_RUNTIME.md](../user-guide/AGENT_RUNTIME.md) |
+| Web 语音输入指南 | 所有用户 | ✅ 已完成 | [VOICE_INPUT.md](../user-guide/VOICE_INPUT.md) |
+| 功能级文档结构（features/） | 开发者用户 | ✅ 已完成 | [features/](../features/)（web-voice-input / first-run-checklist / settings-guidance-and-system-status / agent-runtime / knowledge-index / workflow-automation-engine） |
 
 ---
 
@@ -304,7 +304,7 @@ docs/
    - [ ] 是否需要更新 CHANGELOG.md？
    ```
 
-2. **将工具列表从 README 中提取到独立文件，并加代码引用锚点**：🔄 已新增 [TOOLS.md](user-guide/TOOLS.md)，但自动生成脚本尚未实现。（工具数增长后建议优先补上）
+2. **将工具列表从 README 中提取到独立文件，并加代码引用锚点**：🔄 已新增 [TOOLS.md](../user-guide/TOOLS.md)，但自动生成脚本尚未实现。（工具数增长后建议优先补上）
 
 3. **为 examples/workspace 建立「最小可运行验证」**：🔄 已补示例并验证新增 tool / skill 可解析；CI 中的示例引用校验脚本尚未实现。
 

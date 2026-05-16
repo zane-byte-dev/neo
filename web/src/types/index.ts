@@ -149,7 +149,7 @@ export interface CronJobInfo {
 }
 
 export interface CronRunInfo {
-    id: number
+    id: string
     job_name: string
     status: string           // 'running' | 'success' | 'error'
     started_at: number
@@ -157,6 +157,63 @@ export interface CronRunInfo {
     duration_ms: number | null
     error: string | null
     summary: string | null
+}
+
+// ── Workflows ────────────────────────────────────────────────────────────────
+
+export type WorkflowTrigger =
+    | { type: 'manual' }
+    | { type: 'webhook'; secret?: string }
+    | { type: 'cron'; cron: string; timezone?: string; enabled?: boolean; telegramChatId?: string }
+
+export type WorkflowStep =
+    | { id: string; name?: string; type: 'transform'; template: string }
+    | { id: string; name?: string; type: 'agent'; message: string }
+    | { id: string; name?: string; type: 'skill'; skillName: string; args?: Record<string, unknown> }
+
+export interface WorkflowRunInfo {
+    id: string
+    workflowId: string
+    workflowName: string
+    triggerType: WorkflowTrigger['type']
+    status: 'running' | 'success' | 'error'
+    startedAt: string
+    finishedAt?: string
+    durationMs?: number
+    input?: unknown
+    output?: unknown
+    error?: string
+    steps: Array<{
+        id: string
+        name?: string
+        type: WorkflowStep['type']
+        status: 'running' | 'success' | 'error'
+        startedAt: string
+        finishedAt?: string
+        durationMs?: number
+        output?: unknown
+        error?: string
+    }>
+}
+
+export interface WorkflowDefinition {
+    id: string
+    name: string
+    description?: string
+    enabled: boolean
+    trigger: WorkflowTrigger
+    steps: WorkflowStep[]
+    createdAt: string
+    updatedAt: string
+    lastRun?: {
+        id: string
+        status: WorkflowRunInfo['status']
+        startedAt: string
+        finishedAt: string | null
+        durationMs: number | null
+        error: string | null
+        summary: string | null
+    } | null
 }
 
 export interface AppState {

@@ -26,6 +26,8 @@ import { log } from '../utils/logger.js';
 import { getTelegramRuntime } from './telegram-runtime.js';
 import { userList } from './user-service.js';
 import { refreshNowForAllUsers } from './refresh-now.js';
+import { finishCronRun, startCronRun, type CronRunRecord } from './cron-history.js';
+import { listWorkflows, runWorkflow, workflowRunSummary, type WorkflowDefinition } from './workflow-service.js';
 
 const MODULE = 'CronAgent';
 
@@ -66,6 +68,88 @@ async function readSchedule(userId: string): Promise<ScheduledTask[]> {
 /** Active cron jobs, keyed by `${userId}:${taskId}` */
 const activeJobs = new Map<string, CronTask>();
 
+function summarizeText(text: string): string {
+    const trimmed = text.trim();
+    return trimmed.length > 500 ? `${trimmed.slice(0, 500)}…` : trimmed;
+}
+
+export async function runScheduledTask(userId: string, task: ScheduledTask): Promise<CronRunRecord | null> {
+    const sessionId = `cron-${task.id}-${generateId()}`;
+    const stateDir = stateDirForUser(userId);
+    const history = stateDir ? await startCronRun(stateDir, task.id) : null;
+    log.info(MODULE, 'Executing scheduled task', { userId, taskId: task.id, sessionId });
+
+    try {
+        let runId: string | undefined;
+        const output = await runAgentTurn({
+            userId,
+            sessionId,
+            message: task.message,
+            entrypoint: 'cron',
+            triggerType: 'scheduled_task',
+            metadata: { taskId: task.id, cron: task.cron },
+            onRunCreated: (id) => {
+                runId = id;
+            },
+            onImage: stateDir
+                ? async (data, mimeType, caption) => persistImageArtifact(stateDir, runId ?? 'unknown', data, mimeType, caption)
+                : undefined,
+            onVideo: async (url) => ({ url }),
+        });
+        const outcome = stateDir && runId
+            ? await readRunOutcome(stateDir, runId, { fallbackText: output })
+            : null;
+        const artifactRefs = renderArtifactReferences(outcome?.artifacts ?? []);
+
+        const telegram = task.telegramChatId ? getTelegramRuntime() : null;
+        if (task.telegramChatId && telegram) {
+            const text = outcome?.responseText || output || '（定时任务无输出）';
+            const body = artifactRefs.length ? `${text}\n\n${artifactRefs.join('\n')}` : text;
+            const prefix = `🕐 [定时任务: ${task.id}]\n\n`;
+            try {
+                await telegram.sendMessage(task.telegramChatId, prefix + body);
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : String(err);
+                log.error(MODULE, 'Failed to send Telegram message', { userId, taskId: task.id, error: msg });
+            }
+        }
+
+        const responseText = outcome?.responseText ?? output;
+        log.info(MODULE, 'Scheduled task completed', {
+            userId,
+            taskId: task.id,
+            responseLen: responseText.length,
+            artifactCount: outcome?.artifacts.length ?? 0,
+        });
+        return stateDir && history
+            ? finishCronRun(stateDir, history.id, { status: 'success', summary: summarizeText(responseText) })
+            : null;
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.error(MODULE, 'Scheduled task failed', { userId, taskId: task.id, error: msg });
+        return stateDir && history
+            ? finishCronRun(stateDir, history.id, { status: 'error', error: msg })
+            : null;
+    }
+}
+
+async function runCronWorkflow(userId: string, workflow: WorkflowDefinition): Promise<void> {
+    log.info(MODULE, 'Executing workflow schedule', { userId, workflowId: workflow.id });
+    const run = await runWorkflow(userId, workflow, { trigger: 'cron', workflowId: workflow.id }, 'cron');
+    const trigger = workflow.trigger.type === 'cron' ? workflow.trigger : null;
+    const telegram = trigger?.telegramChatId ? getTelegramRuntime() : null;
+    if (trigger?.telegramChatId && telegram) {
+        const status = run.status === 'success' ? '完成' : '失败';
+        const body = workflowRunSummary(run) ?? (run.status === 'success' ? '（工作流无输出）' : run.error ?? '工作流失败');
+        await telegram.sendMessage(trigger.telegramChatId, `🧭 [工作流: ${workflow.name}] ${status}\n\n${body}`);
+    }
+    if (run.status === 'error') {
+        log.error(MODULE, 'Workflow schedule failed', { userId, workflowId: workflow.id, error: run.error });
+    } else {
+        log.info(MODULE, 'Workflow schedule completed', { userId, workflowId: workflow.id, runId: run.id });
+    }
+}
+
 /**
  * Start the cron agent. Reads schedule files for all users and sets up
  * node-cron jobs. Telegram delivery reads the current runtime dynamically,
@@ -92,62 +176,31 @@ export async function startCronAgent(): Promise<void> {
             }
 
             const job = cronSchedule(task.cron, async () => {
-                const sessionId = `cron-${task.id}-${generateId()}`;
-                const stateDir = stateDirForUser(userId);
-                log.info(MODULE, 'Executing scheduled task', { userId, taskId: task.id, sessionId });
-
-                try {
-                    let runId: string | undefined;
-                    const output = await runAgentTurn({
-                        userId,
-                        sessionId,
-                        message: task.message,
-                        entrypoint: 'cron',
-                        triggerType: 'scheduled_task',
-                        metadata: { taskId: task.id, cron: task.cron },
-                        onRunCreated: (id) => {
-                            runId = id;
-                        },
-                        onImage: stateDir
-                            ? async (data, mimeType, caption) => persistImageArtifact(stateDir, runId ?? 'unknown', data, mimeType, caption)
-                            : undefined,
-                        onVideo: async (url) => ({ url }),
-                    });
-                    const outcome = stateDir && runId
-                        ? await readRunOutcome(stateDir, runId, { fallbackText: output })
-                        : null;
-                    const artifactRefs = renderArtifactReferences(outcome?.artifacts ?? []);
-
-                    // Send to Telegram if configured
-                    const telegram = task.telegramChatId ? getTelegramRuntime() : null;
-                    if (task.telegramChatId && telegram) {
-                        const text = outcome?.responseText || output || '（定时任务无输出）';
-                        const body = artifactRefs.length ? `${text}\n\n${artifactRefs.join('\n')}` : text;
-                        const prefix = `🕐 [定时任务: ${task.id}]\n\n`;
-                        try {
-                            await telegram.sendMessage(task.telegramChatId, prefix + body);
-                        } catch (err: unknown) {
-                            const msg = err instanceof Error ? err.message : String(err);
-                            log.error(MODULE, 'Failed to send Telegram message', { userId, taskId: task.id, error: msg });
-                        }
-                    }
-
-                    log.info(MODULE, 'Scheduled task completed', {
-                        userId,
-                        taskId: task.id,
-                        responseLen: (outcome?.responseText ?? output).length,
-                        artifactCount: outcome?.artifacts.length ?? 0,
-                    });
-                } catch (err: unknown) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    log.error(MODULE, 'Scheduled task failed', { userId, taskId: task.id, error: msg });
-                }
+                await runScheduledTask(userId, task);
             }, {
                 timezone: task.timezone ?? 'Asia/Shanghai',
             });
 
             activeJobs.set(jobKey, job);
             log.info(MODULE, `Scheduled: ${jobKey} (${task.cron})`, { message: task.message.slice(0, 60) });
+        }
+
+        const stateDir = stateDirForUser(userId);
+        const workflows = stateDir ? await listWorkflows(stateDir) : [];
+        for (const workflow of workflows) {
+            if (!workflow.enabled || workflow.trigger.type !== 'cron' || workflow.trigger.enabled === false) continue;
+            if (!cronValidate(workflow.trigger.cron)) {
+                log.warn(MODULE, `Invalid workflow cron expression for ${userId}:${workflow.id}: ${workflow.trigger.cron}`);
+                continue;
+            }
+            const jobKey = `${userId}:workflow:${workflow.id}`;
+            const job = cronSchedule(workflow.trigger.cron, async () => {
+                await runCronWorkflow(userId, workflow);
+            }, {
+                timezone: workflow.trigger.timezone ?? 'Asia/Shanghai',
+            });
+            activeJobs.set(jobKey, job);
+            log.info(MODULE, `Scheduled workflow: ${jobKey} (${workflow.trigger.cron})`);
         }
     }
 

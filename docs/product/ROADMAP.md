@@ -91,14 +91,14 @@
 
 ### 7. 工作流与自动化
 
-当前状态：cron-agent 定时任务 + Webhook 入口已落地；Agent 运行时已升级为持久化、可恢复模型，支持进程重启后恢复执行；复杂工作流引擎尚未实现。
+当前状态：cron-agent 定时任务 + Webhook 入口已落地；Agent 运行时已升级为持久化、可恢复模型，支持进程重启后恢复执行；Workflow MVP 已支持声明式串行步骤、手动 / Webhook / Cron 触发与运行历史。
 
 - [x] **可恢复 Agent 运行时**：每次 Agent 执行创建持久化 run（文件事件日志），进程重启或 SSE 断线后可从 `cursor` 继续追补事件；工具确认状态持久化，approved 后自动恢复执行；cron、Telegram、Webhook 等后台入口统一复用同一 run model
 - [x] **Webhook 入口**：`POST /api/webhook` 接收外部事件，触发 Agent 任务执行，结果通过 Telegram / webhook response 回传；run 完成后消费 `run_completed` 与 `artifact_created` 事件
-- [ ] **工作流引擎**：定义多步骤工作流（YAML/JSON），支持条件分支、循环、并行执行
+- [x] **工作流引擎 MVP**：定义 JSON 多步骤工作流，支持 `transform` / `agent` / `skill` 串行步骤、前序输出引用、手动 / Webhook / Cron 触发与运行历史
 - [ ] **事件触发器**：文件变更、新邮件等外部事件自动触发工作流（当前 Webhook 已覆盖 HTTP 入口）
-- [ ] **Skill 编排**：多个 Skill 串联执行，前序 Skill 输出作为后序 Skill 输入
-- [ ] **定时任务增强**：支持 Web UI 管理定时任务，查看执行历史和日志
+- [x] **Skill 编排 MVP**：工作流步骤可调用已有 Skill，后续步骤可通过 `{{previous}}` 或 `{{steps.stepId}}` 读取输出
+- [x] **定时任务增强 MVP**：Cron 列表显示最近运行状态、耗时、摘要和错误，并提供运行历史 API
 - [ ] **外部服务集成**：日历（Google Calendar）、邮件（IMAP/SMTP）、RSS 订阅触发
 
 ---
@@ -164,7 +164,7 @@
 ## 实施建议
 
 1. **P0 已基本完成**：多模态、沙箱、工具体系核心能力均已落地，当前重心转向 P1/P2 提升
-2. **下一优先级**：RAG Embedding 向量化（P1.4）、工作流引擎（P1.7）是当前最大的功能缺口
+2. **下一优先级**：RAG Embedding 向量化（P1.4）仍是当前最大的功能缺口；工作流下一阶段可补分支 / 重试 / 更完整运行日志 UI
 3. **渐进式推进**：每个大功能拆成多个小 PR，先实现最小可用版本再迭代
 4. **向量化可用 SQLite + vss 起步**：不依赖外部服务，改动量最小，收益直接体现在记忆检索质量上
 5. **MCP 生态持续扩展**：已有 stdio transport，后续可补充 HTTP/SSE transport 以支持远程 MCP Server

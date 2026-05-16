@@ -1158,7 +1158,7 @@ export function noteTags() {
 
 // ── Cron API ──────────────────────────────────────────────────────────────────
 
-import type { CronJobInfo, CronRunInfo } from './types'
+import type { CronJobInfo, CronRunInfo, WorkflowDefinition, WorkflowRunInfo } from './types'
 
 export function cronList() {
     return apiGet<CronJobInfo[]>('/api/crons')
@@ -1234,6 +1234,41 @@ export function cronDelete(name: string) {
         method: 'DELETE',
         credentials: 'include',
     }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+}
+
+// ── Workflow API ─────────────────────────────────────────────────────────────
+
+export function workflowList() {
+    return apiGet<{ workflows: WorkflowDefinition[] }>('/api/workflows')
+}
+
+export function workflowSave(id: string, workflow: Omit<WorkflowDefinition, 'id' | 'createdAt' | 'updatedAt' | 'lastRun'> & Partial<Pick<WorkflowDefinition, 'id'>>) {
+    return fetch(`/api/workflows/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(workflow),
+    }).then((r) => _jsonOrThrow<{ ok: true; workflow: WorkflowDefinition }>(r))
+}
+
+export function workflowDelete(id: string) {
+    return fetch(`/api/workflows/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+}
+
+export function workflowRun(id: string, input: unknown = {}) {
+    return fetch(`/api/workflows/${encodeURIComponent(id)}/run`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input }),
+    }).then((r) => _jsonOrThrow<{ ok: boolean; run: WorkflowRunInfo }>(r))
+}
+
+export function workflowRuns(id: string, limit = 20) {
+    return apiGet<{ runs: WorkflowRunInfo[] }>(`/api/workflows/${encodeURIComponent(id)}/runs?limit=${limit}`)
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

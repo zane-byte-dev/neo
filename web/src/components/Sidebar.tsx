@@ -90,6 +90,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const renameInputRef = React.useRef<HTMLInputElement>(null)
     const importInputRef = React.useRef<HTMLInputElement>(null)
     const longPressTimerRef = React.useRef<number | null>(null)
+    const cancelNotebookCommitRef = React.useRef(false)
 
     // Sidebar tab state
     type SidebarTab = 'home' | 'chat' | 'articles'
@@ -226,6 +227,26 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
         if (!notebookOpen && activeTab !== 'articles') return
         notebookListNotebooks().then(setNotebooks).catch(() => {})
     }, [notebookOpen, activeTab])
+
+    const commitNewNotebook = React.useCallback(() => {
+        if (cancelNotebookCommitRef.current) {
+            cancelNotebookCommitRef.current = false
+            setAddingNotebook(false)
+            setNewNotebookName('')
+            return
+        }
+        const name = newNotebookName.trim()
+        if (!name) {
+            setAddingNotebook(false)
+            setNewNotebookName('')
+            return
+        }
+        if (!notebooks.includes(name)) setNotebooks([...notebooks, name])
+        navigate(`/notebook/article/new?notebook=${encodeURIComponent(name)}`)
+        setNewNotebookName('')
+        setAddingNotebook(false)
+        onNavigate?.()
+    }, [navigate, newNotebookName, notebooks, onNavigate])
 
     const handleDelete = (id: string) => {
         setConfirmDelete(id)
@@ -927,18 +948,14 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                                     onChange={(e) => setNewNotebookName(e.target.value)}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && newNotebookName.trim()) {
-                                            const name = newNotebookName.trim()
-                                            if (!notebooks.includes(name)) setNotebooks([...notebooks, name])
-                                            navigate(`/notebook/article/new?notebook=${encodeURIComponent(name)}`)
-                                            setNewNotebookName('')
-                                            setAddingNotebook(false)
-                                            onNavigate?.()
+                                            commitNewNotebook()
                                         } else if (e.key === 'Escape') {
+                                            cancelNotebookCommitRef.current = true
                                             setAddingNotebook(false)
                                             setNewNotebookName('')
                                         }
                                     }}
-                                    onBlur={() => { setAddingNotebook(false); setNewNotebookName('') }}
+                                    onBlur={commitNewNotebook}
                                     placeholder={t('notebookNamePlaceholder')}
                                     className="flex-1 text-xs bg-transparent border-b border-primary-mint/50 focus:outline-none py-0.5 text-text placeholder:text-text-quaternary"
                                 />

@@ -13,6 +13,10 @@ import {
     cronList,
     cronSave,
     cronDelete,
+    workflowList,
+    workflowSave,
+    workflowDelete,
+    workflowRun,
     fetchMe,
     fetchModels,
     fetchPreferences,
@@ -22,7 +26,7 @@ import {
     type ModelsResponse,
     type PreferencesResponse,
 } from '../api'
-import type { CronJobInfo } from '../types'
+import type { CronJobInfo, WorkflowDefinition } from '../types'
 import { ModelPanel } from './ModelPanel'
 import { SkillsPanel } from './SkillsPanel'
 import { toast } from './Toast'
@@ -590,28 +594,46 @@ const McpTab: React.FC = () => {
 
 // ── Automations Tab ──────────────────────────────────────────────────────────
 
+const DEFAULT_WORKFLOW_JSON = JSON.stringify({
+    name: 'Morning brief workflow',
+    description: 'Two-step example workflow',
+    enabled: true,
+    trigger: { type: 'manual' },
+    steps: [
+        { id: 'collect', type: 'transform', template: 'Input: {{input.message}}' },
+        { id: 'summarize', type: 'agent', message: 'Summarize this into three concise bullets:\n{{previous}}' },
+    ],
+}, null, 2)
+
 const AutomationsTab: React.FC = () => {
     const t = useT()
     const [jobs, setJobs] = React.useState<CronJobInfo[]>([])
+    const [workflows, setWorkflows] = React.useState<WorkflowDefinition[]>([])
     const [userId, setUserId] = React.useState<string | null>(null)
     const [loading, setLoading] = React.useState(true)
     const [saving, setSaving] = React.useState(false)
+    const [workflowSaving, setWorkflowSaving] = React.useState(false)
+    const [workflowRunningId, setWorkflowRunningId] = React.useState<string | null>(null)
     const [loadError, setLoadError] = React.useState<string | null>(null)
     const [saveError, setSaveError] = React.useState<string | null>(null)
+    const [workflowError, setWorkflowError] = React.useState<string | null>(null)
     const [name, setName] = React.useState('')
     const [schedule, setSchedule] = React.useState('0 8 * * *')
     const [message, setMessage] = React.useState('')
     const [enabled, setEnabled] = React.useState(true)
     const [timezone, setTimezone] = React.useState('Asia/Shanghai')
+    const [workflowId, setWorkflowId] = React.useState('')
+    const [workflowJson, setWorkflowJson] = React.useState(DEFAULT_WORKFLOW_JSON)
     const nameInputRef = React.useRef<HTMLInputElement>(null)
     const scheduleInputRef = React.useRef<HTMLInputElement>(null)
     const messageInputRef = React.useRef<HTMLTextAreaElement>(null)
+    const workflowIdInputRef = React.useRef<HTMLInputElement>(null)
 
     const reload = () => {
         setLoading(true)
         setLoadError(null)
-        Promise.allSettled([cronList(), fetchMe()])
-            .then(([jobsResult, meResult]) => {
+        Promise.allSettled([cronList(), fetchMe(), workflowList()])
+            .then(([jobsResult, meResult, workflowsResult]) => {
                 if (jobsResult.status === 'fulfilled') setJobs(jobsResult.value)
                 else {
                     setJobs([])
@@ -621,6 +643,12 @@ const AutomationsTab: React.FC = () => {
                 if (meResult.status === 'fulfilled') setUserId(meResult.value.userId)
                 else {
                     setLoadError(errorMessage(meResult.reason, t('automationsLoadFailed')))
+                    toast.error(t('automationsLoadFailed'))
+                }
+                if (workflowsResult.status === 'fulfilled') setWorkflows(workflowsResult.value.workflows)
+                else {
+                    setWorkflows([])
+                    setLoadError(errorMessage(workflowsResult.reason, t('automationsLoadFailed')))
                     toast.error(t('automationsLoadFailed'))
                 }
             })
@@ -634,6 +662,19 @@ const AutomationsTab: React.FC = () => {
         setSchedule(job.schedule)
         setMessage(job.description ?? '')
         setEnabled(job.enabled !== 0)
+    }
+
+    const editWorkflow = (workflow: WorkflowDefinition) => {
+        const { lastRun: _lastRun, ...editable } = workflow
+        setWorkflowId(workflow.id)
+        setWorkflowJson(JSON.stringify(editable, null, 2))
+        setWorkflowError(null)
+    }
+
+    const resetWorkflowForm = () => {
+        setWorkflowId('')
+        setWorkflowJson(DEFAULT_WORKFLOW_JSON)
+        setWorkflowError(null)
     }
 
     const save = async () => {
@@ -662,6 +703,52 @@ const AutomationsTab: React.FC = () => {
             reload()
         } catch {
             toast.error(t('cronDeleteFailed'))
+        }
+    }
+
+    const saveWorkflowFromJson = async () => {
+        if (!workflowId.trim()) {
+            workflowIdInputRef.current?.focus()
+            return
+        }
+        setWorkflowSaving(true)
+        setWorkflowError(null)
+        try {
+            const parsed = JSON.parse(workflowJson)
+            await workflowSave(workflowId.trim(), parsed)
+            toast.success(t('workflowSaved'))
+            resetWorkflowForm()
+            reload()
+        } catch (e) {
+            setWorkflowError(errorMessage(e, t('workflowSaveFailed')))
+            toast.error(t('workflowSaveFailed'))
+        } finally {
+            setWorkflowSaving(false)
+        }
+    }
+
+    const removeWorkflow = async (workflow: WorkflowDefinition) => {
+        if (!await confirmDialog(t('workflowDeleteConfirm').replace('{name}', workflow.name), { destructive: true, confirmText: t('delete'), cancelText: t('cancel') })) return
+        try {
+            await workflowDelete(workflow.id)
+            toast.success(t('workflowDeleted'))
+            reload()
+        } catch {
+            toast.error(t('workflowDeleteFailed'))
+        }
+    }
+
+    const runWorkflowNow = async (workflow: WorkflowDefinition) => {
+        setWorkflowRunningId(workflow.id)
+        try {
+            const res = await workflowRun(workflow.id, { message: `Manual run: ${workflow.name}` })
+            if (res.run.status === 'success') toast.success(t('workflowRunSuccess'))
+            else toast.error(res.run.error ?? t('workflowRunFailed'))
+            reload()
+        } catch (e) {
+            toast.error(errorMessage(e, t('workflowRunFailed')))
+        } finally {
+            setWorkflowRunningId(null)
         }
     }
 
@@ -702,6 +789,52 @@ const AutomationsTab: React.FC = () => {
                     <code className="block text-xs font-mono bg-fill-secondary border border-border rounded-lg p-2 overflow-x-auto">
                         {userId ? `/api/webhook/${userId}` : t('loading')}
                     </code>
+                </div>
+                <div className="bg-bg-container border border-border rounded-xl p-4 space-y-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <h3 className="text-sm font-semibold text-text">{t('workflows')}</h3>
+                            <p className="text-xs text-text-tertiary mt-0.5">{t('workflowsDescription')}</p>
+                        </div>
+                        <button onClick={resetWorkflowForm} className="px-2 py-1 text-xs rounded border border-border text-text-secondary hover:bg-fill">{t('newWorkflow')}</button>
+                    </div>
+                    {workflowError && (
+                        <ActionableErrorBanner
+                            title={t('workflowSaveFailed')}
+                            message={t('workflowSaveRecoveryHint')}
+                            detail={workflowError}
+                            detailsLabel={t('technicalDetails')}
+                            actionLabel={t('workflowFixJson')}
+                            onAction={() => workflowIdInputRef.current?.focus()}
+                        />
+                    )}
+                    <div className="grid grid-cols-1 gap-3">
+                        <input ref={workflowIdInputRef} value={workflowId} onChange={(e) => setWorkflowId(e.target.value)} placeholder={t('workflowIdPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
+                        <textarea value={workflowJson} onChange={(e) => setWorkflowJson(e.target.value)} rows={8} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 font-mono" />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <button onClick={resetWorkflowForm} className="px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:bg-fill transition-colors">{t('cancel')}</button>
+                        <button disabled={!workflowId.trim() || workflowSaving} onClick={() => void saveWorkflowFromJson()} className="px-3 py-1.5 rounded-lg bg-primary-mint text-white text-xs font-medium hover:opacity-90 disabled:opacity-50">{workflowSaving ? '...' : t('save')}</button>
+                    </div>
+                    {workflows.length === 0 ? (
+                        <div className="py-8 text-center text-sm text-text-quaternary">{t('workflowEmpty')}</div>
+                    ) : (
+                        <div className="border border-border rounded-xl overflow-hidden">
+                            {workflows.map((workflow) => (
+                                <div key={workflow.id} className="flex items-center gap-3 px-4 py-3 border-b border-border/60 last:border-b-0">
+                                    <Zap size={15} className="text-text-tertiary" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[13px] font-semibold text-text truncate">{workflow.name} <span className="text-[11px] text-text-quaternary font-normal">{workflow.enabled ? t('enabled') : t('disabled')}</span></p>
+                                        <p className="text-xs text-text-tertiary truncate">{workflow.trigger.type} · {workflow.steps.length} {t('workflowSteps')}</p>
+                                        {workflow.lastRun && <p className="text-xs text-text-tertiary truncate">{t('workflowLastRun')}: {workflow.lastRun.status}{workflow.lastRun.summary ? ` · ${workflow.lastRun.summary}` : ''}</p>}
+                                    </div>
+                                    <button disabled={workflowRunningId === workflow.id} onClick={() => void runWorkflowNow(workflow)} className="px-2 py-1 text-xs rounded border border-border text-text-secondary hover:bg-fill disabled:opacity-50">{workflowRunningId === workflow.id ? '...' : t('runNow')}</button>
+                                    <button onClick={() => editWorkflow(workflow)} className="px-2 py-1 text-xs rounded border border-border text-text-secondary hover:bg-fill">{t('edit')}</button>
+                                    <button onClick={() => void removeWorkflow(workflow)} className="p-1.5 rounded-lg text-text-tertiary hover:text-destructive hover:bg-destructive/10"><Trash2 size={13} /></button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 <div className="bg-bg-container border border-border rounded-xl p-4 space-y-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
                     <h3 className="text-sm font-semibold text-text">{t('cronJobs')}</h3>

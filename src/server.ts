@@ -183,6 +183,7 @@ function _authMiddleware(): Koa.Middleware {
         const protectedPath = ctx.path.startsWith('/api/') || ctx.path.startsWith('/apps/');
         if (!protectedPath) return next();
         if (ctx.path === '/api/auth/login') return next();
+        if (ctx.path.startsWith('/api/webhook/') || ctx.path.startsWith('/api/workflow-webhook/')) return next();
 
         const userId = ctx.cookies.get(SESSION_COOKIE, { signed: true });
         if (userId) {

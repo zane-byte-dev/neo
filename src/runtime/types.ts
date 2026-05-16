@@ -40,6 +40,7 @@ export const RUN_ENTRYPOINT_VALUES = [
     'cron',
     'telegram',
     'webhook',
+    'workflow',
     'system',
     'resume',
 ] as const;
@@ -51,6 +52,9 @@ export const RUN_TRIGGER_TYPE_VALUES = [
     'scheduled_task',
     'telegram_message',
     'webhook_call',
+    'workflow_manual',
+    'workflow_webhook',
+    'workflow_cron',
     'system_task',
     'resume',
 ] as const;
