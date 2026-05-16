@@ -63,7 +63,7 @@ export const WelcomeScreen: React.FC = () => {
         chats,
         messages,
         createChat,
-        setInputValue,
+        setPendingQuickReply,
         firstRunChecklistDismissed,
         setFirstRunChecklistDismissed,
     } = useAppStore()
@@ -114,13 +114,8 @@ export const WelcomeScreen: React.FC = () => {
 
     const handleCardClick = (starter: string) => {
         if (!activeChatId) createChat()
-        setInputValue(starter)
-        requestAnimationFrame(() => {
-            const textarea = document.querySelector<HTMLTextAreaElement>('textarea')
-            textarea?.focus()
-            const len = starter.length
-            textarea?.setSelectionRange(len, len)
-        })
+        // Auto-send the starter message so the conversation begins immediately
+        setPendingQuickReply(starter)
     }
 
     const focusComposer = () => {

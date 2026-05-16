@@ -8,6 +8,12 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Added
 
+- **Skill 搜索**：Settings / Skills 面板新增搜索框，可按技能名、描述、标签实时过滤，搜索无结果时显示空状态提示。
+- **对话搜索高亮**：Chat 侧边栏搜索时匹配词在标题中高亮显示（绿色 mark）。
+- **欢迎页卡片自动发送**：首页快捷卡片点击后直接发送完整引导消息，不再只填充前缀文字。
+- **工具调用卡片键盘可访问**：ActivityItemCard 在有详情内容时增加 `tabIndex` 和 Enter/Space 键盘支持，键盘和触屏用户均可展开详情。
+- **批注 UI i18n**：NoteEditor 批注草稿区所有文案（新批注、占位符、保存、取消、解决/打开、删除等）改用 i18n key，支持多语言切换。
+
 - **文章内资源 MVP**：文章编辑器新增低干扰生成入口，摘要保留为正文前轻量块，音频通过工具栏 icon 基于当前文章生成，思维导图和报告可通过 `/` 插入为折叠模块；新 artifact 会持久化 `sourceIds` / `primaryArticleId`，`ResourcesPanel` 继续作为 notebook 级资源库与管理入口。
 - **文章批注 MVP**：文章编辑器选区气泡菜单新增批注入口，支持保存划线批注、在 `NoteEditor` 内查看全部批注、跳转原文选区、删除，以及 `open / resolved` 状态切换。后端新增独立 annotation 数据模型与 API。
 - **Web 语音输入**：Chat 输入区右下角新增麦克风按钮，支持录音、停止/取消、转写并回填到输入框。录音最长 90 秒，默认不自动发送。后端新增 `POST /api/transcribe` 转写路由，优先使用 OpenAI Whisper，无 OpenAI key 时 fallback 到 Gemini 1.5 Flash。权限拒绝、浏览器不支持、无可用 provider 等情况均有内联错误提示与修复说明。

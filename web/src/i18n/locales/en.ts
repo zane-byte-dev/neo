@@ -186,13 +186,13 @@ const en = {
     welcomeTagline: 'A local, self-directed, safety-aware AI work companion',
     welcomeCardFilesTitle: 'File organizing',
     welcomeCardFilesDesc: 'Organize and manage local files intelligently',
-    welcomeCardFilesStarter: 'Help me organize and manage local files, ',
+    welcomeCardFilesStarter: 'Help me organize my local files — scan the current directory and suggest a tidy folder structure',
     welcomeCardCreateTitle: 'Content creation',
     welcomeCardCreateDesc: 'Create presentations, documents, and media',
-    welcomeCardCreateStarter: 'Help me create ',
+    welcomeCardCreateStarter: 'Help me create a document — what format would you like? (article, report, outline, script…)',
     welcomeCardDocsTitle: 'Document processing',
     welcomeCardDocsDesc: 'Process and analyze document data',
-    welcomeCardDocsStarter: 'Help me process and analyze this document, ',
+    welcomeCardDocsStarter: 'Help me analyze a document — please paste the content or describe what you need',
     firstRunChecklistTitle: 'Start with Neo',
     firstRunChecklistSubtitle: 'Complete the shortest path from setup to useful work.',
     firstRunChecklistDismiss: 'Dismiss first-run checklist',
@@ -228,6 +228,8 @@ const en = {
     articleTitle: 'Article title…',
     confirmDelete: 'Confirm delete',
     saving: 'Saving…',
+    saved: 'Saved',
+    saveFailed: 'Save failed',
     preview: 'Preview',
     author: 'Author',
     date: 'Date',
@@ -528,6 +530,29 @@ const en = {
     trashDeleteFailed: 'Delete failed',
     trashEmptied: 'Trash emptied',
     trashEmptyFailed: 'Failed to empty trash',
+
+    // Activity batch summary
+    activityBatchFiles: 'Viewed {count} files',
+    activityBatchWeb: 'Searched {count} times',
+    activityBatchWebFiles: 'Searched and viewed {count} resources',
+    activityBatchCommands: 'Ran {count} commands',
+    activityBatchOps: 'Ran {count} operations',
+
+    // Per-chat model
+    chatModelSaveFailed: 'Failed to save model preference',
+
+    // Skill search
+    skillSearch: 'Search skills…',
+
+    // Annotation
+    annotationNew: 'New annotation',
+    annotationPlaceholder: 'Write your thoughts, questions, or notes…',
+    annotationCount: 'Annotations {count}',
+    annotationOpenCount: '{count} open',
+    annotationStatusOpen: 'Open',
+    annotationStatusResolved: 'Resolved',
+    annotationResolve: 'Resolve',
+    annotationReopen: 'Reopen',
 } as const
 
 export default en

@@ -64,6 +64,8 @@ export interface SessionRow {
     notebook_id?: string;
     /** When mode==='notebook', currently selected source ids that ground the chat. */
     source_ids?: string[];
+    /** Per-session model override. Undefined means use routing default. */
+    model?: string;
 }
 
 export interface MessageCitation {
@@ -221,7 +223,7 @@ export async function sessionRestoreFromTrash(sessionId: string, userId: string)
     }, 'ChatService');
 }
 
-/** Patch a session's title, pin, archive, project_root, and/or notebook source selection. */
+/** Patch a session's title, pin, archive, project_root, notebook source selection, and/or model. */
 export async function sessionPatch(
     sessionId: string,
     userId: string,
@@ -231,6 +233,7 @@ export async function sessionPatch(
         is_archived?: number;
         project_root?: string | null;
         source_ids?: string[] | null;
+        model?: string | null;
     },
 ): Promise<SessionRow | null> {
     return withGitAutoCommit(stateDirForUser(userId), 'session_patch', async () => {
@@ -250,6 +253,10 @@ export async function sessionPatch(
         if (patch.source_ids !== undefined) {
             if (patch.source_ids === null || patch.source_ids.length === 0) delete session.source_ids;
             else session.source_ids = [...patch.source_ids];
+        }
+        if (patch.model !== undefined) {
+            if (patch.model === null || patch.model === '') delete session.model;
+            else session.model = patch.model;
         }
         await writeSessionsStore(userId, store);
         return session;

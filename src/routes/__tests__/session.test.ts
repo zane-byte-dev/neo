@@ -10,6 +10,7 @@ vi.mock('../../services/chat-service.js', () => ({
     ]),
     sessionPatch: vi.fn().mockResolvedValue({ id: 's1', title: 'Renamed' }),
     sessionDelete: vi.fn().mockResolvedValue(true),
+    sessionSoftDelete: vi.fn().mockResolvedValue({ id: 's1', title: 'Chat 1' }),
     messageList: vi.fn().mockResolvedValue([
         { id: 1, role: 'user', content: 'hello', timestamp: '2026-01-01T00:00:00Z' },
         { id: 2, role: 'model', content: 'hi back', timestamp: '2026-01-01T00:00:01Z' },
@@ -18,6 +19,10 @@ vi.mock('../../services/chat-service.js', () => ({
 
 vi.mock('../../services/user-service.js', () => ({
     calcUser: vi.fn().mockResolvedValue({ workDir: '/tmp/workdir', stateDir: '/tmp/workdir' }),
+}));
+
+vi.mock('../../services/trash-service.js', () => ({
+    trashRegisterSession: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../runtime/store.js', () => ({

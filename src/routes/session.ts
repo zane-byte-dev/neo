@@ -100,6 +100,7 @@ export function newSession(router: Router): void {
             mode: s.mode ?? 'general',
             ...(s.notebook_id !== undefined && { notebookId: s.notebook_id }),
             ...(s.source_ids !== undefined && { sourceIds: s.source_ids }),
+            ...(s.model !== undefined && { chatModel: s.model }),
         }));
     });
 
@@ -188,10 +189,15 @@ export function newSession(router: Router): void {
         if (!userId) { ctx.status = 401; ctx.body = { error: 'Unauthorized' }; return; }
         const { id } = ctx.params;
         const body = ctx.request.body as Record<string, unknown>;
-        const patch: { title?: string; is_pinned?: number; is_archived?: number; project_root?: string | null; source_ids?: string[] | null } = {};
+        const patch: { title?: string; is_pinned?: number; is_archived?: number; project_root?: string | null; source_ids?: string[] | null; model?: string | null } = {};
         if (typeof body.title === 'string') patch.title = body.title;
         if (typeof body.isPinned === 'boolean') patch.is_pinned = body.isPinned ? 1 : 0;
         if (typeof body.isArchived === 'boolean') patch.is_archived = body.isArchived ? 1 : 0;
+        if (body.chatModel === null || body.chatModel === '') {
+            patch.model = null;
+        } else if (typeof body.chatModel === 'string' && body.chatModel.trim()) {
+            patch.model = body.chatModel.trim();
+        }
         if (body.sourceIds === null) {
             patch.source_ids = null;
         } else if (Array.isArray(body.sourceIds)) {
@@ -222,6 +228,7 @@ export function newSession(router: Router): void {
                 mode: updated.mode ?? 'general',
                 ...(updated.notebook_id !== undefined && { notebookId: updated.notebook_id }),
                 ...(updated.source_ids !== undefined && { sourceIds: updated.source_ids }),
+                ...(updated.model !== undefined && { chatModel: updated.model }),
             },
         };
     });

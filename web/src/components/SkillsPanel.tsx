@@ -11,7 +11,7 @@ import {
 } from '../api'
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
-import { Zap, Plus, Pencil, Trash2, Tag, ChevronLeft, Loader2, AlertTriangle, Code2, RefreshCw } from 'lucide-react'
+import { Zap, Plus, Pencil, Trash2, Tag, ChevronLeft, Loader2, AlertTriangle, Code2, RefreshCw, Search, X } from 'lucide-react'
 import { toast } from './Toast'
 
 // ── Default template ──────────────────────────────────────────────────────────
@@ -399,6 +399,8 @@ export const SkillsPanel: React.FC = () => {
     const [view, setView] = React.useState<PanelView>({ kind: 'list' })
     const [detailSkill, setDetailSkill] = React.useState<SkillDetail | null>(null)
     const [loadingDetail, setLoadingDetail] = React.useState(false)
+    const [searchQuery, setSearchQuery] = React.useState('')
+    const searchRef = React.useRef<HTMLInputElement>(null)
 
     const loadSkills = React.useCallback(async () => {
         setLoading(true)
@@ -500,8 +502,16 @@ export const SkillsPanel: React.FC = () => {
     }
 
     // ── List view ─────────────────────────────────────────────────────────────
-    const enabledSkills = skills.filter((s) => s.enabled)
-    const disabledSkills = skills.filter((s) => !s.enabled)
+    const q = searchQuery.toLowerCase().trim()
+    const filteredSkills = q
+        ? skills.filter((s) =>
+            s.name.toLowerCase().includes(q) ||
+            s.description.toLowerCase().includes(q) ||
+            s.tags.some((tag) => tag.toLowerCase().includes(q))
+        )
+        : skills
+    const enabledSkills = filteredSkills.filter((s) => s.enabled)
+    const disabledSkills = filteredSkills.filter((s) => !s.enabled)
 
     return (
         <div className="flex flex-col h-full">
@@ -529,6 +539,31 @@ export const SkillsPanel: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {/* Search bar */}
+            {skills.length > 0 && (
+                <div className="px-6 py-2.5 border-b border-border shrink-0">
+                    <div className="relative">
+                        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" />
+                        <input
+                            ref={searchRef}
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder={t('skillSearch')}
+                            className="w-full bg-fill border border-transparent rounded-lg pl-8 pr-7 py-[6px] text-[13px] placeholder:text-text-quaternary focus:outline-none focus:bg-bg-container focus:border-border transition-all"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => { setSearchQuery(''); searchRef.current?.focus() }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-fill transition-colors"
+                            >
+                                <X size={11} className="text-text-tertiary" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-5 space-y-5">
@@ -560,6 +595,12 @@ export const SkillsPanel: React.FC = () => {
                             <Plus size={13} />
                             {t('skillNew')}
                         </button>
+                    </div>
+                )}
+
+                {!loading && !error && skills.length > 0 && q && filteredSkills.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <p className="text-sm text-text-tertiary">{t('noMatchingChats')}</p>
                     </div>
                 )}
 

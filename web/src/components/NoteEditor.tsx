@@ -518,7 +518,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         )}>
                             {saveStatus === 'saving' && <Loader2 size={11} className="animate-spin" />}
                             {saveStatus === 'saved' && <Check size={11} />}
-                            {saveStatus === 'saving' ? '保存中…' : saveStatus === 'saved' ? '已保存' : saveStatus === 'error' ? '保存失败' : ''}
+                            {saveStatus === 'saving' ? t('saving') : saveStatus === 'saved' ? t('saved') : saveStatus === 'error' ? t('saveFailed') : ''}
                         </span>
                     )}
                 </div>
@@ -938,7 +938,7 @@ const ArticleAnnotationsBlock: React.FC<{
                 <div className="rounded-lg border border-border bg-bg-container shadow-sm px-3 py-3">
                     <div className="flex items-center gap-2 text-[12px] font-semibold text-text">
                         <MessageSquarePlus size={13} className="text-primary-mint shrink-0" />
-                        新批注
+                        {t('annotationNew')}
                     </div>
                     <blockquote className="mt-2 text-[12px] text-text-tertiary border-l-2 border-primary-mint/50 pl-2 line-clamp-2">
                         {draft.quote}
@@ -946,7 +946,7 @@ const ArticleAnnotationsBlock: React.FC<{
                     <textarea
                         value={body}
                         onChange={(e) => onBodyChange(e.target.value)}
-                        placeholder="写下你的想法、问题或判断…"
+                        placeholder={t('annotationPlaceholder')}
                         rows={3}
                         className="mt-2 w-full resize-none rounded-md border border-border bg-bg-container px-2.5 py-2 text-[13px] text-text outline-none focus:border-primary-mint"
                         autoFocus
@@ -956,14 +956,14 @@ const ArticleAnnotationsBlock: React.FC<{
                             onClick={onCancelDraft}
                             className="px-2.5 py-1.5 text-[12px] text-text-tertiary hover:bg-fill rounded-md transition-colors"
                         >
-                            取消
+                            {t('cancel')}
                         </button>
                         <button
                             onClick={onSave}
                             disabled={saving || !body.trim()}
                             className="px-3 py-1.5 text-[12px] rounded-md bg-primary-mint text-white font-medium disabled:opacity-50 transition-opacity"
                         >
-                            {saving ? '保存中…' : '保存批注'}
+                            {saving ? t('saving') : t('save')}
                         </button>
                     </div>
                 </div>
@@ -975,8 +975,8 @@ const ArticleAnnotationsBlock: React.FC<{
                         className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-bg-container px-2.5 hover:border-primary-mint/35 hover:text-primary-mint transition-colors"
                     >
                         <MessageSquare size={12} className="text-primary-mint" />
-                        批注 {annotations.length}
-                        {openCount > 0 && <span className="text-[11px] text-text-quaternary">{openCount} 未解决</span>}
+                        {t('annotationCount', { count: annotations.length })}
+                        {openCount > 0 && <span className="text-[11px] text-text-quaternary">{t('annotationOpenCount', { count: openCount })}</span>}
                     </button>
                     {expanded && annotations.map((annotation) => (
                         <div key={annotation.id} className="relative group">
@@ -994,12 +994,12 @@ const ArticleAnnotationsBlock: React.FC<{
                                 <p className="mt-2 text-[13px] leading-relaxed text-text whitespace-pre-wrap">{annotation.body}</p>
                                 <div className="mt-2 flex items-center gap-2 text-[11px] text-text-quaternary">
                                     <CircleDot size={10} className={annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
-                                    <span className="flex-1">{annotation.status === 'open' ? '未解决' : '已解决'}</span>
+                                    <span className="flex-1">{annotation.status === 'open' ? t('annotationStatusOpen') : t('annotationStatusResolved')}</span>
                                     <button onClick={() => onToggleStatus(annotation)} className="hover:text-primary-mint transition-colors">
-                                        {annotation.status === 'open' ? '解决' : '打开'}
+                                        {annotation.status === 'open' ? t('annotationResolve') : t('annotationReopen')}
                                     </button>
                                     <button onClick={() => onDelete(annotation)} className="hover:text-red-500 transition-colors">
-                                        删除
+                                        {t('delete')}
                                     </button>
                                 </div>
                             </div>

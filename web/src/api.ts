@@ -951,6 +951,7 @@ export function fetchSessions() {
         mode?: 'general' | 'notebook';
         notebookId?: string;
         sourceIds?: string[];
+        chatModel?: string;
     }>>('/api/sessions')
 }
 
@@ -962,6 +963,7 @@ export function patchSession(
         isArchived?: boolean;
         projectRoot?: string | null;
         sourceIds?: string[] | null;
+        chatModel?: string | null;
     },
 ) {
     return fetch(`/api/sessions/${encodeURIComponent(id)}`, {

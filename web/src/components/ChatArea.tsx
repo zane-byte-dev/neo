@@ -184,15 +184,15 @@ function generateBatchSummary(items: ActivityDisplayItem[]): string {
         const n = counts[toolNames[0]]
         return `${toolDisplayName(toolNames[0])} × ${n}`
     }
-    if (fileCount > 0 && webCount === 0 && runCount === 0 && toolNames.every(t => FILE_TOOLS.has(t)))
-        return `查看了 ${fileCount} 个文件`
-    if (webCount > 0 && fileCount === 0 && runCount === 0 && toolNames.every(t => WEB_TOOLS.has(t)))
-        return `搜索了 ${webCount} 次`
+    if (fileCount > 0 && webCount === 0 && runCount === 0 && toolNames.every(n => FILE_TOOLS.has(n)))
+        return t('activityBatchFiles', { count: fileCount })
+    if (webCount > 0 && fileCount === 0 && runCount === 0 && toolNames.every(n => WEB_TOOLS.has(n)))
+        return t('activityBatchWeb', { count: webCount })
     if (fileCount > 0 && webCount > 0 && runCount === 0)
-        return `搜索并查看了 ${fileCount + webCount} 个资源`
+        return t('activityBatchWebFiles', { count: fileCount + webCount })
     if (runCount > 0 && fileCount === 0 && webCount === 0)
-        return `执行了 ${runCount} 次命令`
-    return `执行了 ${total} 次操作`
+        return t('activityBatchCommands', { count: runCount })
+    return t('activityBatchOps', { count: total })
 }
 
 function mergeMessageParts(parts: MessagePart[]): RenderPart[] {
@@ -769,9 +769,12 @@ const ActivityItemCard: React.FC<{ item: ActivityItem; resultItem?: ActivityItem
 
     return (
         <div
+            role={needsDetails ? 'button' : undefined}
+            tabIndex={needsDetails ? 0 : undefined}
             className={cn('my-1.5 rounded-xl px-3 py-2 text-xs transition-colors duration-150 border', tone, needsDetails && 'cursor-pointer hover:brightness-95 dark:hover:brightness-110')}
             style={compact ? undefined : { boxShadow: 'var(--shadow-soft)' }}
             onClick={needsDetails ? toggleDetails : undefined}
+            onKeyDown={needsDetails ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDetails() } } : undefined}
         >
             <div className="flex items-center gap-2 min-w-0">
                 <StatusIcon />
@@ -1451,7 +1454,12 @@ const ChatInput: React.FC<{
     // Persist model choice to the active chat when user changes it
     const handleModelSelect = React.useCallback((model: string) => {
         setSelectedModel(model as typeof selectedModel)
-        if (activeChatId) setChatModel(activeChatId, model)
+        if (activeChatId) {
+            setChatModel(activeChatId, model)
+            patchSession(activeChatId, { chatModel: model === 'auto' ? null : model }).catch(() => {
+                toast.error(t('chatModelSaveFailed'))
+            })
+        }
     }, [activeChatId, setSelectedModel, setChatModel])
 
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)

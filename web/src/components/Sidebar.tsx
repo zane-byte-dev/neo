@@ -11,6 +11,20 @@ import { NotebookSettingsModal, getNotebookSort, applySortToEntries } from './no
 import { TrashPanel } from './TrashPanel'
 import type { Theme, NoteEntry } from '../types'
 
+/** Highlight occurrences of `query` inside `text` with a mark span. */
+function HighlightText({ text, query }: { text: string; query: string }) {
+    if (!query) return <>{text}</>
+    const idx = text.toLowerCase().indexOf(query.toLowerCase())
+    if (idx === -1) return <>{text}</>
+    return (
+        <>
+            {text.slice(0, idx)}
+            <mark className="bg-primary-mint/25 text-inherit rounded-[2px] px-px">{text.slice(idx, idx + query.length)}</mark>
+            {text.slice(idx + query.length)}
+        </>
+    )
+}
+
 function parseImportedChatFile(raw: string, filename: string): { title: string; messages: Array<{ role: 'user' | 'assistant'; content: string }> } {
     try {
         const data = JSON.parse(raw) as Record<string, unknown>
@@ -218,6 +232,7 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                 mode: r.mode ?? 'general',
                 ...(r.notebookId ? { notebookId: r.notebookId } : {}),
                 ...(r.sourceIds ? { sourceIds: r.sourceIds } : {}),
+                ...(r.chatModel ? { chatModel: r.chatModel } : {}),
             }))))
             .catch(() => {})
     }, [])
@@ -802,7 +817,9 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
                                         ) : (
                                             <span aria-hidden className="shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-text-quaternary/70" />
                                         )}
-                                        <span className="flex-1 truncate">{chat.title}</span>
+                                        <span className="flex-1 truncate">
+                                            {searching ? <HighlightText text={chat.title} query={q} /> : chat.title}
+                                        </span>
                                         <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity duration-150">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); handlePin(chat.id) }}

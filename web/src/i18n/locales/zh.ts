@@ -188,13 +188,13 @@ const zh: Record<TranslationKeys, string> = {
     welcomeTagline: '本地运行、自主规划、安全可控的 AI 工作搭子',
     welcomeCardFilesTitle: '文件整理',
     welcomeCardFilesDesc: '智能整理和管理本地文件',
-    welcomeCardFilesStarter: '帮我整理和管理本地文件，',
+    welcomeCardFilesStarter: '帮我整理本地文件，扫描当前目录并给出整理建议',
     welcomeCardCreateTitle: '内容创作',
     welcomeCardCreateDesc: '创作演示文稿、文档和多媒体内容',
-    welcomeCardCreateStarter: '帮我创作一份',
+    welcomeCardCreateStarter: '帮我创作一份内容，想要什么格式？（文章、方案、PPT提纲、脚本…）',
     welcomeCardDocsTitle: '文档处理',
     welcomeCardDocsDesc: '处理和分析文档数据',
-    welcomeCardDocsStarter: '帮我处理和分析这份文档，',
+    welcomeCardDocsStarter: '帮我分析一份文档，请粘贴文档内容或说明分析需求',
     firstRunChecklistTitle: '开始使用 Neo',
     firstRunChecklistSubtitle: '按最短路径完成配置、对话和知识沉淀。',
     firstRunChecklistDismiss: '关闭首次使用清单',
@@ -230,6 +230,8 @@ const zh: Record<TranslationKeys, string> = {
     articleTitle: '文章标题…',
     confirmDelete: '确认删除',
     saving: '保存中…',
+    saved: '已保存',
+    saveFailed: '保存失败',
     preview: '预览',
     author: '作者',
     date: '日期',
@@ -530,6 +532,29 @@ const zh: Record<TranslationKeys, string> = {
     trashDeleteFailed: '删除失败',
     trashEmptied: '垃圾箱已清空',
     trashEmptyFailed: '清空失败',
+
+    // Activity batch summary
+    activityBatchFiles: '查看了 {count} 个文件',
+    activityBatchWeb: '搜索了 {count} 次',
+    activityBatchWebFiles: '搜索并查看了 {count} 个资源',
+    activityBatchCommands: '执行了 {count} 次命令',
+    activityBatchOps: '执行了 {count} 次操作',
+
+    // Per-chat model
+    chatModelSaveFailed: '保存模型偏好失败',
+
+    // Skill search
+    skillSearch: '搜索技能…',
+
+    // Annotation
+    annotationNew: '新批注',
+    annotationPlaceholder: '写下你的想法、问题或判断…',
+    annotationCount: '批注 {count}',
+    annotationOpenCount: '{count} 未解决',
+    annotationStatusOpen: '未解决',
+    annotationStatusResolved: '已解决',
+    annotationResolve: '解决',
+    annotationReopen: '重开',
 }
 
 export default zh
