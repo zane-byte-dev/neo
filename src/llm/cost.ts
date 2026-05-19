@@ -23,6 +23,9 @@ export const COST_PER_1K: Record<string, { input: number; output: number }> = {
     'claude-opus-4-5':   { input: 0.015,  output: 0.075 },
     'claude-sonnet-4-5': { input: 0.003,  output: 0.015 },
     'claude-haiku-4-5':  { input: 0.0008, output: 0.004 },
+    'claude-code/claude-opus-4-5':   { input: 0.015,  output: 0.075 },
+    'claude-code/claude-sonnet-4-5': { input: 0.003,  output: 0.015 },
+    'claude-code/claude-haiku-4-5':  { input: 0.0008, output: 0.004 },
 };
 
 export interface UsageRecord {
@@ -83,4 +86,3 @@ export async function getDailyCost(workDir: string, dateKey = toDateKey(Date.now
     }
     return total;
 }
-

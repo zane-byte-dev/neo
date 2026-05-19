@@ -37,6 +37,7 @@ const PROVIDER_LABELS: Record<string, string> = {
     deepseek: 'DeepSeek',
     openai: 'OpenAI',
     anthropic: 'Anthropic',
+    'claude-code': 'Claude Code',
     ollama: 'Ollama (Local)',
 }
 
@@ -246,6 +247,8 @@ const MODEL_SECRET_FIELDS: SecretFieldDef[] = [
     { key: 'DEEPSEEK_API_KEY',  label: 'DeepSeek API Key',  placeholder: 'sk-…', models: ['deepseek', 'deepseek-reasoner'] },
     { key: 'OPENAI_API_KEY',    label: 'OpenAI API Key',    placeholder: 'sk-…', models: ['gpt', 'gpt-4o', 'gpt-4o-mini', 'gpt-5', 'gpt-5-mini'] },
     { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', placeholder: 'sk-ant-…', models: ['claude', 'claude-sonnet', 'claude-opus', 'claude-haiku'] },
+    { key: 'CLAUDE_CODE_BASE_URL', label: 'Claude Code Proxy URL', placeholder: 'https://claude-code.example.com/v1', models: ['claude-code', 'claude-code-sonnet'] },
+    { key: 'CLAUDE_CODE_TOKEN', label: 'Claude Code Token', placeholder: 'token…', models: ['claude-code-opus', 'claude-code-haiku'] },
 ]
 
 const TELEGRAM_SECRET_FIELDS: SecretFieldDef[] = [

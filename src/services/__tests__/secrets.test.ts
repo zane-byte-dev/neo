@@ -11,6 +11,8 @@ const ORIGINAL_PATH = process.env.NEO_SECRETS_PATH;
 const ORIGINAL_STATE_DIR = process.env.NEO_STATE_DIR;
 const ORIGINAL_GEMINI = process.env.GEMINI_API_KEY;
 const ORIGINAL_OPENAI = process.env.OPENAI_API_KEY;
+const ORIGINAL_CLAUDE_CODE_BASE_URL = process.env.CLAUDE_CODE_BASE_URL;
+const ORIGINAL_CLAUDE_CODE_TOKEN = process.env.CLAUDE_CODE_TOKEN;
 const ORIGINAL_SESSION = process.env.SESSION_SECRET;
 
 beforeEach(() => {
@@ -20,6 +22,8 @@ beforeEach(() => {
     process.env.SESSION_SECRET = 'unit-test-secret';
     delete process.env.GEMINI_API_KEY;
     delete process.env.OPENAI_API_KEY;
+    delete process.env.CLAUDE_CODE_BASE_URL;
+    delete process.env.CLAUDE_CODE_TOKEN;
 });
 
 afterEach(async () => {
@@ -32,6 +36,10 @@ afterEach(async () => {
     else process.env.GEMINI_API_KEY = ORIGINAL_GEMINI;
     if (ORIGINAL_OPENAI === undefined) delete process.env.OPENAI_API_KEY;
     else process.env.OPENAI_API_KEY = ORIGINAL_OPENAI;
+    if (ORIGINAL_CLAUDE_CODE_BASE_URL === undefined) delete process.env.CLAUDE_CODE_BASE_URL;
+    else process.env.CLAUDE_CODE_BASE_URL = ORIGINAL_CLAUDE_CODE_BASE_URL;
+    if (ORIGINAL_CLAUDE_CODE_TOKEN === undefined) delete process.env.CLAUDE_CODE_TOKEN;
+    else process.env.CLAUDE_CODE_TOKEN = ORIGINAL_CLAUDE_CODE_TOKEN;
     if (ORIGINAL_SESSION === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = ORIGINAL_SESSION;
     vi.resetModules();
@@ -52,18 +60,27 @@ describe('secrets store', () => {
         process.env.OPENAI_API_KEY = 'sk-from-env';
         const { updateSecrets, getSecret, getSecretsStatus, resetSecretsCache } = await import('../secrets.js');
 
-        await updateSecrets({ GEMINI_API_KEY: 'AIza-real', OPENAI_API_KEY: 'sk-real' });
+        await updateSecrets({
+            GEMINI_API_KEY: 'AIza-real',
+            OPENAI_API_KEY: 'sk-real',
+            CLAUDE_CODE_BASE_URL: 'https://proxy.example.com/v1',
+            CLAUDE_CODE_TOKEN: 'cc-real',
+        });
         expect(existsSync(process.env.NEO_SECRETS_PATH!)).toBe(true);
 
         // Fresh read from disk
         resetSecretsCache();
         expect(getSecret('GEMINI_API_KEY')).toBe('AIza-real');
         expect(getSecret('OPENAI_API_KEY')).toBe('sk-real');
+        expect(getSecret('CLAUDE_CODE_BASE_URL')).toBe('https://proxy.example.com/v1');
+        expect(getSecret('CLAUDE_CODE_TOKEN')).toBe('cc-real');
 
         const status = await getSecretsStatus();
         expect(status.GEMINI_API_KEY.source).toBe('file');
         expect(status.GEMINI_API_KEY.masked.endsWith('real')).toBe(true);
         expect(status.OPENAI_API_KEY.source).toBe('file');
+        expect(status.CLAUDE_CODE_BASE_URL.source).toBe('file');
+        expect(status.CLAUDE_CODE_TOKEN.source).toBe('file');
         expect(status.DEEPSEEK_API_KEY.source).toBe('none');
     });
 

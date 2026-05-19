@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 > 个人 AI 助手服务：Web Chat + Notebook 知识库 + Telegram Bot + 可扩展的 Tool/Skill 体系。
-> 多 LLM 后端（Gemini / DeepSeek / OpenAI / Anthropic / Ollama），自托管，单用户为先。
+> 多 LLM 后端（Gemini / DeepSeek / OpenAI / Anthropic / Claude Code 兼容代理 / Ollama），自托管，单用户为先。
 
 **English** · [Read in English →](README.en.md)
 
@@ -28,7 +28,7 @@ npm run dev:bot              # 后端 + Telegram bot，监听 :3000
 npm run web:dev              # 另开终端，前端开发服务器 :5173
 ```
 
-打开 http://localhost:5173，首次进入 **Settings / Basic / Overview** 查看系统状态；如果 Models 显示未就绪，进入 **Settings / Basic / Models** 填入至少一个 LLM Provider 的 API Key（Gemini / DeepSeek / OpenAI / Anthropic 任一），即可开始对话。空 Chat 欢迎页现在会显示“开始使用 Neo”清单，引导你完成模型配置、第一条消息和第一条 Notebook 笔记。生产部署见下文「生产部署」一节，常见问题见 [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)。如果你想在这个仓库里用 GitHub Copilot 跑一轮文档驱动的 AI 开发流程，直接看 [docs/user-guide/AI_DEVELOPMENT.md](docs/user-guide/AI_DEVELOPMENT.md)。
+打开 http://localhost:5173，首次进入 **Settings / Basic / Overview** 查看系统状态；如果 Models 显示未就绪，进入 **Settings / Basic / Models** 填入至少一个 LLM Provider 的 API Key / Token（Gemini / DeepSeek / OpenAI / Anthropic / Claude Code 兼容代理任一），即可开始对话。空 Chat 欢迎页现在会显示“开始使用 Neo”清单，引导你完成模型配置、第一条消息和第一条 Notebook 笔记。生产部署见下文「生产部署」一节，常见问题见 [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)。如果你想在这个仓库里用 GitHub Copilot 跑一轮文档驱动的 AI 开发流程，直接看 [docs/user-guide/AI_DEVELOPMENT.md](docs/user-guide/AI_DEVELOPMENT.md)。
 
 > 想贡献代码？请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 > 发现安全问题？请走 [SECURITY.md](SECURITY.md) 中的私密披露流程，不要开公开 issue。
@@ -54,7 +54,7 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 
 - **运行时**：Node.js ≥ 18 (ESM) + TypeScript
 - **后端框架**：Koa 3 + better-sqlite3
-- **LLM**：Vercel AI SDK，统一接入 Google Gemini / DeepSeek / OpenAI / Anthropic / 本地 Ollama（流式 + 函数调用）
+- **LLM**：Vercel AI SDK，统一接入 Google Gemini / DeepSeek / OpenAI / Anthropic / Claude Code 兼容代理 / 本地 Ollama（流式 + 函数调用）
 - **Telegram**：Telegraf 4
 - **前端**：React 19 + Vite + Tailwind CSS 4
 - **进程管理**：PM2
@@ -93,7 +93,7 @@ neo/
 
 - Node.js ≥ 18
 - npm ≥ 10
-- 至少一个 LLM Provider：Gemini / DeepSeek / OpenAI / Anthropic API Key，或本地 Ollama，或登录后的 Gemini CLI（OAuth 配额）
+- 至少一个 LLM Provider：Gemini / DeepSeek / OpenAI / Anthropic API Key，Claude Code 兼容代理地址 + Token，或本地 Ollama，或登录后的 Gemini CLI（OAuth 配额）
 
 ### 安装依赖
 
@@ -136,7 +136,7 @@ const config: LocalConfig = {
 export default config;
 ```
 
-> ⚠️ **关于 API Key**：Gemini / DeepSeek / OpenAI / Anthropic 等 Provider 的 API Key 与 Telegram Bot Token **不写在配置文件里**。启动后访问 Web UI **Settings / Basic / Models** 页填入即可，会以 AES-256-GCM 加密存到 `{stateDir}/secrets.json.enc`（密钥派生自 `SESSION_SECRET`）。
+> ⚠️ **关于 API Key / Token**：Gemini / DeepSeek / OpenAI / Anthropic 等 Provider 的 API Key、Claude Code 兼容代理地址 + Token 与 Telegram Bot Token **不写在配置文件里**。启动后访问 Web UI **Settings / Basic / Models** 页填入即可，会以 AES-256-GCM 加密存到 `{stateDir}/secrets.json.enc`（密钥派生自 `SESSION_SECRET`）。
 
 ### 可选环境变量
 
@@ -152,6 +152,10 @@ GEMINI_CLI_PATH=gemini
 
 # 本地 Ollama（默认值如下）
 OLLAMA_BASE_URL=http://localhost:11434/v1
+
+# Claude Code 兼容代理（也可在 Settings / Basic / Models 中加密保存）
+CLAUDE_CODE_BASE_URL=https://your-claude-code-proxy.example.com/v1
+CLAUDE_CODE_TOKEN=your-token
 
 # 日志级别
 LOG_LEVEL=info                  # debug | info | warn | error
@@ -313,6 +317,7 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 | `deepseek-reasoner` | deepseek-reasoner | DeepSeek API | 深度推理 |
 | `gpt-4o` / `gpt-4o-mini` / `gpt-5` / `gpt-5-mini` | OpenAI 同名模型 | OpenAI API | 完整的 GPT 系列 |
 | `claude-sonnet` / `claude-opus` / `claude-haiku` | claude-*-4-5 | Anthropic API | Claude 4.5 系列 |
+| `claude-code` / `claude-code-sonnet` / `claude-code-opus` / `claude-code-haiku` | claude-code/claude-*-4-5 | Claude Code 兼容代理 | 使用自有代理地址 + Token（Bearer） |
 | `gemma` | ollama/gemma4:e4b | 本地 Ollama | 离线 / 隐私场景 |
 
 **智能路由（auto 模式）**：当用户选择 `auto` 时，`model-router.ts` 会先用 `scorer.ts` 对任务复杂度打分，再映射到 `simple` / `standard` / `complex` 三档：

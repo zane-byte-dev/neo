@@ -10,7 +10,16 @@
 
 ## API Key 在哪里填写？
 
-打开 Web UI 后进入 Models 页，添加 Gemini / DeepSeek / OpenAI / Anthropic 等 Provider 的 API Key。Key 会加密保存到 `{stateDir}/secrets.json.enc`，不会写入仓库。
+打开 Web UI 后进入 Models 页，添加 Gemini / DeepSeek / OpenAI / Anthropic 等 Provider 的 API Key，或 Claude Code 兼容代理的地址 + Token。凭据会加密保存到 `{stateDir}/secrets.json.enc`，不会写入仓库。
+
+## Claude Code 代理怎么接入？
+
+在 **Settings / Basic / Models → Add Model** 里分别保存：
+
+- `Claude Code Proxy URL`：你的代理地址，通常以 `/v1` 结尾。
+- `Claude Code Token`：代理给你的访问 Token，Neo 会按 Bearer Token 发送。
+
+两项都配置后，模型列表会显示 `claude-code`、`claude-code-sonnet`、`claude-code-opus`、`claude-code-haiku`。也可以通过环境变量 `CLAUDE_CODE_BASE_URL` 和 `CLAUDE_CODE_TOKEN` 配置。
 
 ## 首次使用清单在哪里？
 

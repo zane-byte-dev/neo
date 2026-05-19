@@ -14,7 +14,7 @@ import { isAcpAvailable } from './providers/gemini-acp.js';
 
 export interface ProviderStatus {
     /** Provider id used by the UI (matches resolveProvider() in routes/model.ts). */
-    provider: 'google' | 'gemini-acp' | 'deepseek' | 'openai' | 'anthropic' | 'ollama';
+    provider: 'google' | 'gemini-acp' | 'deepseek' | 'openai' | 'anthropic' | 'claude-code' | 'ollama';
     /** Whether the provider is usable right now. */
     ok: boolean;
     /** Short human-readable status (e.g. "running", "未安装 gemini CLI"). */
@@ -128,13 +128,32 @@ export async function checkOllama(): Promise<ProviderStatus> {
 
 // ── Aggregate ────────────────────────────────────────────────────────────────
 
-import { getAnthropicApiKey, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
+import { getAnthropicApiKey, getClaudeCodeBaseUrl, getClaudeCodeToken, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
 
 function cloudStatus(provider: ProviderStatus['provider'], hasKey: boolean): ProviderStatus {
     return {
         provider,
         ok: hasKey,
         detail: hasKey ? 'API Key 已配置' : '未配置 API Key',
+    };
+}
+
+function claudeCodeStatus(): ProviderStatus {
+    const baseUrl = getClaudeCodeBaseUrl();
+    const hasBaseUrl = Boolean(baseUrl);
+    const hasToken = Boolean(getClaudeCodeToken());
+    const ok = hasBaseUrl && hasToken;
+    return {
+        provider: 'claude-code',
+        ok,
+        detail: ok
+            ? '代理地址与 Token 已配置'
+            : !hasBaseUrl && !hasToken
+                ? '未配置代理地址与 Token'
+                : !hasBaseUrl
+                    ? '未配置代理地址'
+                    : '未配置 Token',
+        meta: hasBaseUrl ? { endpoint: baseUrl } : undefined,
     };
 }
 
@@ -146,6 +165,7 @@ export async function getAllProviderStatus(): Promise<ProviderStatus[]> {
         cloudStatus('deepseek', Boolean(getDeepseekApiKey())),
         cloudStatus('openai', Boolean(getOpenAIApiKey())),
         cloudStatus('anthropic', Boolean(getAnthropicApiKey())),
+        claudeCodeStatus(),
         ollama,
     ];
 }

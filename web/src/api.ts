@@ -309,6 +309,8 @@ export type SecretKey =
     | 'DEEPSEEK_API_KEY'
     | 'OPENAI_API_KEY'
     | 'ANTHROPIC_API_KEY'
+    | 'CLAUDE_CODE_BASE_URL'
+    | 'CLAUDE_CODE_TOKEN'
     | 'TELEGRAM_BOT_TOKEN'
     | 'TELEGRAM_CHAT_ID'
 

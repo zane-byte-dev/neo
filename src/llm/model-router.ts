@@ -2,7 +2,7 @@
  * src/llm/model-router.ts — Config-driven smart routing.
  */
 
-import { getAnthropicApiKey, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
+import { getAnthropicApiKey, getClaudeCodeBaseUrl, getClaudeCodeToken, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
 import { isAcpAvailable } from './providers/gemini-acp.js';
 import { scoreRequest, type ScorerDimensions } from './scorer.js';
 import { getFallbackChain, ROUTING_CONFIG, type Tier } from './routing-config.js';
@@ -41,6 +41,9 @@ export function isModelAliasAvailable(alias: string): boolean {
     if (alias === 'gemma') return true;
     if (alias === 'gpt' || alias.startsWith('gpt-')) return Boolean(getOpenAIApiKey());
     if (alias === 'claude' || alias.startsWith('claude-')) return Boolean(getAnthropicApiKey());
+    if (alias === 'claude-code' || alias.startsWith('claude-code-') || alias.startsWith('claude-code/')) {
+        return Boolean(getClaudeCodeBaseUrl() && getClaudeCodeToken());
+    }
     return true;
 }
 
