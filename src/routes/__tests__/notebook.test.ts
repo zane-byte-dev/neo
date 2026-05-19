@@ -3,7 +3,7 @@ import request from 'supertest';
 import { createTestApp, signedCookie } from '../../__tests__/test-helpers.js';
 
 vi.mock('../../services/user-service.js', () => ({
-    calcUser: vi.fn().mockResolvedValue({ workDir: '/tmp/test-nb' }),
+    calcUser: vi.fn().mockResolvedValue({ workDir: '/tmp/test-nb', stateDir: '/tmp/test-nb' }),
 }));
 
 vi.mock('../../services/notebook-service.js', () => ({
@@ -50,6 +50,11 @@ vi.mock('../../services/notebook-service.js', () => ({
     sourceIdFromEntryId: vi.fn((id: string) => id),
 }));
 
+vi.mock('../../services/trash-service.js', () => ({
+    trashArticle: vi.fn().mockResolvedValue({ id: 'trash_1', type: 'article', title: 'Note 1', deletedAt: Date.now() }),
+    trashNotebook: vi.fn(),
+}));
+
 // Mock AI/chat/parser modules so the route file imports succeed (they're not exercised here)
 vi.mock('../../services/notebook-ai.js', () => ({
     generateAndSaveSourceGuide: vi.fn(),
@@ -66,7 +71,8 @@ vi.mock('../../services/document-parser.js', () => ({
 }));
 
 import { notebookGet, notebookCreate, notebookUpdate, notebookDelete } from '../notebook.js';
-import { nbGet, nbDelete } from '../../services/notebook-service.js';
+import { nbGet } from '../../services/notebook-service.js';
+import { trashArticle } from '../../services/trash-service.js';
 
 const cookie = signedCookie('testuser');
 
@@ -152,10 +158,12 @@ describe('Notebook routes', () => {
             .set('Cookie', cookie);
         expect(res.status).toBe(200);
         expect(res.body.ok).toBe(true);
+        expect(res.body.trashId).toBe('trash_1');
+        expect(vi.mocked(trashArticle)).toHaveBeenCalledWith('/tmp/test-nb', '/tmp/test-nb', 'personal/note1.md', 'Note 1');
     });
 
     it('DELETE /api/notebook returns 404 for missing note', async () => {
-        vi.mocked(nbDelete).mockReturnValueOnce(false);
+        vi.mocked(nbGet).mockReturnValueOnce(undefined as any);
         const app = buildApp();
         const res = await request(app.callback())
             .delete('/api/notebook')

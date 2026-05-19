@@ -2,7 +2,7 @@
 
 ## Scope
 
-验证 Article Annotations MVP 的数据持久化、HTTP API、前端类型构建和文档链接。
+验证 Article Annotations MVP 的数据持久化、HTTP API、前端类型构建、辅助面板迭代和文档链接。
 
 ## Automated Coverage
 
@@ -19,18 +19,19 @@
 - Web build 覆盖 `NoteEditor` 与 `NovelEditor` 的 TypeScript 类型。
 - UI smoke：选中文章正文后，气泡菜单新增批注按钮；保存后正文以轻量下划线标记批注，hover 下划线会显示小弹窗。
 - UI smoke：从批注弹窗或紧凑列表删除批注后，会同步移除正文下划线标记。
+- UI smoke：展开“全部批注”后，辅助面板按文章顺序列出批注，支持全部 / 未解决 / 已解决 / 划线 / 段落筛选，并可点击编号或引用跳转正文。
 - Screenshot: <https://github.com/user-attachments/assets/a9c5ecad-fd02-4dc5-a055-f0e563e70d6c>
 
 ## Validation Commands
 
 - ✅ `npm run build`
 - ✅ `npm --prefix web run build`
+- ✅ `npx vitest run src/routes/__tests__/notebook-routes.test.ts src/routes/__tests__/notebook.test.ts src/routes/__tests__/session.test.ts`
 - ✅ `npx vitest run src/services/__tests__/notebook-service.test.ts -t 'article annotations'`
 - ✅ `npx vitest run src/routes/__tests__/notebook-routes.test.ts -t 'article annotation routes'`
-- ⚠️ `npm test` currently has unrelated pre-existing failures in delete-route tests (`DELETE /api/notebook`, `DELETE /api/sessions/:id`).
-- ⚠️ `npm run docs:check` currently has unrelated pre-existing broken links in `docs/product/DOC_REVIEW.md`.
+- ✅ `npm test`
+- ✅ `npm run docs:check`
 
 ## Known Gaps
 
-- 全量 `npm test` 当前仍有 3 个既有删除路由相关失败，和本功能无关；本轮使用 targeted Vitest 覆盖新增 annotation 路径。
-- 本轮尚未实现段落 hover 入口和 annotation id 级强绑定 mark；当前删除样式恢复依赖保存时记录的 anchor 区间，文章大幅改写后仍可能需要后续漂移修复。
+- 本轮尚未实现段落 hover 创建入口和 annotation id 级强绑定 mark；当前删除样式恢复依赖保存时记录的 anchor 区间，文章大幅改写后仍可能需要后续漂移修复。

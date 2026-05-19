@@ -927,7 +927,29 @@ const ArticleAnnotationsBlock: React.FC<{
     onToggleStatus,
     onDelete,
 }) => {
+    type AnnotationFilter = 'all' | 'open' | 'resolved' | 'highlight' | 'paragraph'
     const openCount = annotations.filter((annotation) => annotation.status === 'open').length
+    const resolvedCount = annotations.length - openCount
+    const [filter, setFilter] = React.useState<AnnotationFilter>('all')
+    const sortedAnnotations = React.useMemo(() => [...annotations].sort((a, b) => {
+        const aOffset = typeof a.anchor.startOffset === 'number' ? a.anchor.startOffset : Number.MAX_SAFE_INTEGER
+        const bOffset = typeof b.anchor.startOffset === 'number' ? b.anchor.startOffset : Number.MAX_SAFE_INTEGER
+        if (aOffset !== bOffset) return aOffset - bOffset
+        return a.createdAt - b.createdAt
+    }), [annotations])
+    const visibleAnnotations = sortedAnnotations.filter((annotation) => {
+        if (filter === 'all') return true
+        if (filter === 'open' || filter === 'resolved') return annotation.status === filter
+        return annotation.kind === filter
+    })
+    const filterOptions: Array<{ id: AnnotationFilter; label: string; count: number }> = [
+        { id: 'all', label: '全部', count: annotations.length },
+        { id: 'open', label: t('annotationStatusOpen'), count: openCount },
+        { id: 'resolved', label: t('annotationStatusResolved'), count: resolvedCount },
+        { id: 'highlight', label: '划线', count: annotations.filter((annotation) => annotation.kind === 'highlight').length },
+        { id: 'paragraph', label: '段落', count: annotations.filter((annotation) => annotation.kind === 'paragraph').length },
+    ]
+
     if (!draft && annotations.length === 0) {
         return null
     }
@@ -969,7 +991,7 @@ const ArticleAnnotationsBlock: React.FC<{
                 </div>
             )}
             {annotations.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 text-[12px] text-text-tertiary">
+                <div className="space-y-2 text-[12px] text-text-tertiary">
                     <button
                         onClick={onToggleExpanded}
                         className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-bg-container px-2.5 hover:border-primary-mint/35 hover:text-primary-mint transition-colors"
@@ -978,33 +1000,78 @@ const ArticleAnnotationsBlock: React.FC<{
                         {t('annotationCount', { count: annotations.length })}
                         {openCount > 0 && <span className="text-[11px] text-text-quaternary">{t('annotationOpenCount', { count: openCount })}</span>}
                     </button>
-                    {expanded && annotations.map((annotation) => (
-                        <div key={annotation.id} className="relative group">
-                            <button
-                                onClick={() => onJump(annotation)}
-                                className={cn(
-                                    'h-7 max-w-[180px] truncate rounded-md border bg-bg-container px-2.5 text-[12px] underline decoration-primary-mint/70 underline-offset-4 hover:text-primary-mint transition-colors',
-                                    annotation.status === 'resolved' ? 'border-border text-text-quaternary decoration-text-quaternary/50' : 'border-primary-mint/20 text-text-secondary'
-                                )}
-                            >
-                                {annotation.quote}
-                            </button>
-                            <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-72 -translate-x-1/2 rounded-lg border border-border bg-bg-container px-3 py-2.5 text-left shadow-float opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 transition-opacity">
-                                <div className="text-[11px] text-text-tertiary line-clamp-2 border-l-2 border-primary-mint/50 pl-2">{annotation.quote}</div>
-                                <p className="mt-2 text-[13px] leading-relaxed text-text whitespace-pre-wrap">{annotation.body}</p>
-                                <div className="mt-2 flex items-center gap-2 text-[11px] text-text-quaternary">
-                                    <CircleDot size={10} className={annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
-                                    <span className="flex-1">{annotation.status === 'open' ? t('annotationStatusOpen') : t('annotationStatusResolved')}</span>
-                                    <button onClick={() => onToggleStatus(annotation)} className="hover:text-primary-mint transition-colors">
-                                        {annotation.status === 'open' ? t('annotationResolve') : t('annotationReopen')}
+                    {expanded && (
+                        <div className="rounded-xl border border-border bg-bg-container shadow-sm">
+                            <div className="flex flex-wrap items-center gap-1.5 border-b border-border/70 px-3 py-2">
+                                {filterOptions.map((option) => (
+                                    <button
+                                        key={option.id}
+                                        onClick={() => setFilter(option.id)}
+                                        className={cn(
+                                            'inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] transition-colors',
+                                            filter === option.id
+                                                ? 'bg-primary-mint/12 text-primary-mint'
+                                                : 'text-text-tertiary hover:bg-fill hover:text-text-secondary'
+                                        )}
+                                    >
+                                        {option.label}
+                                        <span className="text-[10px] text-text-quaternary">{option.count}</span>
                                     </button>
-                                    <button onClick={() => onDelete(annotation)} className="hover:text-red-500 transition-colors">
-                                        {t('delete')}
-                                    </button>
-                                </div>
+                                ))}
+                            </div>
+                            <div className="max-h-72 overflow-y-auto custom-scrollbar">
+                                {visibleAnnotations.length === 0 ? (
+                                    <div className="px-3 py-5 text-center text-[12px] text-text-quaternary">当前筛选下暂无批注</div>
+                                ) : visibleAnnotations.map((annotation, index) => (
+                                    <div key={annotation.id} className="border-b border-border/60 px-3 py-3 last:border-b-0">
+                                        <div className="flex items-start gap-2">
+                                            <button
+                                                onClick={() => onJump(annotation)}
+                                                className={cn(
+                                                    'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-medium transition-colors',
+                                                    annotation.status === 'resolved'
+                                                        ? 'border-border text-text-quaternary hover:border-primary-mint/40 hover:text-primary-mint'
+                                                        : 'border-primary-mint/30 bg-primary-mint/8 text-primary-mint'
+                                                )}
+                                                title="跳转到正文位置"
+                                            >
+                                                {index + 1}
+                                            </button>
+                                            <div className="min-w-0 flex-1">
+                                                <button
+                                                    onClick={() => onJump(annotation)}
+                                                    className={cn(
+                                                        'block w-full text-left text-[12px] leading-relaxed underline underline-offset-4 transition-colors',
+                                                        annotation.status === 'resolved'
+                                                            ? 'text-text-quaternary decoration-text-quaternary/40 hover:text-primary-mint'
+                                                            : 'text-text-secondary decoration-primary-mint/70 hover:text-primary-mint'
+                                                    )}
+                                                >
+                                                    <span className="line-clamp-2">{annotation.quote}</span>
+                                                </button>
+                                                <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-text">{annotation.body}</p>
+                                                <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-text-quaternary">
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <CircleDot size={10} className={annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
+                                                        {annotation.status === 'open' ? t('annotationStatusOpen') : t('annotationStatusResolved')}
+                                                    </span>
+                                                    <span>{annotation.kind === 'paragraph' ? '段落批注' : '划线批注'}</span>
+                                                    {annotation.author && <span>{annotation.author}</span>}
+                                                    <span className="flex-1" />
+                                                    <button onClick={() => onToggleStatus(annotation)} className="hover:text-primary-mint transition-colors">
+                                                        {annotation.status === 'open' ? t('annotationResolve') : t('annotationReopen')}
+                                                    </button>
+                                                    <button onClick={() => onDelete(annotation)} className="hover:text-red-500 transition-colors">
+                                                        {t('delete')}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                    ))}
+                    )}
                 </div>
             )}
         </div>

@@ -65,7 +65,8 @@ vi.mock('../../runtime/events.js', () => ({
 }));
 
 import { newSession } from '../session.js';
-import { sessionDelete, sessionPatch } from '../../services/chat-service.js';
+import { sessionPatch, sessionSoftDelete } from '../../services/chat-service.js';
+import { trashRegisterSession } from '../../services/trash-service.js';
 
 const cookie = signedCookie('testuser');
 
@@ -108,7 +109,8 @@ describe('Session routes', () => {
             .set('Cookie', cookie);
         expect(res.status).toBe(200);
         expect(res.body.ok).toBe(true);
-        expect(vi.mocked(sessionDelete)).toHaveBeenCalledWith('s1', 'testuser');
+        expect(vi.mocked(sessionSoftDelete)).toHaveBeenCalledWith('s1', 'testuser');
+        expect(vi.mocked(trashRegisterSession)).toHaveBeenCalledWith('/tmp/workdir', 's1', 'Chat 1');
     });
 
     it('PATCH /api/sessions/:id modifies title', async () => {

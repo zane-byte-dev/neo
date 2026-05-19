@@ -17,7 +17,7 @@ import {
 let workDir: string;
 
 vi.mock('../../services/user-service.js', () => ({
-    calcUser: vi.fn(async () => ({ workDir })),
+    calcUser: vi.fn(async () => ({ workDir, stateDir: workDir })),
 }));
 
 // Mock AI functions to avoid real LLM calls
