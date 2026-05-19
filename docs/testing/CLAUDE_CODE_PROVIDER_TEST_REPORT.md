@@ -12,6 +12,11 @@
   - After `npm install`, `npm run build` passed.
   - After `npm install`, `cd web && npm run build` passed.
   - After `npm install`, `npm test` had 3 pre-existing failures in notebook/session delete tests unrelated to this provider change.
+- Final validation:
+  - `npm run build` passed.
+  - `cd web && npm run build` passed.
+  - `npx vitest run src/llm/__tests__/client.test.ts src/llm/__tests__/model-router.test.ts src/services/__tests__/secrets.test.ts src/routes/__tests__/model.test.ts` passed.
+  - `npm test` still has the same 3 unrelated notebook/session delete failures observed in the baseline.
 
 ## Acceptance coverage
 

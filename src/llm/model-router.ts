@@ -40,10 +40,10 @@ export function isModelAliasAvailable(alias: string): boolean {
     if (alias === 'deepseek' || alias === 'deepseek-chat' || alias === 'deepseek-reasoner') return Boolean(getDeepseekApiKey());
     if (alias === 'gemma') return true;
     if (alias === 'gpt' || alias.startsWith('gpt-')) return Boolean(getOpenAIApiKey());
-    if (alias === 'claude' || alias.startsWith('claude-')) return Boolean(getAnthropicApiKey());
     if (alias === 'claude-code' || alias.startsWith('claude-code-') || alias.startsWith('claude-code/')) {
         return Boolean(getClaudeCodeBaseUrl() && getClaudeCodeToken());
     }
+    if (alias === 'claude' || alias.startsWith('claude-')) return Boolean(getAnthropicApiKey());
     return true;
 }
 
