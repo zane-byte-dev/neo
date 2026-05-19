@@ -44,7 +44,7 @@
 | B9 | 🔴 高 | 文章批注 | 全量 `npm test` 仍有 3 个既有失败（`DELETE /api/notebook`、`DELETE /api/sessions/:id`），和批注功能无关但影响 CI 信心 | annotation test-report ⚠️ | ❌ 待修复 |
 | B10 | 🔴 高 | 文档链接 | `docs/product/DOC_REVIEW.md` 中存在 13 个 broken links，`npm run docs:check` 返回失败，阻塞 CI docs 校验 job | 多轮 test-report ⚠️ | ❌ 待修复 |
 | B11 | 🟡 中 | 文章批注 | 文章正文大幅修改（段落顺序调整、内容增删）后，批注位置锚点依赖字符偏移，会导致下划线标记与批注脱节或指向错误位置 | annotation brief、test-report | ⚠️ 已知风险 |
-| B12 | 🟡 中 | Workflow | JSON 编辑器不校验 Schema，输入语法错误时只有保存失败的 toast，用户无法知道哪里写错 | workflow test-report残余风险 | ❌ 待修复 |
+| B12 | 🟡 中 | Workflow | JSON 编辑器曾不校验 Schema，输入语法错误时只有保存失败的 toast，用户无法知道哪里写错；2026-05-19 已补保存前校验与错误定位 | workflow test-report残余风险 | ✅ 已修复 |
 | B13 | 🟡 中 | 语音输入 | 录音超过 90 秒自动停止的 `voiceErrorTooLong` 逻辑依赖 `setTimeout`，真实环境（浏览器节流、设备睡眠）可能未按预期触发 | voice test-report 已知限制 | ⚠️ 待真实设备验证 |
 | B14 | 🟡 中 | 对话沉淀 Skill | `manage_skill` 接收的是 LLM 原始生成文本；若模型生成的 frontmatter 格式不完整或 YAML 解析失败，错误信息直接以工具返回文本暴露给用户，缺少友好提示 | skill authoring test-report | ❌ 待改善 |
 | B15 | 🟢 低 | Agent 运行时 | E2（前端 cursor 级 SSE reconnect 测试矩阵）仍未完成，覆盖范围空白，SSE 断线重连行为缺乏回归保障 | agent-runtime issues.md E2 | ❌ 待补充 |
@@ -86,7 +86,7 @@
 
 | # | 严重度 | 场景 | 问题描述 |
 |---|--------|------|---------|
-| U12 | 🔴 高 | Workflow | JSON 编辑器无 Schema 校验、无错误行定位，普通用户基本无法独立写出有效 workflow；即便是技术用户也容易因细节笔误导致运行失败 |
+| U12 | 🔴 高 | Workflow | Workflow 仍以 JSON 编辑器为主；虽然 2026-05-19 已补保存前 Schema 校验与错误行定位，但普通用户仍需手写 JSON，缺少模板或向导式创建 |
 | U13 | 🟡 中 | 文章批注 | 批注气泡（hover popover）在正文密集区域（如多处批注紧邻）容易相互遮挡，当前没有 z-index 或位置规避策略 |
 | U14 | 🟡 中 | 文章内资源 | 折叠模块（思维导图/报告）默认展开还是折叠取决于编辑器状态，用户在重新打开文章后可能看到意外的展开/折叠状态，缺少"默认折叠"的一致策略 |
 | U15 | 🟡 中 | 语音输入 | 录音状态出现在输入框区域内，与文字输入焦点冲突；移动端软键盘弹出时，录音状态条可能被遮挡 |
@@ -141,8 +141,8 @@
 
 ### 7.2 Workflow 能力成熟化
 
-**当前状态**：声明式 JSON 工作流 MVP 已落地，支持串行步骤和三种触发方式。  
-**差距**：纯 JSON 编辑门槛过高，缺少 branch/retry/parallel，Skill 步骤未做 LLM 真实集成验证。  
+**当前状态**：声明式 JSON 工作流 MVP 已落地，支持串行步骤、三种触发方式，以及保存前结构校验与错误定位。  
+**差距**：仍以纯 JSON 编辑为主，门槛偏高；同时缺少 branch/retry/parallel，Skill 步骤未做 LLM 真实集成验证。  
 **方向**：
 - Phase 2：步骤模板库、schema-aware 表单、条件分支与失败重试。
 - Phase 3：文件变更 / Notebook 新来源事件触发，RSS/邮件连接器，可视化简易编辑器。
@@ -183,7 +183,7 @@
 
 - [x] **B9** 修复 3 个既有 delete route 测试失败
 - [x] **B10** 修复 `docs/product/DOC_REVIEW.md` 中 13 个 broken links
-- [ ] **B12** Workflow JSON 编辑器增加 Schema 校验与错误行提示
+- [x] **B12** Workflow JSON 编辑器增加 Schema 校验与错误行提示
 - [x] **F14** 实现批注辅助面板（全部批注 + 筛选 + 跳转）
 
 ### P1 — 近期迭代

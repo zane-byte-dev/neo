@@ -32,8 +32,101 @@ import { SkillsPanel } from './SkillsPanel'
 import { toast } from './Toast'
 import { confirm as confirmDialog } from './ConfirmDialog'
 import { ActionableErrorBanner } from './ActionableErrorBanner'
+import type { TranslationKeys } from '../i18n/locales/en'
+import { validateWorkflowId, validateWorkflowJson, type WorkflowValidationIssue } from '../lib/workflow-validation'
 
 const errorMessage = (error: unknown, fallback: string): string => error instanceof Error ? error.message : fallback
+
+type TranslateFn = (key: TranslationKeys, params?: Record<string, string | number>) => string
+
+type WorkflowFormError = {
+    target: 'id' | 'json'
+    summary: string
+    detail: string
+    line?: number
+    column?: number
+    offset?: number
+}
+
+const workflowValidationMessage = (t: TranslateFn, error: WorkflowValidationIssue): string => {
+    switch (error.code) {
+        case 'invalidJson':
+            return t('workflowValidationInvalidJson')
+        case 'invalidWorkflowId':
+            return t('workflowValidationInvalidId')
+        case 'workflowBodyObject':
+            return t('workflowValidationBodyObject')
+        case 'workflowEnabledBoolean':
+            return t('workflowValidationEnabledBoolean')
+        case 'workflowTriggerObject':
+            return t('workflowValidationTriggerObject')
+        case 'workflowTriggerType':
+            return t('workflowValidationTriggerType')
+        case 'workflowTriggerCron':
+            return t('workflowValidationTriggerCron')
+        case 'workflowTriggerSecret':
+            return t('workflowValidationTriggerSecret')
+        case 'workflowStepsArray':
+            return t('workflowValidationStepsArray')
+        case 'workflowStepsMin':
+            return t('workflowValidationStepsMin')
+        case 'workflowStepsMax':
+            return t('workflowValidationStepsMax', { max: error.meta?.max ?? 20 })
+        case 'workflowStepObject':
+            return t('workflowValidationStepObject', { step: error.meta?.step ?? '?' })
+        case 'workflowStepIdPattern':
+            return t('workflowValidationStepId', { step: error.meta?.step ?? '?' })
+        case 'workflowStepNameString':
+            return t('workflowValidationStepName', { stepId: error.meta?.stepId ?? '?' })
+        case 'workflowStepType':
+            return t('workflowValidationStepType', { step: error.meta?.step ?? '?' })
+        case 'workflowStepTemplate':
+            return t('workflowValidationStepTemplate', { stepId: error.meta?.stepId ?? '?' })
+        case 'workflowStepMessage':
+            return t('workflowValidationStepMessage', { stepId: error.meta?.stepId ?? '?' })
+        case 'workflowStepSkillName':
+            return t('workflowValidationStepSkillName', { stepId: error.meta?.stepId ?? '?' })
+        case 'workflowStepArgsObject':
+            return t('workflowValidationStepArgs', { stepId: error.meta?.stepId ?? '?' })
+        default:
+            return t('workflowSaveFailed')
+    }
+}
+
+const workflowFormErrorFromIssue = (
+    t: TranslateFn,
+    target: WorkflowFormError['target'],
+    error: WorkflowValidationIssue,
+): WorkflowFormError => {
+    const summary = workflowValidationMessage(t, error)
+    const detailLines = [summary]
+
+    if (error.path) {
+        detailLines.push(t('workflowJsonPathLabel', { path: error.path }))
+    }
+    if (error.line && error.column) {
+        detailLines.push(t('workflowJsonLocationLabel', { line: error.line, column: error.column }))
+    }
+    if (error.code === 'invalidJson' && typeof error.meta?.reason === 'string') {
+        detailLines.push(t('workflowJsonSyntaxReason', { reason: error.meta.reason }))
+    }
+
+    return {
+        target,
+        summary,
+        detail: detailLines.join('\n'),
+        ...(typeof error.line === 'number' ? { line: error.line } : {}),
+        ...(typeof error.column === 'number' ? { column: error.column } : {}),
+        ...(typeof error.offset === 'number' ? { offset: error.offset } : {}),
+    }
+}
+
+const workflowInlineError = (t: TranslateFn, error: WorkflowFormError): string => {
+    if (typeof error.line === 'number' && typeof error.column === 'number') {
+        return `${error.summary} · ${t('workflowJsonLocation', { line: error.line, column: error.column })}`
+    }
+    return error.summary
+}
 
 type OverviewState = {
     me: PromiseSettledResult<MeInfo>
@@ -616,7 +709,7 @@ const AutomationsTab: React.FC = () => {
     const [workflowRunningId, setWorkflowRunningId] = React.useState<string | null>(null)
     const [loadError, setLoadError] = React.useState<string | null>(null)
     const [saveError, setSaveError] = React.useState<string | null>(null)
-    const [workflowError, setWorkflowError] = React.useState<string | null>(null)
+    const [workflowError, setWorkflowError] = React.useState<WorkflowFormError | null>(null)
     const [name, setName] = React.useState('')
     const [schedule, setSchedule] = React.useState('0 8 * * *')
     const [message, setMessage] = React.useState('')
@@ -628,6 +721,23 @@ const AutomationsTab: React.FC = () => {
     const scheduleInputRef = React.useRef<HTMLInputElement>(null)
     const messageInputRef = React.useRef<HTMLTextAreaElement>(null)
     const workflowIdInputRef = React.useRef<HTMLInputElement>(null)
+    const workflowJsonInputRef = React.useRef<HTMLTextAreaElement>(null)
+
+    const focusWorkflowField = (error: WorkflowFormError) => {
+        if (error.target === 'id') {
+            workflowIdInputRef.current?.focus()
+            return
+        }
+
+        const input = workflowJsonInputRef.current
+        if (!input) return
+        input.focus()
+
+        if (typeof error.offset === 'number') {
+            const offset = Math.max(0, Math.min(error.offset, input.value.length))
+            requestAnimationFrame(() => input.setSelectionRange(offset, offset))
+        }
+    }
 
     const reload = () => {
         setLoading(true)
@@ -707,20 +817,38 @@ const AutomationsTab: React.FC = () => {
     }
 
     const saveWorkflowFromJson = async () => {
-        if (!workflowId.trim()) {
+        const trimmedWorkflowId = workflowId.trim()
+        if (!trimmedWorkflowId) {
             workflowIdInputRef.current?.focus()
             return
         }
-        setWorkflowSaving(true)
         setWorkflowError(null)
+
+        const workflowIdIssue = validateWorkflowId(trimmedWorkflowId)
+        if (workflowIdIssue) {
+            const nextError = workflowFormErrorFromIssue(t, 'id', workflowIdIssue)
+            setWorkflowError(nextError)
+            focusWorkflowField(nextError)
+            return
+        }
+
+        const workflowValidation = validateWorkflowJson(workflowJson)
+        if (!workflowValidation.ok) {
+            const nextError = workflowFormErrorFromIssue(t, 'json', workflowValidation.error)
+            setWorkflowError(nextError)
+            focusWorkflowField(nextError)
+            return
+        }
+
+        setWorkflowSaving(true)
         try {
-            const parsed = JSON.parse(workflowJson)
-            await workflowSave(workflowId.trim(), parsed)
+            await workflowSave(trimmedWorkflowId, workflowValidation.value)
             toast.success(t('workflowSaved'))
             resetWorkflowForm()
             reload()
         } catch (e) {
-            setWorkflowError(errorMessage(e, t('workflowSaveFailed')))
+            const detail = errorMessage(e, t('workflowSaveFailed'))
+            setWorkflowError({ target: 'json', summary: detail, detail })
             toast.error(t('workflowSaveFailed'))
         } finally {
             setWorkflowSaving(false)
@@ -802,15 +930,52 @@ const AutomationsTab: React.FC = () => {
                         <ActionableErrorBanner
                             title={t('workflowSaveFailed')}
                             message={t('workflowSaveRecoveryHint')}
-                            detail={workflowError}
+                            detail={workflowError.detail}
                             detailsLabel={t('technicalDetails')}
-                            actionLabel={t('workflowFixJson')}
-                            onAction={() => workflowIdInputRef.current?.focus()}
+                            actionLabel={workflowError.target === 'id' ? t('workflowFixId') : t('workflowFixJson')}
+                            onAction={() => focusWorkflowField(workflowError)}
                         />
                     )}
                     <div className="grid grid-cols-1 gap-3">
-                        <input ref={workflowIdInputRef} value={workflowId} onChange={(e) => setWorkflowId(e.target.value)} placeholder={t('workflowIdPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
-                        <textarea value={workflowJson} onChange={(e) => setWorkflowJson(e.target.value)} rows={8} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 font-mono" />
+                        <div className="space-y-1.5">
+                            <input
+                                ref={workflowIdInputRef}
+                                value={workflowId}
+                                onChange={(e) => {
+                                    setWorkflowId(e.target.value)
+                                    if (workflowError?.target === 'id') setWorkflowError(null)
+                                }}
+                                placeholder={t('workflowIdPlaceholder')}
+                                aria-invalid={workflowError?.target === 'id'}
+                                className={cn(
+                                    'bg-fill-secondary border rounded-lg px-3 py-2 text-xs text-text outline-none',
+                                    workflowError?.target === 'id' ? 'border-warning focus:border-warning' : 'border-border focus:border-primary-mint/50',
+                                )}
+                            />
+                            <p className={cn('text-[11px]', workflowError?.target === 'id' ? 'text-warning' : 'text-text-tertiary')}>
+                                {workflowError?.target === 'id' ? workflowError.summary : t('workflowIdHint')}
+                            </p>
+                        </div>
+                        <div className="space-y-1.5">
+                            <textarea
+                                ref={workflowJsonInputRef}
+                                value={workflowJson}
+                                onChange={(e) => {
+                                    setWorkflowJson(e.target.value)
+                                    if (workflowError?.target === 'json') setWorkflowError(null)
+                                }}
+                                rows={8}
+                                aria-invalid={workflowError?.target === 'json'}
+                                spellCheck={false}
+                                className={cn(
+                                    'bg-fill-secondary border rounded-lg px-3 py-2 text-xs text-text outline-none font-mono',
+                                    workflowError?.target === 'json' ? 'border-warning focus:border-warning' : 'border-border focus:border-primary-mint/50',
+                                )}
+                            />
+                            <p className={cn('text-[11px]', workflowError?.target === 'json' ? 'text-warning' : 'text-text-tertiary')}>
+                                {workflowError?.target === 'json' ? workflowInlineError(t, workflowError) : t('workflowJsonHint')}
+                            </p>
+                        </div>
                     </div>
                     <div className="flex justify-end gap-2">
                         <button onClick={resetWorkflowForm} className="px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:bg-fill transition-colors">{t('cancel')}</button>

@@ -1,5 +1,7 @@
 # Workflow Automation Engine — Dev Plan
 
+> Status update (2026-05-19): Workflow MVP 继续收口。Automations 页的 JSON 编辑器已补保存前本地校验，覆盖 workflow ID、`trigger` / `steps` 结构与 JSON 语法错误定位；完整模板库 / 向导式创建仍保持 defer。
+
 ## Scope
 
 Phase 1 MVP 聚焦把现有 Cron / Webhook / Agent Runtime / Skill 底座升级为可追踪的轻量工作流层，不做可视化拖拽、复杂分支、循环或外部连接器。
@@ -28,10 +30,11 @@ Phase 1 MVP 聚焦把现有 Cron / Webhook / Agent Runtime / Skill 底座升级�
 - HTTP 路由：[../../../src/routes/workflows.ts](../../../src/routes/workflows.ts)
 - Cron 历史：[../../../src/services/cron-history.ts](../../../src/services/cron-history.ts)
 - Automations UI：[../../../web/src/components/SettingsPanel.tsx](../../../web/src/components/SettingsPanel.tsx)
+- JSON 编辑器保存前校验：[../../../web/src/lib/workflow-validation.ts](../../../web/src/lib/workflow-validation.ts)
 
 ## Deferred
 
 - 条件分支、循环、并行、重试策略。
 - 工作流运行详情页和步骤日志展开 UI。
 - 文件变更、RSS、邮件、日历等事件触发器。
-- YAML 编辑器与 schema-aware 表单。
+- YAML 编辑器与 schema-aware 表单 / 模板向导。

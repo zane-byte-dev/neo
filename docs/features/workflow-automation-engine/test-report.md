@@ -1,5 +1,7 @@
 # Workflow Automation Engine — Test Report
 
+> Status update (2026-05-19): Automations 页的 Workflow JSON 编辑器已补保存前本地校验。当前会在保存前校验 workflow ID、`trigger` / `steps` 结构与必填字段，并为 JSON 语法错误和结构错误提供行列定位。
+
 ## Scope
 
 验证 Phase 1 MVP：声明式 Workflow 定义、串行步骤执行、手动 / Webhook / Cron 触发入口、Cron 运行历史、Automations 页基础管理入口，以及本轮顺手修复的 Notebook / Note UX 快赢。
@@ -28,9 +30,10 @@
 - ✅ `npx vitest run src/services/__tests__/workflow-service.test.ts src/routes/__tests__/workflows.test.ts src/routes/__tests__/cron.test.ts src/services/__tests__/cron-agent-runtime.test.ts`
 - ✅ `npm run build -- --pretty false`
 - ✅ `npm --prefix web run build`
+- ✅ `npm --prefix web run build`（2026-05-19：复验 Workflow 编辑器本地校验与 i18n 改动）
 
 ## Residual Risk
 
-- 本轮 UI 使用 JSON 编辑器，适合 MVP 和高级用户；后续需要 schema-aware 表单降低配置错误率。
+- JSON 编辑器已具备保存前结构校验与错误定位，但普通用户仍需要手写 JSON；后续仍需要 schema-aware 表单或模板向导继续降低门槛。
 - Skill step 已接入现有 Skill executor，但未在本轮自动化测试中调用真实 LLM 型 Skill，避免测试依赖外部模型。
 - Cron Workflow 的完整端到端调度依赖进程中的 node-cron，本轮覆盖了服务、路由和调度代码构建，未做长时间等待型 E2E。

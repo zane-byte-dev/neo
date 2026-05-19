@@ -29,6 +29,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Changed
 
+- Workflow JSON 编辑器现在会在保存前校验工作流 ID、`trigger` / `steps` 结构与必填字段；语法错误会显示行列位置并把“检查 JSON”动作定位到出错位置，减少只能看到失败 toast 的排障成本。
 - Dangerous-tool confirmations now de-duplicate replayed runtime events in Web Chat, so reconnect/replay no longer renders the same safety prompt twice; bash session/always approvals are now reused at the tool level instead of exact-command matching, which reduces repeated confirmations inside the same workflow. Chat stop/cancel is also now one-shot per active run, avoiding bursts of duplicate cancel requests from repeated clicks or Esc key repeats.
 - Article resources no longer render a separate status strip or bottom resource-card area; notebook generation now resolves to an available provider before falling back to local models, generated mind maps/reports strip previously inserted resource blocks from prompts to avoid empty artifacts, article mind maps now render inline as embedded markmap blocks, article reports now render inline as structured Markdown content instead of raw text, and article toolbar audio now requests single-speaker narration instead of A/B dialogue.
 - Article annotations now use underline markers with hover popovers; deleting an annotation also removes its underline marker from the article body.

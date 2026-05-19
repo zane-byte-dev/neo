@@ -101,7 +101,7 @@
 
 ### 7. 工作流与自动化
 
-当前状态：cron-agent 定时任务 + Webhook 入口已落地；Agent 运行时已升级为持久化、可恢复模型，支持进程重启后恢复执行；Workflow MVP 已支持声明式串行步骤、手动 / Webhook / Cron 触发与运行历史。
+当前状态：cron-agent 定时任务 + Webhook 入口已落地；Agent 运行时已升级为持久化、可恢复模型，支持进程重启后恢复执行；Workflow MVP 已支持声明式串行步骤、手动 / Webhook / Cron 触发与运行历史，Settings 中的 JSON 编辑器也已补保存前结构校验与错误定位。
 
 - [x] **可恢复 Agent 运行时**：每次 Agent 执行创建持久化 run（文件事件日志），进程重启或 SSE 断线后可从 `cursor` 继续追补事件；工具确认状态持久化，approved 后自动恢复执行；cron、Telegram、Webhook 等后台入口统一复用同一 run model
 - [x] **Webhook 入口**：`POST /api/webhook` 接收外部事件，触发 Agent 任务执行，结果通过 Telegram / webhook response 回传；run 完成后消费 `run_completed` 与 `artifact_created` 事件

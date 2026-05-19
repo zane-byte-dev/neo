@@ -68,6 +68,6 @@ docs/
 | 文章批注 | [brief.md](features/article-annotations/brief.md) | [plan.md](features/article-annotations/plan.md) | [test-report.md](features/article-annotations/test-report.md) | ✅ MVP 已实现 |
 | 文章内资源 | [brief.md](features/article-embedded-resources/brief.md) | [plan.md](features/article-embedded-resources/plan.md) | [test-report.md](features/article-embedded-resources/test-report.md) | ✅ MVP 已实现 |
 | Web 语音输入 | [brief.md](features/web-voice-input/brief.md) | [plan.md](features/web-voice-input/plan.md) | — | ✅ Phase 1 已实现 |
-| Workflow 自动化引擎 | [brief.md](features/workflow-automation-engine/brief.md) | — | — | 📝 规划中 |
+| Workflow 自动化引擎 | [brief.md](features/workflow-automation-engine/brief.md) | [plan.md](features/workflow-automation-engine/plan.md) | [test-report.md](features/workflow-automation-engine/test-report.md) | ✅ MVP 已实现；JSON 编辑器已补保存前校验 |
 | Agent 可恢复运行时 | — | [plan.md](features/agent-runtime/plan.md) | — | ✅ A1-D3 全完成，E2 待处理（附 [issues.md](features/agent-runtime/issues.md)） |
 | 统一知识索引 | [design.md](features/knowledge-index/design.md) | [plan.md](features/knowledge-index/plan.md) | — | ✅ Phase 0-2 完成；Phase 3（embedding）待做 |

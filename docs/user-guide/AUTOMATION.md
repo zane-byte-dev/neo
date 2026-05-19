@@ -50,6 +50,12 @@ Workflow 保存于 `{stateDir}/workflows/workflows.json`，也可以在 Web UI �
 { "type": "cron", "cron": "0 8 * * *", "timezone": "Asia/Shanghai", "enabled": true }
 ```
 
+Web UI 中的 Workflow JSON 编辑器会在保存前做本地校验：
+
+- Workflow ID 会校验 1-64 个字符的格式约束。
+- JSON 语法错误会显示行列位置，并把光标定位到出错处。
+- `trigger` 与 `steps` 会校验支持的类型和必填字段，避免只看到失败 toast 却不知道哪一项写错。
+
 Workflow API：
 
 | API | 说明 |
