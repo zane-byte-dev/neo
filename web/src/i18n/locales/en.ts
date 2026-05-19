@@ -377,6 +377,7 @@ const en = {
     tabModelConfig: 'Model Config',
     tabUsageHistory: 'Usage History',
     tabBots: 'Bots',
+    tabApprovals: 'Approvals',
 
     // Provider status
     providerStatusTitle: 'Provider Health',

@@ -734,6 +734,60 @@ const DetailModal: React.FC<{
     )
 }
 
+// ── Provider groups for AddModelModal ───────────────────────────────────────
+
+interface ProviderSetupGroup {
+    id: string
+    label: string
+    description: string
+    docsUrl?: string
+    fields: SecretFieldDef[]
+}
+
+const PROVIDER_SETUP_GROUPS: ProviderSetupGroup[] = [
+    {
+        id: 'google',
+        label: 'Google Gemini',
+        description: 'Access Gemini Flash, Pro and Ultra models via the Google AI Studio API.',
+        docsUrl: 'https://aistudio.google.com/app/apikey',
+        fields: MODEL_SECRET_FIELDS.filter((f) => f.key === 'GEMINI_API_KEY'),
+    },
+    {
+        id: 'deepseek',
+        label: 'DeepSeek',
+        description: 'Access DeepSeek Chat and DeepSeek Reasoner models.',
+        docsUrl: 'https://platform.deepseek.com/api_keys',
+        fields: MODEL_SECRET_FIELDS.filter((f) => f.key === 'DEEPSEEK_API_KEY'),
+    },
+    {
+        id: 'openai',
+        label: 'OpenAI',
+        description: 'Access GPT-4o, GPT-4o mini and other OpenAI models.',
+        docsUrl: 'https://platform.openai.com/api-keys',
+        fields: MODEL_SECRET_FIELDS.filter((f) => f.key === 'OPENAI_API_KEY'),
+    },
+    {
+        id: 'anthropic',
+        label: 'Anthropic',
+        description: 'Access Claude Sonnet, Opus and Haiku via the Anthropic API.',
+        docsUrl: 'https://console.anthropic.com/settings/keys',
+        fields: MODEL_SECRET_FIELDS.filter((f) => f.key === 'ANTHROPIC_API_KEY'),
+    },
+    {
+        id: 'claude-code',
+        label: 'Claude Code',
+        description: 'Connect to a self-hosted Claude Code proxy server.',
+        fields: MODEL_SECRET_FIELDS.filter((f) => f.key === 'CLAUDE_CODE_BASE_URL' || f.key === 'CLAUDE_CODE_TOKEN'),
+    },
+    {
+        id: 'ollama',
+        label: 'Ollama (Local)',
+        description: 'Run open-source models locally — no API key required. Start Ollama and Neo will auto-discover available models.',
+        docsUrl: 'https://ollama.com',
+        fields: [],
+    },
+]
+
 const AddModelModal: React.FC<{
     open: boolean
     statuses: Record<SecretKey, SecretStatus> | null
@@ -744,6 +798,8 @@ const AddModelModal: React.FC<{
     onClose: () => void
     onSave: (key: SecretKey, value: string) => void
 }> = ({ open, statuses, loading, savingKey, error, t, onClose, onSave }) => {
+    const [selectedProvider, setSelectedProvider] = React.useState('google')
+
     React.useEffect(() => {
         if (!open) return
         const onKey = (event: KeyboardEvent) => {
@@ -755,38 +811,80 @@ const AddModelModal: React.FC<{
 
     if (!open) return null
 
+    const group = PROVIDER_SETUP_GROUPS.find((g) => g.id === selectedProvider) ?? PROVIDER_SETUP_GROUPS[0]
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in" onClick={onClose}>
             <div
-                className="bg-bg-container border border-border rounded-2xl w-[92vw] max-w-3xl max-h-[85vh] flex flex-col"
+                className="bg-bg-container border border-border rounded-2xl w-[92vw] max-w-lg flex flex-col"
                 style={{ boxShadow: 'var(--shadow-float)' }}
                 onClick={(event) => event.stopPropagation()}
             >
+                {/* Header */}
                 <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-border shrink-0">
                     <div>
                         <h2 className="text-sm font-semibold text-text">{t('addModel')}</h2>
-                        <p className="text-xs text-text-tertiary mt-1 leading-relaxed">{t('addModelDescription')}</p>
+                        <p className="text-xs text-text-tertiary mt-0.5">{t('addModelDescription')}</p>
                     </div>
-                    <button onClick={onClose} className="text-text-tertiary hover:text-text text-lg leading-none px-1">&times;</button>
+                    <button onClick={onClose} className="text-text-tertiary hover:text-text text-lg leading-none px-1 mt-0.5">&times;</button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-0">
-                    {error && <p className="text-[11px] text-destructive">{error}</p>}
-
-                    <SecretFieldsEditor
-                        fields={MODEL_SECRET_FIELDS}
-                        statuses={statuses}
-                        loading={loading}
-                        savingKey={savingKey}
-                        helperText={t('credentialsPlaceholder')}
-                        onSave={onSave}
-                        t={t}
-                    />
-
-                    <div className="rounded-xl border border-border-secondary bg-fill-secondary/60 p-4">
-                        <h3 className="text-xs font-semibold text-text mb-1.5">{t('localModelsHintTitle')}</h3>
-                        <p className="text-xs text-text-tertiary leading-relaxed">{t('localModelsHintDescription')}</p>
+                {/* Provider picker */}
+                <div className="px-5 pt-4 pb-3">
+                    <p className="text-[11px] font-medium text-text-quaternary uppercase tracking-wide mb-2">Provider</p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {PROVIDER_SETUP_GROUPS.map((g) => (
+                            <button
+                                key={g.id}
+                                type="button"
+                                onClick={() => setSelectedProvider(g.id)}
+                                className={cn(
+                                    'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors',
+                                    selectedProvider === g.id
+                                        ? 'border-primary-mint bg-primary-mint/10 text-primary-mint'
+                                        : 'border-border bg-fill text-text-secondary hover:bg-fill-secondary hover:text-text'
+                                )}
+                            >
+                                {g.label}
+                            </button>
+                        ))}
                     </div>
+                </div>
+
+                {/* Provider content */}
+                <div className="px-5 pb-4 space-y-3 min-h-[160px]">
+                    {error && <p className="text-[11px] text-destructive mb-1">{error}</p>}
+
+                    <div className="flex items-start justify-between gap-3">
+                        <p className="text-xs text-text-tertiary leading-relaxed">{group.description}</p>
+                        {group.docsUrl && (
+                            <a
+                                href={group.docsUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="shrink-0 text-[11px] text-primary-mint hover:underline"
+                            >
+                                {group.fields.length > 0 ? 'Get API key ↗' : 'Learn more ↗'}
+                            </a>
+                        )}
+                    </div>
+
+                    {group.fields.length > 0 ? (
+                        <SecretFieldsEditor
+                            fields={group.fields}
+                            statuses={statuses}
+                            loading={loading}
+                            savingKey={savingKey}
+                            helperText={t('credentialsPlaceholder')}
+                            onSave={onSave}
+                            t={t}
+                        />
+                    ) : (
+                        <div className="rounded-xl border border-border-secondary bg-fill-secondary/50 p-4">
+                            <p className="text-xs text-text-secondary font-medium mb-1">{t('localModelsHintTitle')}</p>
+                            <p className="text-xs text-text-tertiary leading-relaxed">{t('localModelsHintDescription')}</p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="px-5 py-3 border-t border-border shrink-0 flex justify-end">
@@ -1105,7 +1203,7 @@ export const ModelPanel: React.FC = () => {
     const [secretsError, setSecretsError] = React.useState<string | null>(null)
     const [savingSecretKey, setSavingSecretKey] = React.useState<SecretKey | null>(null)
     const [modelConfigOpen, setModelConfigOpen] = React.useState(false)
-    const [activeTab, setActiveTab] = React.useState<'config' | 'history' | 'bots'>('config')
+    const [activeTab, setActiveTab] = React.useState<'config' | 'history' | 'bots' | 'approvals'>('config')
     const telegramCredentialsRef = React.useRef<HTMLDivElement>(null)
 
     const load = async (requestedMonth = month) => {
@@ -1262,15 +1360,16 @@ export const ModelPanel: React.FC = () => {
 
     const configuredModels = data.models.filter((model) => model.configured)
 
-    type TabKey = 'config' | 'history' | 'bots'
+    type TabKey = 'config' | 'history' | 'bots' | 'approvals'
     const tabs: Array<{ key: TabKey; label: string }> = [
-        { key: 'config',  label: t('tabModelConfig') },
-        { key: 'history', label: t('tabUsageHistory') },
-        { key: 'bots',    label: t('tabBots') },
+        { key: 'config',    label: t('tabModelConfig') },
+        { key: 'history',   label: t('tabUsageHistory') },
+        { key: 'bots',      label: t('tabBots') },
+        { key: 'approvals', label: t('tabApprovals') },
     ]
 
     return (
-        <div className="flex-1 overflow-y-auto">
+        <div className="h-full overflow-y-auto">
             <div className="max-w-5xl mx-auto px-4 md:px-6 py-6 space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -1279,39 +1378,6 @@ export const ModelPanel: React.FC = () => {
                         <p className="text-xs text-text-tertiary mt-0.5">{t('modelsSubtitle')}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                const d = new Date(month + '-01')
-                                d.setMonth(d.getMonth() - 1)
-                                setMonth(d.toISOString().slice(0, 7))
-                            }}
-                            className="p-1.5 bg-fill border border-border rounded-lg text-text-secondary hover:bg-fill-secondary transition-colors"
-                            title={t('prevMonth')}
-                        >
-                            <ChevronLeft size={14} />
-                        </button>
-                        <input
-                            type="month"
-                            value={month}
-                            onChange={(e) => setMonth(e.target.value)}
-                            className="bg-fill border border-border rounded-lg px-3 py-1.5 text-xs text-text-secondary outline-none focus:border-primary-mint"
-                        />
-                        <button
-                            type="button"
-                            onClick={() => {
-                                const d = new Date(month + '-01')
-                                d.setMonth(d.getMonth() + 1)
-                                const next = d.toISOString().slice(0, 7)
-                                if (next <= new Date().toISOString().slice(0, 7)) setMonth(next)
-                            }}
-                            className="p-1.5 bg-fill border border-border rounded-lg text-text-secondary hover:bg-fill-secondary transition-colors disabled:opacity-40"
-                            title={t('nextMonth')}
-                        >
-                            <ChevronRight size={14} />
-                        </button>
-                    </div>
                         <button
                             onClick={() => {
                                 void load()
@@ -1404,7 +1470,42 @@ export const ModelPanel: React.FC = () => {
                 {activeTab === 'history' && (
                     <>
                         <section>
-                            <h2 className="text-sm font-semibold text-text mb-2.5">{t('usageOverview')} — {data.usage.month}</h2>
+                            <div className="flex items-center justify-between mb-2.5">
+                                <h2 className="text-sm font-semibold text-text">{t('usageOverview')} — {data.usage.month}</h2>
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const d = new Date(month + '-01')
+                                            d.setMonth(d.getMonth() - 1)
+                                            setMonth(d.toISOString().slice(0, 7))
+                                        }}
+                                        className="p-1.5 bg-fill border border-border rounded-lg text-text-secondary hover:bg-fill-secondary transition-colors"
+                                        title={t('prevMonth')}
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                    <input
+                                        type="month"
+                                        value={month}
+                                        onChange={(e) => setMonth(e.target.value)}
+                                        className="bg-fill border border-border rounded-lg px-3 py-1.5 text-xs text-text-secondary outline-none focus:border-primary-mint"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const d = new Date(month + '-01')
+                                            d.setMonth(d.getMonth() + 1)
+                                            const next = d.toISOString().slice(0, 7)
+                                            if (next <= new Date().toISOString().slice(0, 7)) setMonth(next)
+                                        }}
+                                        className="p-1.5 bg-fill border border-border rounded-lg text-text-secondary hover:bg-fill-secondary transition-colors disabled:opacity-40"
+                                        title={t('nextMonth')}
+                                    >
+                                        <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
                             <UsageSummary data={data} t={t} />
                         </section>
 
@@ -1450,17 +1551,21 @@ export const ModelPanel: React.FC = () => {
                             />
                         </section>
 
-                        <section>
-                            <ToolApprovalsCard
-                                rules={toolApprovals}
-                                loading={approvalsLoading}
-                                deletingId={deletingApprovalId}
-                                error={approvalsError}
-                                t={t}
-                                onRevoke={revokeApproval}
-                            />
-                        </section>
                     </>
+                )}
+
+                {/* Approvals tab */}
+                {activeTab === 'approvals' && (
+                    <section>
+                        <ToolApprovalsCard
+                            rules={toolApprovals}
+                            loading={approvalsLoading}
+                            deletingId={deletingApprovalId}
+                            error={approvalsError}
+                            t={t}
+                            onRevoke={revokeApproval}
+                        />
+                    </section>
                 )}
             </div>
 

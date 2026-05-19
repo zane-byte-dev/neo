@@ -379,6 +379,7 @@ const zh: Record<TranslationKeys, string> = {
     tabModelConfig: '模型配置',
     tabUsageHistory: '使用记录',
     tabBots: '机器人',
+    tabApprovals: '放行规则',
 
     // Provider status
     providerStatusTitle: '提供方状态',
