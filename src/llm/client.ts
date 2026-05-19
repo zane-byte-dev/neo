@@ -14,7 +14,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { setupLogger, log } from '../utils/logger.js';
 import { recordTokenUsage } from '../utils/token-tracker.js';
-import { DAILY_COST_LIMIT, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, MODEL_ALIASES, OLLAMA_BASE_URL, STREAM_FIRST_CHUNK_TIMEOUT_MS, getAnthropicApiKey, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
+import { DAILY_COST_LIMIT, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, MODEL_ALIASES, OLLAMA_BASE_URL, STREAM_FIRST_CHUNK_TIMEOUT_MS, getAnthropicApiKey, getClaudeCodeBaseUrl, getClaudeCodeToken, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
 import { acpStream, acpGenerate } from './providers/gemini-acp.js';
 import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
@@ -82,7 +82,12 @@ function isOpenAIModel(modelId: string): boolean {
 
 /** Check if a model ID belongs to Anthropic (Claude family). */
 function isAnthropicModel(modelId: string): boolean {
-    return modelId.startsWith('claude-');
+    return modelId.startsWith('claude-') && !modelId.startsWith('claude-code/');
+}
+
+/** Check if a model ID uses a Claude Code compatible endpoint. */
+function isClaudeCodeModel(modelId: string): boolean {
+    return modelId.startsWith('claude-code/');
 }
 
 /** Create an AI SDK LanguageModel for a given model id. */
@@ -104,6 +109,19 @@ function createModel(modelId: string): LanguageModel {
     if (isOpenAIModel(modelId)) {
         const openai = createOpenAI({ apiKey: getOpenAIApiKey() });
         return openai.chat(modelId);
+    }
+    if (isClaudeCodeModel(modelId)) {
+        const baseURL = getClaudeCodeBaseUrl();
+        const authToken = getClaudeCodeToken();
+        if (!baseURL || !authToken) {
+            throw new Error('CLAUDE_CODE_BASE_URL and CLAUDE_CODE_TOKEN are required for Claude Code models');
+        }
+        const claudeCode = createAnthropic({
+            baseURL,
+            authToken,
+            name: 'claude-code',
+        });
+        return claudeCode(modelId.replace('claude-code/', ''));
     }
     if (isAnthropicModel(modelId)) {
         const anthropic = createAnthropic({ apiKey: getAnthropicApiKey() });
@@ -255,7 +273,8 @@ export class LLMClient {
         const deepseekKey = getDeepseekApiKey();
         const openaiKey = getOpenAIApiKey();
         const anthropicKey = getAnthropicApiKey();
-        if (!geminiKey && !deepseekKey && !openaiKey && !anthropicKey) {
+        const claudeCodeReady = Boolean(getClaudeCodeBaseUrl() && getClaudeCodeToken());
+        if (!geminiKey && !deepseekKey && !openaiKey && !anthropicKey && !claudeCodeReady) {
             log.warn('AgentRuntime', 'No cloud API key set (GEMINI/DEEPSEEK/OPENAI/ANTHROPIC). Ollama/ACP may still work.');
         }
 
@@ -264,6 +283,7 @@ export class LLMClient {
             : deepseekKey ? 'deepseek'
             : openaiKey ? 'gpt-4o-mini'
             : anthropicKey ? 'claude-haiku'
+            : claudeCodeReady ? 'claude-code-haiku'
             : 'gemma';
         this.modelId = resolveModel(GEMINI_MODEL_ENV ?? defaultModel);
         this.enabled = true;

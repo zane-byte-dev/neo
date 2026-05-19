@@ -17,6 +17,11 @@ describe('resolveModel', () => {
         expect(resolveModel('deepseek')).toBe('deepseek-chat');
     });
 
+    it('"claude-code" → Claude Code compatible Sonnet endpoint model', () => {
+        expect(resolveModel('claude-code')).toBe('claude-code/claude-sonnet-4-5');
+        expect(resolveModel('claude-code-haiku')).toBe('claude-code/claude-haiku-4-5');
+    });
+
     it('unknown alias returned as-is', () => {
         expect(resolveModel('my-custom-model')).toBe('my-custom-model');
     });

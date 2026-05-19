@@ -9,6 +9,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 ### Added
 
 - **Skill 搜索**：Settings / Skills 面板新增搜索框，可按技能名、描述、标签实时过滤，搜索无结果时显示空状态提示。
+- **Claude Code 兼容代理接入**：Settings / Models 可保存 Claude Code 代理地址与 Token，并新增 `claude-code*` 模型别名直接用于对话。
 - **对话搜索高亮**：Chat 侧边栏搜索时匹配词在标题中高亮显示（绿色 mark）。
 - **欢迎页卡片自动发送**：首页快捷卡片点击后直接发送完整引导消息，不再只填充前缀文字。
 - **工具调用卡片键盘可访问**：ActivityItemCard 在有详情内容时增加 `tabIndex` 和 Enter/Space 键盘支持，键盘和触屏用户均可展开详情。
