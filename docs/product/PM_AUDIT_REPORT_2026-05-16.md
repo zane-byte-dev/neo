@@ -184,7 +184,7 @@
 - [x] **B9** 修复 3 个既有 delete route 测试失败
 - [x] **B10** 修复 `docs/product/DOC_REVIEW.md` 中 13 个 broken links
 - [ ] **B12** Workflow JSON 编辑器增加 Schema 校验与错误行提示
-- [ ] **F14** 实现批注辅助面板（全部批注 + 筛选 + 跳转）
+- [x] **F14** 实现批注辅助面板（全部批注 + 筛选 + 跳转）
 
 ### P1 — 近期迭代
 

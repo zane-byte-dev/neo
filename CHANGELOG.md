@@ -14,6 +14,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 - **欢迎页卡片自动发送**：首页快捷卡片点击后直接发送完整引导消息，不再只填充前缀文字。
 - **工具调用卡片键盘可访问**：ActivityItemCard 在有详情内容时增加 `tabIndex` 和 Enter/Space 键盘支持，键盘和触屏用户均可展开详情。
 - **批注 UI i18n**：NoteEditor 批注草稿区所有文案（新批注、占位符、保存、取消、解决/打开、删除等）改用 i18n key，支持多语言切换。
+- **批注辅助面板**：文章编辑器“全部批注”入口升级为辅助面板，按文章顺序列出批注，支持全部 / 未解决 / 已解决 / 划线 / 段落筛选，并可点击跳回正文位置。
 
 - **文章内资源 MVP**：文章编辑器新增低干扰生成入口，摘要保留为正文前轻量块，音频通过工具栏 icon 基于当前文章生成，思维导图和报告可通过 `/` 插入为折叠模块；新 artifact 会持久化 `sourceIds` / `primaryArticleId`，`ResourcesPanel` 继续作为 notebook 级资源库与管理入口。
 - **文章批注 MVP**：文章编辑器选区气泡菜单新增批注入口，支持保存划线批注、在 `NoteEditor` 内查看全部批注、跳转原文选区、删除，以及 `open / resolved` 状态切换。后端新增独立 annotation 数据模型与 API。
@@ -31,6 +32,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 - Dangerous-tool confirmations now de-duplicate replayed runtime events in Web Chat, so reconnect/replay no longer renders the same safety prompt twice; bash session/always approvals are now reused at the tool level instead of exact-command matching, which reduces repeated confirmations inside the same workflow. Chat stop/cancel is also now one-shot per active run, avoiding bursts of duplicate cancel requests from repeated clicks or Esc key repeats.
 - Article resources no longer render a separate status strip or bottom resource-card area; notebook generation now resolves to an available provider before falling back to local models, generated mind maps/reports strip previously inserted resource blocks from prompts to avoid empty artifacts, article mind maps now render inline as embedded markmap blocks, article reports now render inline as structured Markdown content instead of raw text, and article toolbar audio now requests single-speaker narration instead of A/B dialogue.
 - Article annotations now use underline markers with hover popovers; deleting an annotation also removes its underline marker from the article body.
+- Delete-route regression tests now align with the current trash/soft-delete behavior for articles and sessions.
 - Skills REST routes now reuse a shared skill storage service, so Web Settings and chat-driven skill authoring share the same validation, enabled-state patching, and flat/nested file discovery.
 - Cron task lists now surface real last-run status, duration, summary and errors; external webhook endpoints can pass through cookie auth and continue to use their configured secrets.
 - Settings navigation now separates Basic (Overview, Models, Skills) from Advanced (Apps, MCP, Automations), and high-frequency settings errors include repair actions.
