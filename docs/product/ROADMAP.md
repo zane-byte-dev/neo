@@ -1,6 +1,8 @@
 # Neo Roadmap
 
 > 功能规划与开发路线图。按优先级分为 P0（核心）、P1（重要）、P2（锦上添花）三档。
+>
+> **最后更新：2026-05-16**（第二轮 PM 审计后同步，详见 [PM_AUDIT_REPORT_2026-05-16.md](PM_AUDIT_REPORT_2026-05-16.md)）
 
 ---
 
@@ -72,7 +74,7 @@
 
 ### 6. Web UI 增强
 
-当前状态：React 前端有 Chat 和 Notebook 面板，功能完善；欢迎页已提供首次使用清单；支持 Mini-app 托管；零配置首启自动生成默认配置。
+当前状态：React 前端有 Chat 和 Notebook 面板，功能完善；欢迎页已提供首次使用清单；支持 Mini-app 托管；零配置首启自动生成默认配置。文章批注与文章内资源 MVP 已落地，语音输入已上线。
 
 - [x] **Artifact 渲染**：代码块支持语法高亮 + 一键复制；支持折叠超长代码块；支持 Mermaid 图表、数学公式（KaTeX）渲染
 - [x] **思维过程展示**：展示 AI 的思考过程（thinking/reasoning chunks）和工具调用过程，可折叠
@@ -80,7 +82,7 @@
 - [x] **移动端适配**：响应式布局，适配手机和平板（侧边栏抽屉、安全区域、长按菜单）
 - [x] **深色/浅色主题**：三主题（Light / Dark / Classic Dark）手动切换
 - [x] **键盘快捷键**：Cmd+N 新建会话、Cmd+B 切换侧边栏
-- [x] **首次使用清单**：Chat 欢迎页新增“开始使用 Neo” checklist，引导完成模型配置、第一条消息和 Notebook 笔记创建，并支持完成状态自动刷新与关闭持久化
+- [x] **首次使用清单**：Chat 欢迎页新增"开始使用 Neo" checklist，引导完成模型配置、第一条消息和 Notebook 笔记创建，并支持完成状态自动刷新与关闭持久化
 - [x] **设置清晰度与系统状态**：设置页新增 Basic / Advanced 分层、Overview 系统状态卡片，以及模型、Telegram、MCP、自动化失败时的修复入口
 - [x] **语音输入**：Web 端支持录音并转文字；前端使用 MediaRecorder 采集音频 Blob，后端新增 POST /api/transcribe 统一转写接口（OpenAI Whisper 优先，Gemini 1.5 Flash fallback），转写结果回填到输入框，默认不自动发送；权限拒绝、浏览器不支持、无可用 provider 等场景均有错误提示
 - [x] **Mini-app 托管**：每个用户可在 `{stateDir}/apps/` 下放置静态 Web 应用，侧边栏「应用」分组动态列出，支持 `manifest.json`（title/description/icon）；路由隔离，每个用户只能访问自己的应用
@@ -88,6 +90,13 @@
 - [x] **模型路由可视化配置**：/models 展示 provider 在线状态（Ollama 探活、ACP 检查 CLI 路径、云端检查 key），支持在 UI 中覆盖路由层级（simple/standard/complex 各 tier），配置持久化到 `{stateDir}/routing.json`
 - [x] **文章批注 MVP**：文章编辑器支持选区批注，批注以独立 annotation 数据模型持久化；正文用下划线标记，hover 弹窗可查看、跳转、删除，并切换未解决 / 已解决状态
 - [x] **文章内资源 MVP**：文章编辑器采用低干扰资源入口；摘要保留为正文前轻量块，音频通过工具栏 icon 基于当前文章生成，思维导图与报告通过 `/` 插入为可折叠模块；新生成 artifact 会记录 `sourceIds` / `primaryArticleId`，资源面板继续承担 notebook 级浏览与管理
+- [ ] **批注辅助面板**：按文章顺序列出所有批注，支持 open/resolved 筛选和点击跳转正文位置（P1，当前最大缺口）
+- [ ] **段落批注入口**：鼠标 hover 段落左侧出现"+ 批注"按钮，不要求精准选区（P1）
+- [ ] **Slash 命令面板**：输入 `/` 后弹出可用生成命令列表，用户无需记忆确切词（P1）
+- [ ] **语音输入语言偏好**：允许用户指定转写语言，降低中英混合场景误识率（P2）
+- [ ] **语音输入自动发送偏好**：用户可配置转写后是否自动发送（P2 Phase 2 规划项）
+- [ ] **音频 artifact 复用**：工具栏音频 icon 先检查历史同文章朗读，存在时直接打开 viewer（P2）
+- [ ] **操作按钮触屏友好**：工具调用卡片"详情"按钮、侧边栏对话项操作按钮改为常驻或长按唤起，修复移动端不可用问题（P2）
 
 ### 7. 工作流与自动化
 
@@ -96,6 +105,8 @@
 - [x] **可恢复 Agent 运行时**：每次 Agent 执行创建持久化 run（文件事件日志），进程重启或 SSE 断线后可从 `cursor` 继续追补事件；工具确认状态持久化，approved 后自动恢复执行；cron、Telegram、Webhook 等后台入口统一复用同一 run model
 - [x] **Webhook 入口**：`POST /api/webhook` 接收外部事件，触发 Agent 任务执行，结果通过 Telegram / webhook response 回传；run 完成后消费 `run_completed` 与 `artifact_created` 事件
 - [x] **工作流引擎 MVP**：定义 JSON 多步骤工作流，支持 `transform` / `agent` / `skill` 串行步骤、前序输出引用、手动 / Webhook / Cron 触发与运行历史
+- [ ] **Workflow 步骤模板与向导**：提供常用 Workflow 模板和分步创建向导，降低 JSON 编辑门槛（P1，PM 审计 U12/O11 关键问题）
+- [ ] **工作流步骤类型增强**：新增条件分支（branch）、失败重试（retry）、并行步骤（parallel）（P1 Phase 2）
 - [ ] **事件触发器**：文件变更、新邮件等外部事件自动触发工作流（当前 Webhook 已覆盖 HTTP 入口）
 - [x] **Skill 编排 MVP**：工作流步骤可调用已有 Skill，后续步骤可通过 `{{previous}}` 或 `{{steps.stepId}}` 读取输出
 - [x] **定时任务增强 MVP**：Cron 列表显示最近运行状态、耗时、摘要和错误，并提供运行历史 API
@@ -163,8 +174,14 @@
 
 ## 实施建议
 
+> 最后更新：2026-05-16，基于第二轮 PM 审计结论。
+
 1. **P0 已基本完成**：多模态、沙箱、工具体系核心能力均已落地，当前重心转向 P1/P2 提升
-2. **下一优先级**：RAG Embedding 向量化（P1.4）仍是当前最大的功能缺口；工作流下一阶段可补分支 / 重试 / 更完整运行日志 UI
+2. **最高优先级缺口（2026-05-16）**：
+   - **批注辅助面板**（F14）：是文章批注功能的最大未完成体验缺口
+   - **Workflow 向导/模板**（O11/U12）：JSON 编辑器阻碍了普通用户使用 Workflow
+   - **RAG Embedding 向量化**（P1.4）：产品与竞品最大能力差距，建议 SQLite + vss 起步
 3. **渐进式推进**：每个大功能拆成多个小 PR，先实现最小可用版本再迭代
 4. **向量化可用 SQLite + vss 起步**：不依赖外部服务，改动量最小，收益直接体现在记忆检索质量上
 5. **MCP 生态持续扩展**：已有 stdio transport，后续可补充 HTTP/SSE transport 以支持远程 MCP Server
+6. **技术债务优先级**：3 个既有 delete route 测试失败（B9）和 13 个文档断链（B10）应尽快修复，恢复 CI 全绿状态
