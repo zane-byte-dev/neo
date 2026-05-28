@@ -16,6 +16,7 @@ import { MAX_INPUT_LENGTH } from '../config.js';
 import { calcUser, getWebhookSecret } from '../services/user-service.js';
 import { timingSafeEqual } from 'node:crypto';
 import { persistImageArtifact, readRunOutcome } from '../runtime/outcome.js';
+import { pruneTextChunkEventsSafe } from '../runtime/executor.js';
 
 const MODULE = 'Webhook';
 
@@ -86,6 +87,7 @@ export function webhookRoute(router: Router): void {
                 },
                 onVideo: async (url) => ({ url }),
             });
+            if (stateDir && runId) await pruneTextChunkEventsSafe(stateDir, runId);
             const outcome = runId
                 ? await readRunOutcome(stateDir, runId, { fallbackText: output })
                 : null;

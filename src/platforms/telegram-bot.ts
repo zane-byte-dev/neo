@@ -7,6 +7,7 @@ import { sessionCreate, sessionDelete } from '../services/chat-service.js';
 import { log } from '../utils/logger.js';
 import { markdownToTelegramHtml, splitTelegramText } from '../utils/telegram-html.js';
 import { persistImageArtifact, readRunOutcome, renderArtifactReferences } from '../runtime/outcome.js';
+import { pruneTextChunkEventsSafe } from '../runtime/executor.js';
 
 const MODULE = 'Telegram';
 
@@ -93,6 +94,7 @@ export async function startTelegramBot(): Promise<TelegramRuntime | null> {
                     onVideo: async (url: string) => ({ url }),
                 });
                 const userCtx = runId ? await getUserCtx() : null;
+                if (runId && userCtx) await pruneTextChunkEventsSafe(userCtx.stateDir ?? userCtx.workDir, runId);
                 const outcome = runId && userCtx
                     ? await readRunOutcome(userCtx.stateDir ?? userCtx.workDir, runId, { fallbackText: output })
                     : null;

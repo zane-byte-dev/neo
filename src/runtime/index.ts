@@ -29,17 +29,21 @@ export {
     appendEvent,
     listRunEvents,
     lastEventIndex,
+    pruneTextChunkEvents,
     type AppendEventOptions,
     type ListEventsOptions,
 } from './events.js';
 export {
     saveCheckpoint,
     loadCheckpoint,
+    deleteCheckpoint,
 } from './checkpoint.js';
 export {
     appendRunEventSafe,
     updateRunStatusSafe,
     saveRunCheckpointSafe,
+    deleteRunCheckpointSafe,
+    pruneTextChunkEventsSafe,
     bumpRunMetrics,
     previewText,
     startCancellationProbe,

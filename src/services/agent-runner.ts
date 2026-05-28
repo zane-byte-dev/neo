@@ -32,6 +32,7 @@ import { loadPendingAction } from '../runtime/pending-actions.js';
 import {
     appendRunEventSafe,
     bumpRunMetrics,
+    deleteRunCheckpointSafe,
     previewText,
     saveRunCheckpointSafe,
     startCancellationProbe,
@@ -594,6 +595,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                 toolCallCount,
                 totalDurationMs: elapsed,
             });
+            await deleteRunCheckpointSafe(stateDir, runId);
             throw err;
         }
 
@@ -640,6 +642,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
             responseLength: output.length,
             ...(previewText(output) !== undefined && { outputPreview: previewText(output)! }),
         });
+        await deleteRunCheckpointSafe(stateDir, runId);
 
         log.info(MODULE, 'Turn done', {
             userId,
