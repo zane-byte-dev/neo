@@ -16,8 +16,8 @@
  * truth for the user.
  */
 
-import { appendEvent, type AppendEventOptions } from './events.js';
-import { saveCheckpoint } from './checkpoint.js';
+import { appendEvent, pruneTextChunkEvents, type AppendEventOptions } from './events.js';
+import { deleteCheckpoint, saveCheckpoint } from './checkpoint.js';
 import { loadRun, saveRun, updateRunStatus } from './store.js';
 import type {
     JsonObject,
@@ -99,6 +99,37 @@ export async function saveRunCheckpointSafe(
             error: err instanceof Error ? err.message : String(err),
         });
         return null;
+    }
+}
+
+/**
+ * Delete the run's checkpoint once it has reached a terminal state.
+ * Swallows all errors — cleanup is best-effort.
+ */
+export async function deleteRunCheckpointSafe(workDir: string, runId: string): Promise<void> {
+    try {
+        await deleteCheckpoint(workDir, runId);
+    } catch (err: unknown) {
+        log.warn(MODULE, 'deleteCheckpoint failed', {
+            runId,
+            error: err instanceof Error ? err.message : String(err),
+        });
+    }
+}
+
+/**
+ * Rewrite the run's event log, stripping text/thought llm_chunk events
+ * that are only needed during live streaming.  Called after a run
+ * reaches a terminal state; errors are logged and swallowed.
+ */
+export async function pruneTextChunkEventsSafe(workDir: string, runId: string): Promise<void> {
+    try {
+        await pruneTextChunkEvents(workDir, runId);
+    } catch (err: unknown) {
+        log.warn(MODULE, 'pruneTextChunkEvents failed', {
+            runId,
+            error: err instanceof Error ? err.message : String(err),
+        });
     }
 }
 

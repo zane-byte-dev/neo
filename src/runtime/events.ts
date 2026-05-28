@@ -13,7 +13,7 @@
  */
 
 import { existsSync } from 'node:fs';
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { generateId } from '../utils/id-generator.js';
 import { eventsFilePath } from './paths.js';
@@ -106,6 +106,45 @@ export async function lastEventIndex(workDir: string, runId: string): Promise<nu
     const path = eventsFilePath(workDir, runId);
     if (!existsSync(path)) return -1;
     return _peekNextIndex(path).then((n) => n - 1);
+}
+
+/**
+ * Remove high-volume text/thought llm_chunk events from the run's event
+ * log once the run has reached a terminal state.  The final assistant
+ * reply is persisted to chat history and is the source of truth; these
+ * streaming-only events account for the bulk of on-disk usage and are
+ * not needed afterwards.
+ *
+ * Uses atomic-replace so a crash mid-write never leaves a corrupt file.
+ * Missing files are silently ignored.  Malformed lines are kept as-is.
+ */
+export async function pruneTextChunkEvents(workDir: string, runId: string): Promise<void> {
+    const path = eventsFilePath(workDir, runId);
+    if (!existsSync(path)) return;
+    const text = await readFile(path, 'utf8');
+    const lines = text.split('\n');
+    const kept: string[] = [];
+    let pruned = 0;
+    for (const line of lines) {
+        if (!line) continue;
+        try {
+            const parsed = JSON.parse(line) as RunEvent;
+            if (
+                parsed.type === 'llm_chunk' &&
+                (parsed.payload.chunkType === 'text' || parsed.payload.chunkType === 'thought')
+            ) {
+                pruned += 1;
+                continue;
+            }
+        } catch {
+            // Malformed line: keep it as-is.
+        }
+        kept.push(line);
+    }
+    if (pruned === 0) return;
+    const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
+    await writeFile(tmp, kept.join('\n') + '\n', 'utf8');
+    await rename(tmp, path);
 }
 
 // ── internals ──────────────────────────────────────────────────────────

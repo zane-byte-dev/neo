@@ -20,6 +20,7 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { runAgentTurn } from '../services/agent-runner.js';
 import { readRunOutcome, renderArtifactReferences, persistImageArtifact } from '../runtime/outcome.js';
+import { pruneTextChunkEventsSafe } from '../runtime/executor.js';
 import { generateId } from '../utils/id-generator.js';
 import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
@@ -96,6 +97,7 @@ export async function runScheduledTask(userId: string, task: ScheduledTask): Pro
                 : undefined,
             onVideo: async (url) => ({ url }),
         });
+        if (stateDir && runId) await pruneTextChunkEventsSafe(stateDir, runId);
         const outcome = stateDir && runId
             ? await readRunOutcome(stateDir, runId, { fallbackText: output })
             : null;

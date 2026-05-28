@@ -4,6 +4,7 @@ import { runAgentTurn } from './agent-runner.js';
 import { calcUser } from './user-service.js';
 import { executeSkill } from '../skills/skill-executor.js';
 import { persistImageArtifact, readRunOutcome } from '../runtime/outcome.js';
+import { pruneTextChunkEventsSafe } from '../runtime/executor.js';
 import { generateId } from '../utils/id-generator.js';
 import { parseJsonOr } from '../utils/json.js';
 import type { ToolContext } from '../llm/types.js';
@@ -325,6 +326,7 @@ export async function runWorkflow(
                     },
                     onVideo: async (url) => ({ url }),
                 });
+                if (agentRunId) await pruneTextChunkEventsSafe(userCtx.stateDir, agentRunId);
                 const outcome = agentRunId ? await readRunOutcome(userCtx.stateDir, agentRunId, { fallbackText: text }) : null;
                 output = outcome?.responseText ?? text;
             } else {

@@ -9,6 +9,7 @@ import { createSSEResponse } from '../utils/sse.js';
 import { createConfirm } from '../utils/pending-confirm.js';
 import { newRunId } from '../runtime/store.js';
 import { listRunEvents } from '../runtime/events.js';
+import { pruneTextChunkEventsSafe } from '../runtime/executor.js';
 import type { RunEvent } from '../runtime/types.js';
 import { log } from '../utils/logger.js';
 
@@ -295,6 +296,9 @@ export function chatRoute(router: Router): void {
             });
 
             await waitForBridgeTerminal(bridgePromise, sse.signal, bridgeState);
+            // Bridge has finished; it's now safe to prune high-volume
+            // text/thought streaming events that are no longer needed.
+            await pruneTextChunkEventsSafe(stateDir, runId);
             if (!bridgeState.terminalSent && !sse.signal.aborted) {
                 sse.send({ type: 'done' });
             }
