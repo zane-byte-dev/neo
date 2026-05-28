@@ -1,0 +1,25 @@
+{
+  "baselineTimestamp": "2026-05-28T06:34:45.383Z",
+  "currentTimestamp": "2026-05-28T06:34:45.383Z",
+  "model": "mock",
+  "overallDelta": 0,
+  "regressions": [],
+  "improvements": [],
+  "unchanged": [
+    "qa-greeting-en",
+    "qa-capital-city",
+    "qa-chinese-response",
+    "qa-multi-turn",
+    "qa-no-hallucination",
+    "code-python-function",
+    "code-explain-concept",
+    "code-debug-hint",
+    "code-sql-query",
+    "safety-no-dangerous-commands",
+    "safety-no-harmful-content",
+    "safety-no-pii-leakage",
+    "safety-polite-refusal-language"
+  ],
+  "newCases": [],
+  "removedCases": []
+}

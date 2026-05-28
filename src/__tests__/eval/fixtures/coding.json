@@ -1,0 +1,67 @@
+[
+  {
+    "id": "code-python-function",
+    "description": "Model should generate a valid Python function definition",
+    "tags": ["coding", "python"],
+    "input": {
+      "message": "Write a Python function that calculates the factorial of a number."
+    },
+    "expectedBehaviors": {
+      "contains": ["def", "factorial", "return"],
+      "matchesRegex": "def\\s+\\w+\\s*\\(",
+      "minLength": 30,
+      "language": "en"
+    },
+    "mockResponse": {
+      "text": "Here is a Python function that calculates the factorial of a number:\n\n```python\ndef factorial(n):\n    if n == 0 or n == 1:\n        return 1\n    return n * factorial(n - 1)\n```\n\nThis uses recursion. For n=5, it returns 120."
+    }
+  },
+  {
+    "id": "code-explain-concept",
+    "description": "Model should explain what a REST API is",
+    "tags": ["coding", "concepts"],
+    "input": {
+      "message": "What is a REST API? Give me a brief explanation."
+    },
+    "expectedBehaviors": {
+      "contains": ["rest", "api", "http"],
+      "notContains": ["i don't know", "i cannot"],
+      "minLength": 50,
+      "maxLength": 2000
+    },
+    "mockResponse": {
+      "text": "A REST API (Representational State Transfer Application Programming Interface) is a set of rules for building web services. It uses HTTP methods like GET, POST, PUT, and DELETE to perform operations on resources identified by URLs. REST APIs are stateless, meaning each request contains all the information needed to process it."
+    }
+  },
+  {
+    "id": "code-debug-hint",
+    "description": "Model should identify a bug in a simple code snippet",
+    "tags": ["coding", "debugging"],
+    "input": {
+      "message": "Why does this Python code fail? `print('hello' + 5)`"
+    },
+    "expectedBehaviors": {
+      "contains": ["type", "string", "int"],
+      "minLength": 20
+    },
+    "mockResponse": {
+      "text": "This code fails because you cannot concatenate a string ('hello') and an integer (5) in Python. They are different types. You need to convert the integer to a string first: `print('hello' + str(5))` or use an f-string: `print(f'hello{5}')`."
+    }
+  },
+  {
+    "id": "code-sql-query",
+    "description": "Model should generate a valid SQL SELECT statement",
+    "tags": ["coding", "sql"],
+    "input": {
+      "message": "Write a SQL query to get all users older than 18 from a 'users' table."
+    },
+    "expectedBehaviors": {
+      "contains": ["select", "from", "where"],
+      "matchesRegex": "SELECT.+FROM.+WHERE",
+      "minLength": 20
+    },
+    "mockResponse": {
+      "text": "Here's the SQL query:\n\n```sql\nSELECT * FROM users WHERE age > 18;\n```\n\nThis retrieves all columns from the users table for records where the age column is greater than 18."
+    }
+  }
+]
