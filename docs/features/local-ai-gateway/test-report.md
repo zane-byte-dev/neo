@@ -37,6 +37,7 @@ npx vitest run src/services/__tests__/gateway-settings.test.ts src/routes/__test
 - Gateway 未启用、缺 token、错 token、正确 token。
 - Settings 生成的 UI-managed token 可用于 gateway auth；关闭 Settings 开关会覆盖静态 `gatewayToken`。
 - `/api/gateway` 可返回状态、生成 token、重置 token，并在后续 GET 中只返回脱敏 token。
+- `/api/gateway` 在 Web UI 经 Vite `5173` 代理访问时，仍返回后端 Gateway Base URL `http://localhost:3000/v1`，避免外部客户端请求到前端 HTML。
 - Basic Auth 开启时 `/v1/*` 仍使用 gateway Bearer token。
 - `/v1/models`、OpenAI 非流式、OpenAI SSE、Anthropic 非流式、Anthropic SSE route 分流。
 - OpenAI 文本消息 normalizer、非流式 response shape、SSE chunk / `[DONE]`。

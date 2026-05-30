@@ -47,6 +47,8 @@ OPENAI_BASE_URL=http://localhost:3000/v1
 OPENAI_API_KEY=<neo-gateway-token>
 ```
 
+注意：`http://localhost:5173` 是前端开发服务器，不是 Gateway 服务。Gateway 默认运行在后端端口 `3000`。如果某个客户端的字段会自动追加 `/v1/models`、`/v1/chat/completions`，请填根地址 `http://localhost:3000`；如果字段明确叫 OpenAI `baseURL` / `OPENAI_BASE_URL`，请填 `http://localhost:3000/v1`。
+
 支持接口：
 
 | Endpoint | 说明 |

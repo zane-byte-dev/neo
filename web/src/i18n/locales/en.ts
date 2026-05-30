@@ -307,7 +307,7 @@ const en = {
     gatewaySourceSettings: 'Settings token',
     gatewaySourceConfig: 'Config token',
     gatewaySourceNone: 'No token',
-    gatewayBaseUrl: 'Base URL',
+    gatewayBaseUrl: 'OpenAI / Anthropic Base URL',
     gatewayToken: 'Gateway token',
     gatewayTokenHint: 'The full token is shown only after you generate or reset it. Existing tokens are masked here.',
     gatewayTokenNotGenerated: 'Not generated',

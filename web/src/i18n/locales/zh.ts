@@ -309,7 +309,7 @@ const zh: Record<TranslationKeys, string> = {
     gatewaySourceSettings: '设置生成',
     gatewaySourceConfig: '配置文件',
     gatewaySourceNone: '未生成',
-    gatewayBaseUrl: 'Base URL',
+    gatewayBaseUrl: 'OpenAI / Anthropic Base URL',
     gatewayToken: '网关 Token',
     gatewayTokenHint: '完整 Token 只会在生成或重置后显示一次；已有 Token 在这里仅显示脱敏尾号。',
     gatewayTokenNotGenerated: '尚未生成',
