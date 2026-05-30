@@ -123,7 +123,7 @@ function _optionalBasicAuthMiddleware(): Koa.Middleware {
     const enabled = Boolean(BASIC_AUTH_USER && BASIC_AUTH_PASS);
 
     return async (ctx, next) => {
-        if (!enabled) return next();
+        if (!enabled || ctx.path.startsWith('/v1/')) return next();
 
         const auth = ctx.get('authorization');
         if (!auth.startsWith('Basic ')) {

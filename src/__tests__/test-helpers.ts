@@ -9,6 +9,7 @@ import { timingSafeEqual } from 'crypto';
 import Keygrip from 'keygrip';
 import { SESSION_SECRET } from '../config.js';
 import { SESSION_COOKIE } from '../const/cookie.js';
+import { hasGatewayTokenConfigured, userGetByGatewayToken } from '../services/user-service.js';
 
 export interface TestAppOptions {
     basicAuthUser?: string;
@@ -29,6 +30,8 @@ export function createTestApp(opts: TestAppOptions = {}) {
         const user = opts.basicAuthUser;
         const pass = opts.basicAuthPass;
         app.use(async (ctx, next) => {
+            if (ctx.path.startsWith('/v1/')) return next();
+
             const auth = ctx.get('authorization');
             if (!auth.startsWith('Basic ')) {
                 ctx.set('WWW-Authenticate', 'Basic realm="neo"');
@@ -61,6 +64,28 @@ export function createTestApp(opts: TestAppOptions = {}) {
 
     // Cookie auth (same as server.ts _authMiddleware)
     app.use(async (ctx, next) => {
+        if (ctx.path.startsWith('/v1/')) {
+            if (!hasGatewayTokenConfigured()) {
+                ctx.status = 403;
+                ctx.body = { error: { message: 'AI gateway is disabled', code: 'gateway_disabled' } };
+                return;
+            }
+            const auth = ctx.get('authorization');
+            if (!auth.startsWith('Bearer ')) {
+                ctx.status = 401;
+                ctx.body = { error: { message: 'Missing gateway token', code: 'missing_gateway_token' } };
+                return;
+            }
+            const user = userGetByGatewayToken(auth.slice('Bearer '.length).trim());
+            if (!user) {
+                ctx.status = 401;
+                ctx.body = { error: { message: 'Invalid gateway token', code: 'invalid_gateway_token' } };
+                return;
+            }
+            ctx.state.userId = user.id;
+            return next();
+        }
+
         if (!ctx.path.startsWith('/api/')) return next();
         if (ctx.path === '/api/auth/login') return next();
         const userId = ctx.cookies.get(SESSION_COOKIE, { signed: true });

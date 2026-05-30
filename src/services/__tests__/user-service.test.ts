@@ -6,6 +6,8 @@ import {
     userGetWorkDir,
     userGetWorkspaceDir,
     userGetStateDir,
+    hasGatewayTokenConfigured,
+    userGetByGatewayToken,
     getWebhookSecret,
 } from '../user-service.js';
 
@@ -15,6 +17,7 @@ const SAMPLE = [
         name: 'Alice',
         tenants: ['tg:111'],
         webToken: 'tok-alice',
+        gatewayToken: 'gw-alice',
         webhookSecret: 'whk-alice',
         workDir: '/tmp/alice/proj',
         stateDir: '/tmp/alice/state',
@@ -75,6 +78,17 @@ describe('userGetByWebToken', () => {
     });
     it('returns null on miss', () => {
         expect(userGetByWebToken('nope')).toBeNull();
+    });
+});
+
+describe('gateway token helpers', () => {
+    it('detects configured gateway tokens', () => {
+        expect(hasGatewayTokenConfigured()).toBe(true);
+    });
+
+    it('matches gateway token with timing-safe lookup', () => {
+        expect(userGetByGatewayToken('gw-alice')?.id).toBe('alice');
+        expect(userGetByGatewayToken('wrong')).toBeNull();
     });
 });
 

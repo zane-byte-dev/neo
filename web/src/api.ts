@@ -5,6 +5,7 @@
  */
 
 import { createSSEStream } from './lib/stream-transport.js'
+import { notifyNotebookArticleDeleted } from './lib/notebookEvents.js'
 
 // ── REST helper ───────────────────────────────────────────────────────────────
 
@@ -727,7 +728,10 @@ export function notebookDelete(id: string) {
         credentials: 'include',
     }).then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
+        return r.json().then((body) => {
+            notifyNotebookArticleDeleted(id)
+            return body
+        })
     })
 }
 

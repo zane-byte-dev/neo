@@ -8,6 +8,7 @@ import { useT, LOCALE_OPTIONS } from '../i18n'
 import { toast } from './Toast'
 import { confirm as confirmDialog } from './ConfirmDialog'
 import { NotebookSettingsModal, getNotebookSort, applySortToEntries } from './notebook/NotebookSettingsModal'
+import { NOTEBOOK_ARTICLE_DELETED_EVENT, getNotebookArticleDeletedDetail } from '../lib/notebookEvents'
 import { TrashPanel } from './TrashPanel'
 import type { Theme, NoteEntry } from '../types'
 
@@ -141,6 +142,31 @@ export const Sidebar: React.FC<{ onNavigate?: () => void; onCollapse?: () => voi
     const [nbArticles, setNbArticles] = React.useState<Record<string, NoteEntry[]>>({})
     const [loadingNbs, setLoadingNbs] = React.useState<Set<string>>(new Set())
     const [nbSortState, setNbSortState] = React.useState<Record<string, string>>({})
+
+    React.useEffect(() => {
+        const handleDeleted = (event: Event) => {
+            const detail = getNotebookArticleDeletedDetail(event)
+            if (!detail) return
+            setNbArticles((prev) => {
+                let changed = false
+                const next: Record<string, NoteEntry[]> = {}
+                for (const [nb, articles] of Object.entries(prev)) {
+                    const filtered = articles.filter((article) => article.id !== detail.id)
+                    next[nb] = filtered
+                    if (filtered.length !== articles.length) changed = true
+                }
+                return changed ? next : prev
+            })
+            setRecentArticles((prev) => {
+                const next = prev.filter((article) => article.id !== detail.id)
+                if (next.length === prev.length) return prev
+                try { localStorage.setItem('neo:recentArticles', JSON.stringify(next)) } catch { /* ignore */ }
+                return next
+            })
+        }
+        window.addEventListener(NOTEBOOK_ARTICLE_DELETED_EVENT, handleDeleted)
+        return () => window.removeEventListener(NOTEBOOK_ARTICLE_DELETED_EVENT, handleDeleted)
+    }, [])
 
     const toggleNotebookExpand = async (nb: string) => {
         setExpandedNbs((prev) => {

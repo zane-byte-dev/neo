@@ -44,6 +44,7 @@ export interface UsageRecord {
     fallbackUsed: boolean;
     originalModel?: string;
     sessionId?: string;
+    caller?: string;
     /** The system instruction sent to the model (AGENTS.md + SOUL.md + USER.md etc.) */
     systemPrompt?: string;
     /** The full user prompt as actually sent to the model (with runtime context wrapping) */

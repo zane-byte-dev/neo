@@ -41,6 +41,10 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 - Chinese README now has one Quick Start path and an updated built-in tools table.
 - English README now matches first-launch bootstrap behavior and current `stateDir` layout.
 
+### Fixed
+
+- 删除文章后，左侧文章目录会立即移除对应条目，并同步清理首页最近文章里的已删除入口。
+
 ## [0.1.0] - 2026-05-12
 
 ### Added

@@ -1,0 +1,78 @@
+import type Koa from 'koa';
+import type Router from '@koa/router';
+import { getGatewayModels, createOpenAIChatCompletion, streamOpenAIChatCompletion, createAnthropicMessage, streamAnthropicMessage } from '../services/ai-gateway-service.js';
+import { GatewayError, toGatewayError } from '../llm/gateway/errors.js';
+import { encodeOpenAIError, encodeOpenAIErrorEvent } from '../llm/gateway/openai.js';
+import { encodeAnthropicError, encodeAnthropicErrorEvent } from '../llm/gateway/anthropic.js';
+
+function allowFallback(ctx: Koa.Context): boolean {
+    return ctx.get('x-neo-allow-fallback').toLowerCase() === 'true';
+}
+
+function requestBody(ctx: Koa.Context): Record<string, unknown> {
+    return (ctx.request.body && typeof ctx.request.body === 'object') ? ctx.request.body as Record<string, unknown> : {};
+}
+
+function prepareSse(ctx: Koa.Context): void {
+    ctx.respond = false;
+    ctx.res.statusCode = 200;
+    ctx.res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    ctx.res.setHeader('Cache-Control', 'no-cache, no-transform');
+    ctx.res.setHeader('Connection', 'keep-alive');
+    ctx.res.flushHeaders?.();
+}
+
+function callContext(ctx: Koa.Context): { userId: string; allowFallback: boolean; abortSignal: AbortSignal } {
+    const ctrl = new AbortController();
+    ctx.req.on('close', () => ctrl.abort());
+    return { userId: ctx.state.userId as string, allowFallback: allowFallback(ctx), abortSignal: ctrl.signal };
+}
+
+async function writeStream(ctx: Koa.Context, stream: AsyncGenerator<string>, onError: (err: GatewayError) => string): Promise<void> {
+    prepareSse(ctx);
+    try {
+        for await (const chunk of stream) ctx.res.write(chunk);
+    } catch (err) {
+        ctx.res.write(onError(toGatewayError(err)));
+    } finally {
+        ctx.res.end();
+    }
+}
+
+export function aiGateway(router: Router): void {
+    router.get('/v1/models', async (ctx) => {
+        ctx.body = await getGatewayModels();
+    });
+
+    router.post('/v1/chat/completions', async (ctx) => {
+        const body = requestBody(ctx);
+        const callCtx = callContext(ctx);
+        if (body.stream === true) {
+            await writeStream(ctx, streamOpenAIChatCompletion(body, callCtx), encodeOpenAIErrorEvent);
+            return;
+        }
+        try {
+            ctx.body = await createOpenAIChatCompletion(body, callCtx);
+        } catch (err) {
+            const gatewayError = toGatewayError(err);
+            ctx.status = gatewayError.status;
+            ctx.body = encodeOpenAIError(gatewayError);
+        }
+    });
+
+    router.post('/v1/messages', async (ctx) => {
+        const body = requestBody(ctx);
+        const callCtx = callContext(ctx);
+        if (body.stream === true) {
+            await writeStream(ctx, streamAnthropicMessage(body, callCtx), encodeAnthropicErrorEvent);
+            return;
+        }
+        try {
+            ctx.body = await createAnthropicMessage(body, callCtx);
+        } catch (err) {
+            const gatewayError = toGatewayError(err);
+            ctx.status = gatewayError.status;
+            ctx.body = encodeAnthropicError(gatewayError);
+        }
+    });
+}
