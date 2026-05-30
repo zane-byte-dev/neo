@@ -24,7 +24,6 @@ import { generateId } from '../utils/id-generator.js';
 import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
 import { userList } from './user-service.js';
-import { refreshNowForAllUsers } from './refresh-now.js';
 import { finishCronRun, startCronRun, type CronRunRecord } from './cron-history.js';
 import { listWorkflows, runWorkflow, workflowRunSummary, type WorkflowDefinition } from './workflow-service.js';
 
@@ -187,15 +186,6 @@ export async function startCronAgent(): Promise<void> {
         log.info(MODULE, 'No scheduled tasks found');
     }
 
-    // ── Built-in system tasks ────────────────────────────────────────────────
-
-    // Refresh NOW.md for all users every day at 08:00 Asia/Shanghai
-    const refreshNowJob = cronSchedule('0 8 * * *', async () => {
-        log.info(MODULE, 'Running built-in task: refresh-now');
-        await refreshNowForAllUsers();
-    }, { timezone: 'Asia/Shanghai' });
-    activeJobs.set('system:refresh-now', refreshNowJob);
-    log.info(MODULE, 'Scheduled built-in task: refresh-now (0 8 * * * Asia/Shanghai)');
 }
 
 /**

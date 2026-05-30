@@ -25,10 +25,6 @@ vi.mock('../user-service.js', () => ({
     userList: vi.fn(() => state.users),
 }));
 
-vi.mock('../refresh-now.js', () => ({
-    refreshNowForAllUsers: vi.fn(async () => undefined),
-}));
-
 vi.mock('../../utils/logger.js', () => ({
     log: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
     setupLogger: vi.fn(),
