@@ -436,6 +436,13 @@ export async function* streamOpenAIChatCompletion(body: OpenAIChatRequest, ctx: 
     throw toGatewayError(lastError);
 }
 
+export function countAnthropicTokens(body: AnthropicMessagesRequest): object {
+    const normalized = normalizeAnthropicRequest(body);
+    const text = [normalized.system ?? '', normalized.promptText].join(' ');
+    const inputTokens = Math.ceil(text.length / 4);
+    return { input_tokens: inputTokens };
+}
+
 export async function createAnthropicMessage(body: AnthropicMessagesRequest, ctx: GatewayCallContext): Promise<object> {
     const normalized = normalizeAnthropicRequest(body);
     const dirs = getUserDirs(ctx.userId);

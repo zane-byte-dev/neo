@@ -1,6 +1,6 @@
 import type Koa from 'koa';
 import type Router from '@koa/router';
-import { getGatewayModels, createOpenAIChatCompletion, streamOpenAIChatCompletion, createAnthropicMessage, streamAnthropicMessage } from '../services/ai-gateway-service.js';
+import { getGatewayModels, createOpenAIChatCompletion, streamOpenAIChatCompletion, createAnthropicMessage, streamAnthropicMessage, countAnthropicTokens } from '../services/ai-gateway-service.js';
 import { GatewayError, toGatewayError } from '../llm/gateway/errors.js';
 import { encodeOpenAIError, encodeOpenAIErrorEvent } from '../llm/gateway/openai.js';
 import { encodeAnthropicError, encodeAnthropicErrorEvent } from '../llm/gateway/anthropic.js';
@@ -71,6 +71,16 @@ export function aiGateway(router: Router): void {
         }
         try {
             ctx.body = await createAnthropicMessage(body, callCtx);
+        } catch (err) {
+            const gatewayError = toGatewayError(err);
+            ctx.status = gatewayError.status;
+            ctx.body = encodeAnthropicError(gatewayError);
+        }
+    });
+
+    router.post('/v1/messages/count_tokens', (ctx) => {
+        try {
+            ctx.body = countAnthropicTokens(requestBody(ctx));
         } catch (err) {
             const gatewayError = toGatewayError(err);
             ctx.status = gatewayError.status;
