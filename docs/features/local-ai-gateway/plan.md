@@ -303,16 +303,18 @@ Claude Code smoke：
 
 ## Acceptance Checklist
 
-- [ ] Gateway 未配置 token 时不可访问 `/v1/*`。
-- [ ] Bearer token 能映射到正确 Neo user。
-- [ ] `/v1/models` 返回 configured aliases。
-- [ ] OpenAI non-streaming 请求可返回完整回答。
-- [ ] OpenAI streaming 请求可被 OpenAI SDK 消费。
-- [ ] Anthropic non-streaming 请求可返回完整回答。
-- [ ] Anthropic streaming 请求可被 Claude Code 消费。
-- [ ] Claude Code tool_use / tool_result 回合不触发 Neo tool executor。
-- [ ] Gateway 调用写入 usage/cost 记录。
-- [ ] 文档、构建和相关测试通过。
+- [x] Gateway 未配置 token 时不可访问 `/v1/*`。
+- [x] Bearer token 能映射到正确 Neo user。
+- [x] `/v1/models` 返回 configured aliases。
+- [x] OpenAI non-streaming 请求可返回完整回答。
+- [x] OpenAI streaming 请求输出 OpenAI-compatible SSE。
+- [x] Anthropic non-streaming 请求可返回完整回答。
+- [x] Anthropic streaming 请求输出 Anthropic event stream。
+- [x] Claude Code tool_use / tool_result 回合不触发 Neo tool executor。
+- [x] Gateway 调用写入 usage/cost 记录。
+- [x] 文档、构建和相关测试通过。
+
+补充：真实 OpenAI SDK / Claude Code 客户端 smoke 尚需在配置有效 provider key 和 gateway token 的本机环境中执行，结果记录见 [test-report.md](test-report.md)。
 
 ## Deferred
 

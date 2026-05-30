@@ -8,6 +8,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Added
 
+- **Local AI Gateway MVP**：新增 `/v1/models`、OpenAI-compatible `/v1/chat/completions` 和 Anthropic-compatible `/v1/messages`，支持 per-user gateway Bearer token、文本非流式 / 流式调用、模型 alias / `auto` 路由、usage/cost 记录，以及 Anthropic `tool_use` / `tool_result` 协议透传。
 - **Skill 搜索**：Settings / Skills 面板新增搜索框，可按技能名、描述、标签实时过滤，搜索无结果时显示空状态提示。
 - **Claude Code 兼容代理接入**：Settings / Models 可保存 Claude Code 代理地址与 Token，并新增 `claude-code*` 模型别名直接用于对话。
 - **对话搜索高亮**：Chat 侧边栏搜索时匹配词在标题中高亮显示（绿色 mark）。

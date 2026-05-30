@@ -27,6 +27,7 @@ docs/
 | [BROWSER_EXTENSION.md](user-guide/BROWSER_EXTENSION.md) | Chrome 扩展安装、权限、保存路径、排查 | ✅ 已落地 |
 | [AGENT_RUNTIME.md](user-guide/AGENT_RUNTIME.md) | runId、事件流、断线追补、磁盘布局 | ✅ 已落地 |
 | [VOICE_INPUT.md](user-guide/VOICE_INPUT.md) | Web Chat 语音输入：录音、转写、权限与常见问题 | ✅ 已落地 |
+| [LOCAL_AI_GATEWAY.md](user-guide/LOCAL_AI_GATEWAY.md) | OpenAI / Anthropic compatible 本地模型网关配置与排障 | ✅ MVP 已落地 |
 
 ## 开发者指南
 
@@ -69,7 +70,7 @@ docs/
 | 文章批注 | [brief.md](features/article-annotations/brief.md) | [plan.md](features/article-annotations/plan.md) | [test-report.md](features/article-annotations/test-report.md) | ✅ MVP 已实现 |
 | 文章内资源 | [brief.md](features/article-embedded-resources/brief.md) | [plan.md](features/article-embedded-resources/plan.md) | [test-report.md](features/article-embedded-resources/test-report.md) | ✅ MVP 已实现 |
 | Web 语音输入 | [brief.md](features/web-voice-input/brief.md) | [plan.md](features/web-voice-input/plan.md) | — | ✅ Phase 1 已实现 |
-| 本地 AI Gateway | [brief.md](features/local-ai-gateway/brief.md) | [plan.md](features/local-ai-gateway/plan.md) | — | 📝 方案完成，待实现 |
+| 本地 AI Gateway | [brief.md](features/local-ai-gateway/brief.md) | [plan.md](features/local-ai-gateway/plan.md) | [test-report.md](features/local-ai-gateway/test-report.md) | ✅ MVP 已实现 |
 | Run Console | [brief.md](features/run-console/brief.md) | [plan.md](features/run-console/plan.md) | — | 📝 Draft |
 | Workflow 模板与向导 | [brief.md](features/workflow-template-wizard/brief.md) | [plan.md](features/workflow-template-wizard/plan.md) | — | 📝 Draft |
 | Connector Center | [brief.md](features/connector-center/brief.md) | [plan.md](features/connector-center/plan.md) | — | 📝 Draft |

@@ -44,6 +44,7 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 | **Skills** | Markdown 定义的可复用 AI 技能，支持参数插值与代码块执行 |
 | **Tools** | 内置工具 + 用户自定义工具（`{stateDir}/tools/` 自动加载） |
 | **自动化** | Webhook / Cron / Workflow 触发 Agent，支持串行步骤、运行历史和手动运行 |
+| **Local AI Gateway** | OpenAI / Anthropic 兼容 `/v1` 本地入口，外部客户端可复用 Neo 的模型路由、密钥管理和 usage 记录 |
 | **Telegram Bot** | Telegraf 长轮询接入，支持 Markdown 渲染、图片发送 |
 | **浏览器扩展** | Chrome 划词保存，支持 X.com 推文、Gemini 对话、飞书 Wiki |
 | **Web UI** | React 前端，提供 Chat / Notebook 面板 |
@@ -126,6 +127,7 @@ const config: LocalConfig = {
             name: 'Alice',
             tenants: [],                     // 例如 ['telegram:123456789']
             webToken: 'long-random-string',  // Web 登录 token
+            gatewayToken: 'long-random-gateway-token', // 可选：/v1 本地 AI Gateway token
             workDir:  '/abs/path/to/workspace',   // 个人工作区（AGENTS.md / notebooks / skills…）
             stateDir: '/abs/path/to/state',       // 运行态数据（runs / secrets / usage…）
         },
@@ -163,6 +165,21 @@ LOG_LEVEL=info                  # debug | info | warn | error
 # 每日付费 LLM 调用美元预算上限（0 = 不限）
 DAILY_COST_LIMIT=0
 ```
+
+### Local AI Gateway
+
+配置 `gatewayToken` 后，外部本地客户端可以把 Neo 当作统一模型入口：
+
+```bash
+OPENAI_BASE_URL=http://localhost:3000/v1
+OPENAI_API_KEY=<neo-gateway-token>
+
+ANTHROPIC_BASE_URL=http://localhost:3000/v1
+ANTHROPIC_AUTH_TOKEN=<neo-gateway-token>
+ANTHROPIC_MODEL=claude
+```
+
+首版支持 `GET /v1/models`、`POST /v1/chat/completions` 和 `POST /v1/messages`。Gateway 不注入 Web Chat 的系统提示、记忆或 Neo tools；Anthropic 工具调用只按协议透传给客户端。详细配置见 [docs/user-guide/LOCAL_AI_GATEWAY.md](docs/user-guide/LOCAL_AI_GATEWAY.md)。
 
 ### 开发模式
 

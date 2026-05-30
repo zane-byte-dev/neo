@@ -62,7 +62,7 @@
 
 ### 5. 多模型支持
 
-当前状态：已支持 Google Gemini（API Key + CLI OAuth）、DeepSeek、OpenAI GPT、Anthropic Claude、Claude Code 兼容代理、Ollama 本地模型，内置智能路由 + 自动 fallback + 用户偏好。
+当前状态：已支持 Google Gemini（API Key + CLI OAuth）、DeepSeek、OpenAI GPT、Anthropic Claude、Claude Code 兼容代理、Ollama 本地模型，内置智能路由 + 自动 fallback + 用户偏好，并提供本机 OpenAI / Anthropic compatible AI Gateway。
 
 - [x] **DeepSeek 接入**：通过 AI SDK 接入 DeepSeek API（deepseek-chat / deepseek-reasoner）
 - [x] **本地模型**：支持 Ollama / 本地 Gemma，适配隐私敏感场景
@@ -71,6 +71,7 @@
 - [x] **OpenAI / Claude 接入**：通过 AI SDK 的 `@ai-sdk/openai` / `@ai-sdk/anthropic` 接入；设置 `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` 即启用，内置别名 `gpt-4o` / `gpt-4o-mini` / `gpt-5` / `claude-sonnet` / `claude-opus` / `claude-haiku`，价格表已纳入预算统计
 - [x] **Claude Code 兼容代理**：Settings / Models 支持保存 `CLAUDE_CODE_BASE_URL` + `CLAUDE_CODE_TOKEN`，提供 `claude-code` / `claude-code-sonnet` / `claude-code-opus` / `claude-code-haiku` 别名，走 Anthropic Messages 兼容流式与工具调用
 - [x] **模型 fallback**：`chatWithContextStreaming` 按 `fallbackChain` 顺序尝试，`switch-model`（429/503/超时）自动切换下一款，`retry-same`（5xx）原模型指数退避，`fatal`（4xx）立刻抛出；`usage.jsonl` 记录 `fallbackUsed` + `originalModel`
+- [x] **Local AI Gateway**：`/v1/models`、OpenAI-compatible `/v1/chat/completions`、Anthropic-compatible `/v1/messages` 已落地；外部客户端使用 per-user gateway Bearer token 调用 Neo alias / `auto`，usage 记录区分 `ai-gateway:openai` 与 `ai-gateway:anthropic`
 - [x] **用户可配置**：每个用户可通过 `space/{userId}/preferences.json` 或 `GET/POST /api/preferences` 设置 `defaultModel` 与 `enabledModels`；未显式选择模型时自动套用 `defaultModel`
 
 ### 6. Web UI 增强
