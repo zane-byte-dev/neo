@@ -5,13 +5,11 @@ import {
     fetchGatewaySettings,
     fetchModels,
     fetchModelMessages,
-    fetchPreferences,
     fetchSecrets,
     fetchToolApprovals,
     resetRouting,
     saveRouting,
     saveGatewaySettings,
-    savePreferences,
     saveSecrets,
     type GatewayStatus,
     type ModelsResponse,
@@ -24,7 +22,6 @@ import {
     type ToolApprovalRule,
     type UsageRecord,
     type SessionMessage,
-    type UserPreferences,
 } from '../api'
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
@@ -261,38 +258,6 @@ const SecretFieldsEditor: React.FC<{
                         </div>
                     )
                 })}
-        </div>
-    )
-}
-
-const CredentialsCard: React.FC<{
-    title: string
-    description: string
-    fields: SecretFieldDef[]
-    statuses: Record<SecretKey, SecretStatus> | null
-    loading: boolean
-    savingKey: SecretKey | null
-    error: string | null
-    t: T
-    onSave: (key: SecretKey, value: string) => void
-}> = ({ title, description, fields, statuses, loading, savingKey, error, t, onSave }) => {
-    return (
-        <div className="bg-bg-container border border-border rounded-xl p-4 space-y-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
-            <div>
-                <h2 className="text-sm font-semibold text-text">{title}</h2>
-                <p className="text-xs text-text-tertiary mt-1 leading-relaxed">{description}</p>
-                {error && <p className="text-[11px] text-destructive mt-2">{error}</p>}
-            </div>
-
-            <SecretFieldsEditor
-                fields={fields}
-                statuses={statuses}
-                loading={loading}
-                savingKey={savingKey}
-                helperText={t('credentialsPlaceholder')}
-                onSave={onSave}
-                t={t}
-            />
         </div>
     )
 }
@@ -1228,10 +1193,6 @@ export const ModelPanel: React.FC = () => {
     const [error, setError] = React.useState<string | null>(null)
     const [month, setMonth] = React.useState(() => new Date().toISOString().slice(0, 7))
     const [detailRecord, setDetailRecord] = React.useState<UsageRecord | null>(null)
-    const [preferences, setPreferences] = React.useState<UserPreferences>({})
-    const [prefsLoading, setPrefsLoading] = React.useState(true)
-    const [prefsSaving, setPrefsSaving] = React.useState(false)
-    const [prefsError, setPrefsError] = React.useState<string | null>(null)
     const [toolApprovals, setToolApprovals] = React.useState<ToolApprovalRule[]>([])
     const [approvalsLoading, setApprovalsLoading] = React.useState(true)
     const [approvalsError, setApprovalsError] = React.useState<string | null>(null)
@@ -1247,7 +1208,7 @@ export const ModelPanel: React.FC = () => {
     const [gatewayToken, setGatewayToken] = React.useState<string | null>(null)
     const [gatewayCopied, setGatewayCopied] = React.useState<string | null>(null)
     const [modelConfigOpen, setModelConfigOpen] = React.useState(false)
-    const [activeTab, setActiveTab] = React.useState<'config' | 'history' | 'bots' | 'approvals'>('config')
+    const [activeTab, setActiveTab] = React.useState<'config' | 'history' | 'approvals'>('config')
 
     const load = async (requestedMonth = month) => {
         setLoading(true)
@@ -1259,19 +1220,6 @@ export const ModelPanel: React.FC = () => {
             setError((e as Error).message ?? t('loadFailed'))
         } finally {
             setLoading(false)
-        }
-    }
-
-    const loadPreferences = async () => {
-        setPrefsLoading(true)
-        setPrefsError(null)
-        try {
-            const res = await fetchPreferences()
-            setPreferences(res.preferences)
-        } catch (e: unknown) {
-            setPrefsError((e as Error).message ?? t('loadFailed'))
-        } finally {
-            setPrefsLoading(false)
         }
     }
 
@@ -1358,10 +1306,6 @@ export const ModelPanel: React.FC = () => {
     }, [month])
 
     React.useEffect(() => {
-        void loadPreferences()
-    }, [])
-
-    React.useEffect(() => {
         void loadToolApprovals()
     }, [])
 
@@ -1417,11 +1361,10 @@ export const ModelPanel: React.FC = () => {
 
     const configuredModels = data.models.filter((model) => model.configured)
 
-    type TabKey = 'config' | 'history' | 'bots' | 'approvals'
+    type TabKey = 'config' | 'history' | 'approvals'
     const tabs: Array<{ key: TabKey; label: string }> = [
         { key: 'config',    label: t('tabModelConfig') },
         { key: 'history',   label: t('tabUsageHistory') },
-        { key: 'bots',      label: t('tabBots') },
         { key: 'approvals', label: t('tabApprovals') },
     ]
 
@@ -1438,7 +1381,6 @@ export const ModelPanel: React.FC = () => {
                         <button
                             onClick={() => {
                                 void load()
-                                void loadPreferences()
                                 void loadToolApprovals()
                                 void loadSecrets()
                                 void loadGateway()
@@ -1591,13 +1533,6 @@ export const ModelPanel: React.FC = () => {
                             <HistoryTable records={data.history} t={t} onViewDetail={setDetailRecord} />
                         </section>
                     </>
-                )}
-
-                {/* Bots tab */}
-                {activeTab === 'bots' && (
-                    <section>
-                        <p className="text-sm text-text-tertiary">{t('noBotsConfigured')}</p>
-                    </section>
                 )}
 
                 {/* Approvals tab */}

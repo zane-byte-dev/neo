@@ -31,9 +31,6 @@ function sanitizeIncoming(body: unknown): UserPreferences {
             .filter((m) => m && MODEL_ALIASES[m]);
         if (list.length) out.enabledModels = [...new Set(list)];
     }
-    if (typeof b.telegramBotEnabled === 'boolean') {
-        out.telegramBotEnabled = b.telegramBotEnabled;
-    }
     return out;
 }
 
