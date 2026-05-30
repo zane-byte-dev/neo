@@ -238,7 +238,6 @@ async function waitFor(ms: number, signal?: AbortSignal): Promise<void> {
 export interface UserPreferences {
     defaultModel?: string
     enabledModels?: string[]
-    telegramBotEnabled?: boolean
 }
 
 export interface ToolApprovalRule {
@@ -253,15 +252,9 @@ export interface ToolApprovalRule {
     args?: Record<string, unknown>
 }
 
-export interface TelegramRuntimeInfo {
-    configured: boolean
-    active: boolean
-}
-
 export interface PreferencesResponse {
     preferences: UserPreferences
     availableModels?: string[]
-    telegram: TelegramRuntimeInfo
 }
 
 export interface ToolApprovalsResponse {
@@ -312,8 +305,6 @@ export type SecretKey =
     | 'ANTHROPIC_API_KEY'
     | 'CLAUDE_CODE_BASE_URL'
     | 'CLAUDE_CODE_TOKEN'
-    | 'TELEGRAM_BOT_TOKEN'
-    | 'TELEGRAM_CHAT_ID'
 
 export interface SecretStatus {
     hasValue: boolean
@@ -1249,7 +1240,7 @@ export function mcpDelete(name: string) {
     }).then((r) => _jsonOrThrow<{ ok: true }>(r))
 }
 
-export function cronSave(name: string, job: { cron: string; message: string; enabled: boolean; timezone?: string; telegramChatId?: string }) {
+export function cronSave(name: string, job: { cron: string; message: string; enabled: boolean; timezone?: string }) {
     return fetch(`/api/crons/${encodeURIComponent(name)}`, {
         method: 'PUT',
         credentials: 'include',

@@ -164,7 +164,7 @@ export interface CronRunInfo {
 export type WorkflowTrigger =
     | { type: 'manual' }
     | { type: 'webhook'; secret?: string }
-    | { type: 'cron'; cron: string; timezone?: string; enabled?: boolean; telegramChatId?: string }
+    | { type: 'cron'; cron: string; timezone?: string; enabled?: boolean }
 
 export type WorkflowStep =
     | { id: string; name?: string; type: 'transform'; template: string }

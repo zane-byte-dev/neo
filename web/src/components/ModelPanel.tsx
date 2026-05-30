@@ -25,7 +25,6 @@ import {
     type UsageRecord,
     type SessionMessage,
     type UserPreferences,
-    type TelegramRuntimeInfo,
 } from '../api'
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
@@ -158,84 +157,6 @@ const UsageSummary: React.FC<{ data: ModelsResponse; t: T }> = ({ data, t }) => 
     )
 }
 
-// ── Telegram Control ─────────────────────────────────────────────────────────
-
-const TelegramControlCard: React.FC<{
-    preferences: UserPreferences
-    runtime: TelegramRuntimeInfo
-    loading: boolean
-    saving: boolean
-    error: string | null
-    t: T
-    onToggle: () => void
-    onRepair: () => void
-}> = ({ preferences, runtime, loading, saving, error, t, onToggle, onRepair }) => {
-    const enabled = Boolean(preferences.telegramBotEnabled)
-    const disabled = loading || saving
-
-    let statusText = t('telegramBotStopped')
-    let statusTone = 'bg-fill text-text-secondary'
-    if (!runtime.configured) {
-        statusText = t('telegramBotUnavailable')
-        statusTone = 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-    } else if (runtime.active && enabled) {
-        statusText = t('telegramBotRunning')
-        statusTone = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-    } else if (runtime.active) {
-        statusText = t('telegramBotRunningShared')
-        statusTone = 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-    }
-
-    return (
-        <div className="bg-bg-container border border-border rounded-xl p-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
-            <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                        <h2 className="text-sm font-semibold text-text">{t('telegramBot')}</h2>
-                        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium', statusTone)}>{loading ? '...' : statusText}</span>
-                    </div>
-                    <p className="text-xs text-text-tertiary leading-relaxed">
-                        {t('telegramBotDescription')}
-                    </p>
-                </div>
-
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={enabled}
-                    aria-label={t('telegramBot')}
-                    disabled={disabled}
-                    onClick={onToggle}
-                    className={cn(
-                        'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors duration-200',
-                        enabled ? 'bg-primary-mint border-primary-mint' : 'bg-fill border-border',
-                        disabled && 'cursor-not-allowed opacity-60',
-                    )}
-                >
-                    <span
-                        className={cn(
-                            'inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-                            enabled ? 'translate-x-6' : 'translate-x-1',
-                        )}
-                    />
-                </button>
-            </div>
-            {error && (
-                <div className="mt-3">
-                    <ActionableErrorBanner
-                        title={t('telegramBotToggleFailed')}
-                        message={t('telegramBotRecoveryHint')}
-                        detail={error}
-                        detailsLabel={t('technicalDetails')}
-                        actionLabel={t('telegramBotRepairAction')}
-                        onAction={onRepair}
-                    />
-                </div>
-            )}
-        </div>
-    )
-}
-
 // ── Credentials ──────────────────────────────────────────────────────────────
 
 interface SecretFieldDef {
@@ -252,11 +173,6 @@ const MODEL_SECRET_FIELDS: SecretFieldDef[] = [
     { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', placeholder: 'sk-ant-…', models: ['claude', 'claude-sonnet', 'claude-opus', 'claude-haiku'] },
     { key: 'CLAUDE_CODE_BASE_URL', label: 'Claude Code Proxy URL', placeholder: 'https://claude-code.example.com/v1', models: ['claude-code', 'claude-code-sonnet'] },
     { key: 'CLAUDE_CODE_TOKEN', label: 'Claude Code Token', placeholder: 'token…', models: ['claude-code-opus', 'claude-code-haiku'] },
-]
-
-const TELEGRAM_SECRET_FIELDS: SecretFieldDef[] = [
-    { key: 'TELEGRAM_BOT_TOKEN', label: 'Telegram Bot Token', placeholder: '1234:ABC…' },
-    { key: 'TELEGRAM_CHAT_ID',   label: 'Telegram Chat ID',   placeholder: '123456789' },
 ]
 
 const MODEL_PROVIDER_SECRET_KEYS = new Set<SecretKey>(MODEL_SECRET_FIELDS.map((field) => field.key))
@@ -1313,7 +1229,6 @@ export const ModelPanel: React.FC = () => {
     const [month, setMonth] = React.useState(() => new Date().toISOString().slice(0, 7))
     const [detailRecord, setDetailRecord] = React.useState<UsageRecord | null>(null)
     const [preferences, setPreferences] = React.useState<UserPreferences>({})
-    const [telegramRuntime, setTelegramRuntime] = React.useState<TelegramRuntimeInfo>({ configured: true, active: false })
     const [prefsLoading, setPrefsLoading] = React.useState(true)
     const [prefsSaving, setPrefsSaving] = React.useState(false)
     const [prefsError, setPrefsError] = React.useState<string | null>(null)
@@ -1333,7 +1248,6 @@ export const ModelPanel: React.FC = () => {
     const [gatewayCopied, setGatewayCopied] = React.useState<string | null>(null)
     const [modelConfigOpen, setModelConfigOpen] = React.useState(false)
     const [activeTab, setActiveTab] = React.useState<'config' | 'history' | 'bots' | 'approvals'>('config')
-    const telegramCredentialsRef = React.useRef<HTMLDivElement>(null)
 
     const load = async (requestedMonth = month) => {
         setLoading(true)
@@ -1354,9 +1268,8 @@ export const ModelPanel: React.FC = () => {
         try {
             const res = await fetchPreferences()
             setPreferences(res.preferences)
-            setTelegramRuntime(res.telegram)
         } catch (e: unknown) {
-            setPrefsError((e as Error).message ?? t('telegramBotLoadFailed'))
+            setPrefsError((e as Error).message ?? t('loadFailed'))
         } finally {
             setPrefsLoading(false)
         }
@@ -1410,9 +1323,6 @@ export const ModelPanel: React.FC = () => {
             if (MODEL_PROVIDER_SECRET_KEYS.has(key)) {
                 void load()
             }
-            if (key === 'TELEGRAM_BOT_TOKEN' || key === 'TELEGRAM_CHAT_ID') {
-                void loadPreferences()
-            }
         } catch (e: unknown) {
             setSecretsError((e as Error).message ?? t('credentialsSaveFailed'))
         } finally {
@@ -1462,28 +1372,6 @@ export const ModelPanel: React.FC = () => {
     React.useEffect(() => {
         void loadGateway()
     }, [])
-
-    const toggleTelegramBot = async () => {
-        const previous = preferences
-        const next: UserPreferences = {
-            ...preferences,
-            telegramBotEnabled: !Boolean(preferences.telegramBotEnabled),
-        }
-
-        setPreferences(next)
-        setPrefsSaving(true)
-        setPrefsError(null)
-        try {
-            const res = await savePreferences(next)
-            setPreferences(res.preferences)
-            setTelegramRuntime(res.telegram)
-        } catch (e: unknown) {
-            setPreferences(previous)
-            setPrefsError((e as Error).message ?? t('telegramBotToggleFailed'))
-        } finally {
-            setPrefsSaving(false)
-        }
-    }
 
     const revokeApproval = async (ruleId: string) => {
         setDeletingApprovalId(ruleId)
@@ -1707,36 +1595,9 @@ export const ModelPanel: React.FC = () => {
 
                 {/* Bots tab */}
                 {activeTab === 'bots' && (
-                    <>
-                        <section>
-                            <h2 className="text-sm font-semibold text-text mb-2.5">{t('telegramBot')}</h2>
-                            <TelegramControlCard
-                                preferences={preferences}
-                                runtime={telegramRuntime}
-                                loading={prefsLoading}
-                                saving={prefsSaving}
-                                error={prefsError}
-                                t={t}
-                                onToggle={toggleTelegramBot}
-                                onRepair={() => telegramCredentialsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                            />
-                        </section>
-
-                        <section ref={telegramCredentialsRef}>
-                            <CredentialsCard
-                                title={t('telegramCredentials')}
-                                description={t('telegramCredentialsDescription')}
-                                fields={TELEGRAM_SECRET_FIELDS}
-                                statuses={secrets}
-                                loading={secretsLoading}
-                                savingKey={savingSecretKey}
-                                error={secretsError}
-                                t={t}
-                                onSave={(key, value) => { void saveSecret(key, value) }}
-                            />
-                        </section>
-
-                    </>
+                    <section>
+                        <p className="text-sm text-text-tertiary">{t('noBotsConfigured')}</p>
+                    </section>
                 )}
 
                 {/* Approvals tab */}

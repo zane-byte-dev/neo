@@ -102,8 +102,7 @@ export const getOpenAIApiKey   = (): string => getSecret('OPENAI_API_KEY');
 export const getAnthropicApiKey = (): string => getSecret('ANTHROPIC_API_KEY');
 export const getClaudeCodeBaseUrl = (): string => getSecret('CLAUDE_CODE_BASE_URL');
 export const getClaudeCodeToken = (): string => getSecret('CLAUDE_CODE_TOKEN');
-export const getTelegramBotToken = (): string => getSecret('TELEGRAM_BOT_TOKEN');
-export const getTelegramChatId   = (): string => getSecret('TELEGRAM_CHAT_ID');
+
 
 /** Maximum agentic tool-call iterations before forcing stop */
 export const MAX_TOOL_ITERATIONS = 25;
@@ -128,22 +127,6 @@ export const MODEL_ALIASES: Record<string, string> = {
     'deepseek-reasoner': 'deepseek-reasoner',
     gemma: 'ollama/gemma4:e4b',
     'gemini-acp': 'acp/gemini',
-    // OpenAI
-    gpt:         'gpt-4o',
-    'gpt-4o':    'gpt-4o',
-    'gpt-4o-mini': 'gpt-4o-mini',
-    'gpt-5':     'gpt-5',
-    'gpt-5-mini': 'gpt-5-mini',
-    // Anthropic Claude
-    claude:          'claude-sonnet-4-5',
-    'claude-sonnet': 'claude-sonnet-4-5',
-    'claude-opus':   'claude-opus-4-5',
-    'claude-haiku':  'claude-haiku-4-5',
-    // Claude Code compatible endpoint/proxy
-    'claude-code':        'claude-code/claude-sonnet-4-5',
-    'claude-code-sonnet': 'claude-code/claude-sonnet-4-5',
-    'claude-code-opus':   'claude-code/claude-opus-4-5',
-    'claude-code-haiku':  'claude-code/claude-haiku-4-5',
 };
 
 // ── Security ─────────────────────────────────────────────────────────────────

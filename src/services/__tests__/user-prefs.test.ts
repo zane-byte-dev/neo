@@ -25,7 +25,6 @@ describe('loadUserPreferences', () => {
             JSON.stringify({
                 defaultModel: '  deepseek  ',
                 enabledModels: ['deepseek', 'claude', 'deepseek', '', 5],
-                telegramBotEnabled: true,
                 extra: 'ignored',
             }),
             'utf8',
@@ -33,7 +32,6 @@ describe('loadUserPreferences', () => {
         const p = await loadUserPreferences(dir);
         expect(p.defaultModel).toBe('deepseek');
         expect(p.enabledModels).toEqual(['deepseek', 'claude']);
-        expect(p.telegramBotEnabled).toBe(true);
         expect((p as Record<string, unknown>).extra).toBeUndefined();
     });
 });
@@ -43,11 +41,9 @@ describe('saveUserPreferences', () => {
         const out = await saveUserPreferences(dir, {
             defaultModel: 'deepseek',
             enabledModels: ['deepseek', '', 'claude'],
-            telegramBotEnabled: false,
         });
         expect(out.defaultModel).toBe('deepseek');
         expect(out.enabledModels).toEqual(['deepseek', 'claude']);
-        expect(out.telegramBotEnabled).toBeUndefined(); // false is dropped
         const raw = JSON.parse(await fs.readFile(join(dir, 'preferences.json'), 'utf8'));
         expect(raw.defaultModel).toBe('deepseek');
     });

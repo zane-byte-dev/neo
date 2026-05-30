@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 const state = vi.hoisted(() => ({
     users: [] as Array<{ id: string; workDir?: string; stateDir?: string }>,
     jobs: [] as Array<{ expr: string; callback: () => Promise<void> | void; stop: ReturnType<typeof vi.fn> }>,
-    telegram: null as null | { sendMessage: ReturnType<typeof vi.fn> },
 }));
 
 vi.mock('node-cron', () => ({
@@ -24,10 +23,6 @@ vi.mock('../agent-runner.js', () => ({
 
 vi.mock('../user-service.js', () => ({
     userList: vi.fn(() => state.users),
-}));
-
-vi.mock('../telegram-runtime.js', () => ({
-    getTelegramRuntime: vi.fn(() => state.telegram),
 }));
 
 vi.mock('../refresh-now.js', () => ({
@@ -55,12 +50,10 @@ describe('cron-agent runtime outcome delivery', () => {
                 id: 'morning-brief',
                 cron: '*/5 * * * *',
                 message: 'hello from cron',
-                telegramChatId: '12345',
             },
         ]), 'utf8');
         state.users = [{ id: 'alice', workDir: workDir, stateDir: workDir }];
         state.jobs = [];
-        state.telegram = { sendMessage: vi.fn(async () => undefined) };
         vi.clearAllMocks();
     });
 
@@ -69,7 +62,7 @@ describe('cron-agent runtime outcome delivery', () => {
         rmSync(workDir, { recursive: true, force: true });
     });
 
-    it('appends runtime artifact references to Telegram delivery text', async () => {
+    it('runs scheduled task and produces outcome', async () => {
         vi.mocked(runAgentTurn).mockImplementation(async (opts) => {
             const runId = 'run_cron_test';
             opts.onRunCreated?.(runId);
@@ -105,10 +98,6 @@ describe('cron-agent runtime outcome delivery', () => {
 
         await job!.callback();
 
-        expect(state.telegram?.sendMessage).toHaveBeenCalledTimes(1);
-        expect(state.telegram?.sendMessage).toHaveBeenCalledWith(
-            '12345',
-            expect.stringContaining('https://example.com/demo.mp4'),
-        );
+        expect(runAgentTurn).toHaveBeenCalledTimes(1);
     });
 });

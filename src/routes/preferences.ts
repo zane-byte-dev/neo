@@ -9,7 +9,6 @@
 import type Router from '@koa/router';
 import { calcUser, invalidateUserCache } from '../services/user-service.js';
 import { saveUserPreferences, type UserPreferences } from '../services/user-prefs.js';
-import { ensureTelegramBotStarted, getTelegramRuntimeState, syncTelegramBotState } from '../services/telegram-runtime.js';
 import { MODEL_ALIASES } from '../config.js';
 import { isModelAliasAvailable } from '../llm/model-router.js';
 
@@ -50,7 +49,6 @@ export function preferences(router: Router): void {
         ctx.body = {
             preferences: userCtx.preferences,
             availableModels: Object.keys(MODEL_ALIASES).filter((alias) => isModelAliasAvailable(alias)),
-            telegram: getTelegramRuntimeState(),
         };
     });
 
@@ -62,23 +60,9 @@ export function preferences(router: Router): void {
             return;
         }
         const incoming = sanitizeIncoming(ctx.request.body);
-        if (incoming.telegramBotEnabled === true) {
-            const startResult = await ensureTelegramBotStarted();
-            if (!startResult.active) {
-                ctx.status = startResult.reason === 'missing_token' ? 409 : 500;
-                ctx.body = {
-                    error: startResult.reason === 'missing_token'
-                        ? 'TELEGRAM_BOT_TOKEN not configured'
-                        : (startResult.error ?? 'Failed to start Telegram bot'),
-                    telegram: startResult,
-                };
-                return;
-            }
-        }
         const userCtx = await calcUser(userId);
         const saved = await saveUserPreferences(userCtx.stateDir ?? userCtx.workDir, incoming);
         invalidateUserCache(userId);
-        const telegram = await syncTelegramBotState();
-        ctx.body = { preferences: saved, telegram };
+        ctx.body = { preferences: saved };
     });
 }

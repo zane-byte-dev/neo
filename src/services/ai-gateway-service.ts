@@ -84,16 +84,9 @@ function isKnownAlias(model: string): boolean {
 function isSupportedModelName(model: string): boolean {
     if (model === 'auto' || isKnownAlias(model)) return true;
     if (Object.values(MODEL_ALIASES).includes(model)) return true;
-    return model.startsWith('gemini')
-        || model.startsWith('acp/')
+    return model.startsWith('acp/')
         || model.startsWith('deepseek')
-        || model.startsWith('ollama/')
-        || model.startsWith('gpt-')
-        || model.startsWith('o1-')
-        || model.startsWith('o3-')
-        || model.startsWith('o4-')
-        || model.startsWith('claude-')
-        || model.startsWith('claude-code/');
+        || model.startsWith('ollama/');
 }
 
 function findTier(alias: string): Tier | undefined {
@@ -104,8 +97,12 @@ function findTier(alias: string): Tier | undefined {
 }
 
 function selectModels(requestedModelRaw: string, promptText: string, allowFallback: boolean, hasTools: boolean): SelectedModels {
-    // Resolve virtual aliases (e.g. claude-opus-4.7 → auto for Claude Desktop compat)
-    const requestedModel = VIRTUAL_ALIASES[requestedModelRaw] ?? requestedModelRaw;
+    // Resolve virtual aliases (e.g. claude-opus-4.7 → auto for Claude Desktop compat).
+    // Any unrecognised claude-* model (e.g. claude-haiku-4-5-20251001 from Claude Desktop
+    // subagents) is silently routed to 'auto' so Neo's smart router picks the best
+    // available configured provider instead of attempting a direct Anthropic API call.
+    const requestedModel = VIRTUAL_ALIASES[requestedModelRaw]
+        ?? (requestedModelRaw.startsWith('claude-') ? 'auto' : requestedModelRaw);
     if (!isSupportedModelName(requestedModel)) {
         throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModelRaw}`);
     }
@@ -280,13 +277,9 @@ function anthropicContentFromParts(content: Array<unknown>, fallbackText: string
 
 function providerOwner(modelId: string): string {
     if (modelId === 'auto') return 'neo';
-    if (modelId.startsWith('gemini')) return 'google';
     if (modelId.startsWith('acp/')) return 'gemini-acp';
     if (modelId.startsWith('deepseek')) return 'deepseek';
     if (modelId.startsWith('ollama/')) return 'ollama';
-    if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-') || modelId.startsWith('o4-')) return 'openai';
-    if (modelId.startsWith('claude-code/')) return 'claude-code';
-    if (modelId.startsWith('claude-')) return 'anthropic';
     return 'neo';
 }
 

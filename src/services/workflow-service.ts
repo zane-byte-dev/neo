@@ -12,7 +12,7 @@ import type { ToolContext } from '../llm/types.js';
 export type WorkflowTrigger =
     | { type: 'manual' }
     | { type: 'webhook'; secret?: string }
-    | { type: 'cron'; cron: string; timezone?: string; enabled?: boolean; telegramChatId?: string };
+    | { type: 'cron'; cron: string; timezone?: string; enabled?: boolean };
 
 export type WorkflowStep =
     | { id: string; name?: string; type: 'transform'; template: string }
@@ -143,7 +143,6 @@ function normalizeTrigger(input: unknown): WorkflowTrigger {
             cron,
             enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
             ...(typeof raw.timezone === 'string' && raw.timezone.trim() ? { timezone: raw.timezone.trim() } : {}),
-            ...(typeof raw.telegramChatId === 'string' && raw.telegramChatId.trim() ? { telegramChatId: raw.telegramChatId.trim() } : {}),
         };
     }
     return { type: 'manual' };

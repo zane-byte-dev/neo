@@ -10,8 +10,7 @@
  *     "id": "morning-brief",
  *     "cron": "0 8 * * *",
  *     "message": "给我今天的天气和日程摘要",
- *     "enabled": true,
- *     "telegramChatId": "123456789"
+ *     "enabled": true
  *   }
  * ]
  */
@@ -24,7 +23,6 @@ import { pruneTextChunkEventsSafe } from '../runtime/executor.js';
 import { generateId } from '../utils/id-generator.js';
 import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
-import { getTelegramRuntime } from './telegram-runtime.js';
 import { userList } from './user-service.js';
 import { refreshNowForAllUsers } from './refresh-now.js';
 import { finishCronRun, startCronRun, type CronRunRecord } from './cron-history.js';
@@ -39,8 +37,6 @@ interface ScheduledTask {
     enabled?: boolean;
     /** IANA timezone (default: user's or 'Asia/Shanghai') */
     timezone?: string;
-    /** If set, send result to this Telegram chat */
-    telegramChatId?: string;
 }
 
 function readAllUserIds(): string[] {
@@ -103,19 +99,6 @@ export async function runScheduledTask(userId: string, task: ScheduledTask): Pro
             : null;
         const artifactRefs = renderArtifactReferences(outcome?.artifacts ?? []);
 
-        const telegram = task.telegramChatId ? getTelegramRuntime() : null;
-        if (task.telegramChatId && telegram) {
-            const text = outcome?.responseText || output || '（定时任务无输出）';
-            const body = artifactRefs.length ? `${text}\n\n${artifactRefs.join('\n')}` : text;
-            const prefix = `🕐 [定时任务: ${task.id}]\n\n`;
-            try {
-                await telegram.sendMessage(task.telegramChatId, prefix + body);
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : String(err);
-                log.error(MODULE, 'Failed to send Telegram message', { userId, taskId: task.id, error: msg });
-            }
-        }
-
         const responseText = outcome?.responseText ?? output;
         log.info(MODULE, 'Scheduled task completed', {
             userId,
@@ -138,13 +121,6 @@ export async function runScheduledTask(userId: string, task: ScheduledTask): Pro
 async function runCronWorkflow(userId: string, workflow: WorkflowDefinition): Promise<void> {
     log.info(MODULE, 'Executing workflow schedule', { userId, workflowId: workflow.id });
     const run = await runWorkflow(userId, workflow, { trigger: 'cron', workflowId: workflow.id }, 'cron');
-    const trigger = workflow.trigger.type === 'cron' ? workflow.trigger : null;
-    const telegram = trigger?.telegramChatId ? getTelegramRuntime() : null;
-    if (trigger?.telegramChatId && telegram) {
-        const status = run.status === 'success' ? '完成' : '失败';
-        const body = workflowRunSummary(run) ?? (run.status === 'success' ? '（工作流无输出）' : run.error ?? '工作流失败');
-        await telegram.sendMessage(trigger.telegramChatId, `🧭 [工作流: ${workflow.name}] ${status}\n\n${body}`);
-    }
     if (run.status === 'error') {
         log.error(MODULE, 'Workflow schedule failed', { userId, workflowId: workflow.id, error: run.error });
     } else {
@@ -154,8 +130,7 @@ async function runCronWorkflow(userId: string, workflow: WorkflowDefinition): Pr
 
 /**
  * Start the cron agent. Reads schedule files for all users and sets up
- * node-cron jobs. Telegram delivery reads the current runtime dynamically,
- * so the bot can be turned on/off without restarting cron.
+ * node-cron jobs.
  */
 export async function startCronAgent(): Promise<void> {
     const userIds = readAllUserIds();

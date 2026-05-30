@@ -11,7 +11,7 @@ import { promises as fs } from 'node:fs';
 import { streamText, generateText, stepCountIs, type ModelMessage } from 'ai';
 import { setupLogger, log } from '../utils/logger.js';
 import { recordTokenUsage } from '../utils/token-tracker.js';
-import { DAILY_COST_LIMIT, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, STREAM_FIRST_CHUNK_TIMEOUT_MS, getAnthropicApiKey, getClaudeCodeBaseUrl, getClaudeCodeToken, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
+import { DAILY_COST_LIMIT, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, STREAM_FIRST_CHUNK_TIMEOUT_MS, getDeepseekApiKey } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
 import { acpStream, acpGenerate } from './providers/gemini-acp.js';
 import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
@@ -191,21 +191,13 @@ export class LLMClient {
     private modelId = '';
 
     constructor() {
-        const geminiKey = getGeminiApiKey();
         const deepseekKey = getDeepseekApiKey();
-        const openaiKey = getOpenAIApiKey();
-        const anthropicKey = getAnthropicApiKey();
-        const claudeCodeReady = Boolean(getClaudeCodeBaseUrl() && getClaudeCodeToken());
-        if (!geminiKey && !deepseekKey && !openaiKey && !anthropicKey && !claudeCodeReady) {
-            log.warn('AgentRuntime', 'No cloud API key set (GEMINI/DEEPSEEK/OPENAI/ANTHROPIC). Ollama/ACP may still work.');
+        if (!deepseekKey) {
+            log.warn('AgentRuntime', 'No DEEPSEEK_API_KEY set. Ollama/ACP may still work.');
         }
 
-        // Default: prefer DeepSeek → OpenAI → Anthropic → Ollama
-        const defaultModel = deepseekKey ? 'deepseek'
-            : openaiKey ? 'gpt-4o-mini'
-            : anthropicKey ? 'claude-haiku'
-            : claudeCodeReady ? 'claude-code-haiku'
-            : 'gemma';
+        // Default: prefer DeepSeek → Ollama
+        const defaultModel = deepseekKey ? 'deepseek' : 'gemma';
         this.modelId = resolveModel(GEMINI_MODEL_ENV ?? defaultModel);
         this.enabled = true;
         log.info('AgentRuntime', `Initialized (AI SDK). Model: ${this.modelId}`);

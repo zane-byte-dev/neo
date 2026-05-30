@@ -15,8 +15,6 @@ export interface UserPreferences {
     defaultModel?: string;
     /** Whitelist of model aliases exposed in the UI. Empty/undefined = all. */
     enabledModels?: string[];
-    /** Whether the Telegram bot should be started for this user. */
-    telegramBotEnabled?: boolean;
 }
 
 const FILE_NAME = 'preferences.json';
@@ -51,9 +49,6 @@ function sanitize(input: UserPreferences): UserPreferences {
             .map((m) => m.trim())
             .filter(Boolean);
         if (list.length) out.enabledModels = [...new Set(list)];
-    }
-    if (input.telegramBotEnabled === true) {
-        out.telegramBotEnabled = true;
     }
     return out;
 }

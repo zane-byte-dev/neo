@@ -1,7 +1,7 @@
 /**
  * src/services/secrets.ts — System-level encrypted secret storage.
  *
- * Persists API keys / tokens (Gemini, DeepSeek, OpenAI, Anthropic, Telegram …)
+ * Persists API keys / tokens (Gemini, DeepSeek, OpenAI, Anthropic, …)
  * to a single AES-256-GCM encrypted JSON file. Values configured here override
  * the matching `process.env.*` so secrets can be managed from the UI rather
  * than `.env`. If a key is not present in the encrypted store the reader falls
@@ -26,9 +26,7 @@ export type SecretKey =
     | 'OPENAI_API_KEY'
     | 'ANTHROPIC_API_KEY'
     | 'CLAUDE_CODE_BASE_URL'
-    | 'CLAUDE_CODE_TOKEN'
-    | 'TELEGRAM_BOT_TOKEN'
-    | 'TELEGRAM_CHAT_ID';
+    | 'CLAUDE_CODE_TOKEN';
 
 export const SECRET_KEYS: readonly SecretKey[] = [
     'GEMINI_API_KEY',
@@ -37,8 +35,6 @@ export const SECRET_KEYS: readonly SecretKey[] = [
     'ANTHROPIC_API_KEY',
     'CLAUDE_CODE_BASE_URL',
     'CLAUDE_CODE_TOKEN',
-    'TELEGRAM_BOT_TOKEN',
-    'TELEGRAM_CHAT_ID',
 ];
 
 export type SecretStore = Partial<Record<SecretKey, string>>;

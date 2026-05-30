@@ -207,8 +207,6 @@ const SettingsOverview: React.FC = () => {
         ? state.models.value.providerStatus.filter((provider) => !provider.ok).length
         : 0
     const modelsOk = configuredModels > 0
-    const telegramConfigured = state?.preferences.status === 'fulfilled' ? state.preferences.value.telegram.configured : false
-    const telegramActive = state?.preferences.status === 'fulfilled' ? state.preferences.value.telegram.active : false
     const cronCount = state?.crons.status === 'fulfilled' ? state.crons.value.length : 0
     const ready = backendOk && accountOk && modelsOk
     const firstError = state
@@ -310,7 +308,7 @@ const SettingsOverview: React.FC = () => {
                         title={t('systemStatusAutomation')}
                         status={state?.preferences.status === 'fulfilled' && state?.crons.status === 'fulfilled' ? t('systemStatusReadyShort') : t('systemStatusAttentionShort')}
                         summary={state?.preferences.status === 'fulfilled' && state?.crons.status === 'fulfilled'
-                            ? t('systemStatusAutomationReady', { telegram: telegramActive ? t('enabled') : (telegramConfigured ? t('disabled') : t('systemStatusNotConfigured')), count: cronCount })
+                            ? t('systemStatusAutomationReady', { count: cronCount })
                             : t('systemStatusAutomationFailed')}
                         tone={state?.preferences.status === 'fulfilled' && state?.crons.status === 'fulfilled' ? 'neutral' : 'warning'}
                         actionLabel={t('systemStatusOpenAutomations')}

@@ -13,7 +13,6 @@ interface ScheduledTask {
     message: string;
     enabled?: boolean;
     timezone?: string;
-    telegramChatId?: string;
 }
 
 const TASK_NAME_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
@@ -46,16 +45,12 @@ function normalizeTask(id: string, body: Record<string, unknown>, existing?: Sch
     const message = typeof body.message === 'string' ? body.message : existing?.message ?? '';
     if (!cronValidate(cron) || !message.trim()) return null;
     const timezone = typeof body.timezone === 'string' && body.timezone.trim() ? body.timezone.trim() : existing?.timezone;
-    const telegramChatId = typeof body.telegramChatId === 'string' && body.telegramChatId.trim()
-        ? body.telegramChatId.trim()
-        : existing?.telegramChatId;
     return {
         id,
         cron,
         message,
         enabled: typeof body.enabled === 'boolean' ? body.enabled : existing?.enabled ?? true,
         ...(timezone ? { timezone } : {}),
-        ...(telegramChatId ? { telegramChatId } : {}),
     };
 }
 
