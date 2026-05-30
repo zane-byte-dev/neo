@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2, FolderOpen, Mic, MicOff, Terminal, Globe, Wrench, BrainCircuit } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2, FolderOpen, Mic, MicOff, Terminal, Globe, Wrench, BrainCircuit, Copy, Check } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -407,6 +407,77 @@ function speakText(text: string, onEnd?: () => void) {
     speak()
 }
 
+function messageMainText(msg: Message): string {
+    if (msg.parts?.length) {
+        return msg.parts
+            .filter((part): part is Extract<MessagePart, { type: 'text' }> => part.type === 'text')
+            .map((part) => part.content)
+            .join('\n\n')
+    }
+    return msg.content ?? ''
+}
+
+async function copyTextToClipboard(text: string) {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text)
+        return
+    }
+    if (typeof document === 'undefined') throw new Error('Clipboard unavailable')
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    textarea.style.pointerEvents = 'none'
+    document.body.appendChild(textarea)
+    textarea.select()
+    const copied = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    if (!copied) throw new Error('Clipboard unavailable')
+}
+
+function CopyReplyButton({ text }: { text: string }) {
+    const [copied, setCopied] = React.useState(false)
+    const resetTimer = React.useRef<number | null>(null)
+
+    React.useEffect(() => {
+        return () => {
+            if (resetTimer.current !== null) window.clearTimeout(resetTimer.current)
+        }
+    }, [])
+
+    if (!text.trim()) return null
+
+    const handleClick = async () => {
+        try {
+            await copyTextToClipboard(text)
+            setCopied(true)
+            toast.success(t('replyCopied'), 1600)
+            if (resetTimer.current !== null) window.clearTimeout(resetTimer.current)
+            resetTimer.current = window.setTimeout(() => setCopied(false), 1600)
+        } catch {
+            toast.error(t('copyReplyFailed'))
+        }
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={handleClick}
+            className={cn(
+                'inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors cursor-pointer',
+                copied
+                    ? 'text-primary-mint bg-primary-mint/10 hover:bg-primary-mint/20'
+                    : 'text-text-tertiary hover:text-text-secondary hover:bg-fill'
+            )}
+            title={copied ? t('replyCopied') : t('copyReply')}
+            aria-label={copied ? t('replyCopied') : t('copyReply')}
+        >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+        </button>
+    )
+}
+
 function SpeakButton({ text }: { text: string }) {
     const [isSpeaking, setIsSpeaking] = React.useState(false)
 
@@ -436,7 +507,7 @@ function SpeakButton({ text }: { text: string }) {
             type="button"
             onClick={handleClick}
             className={cn(
-                'mt-2 inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors cursor-pointer',
+                'inline-flex items-center justify-center w-7 h-7 rounded-lg transition-colors cursor-pointer',
                 isSpeaking
                     ? 'text-primary-mint bg-primary-mint/10 hover:bg-primary-mint/20'
                     : 'text-text-tertiary hover:text-text-secondary hover:bg-fill'
@@ -2870,17 +2941,14 @@ export const ChatArea: React.FC<{
                                     {(() => {
                                         const isLast = msgIdx === chatMessages.length - 1
                                         if (isGenerating && isLast) return null
-                                        // Only speak the visible main text (mirrors what's rendered as prose):
-                                        // when parts exist we render only the `text` parts as prose; otherwise we render msg.content.
-                                        // Tool-call/activity entries are intentionally excluded.
-                                        const speakable = msg.parts && msg.parts.length > 0
-                                            ? msg.parts
-                                                .filter((p) => p.type === 'text')
-                                                .map((p) => (p as { type: 'text'; content: string }).content)
-                                                .join('\n\n')
-                                            : (msg.content ?? '')
-                                        if (!speakable.trim()) return null
-                                        return <SpeakButton text={speakable} />
+                                        const actionText = messageMainText(msg)
+                                        if (!actionText.trim()) return null
+                                        return (
+                                            <div className="mt-2 flex items-center gap-1">
+                                                <CopyReplyButton text={actionText} />
+                                                <SpeakButton text={actionText} />
+                                            </div>
+                                        )
                                     })()}
                                 </div>
                             )}

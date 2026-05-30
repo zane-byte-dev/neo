@@ -22,6 +22,12 @@ vi.mock('../../utils/token-tracker.js', () => ({
     recordTokenUsage: mocks.recordTokenUsage,
 }));
 
+vi.mock('../../llm/model-factory.js', () => ({
+    createLanguageModel: vi.fn(() => ({ provider: 'mock', modelId: 'mock' })),
+    isAcpModel: vi.fn((modelId: string) => modelId.startsWith('acp/')),
+    resolveModel: vi.fn((model: string) => model === 'gemma' ? 'ollama/gemma4:e4b' : model),
+}));
+
 function usage(inputTokens = 3, outputTokens = 4) {
     return {
         inputTokens,

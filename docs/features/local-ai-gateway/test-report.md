@@ -10,6 +10,7 @@
 - `/v1/chat/completions` OpenAI-compatible 非流式 / 流式
 - `/v1/messages` Anthropic Messages 非流式 / 流式
 - per-user `gatewayToken` Bearer 鉴权
+- Settings / Models 中的 Local AI Gateway 开关、token 生成 / 重置、一次性显示
 - gateway usage/cost 记录，caller 区分 `ai-gateway:openai` / `ai-gateway:anthropic`
 - Anthropic `tools` 声明、`tool_use` 返回、`tool_result` 输入转换；Neo 不执行客户端工具
 
@@ -23,9 +24,19 @@ npx vitest run src/routes/__tests__/ai-gateway.test.ts src/llm/gateway/__tests__
 
 结果：通过，5 个测试文件，26 个测试。
 
+已执行：
+
+```bash
+npx vitest run src/services/__tests__/gateway-settings.test.ts src/routes/__tests__/gateway.test.ts src/services/__tests__/user-service.test.ts src/routes/__tests__/ai-gateway.test.ts
+```
+
+结果：通过，4 个测试文件，26 个测试。
+
 覆盖点：
 
 - Gateway 未启用、缺 token、错 token、正确 token。
+- Settings 生成的 UI-managed token 可用于 gateway auth；关闭 Settings 开关会覆盖静态 `gatewayToken`。
+- `/api/gateway` 可返回状态、生成 token、重置 token，并在后续 GET 中只返回脱敏 token。
 - Basic Auth 开启时 `/v1/*` 仍使用 gateway Bearer token。
 - `/v1/models`、OpenAI 非流式、OpenAI SSE、Anthropic 非流式、Anthropic SSE route 分流。
 - OpenAI 文本消息 normalizer、非流式 response shape、SSE chunk / `[DONE]`。
@@ -36,9 +47,18 @@ npx vitest run src/routes/__tests__/ai-gateway.test.ts src/llm/gateway/__tests__
 
 ```bash
 npm run build
+npm run docs:check
 ```
 
-结果：通过。
+结果：通过。`docs:check` 检查 97 个 Markdown 文件。
+
+已执行：
+
+```bash
+npm --prefix web run build
+```
+
+结果：通过。Vite 输出了既有 chunk size / Rollup PURE annotation 警告，不影响构建结果。
 
 ## Manual Smoke
 

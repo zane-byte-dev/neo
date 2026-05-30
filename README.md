@@ -39,7 +39,7 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 
 | 模块 | 说明 |
 |------|------|
-| **AI 对话** | 基于 Gemini 的多轮对话，支持流式输出、函数调用、子 agent 派生 |
+| **AI 对话** | 基于 Gemini 的多轮对话，支持流式输出、函数调用、子 agent 派生和回复复制 |
 | **Notebook** | 文章/知识条目管理，含全文搜索、文章批注和文章内资源预览 |
 | **Skills** | Markdown 定义的可复用 AI 技能，支持参数插值与代码块执行 |
 | **Tools** | 内置工具 + 用户自定义工具（`{stateDir}/tools/` 自动加载） |
@@ -127,7 +127,7 @@ const config: LocalConfig = {
             name: 'Alice',
             tenants: [],                     // 例如 ['telegram:123456789']
             webToken: 'long-random-string',  // Web 登录 token
-            gatewayToken: 'long-random-gateway-token', // 可选：/v1 本地 AI Gateway token
+            gatewayToken: 'long-random-gateway-token', // 高级可选：静态 /v1 本地 AI Gateway token
             workDir:  '/abs/path/to/workspace',   // 个人工作区（AGENTS.md / notebooks / skills…）
             stateDir: '/abs/path/to/state',       // 运行态数据（runs / secrets / usage…）
         },
@@ -168,7 +168,7 @@ DAILY_COST_LIMIT=0
 
 ### Local AI Gateway
 
-配置 `gatewayToken` 后，外部本地客户端可以把 Neo 当作统一模型入口：
+在 **Settings / Basic / Models** 打开 **Local AI Gateway** 后，外部本地客户端可以把 Neo 当作统一模型入口。页面会生成 gateway token 并显示本机 Base URL：
 
 ```bash
 OPENAI_BASE_URL=http://localhost:3000/v1
@@ -179,7 +179,7 @@ ANTHROPIC_AUTH_TOKEN=<neo-gateway-token>
 ANTHROPIC_MODEL=claude
 ```
 
-首版支持 `GET /v1/models`、`POST /v1/chat/completions` 和 `POST /v1/messages`。Gateway 不注入 Web Chat 的系统提示、记忆或 Neo tools；Anthropic 工具调用只按协议透传给客户端。详细配置见 [docs/user-guide/LOCAL_AI_GATEWAY.md](docs/user-guide/LOCAL_AI_GATEWAY.md)。
+首版支持 `GET /v1/models`、`POST /v1/chat/completions` 和 `POST /v1/messages`。Gateway 不注入 Web Chat 的系统提示、记忆或 Neo tools；Anthropic 工具调用只按协议透传给客户端。`gatewayToken` 配置字段仍可作为高级静态 token 回退。详细配置见 [docs/user-guide/LOCAL_AI_GATEWAY.md](docs/user-guide/LOCAL_AI_GATEWAY.md)。
 
 ### 开发模式
 

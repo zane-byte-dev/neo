@@ -4,7 +4,15 @@ Neo 可以作为本机 OpenAI / Anthropic 兼容模型入口。外部客户端�
 
 ## 启用方式
 
-Gateway 默认关闭。给某个用户配置 `gatewayToken` 后，`/v1/*` 才会启用：
+Gateway 默认关闭。推荐在 Web UI 中开启：
+
+1. 打开 **Settings / Basic / Models**。
+2. 在 **Local AI Gateway** 卡片打开开关。
+3. 复制生成的 token 和 Base URL。完整 token 只会在生成 / 重置后显示一次，之后页面只显示脱敏尾号。
+
+Provider API Key 仍在同一个 **Models** 页面中配置；不要把 Gemini、DeepSeek、OpenAI、Anthropic 等真实 key 发给外部客户端。
+
+如果需要用文件托管或自动化部署，也可以给某个用户配置 `gatewayToken`。只要不存在 UI 写入的 `{stateDir}/gateway.json` 覆盖项，`/v1/*` 会继续识别这个字段：
 
 ```ts
 // src/config.local.ts
@@ -28,8 +36,7 @@ export default config;
 ```
 
 如果你使用首次启动生成的 `~/.neo/config.json`，也可以在对应 user 条目里增加同名字段。
-
-Provider API Key 仍在 Web UI 的 **Settings / Basic / Models** 中配置；不要把 Gemini、DeepSeek、OpenAI、Anthropic 等真实 key 发给外部客户端。
+在设置页关闭 Gateway 会写入用户状态文件，并覆盖配置文件中的静态 token。
 
 ## OpenAI 兼容接口
 
@@ -121,7 +128,7 @@ curl http://localhost:3000/v1/messages \
 
 | Code | HTTP | 含义 |
 |------|------|------|
-| `gateway_disabled` | 403 | 没有配置任何 `gatewayToken` |
+| `gateway_disabled` | 403 | 当前没有开启或配置任何 gateway token |
 | `missing_gateway_token` | 401 | 未提供 `Authorization: Bearer ...` |
 | `invalid_gateway_token` | 401 | token 不匹配任何用户 |
 | `unknown_model` | 404 | 请求的模型名无法识别 |

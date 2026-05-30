@@ -296,10 +296,10 @@ Claude Code smoke：
 
 ### Phase 3: Product Polish
 
-- Models 页面显示 gateway enabled 状态。
-- 增加 token 生成 / 重置入口，token 只显示一次。
+- [x] Models 页面显示 gateway enabled 状态。
+- [x] 增加 token 生成 / 重置入口，token 只显示一次。
 - 使用记录增加 gateway protocol filter。
-- 用户指南补完整配置示例和排错表。
+- [x] 用户指南补完整配置示例和排错表。
 
 ## Acceptance Checklist
 

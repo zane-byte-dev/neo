@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
     userList,
     userGetByTenant,
@@ -31,15 +35,18 @@ const SAMPLE = [
 ];
 
 let prevUsers: string | undefined;
+let tempDirs: string[];
 
 beforeEach(() => {
     prevUsers = process.env.USERS;
+    tempDirs = [];
     process.env.USERS = JSON.stringify(SAMPLE);
 });
 
 afterEach(() => {
     if (prevUsers === undefined) delete process.env.USERS;
     else process.env.USERS = prevUsers;
+    for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
 });
 
 describe('userList', () => {
@@ -89,6 +96,31 @@ describe('gateway token helpers', () => {
     it('matches gateway token with timing-safe lookup', () => {
         expect(userGetByGatewayToken('gw-alice')?.id).toBe('alice');
         expect(userGetByGatewayToken('wrong')).toBeNull();
+    });
+
+    it('matches UI-managed gateway tokens from stateDir', () => {
+        const stateDir = mkdtempSync(join(tmpdir(), 'user-service-gateway-'));
+        tempDirs.push(stateDir);
+        writeFileSync(join(stateDir, 'gateway.json'), JSON.stringify({
+            enabled: true,
+            tokenHash: createHash('sha256').update('ui-gateway').digest('hex'),
+            tokenTail: 'ateway',
+        }), 'utf8');
+        process.env.USERS = JSON.stringify([{ id: 'ui', name: 'UI', workDir: stateDir, stateDir }]);
+
+        expect(hasGatewayTokenConfigured()).toBe(true);
+        expect(userGetByGatewayToken('ui-gateway')?.id).toBe('ui');
+        expect(userGetByGatewayToken('gw-alice')).toBeNull();
+    });
+
+    it('lets disabled UI state override config gatewayToken', () => {
+        const stateDir = mkdtempSync(join(tmpdir(), 'user-service-gateway-'));
+        tempDirs.push(stateDir);
+        writeFileSync(join(stateDir, 'gateway.json'), JSON.stringify({ enabled: false }), 'utf8');
+        process.env.USERS = JSON.stringify([{ id: 'ui', name: 'UI', gatewayToken: 'legacy-gateway', workDir: stateDir, stateDir }]);
+
+        expect(hasGatewayTokenConfigured()).toBe(false);
+        expect(userGetByGatewayToken('legacy-gateway')).toBeNull();
     });
 });
 

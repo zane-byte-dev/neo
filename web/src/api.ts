@@ -333,6 +333,27 @@ export function saveSecrets(patch: Partial<Record<SecretKey, string>>): Promise<
     return _post('/api/secrets', patch).then((r) => _jsonOrThrow<SecretsResponse>(r))
 }
 
+export interface GatewayStatus {
+    enabled: boolean
+    configured: boolean
+    source: 'state' | 'config' | 'none'
+    masked: string
+    baseUrl: string
+    token?: string
+}
+
+export interface GatewayResponse {
+    gateway: GatewayStatus
+}
+
+export function fetchGatewaySettings(): Promise<GatewayResponse> {
+    return apiGet<GatewayResponse>('/api/gateway')
+}
+
+export function saveGatewaySettings(patch: { enabled?: boolean; rotate?: boolean }): Promise<GatewayResponse> {
+    return _post('/api/gateway', patch).then((r) => _jsonOrThrow<GatewayResponse>(r))
+}
+
 export function fetchToolApprovals(): Promise<ToolApprovalsResponse> {
     return apiGet<ToolApprovalsResponse>('/api/tool-approvals')
 }

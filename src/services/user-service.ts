@@ -5,8 +5,8 @@
  *   calcUser(userId)  — build and cache the full runtime context for a user.
  */
 import { UserProfileManager } from './user-profile.js';
-import { timingSafeEqual } from 'node:crypto';
 import { loadUserPreferences, type UserPreferences } from './user-prefs.js';
+import { hasEffectiveGatewayTokenSync, matchesGatewayTokenSync } from './gateway-settings.js';
 import { loadUserSkills } from '../skills/skill-registry.js';
 import { loadUserTools } from '../tools/user-tools/loader.js';
 import { loadMcpTools } from '../mcp/loader.js';
@@ -92,17 +92,13 @@ export function userGetByWebToken(token: string): UserRow | null {
 }
 
 export function hasGatewayTokenConfigured(): boolean {
-    return _readConfigUsers().some((u) => Boolean(u.gatewayToken?.trim()));
+    return _readConfigUsers().some((u) => hasEffectiveGatewayTokenSync(u));
 }
 
 export function userGetByGatewayToken(token: string): UserRow | null {
     if (!token) return null;
     for (const user of _readConfigUsers()) {
-        const expected = user.gatewayToken?.trim();
-        if (!expected) continue;
-        const tokenBuffer = Buffer.from(token, 'utf8');
-        const expectedBuffer = Buffer.from(expected, 'utf8');
-        if (tokenBuffer.length === expectedBuffer.length && timingSafeEqual(tokenBuffer, expectedBuffer)) {
+        if (matchesGatewayTokenSync(user, token)) {
             return toUserRow(user);
         }
     }
