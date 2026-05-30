@@ -35,7 +35,7 @@ vi.mock('../../config.js', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('../../config.js');
     return {
         ...actual,
-        MODEL_ALIASES: { flash: 'gemini-3-flash-preview', pro: 'gemini-2.5-pro' },
+        MODEL_ALIASES: { deepseek: 'deepseek-chat', claude: 'claude-sonnet-4-5' },
     };
 });
 
@@ -43,13 +43,13 @@ beforeEach(() => {
     calcUserMock.mockResolvedValue({
         workDir: '/tmp/work',
         stateDir: '/tmp/state',
-        preferences: { defaultModel: 'flash' },
+        preferences: { defaultModel: 'deepseek' },
     });
     saveUserPreferencesMock.mockImplementation(async (_dir: string, p: unknown) => p);
     getTelegramRuntimeStateMock.mockReturnValue({ active: false, reason: 'not_started' });
     syncTelegramBotStateMock.mockResolvedValue({ active: false, reason: 'not_started' });
     ensureTelegramBotStartedMock.mockResolvedValue({ active: true, reason: 'ok' });
-    isModelAliasAvailableMock.mockImplementation((alias: string) => alias === 'flash' || alias === 'pro');
+    isModelAliasAvailableMock.mockImplementation((alias: string) => alias === 'deepseek' || alias === 'claude');
 });
 
 describe('/api/preferences', () => {
@@ -69,8 +69,8 @@ describe('/api/preferences', () => {
             .get('/api/preferences')
             .set('Cookie', signedCookie('u1'));
         expect(res.status).toBe(200);
-        expect(res.body.preferences.defaultModel).toBe('flash');
-        expect(res.body.availableModels).toEqual(['flash', 'pro']);
+        expect(res.body.preferences.defaultModel).toBe('deepseek');
+        expect(res.body.availableModels).toEqual(['deepseek', 'claude']);
     });
 
     it('POST sanitizes incoming preferences and saves them', async () => {
@@ -81,16 +81,16 @@ describe('/api/preferences', () => {
             .post('/api/preferences')
             .set('Cookie', signedCookie('u1'))
             .send({
-                defaultModel: 'flash',
-                enabledModels: ['flash', 'unknown-model', 'pro'],
+                defaultModel: 'deepseek',
+                enabledModels: ['deepseek', 'unknown-model', 'claude'],
                 telegramBotEnabled: false,
                 garbage: true,
             });
         expect(res.status).toBe(200);
         expect(saveUserPreferencesMock).toHaveBeenCalled();
         const saved = saveUserPreferencesMock.mock.calls[0][1];
-        expect(saved.defaultModel).toBe('flash');
-        expect(saved.enabledModels).toEqual(['flash', 'pro']);
+        expect(saved.defaultModel).toBe('deepseek');
+        expect(saved.enabledModels).toEqual(['deepseek', 'claude']);
         expect(saved.telegramBotEnabled).toBe(false);
         expect((saved as Record<string, unknown>).garbage).toBeUndefined();
     });

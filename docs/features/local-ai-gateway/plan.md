@@ -198,14 +198,14 @@ Claude Code 关键路径：
 
 `GET /v1/models` 返回 OpenAI-compatible model list：
 
-- 只返回当前 configured 的 Neo aliases。
+- 返回 `auto`、当前 configured 的 Neo aliases，以及对应 canonical provider model id，避免外部客户端只识别 provider model id 时把列表过滤为空。
 - 每项至少包含 `id`、`object: 'model'`、`created`、`owned_by`。
 - 可选扩展字段放在 `metadata` 或 `x_neo` 下，避免破坏兼容客户端。
 
 模型 id 策略：
 
 - 外部推荐使用 Neo alias：`auto`、`flash`、`deepseek`、`claude`、`gemma`。
-- Gateway 仍接受 canonical provider id，但列表默认展示 alias，减少客户端暴露上游细节。
+- Gateway 仍接受 canonical provider id，并在 `/v1/models` 中同时展示，方便有严格 model discovery 的客户端使用。
 
 ## Documentation Updates
 
@@ -229,7 +229,7 @@ Claude Code 关键路径：
 ### Route Tests
 
 - `GET /v1/models` 需要 Bearer token。
-- `GET /v1/models` 只返回 configured models。
+- `GET /v1/models` 返回 auto、configured aliases 与对应 provider model id。
 - `POST /v1/chat/completions` 非流式返回 OpenAI shape。
 - `POST /v1/chat/completions` 流式返回 SSE header 和 `[DONE]`。
 - `POST /v1/messages` 非流式返回 Anthropic shape。

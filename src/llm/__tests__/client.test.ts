@@ -5,14 +5,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 describe('resolveModel', () => {
-    it('"flash" → "gemini-3-flash-preview"', () => {
-        expect(resolveModel('flash')).toBe('gemini-3-flash-preview');
-    });
-
-    it('"pro" → "gemini-3-pro-preview"', () => {
-        expect(resolveModel('pro')).toBe('gemini-3-pro-preview');
-    });
-
     it('"deepseek" → "deepseek-chat"', () => {
         expect(resolveModel('deepseek')).toBe('deepseek-chat');
     });

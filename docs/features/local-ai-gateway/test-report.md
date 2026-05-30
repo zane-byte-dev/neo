@@ -39,7 +39,7 @@ npx vitest run src/services/__tests__/gateway-settings.test.ts src/routes/__test
 - `/api/gateway` 可返回状态、生成 token、重置 token，并在后续 GET 中只返回脱敏 token。
 - `/api/gateway` 在 Web UI 经 Vite `5173` 代理访问时，仍返回后端 Gateway Base URL `http://localhost:3000/v1`，避免外部客户端请求到前端 HTML。
 - Basic Auth 开启时 `/v1/*` 仍使用 gateway Bearer token。
-- `/v1/models`、OpenAI 非流式、OpenAI SSE、Anthropic 非流式、Anthropic SSE route 分流。
+- `/v1/models` 返回 Neo alias 与 canonical provider model id；OpenAI 非流式、OpenAI SSE、Anthropic 非流式、Anthropic SSE route 分流。
 - OpenAI 文本消息 normalizer、非流式 response shape、SSE chunk / `[DONE]`。
 - Anthropic system/text/tool_use/tool_result normalizer、message/event stream shape。
 - Service 层 mock AI SDK 后确认 usage 写入和 Anthropic `tool_use` 透传。

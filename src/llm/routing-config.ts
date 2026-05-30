@@ -11,9 +11,9 @@ export interface RoutingConfig {
 
 const DEFAULTS: RoutingConfig = {
     tiers: {
-        simple: ['gemma', 'flash', 'gemini-acp'],
-        standard: ['gemini-acp', 'flash', 'deepseek'],
-        complex: ['deepseek-reasoner', 'pro', 'deepseek'],
+        simple: ['deepseek', 'gemini-acp'],
+        standard: ['deepseek', 'gemini-acp'],
+        complex: ['deepseek-reasoner', 'deepseek'],
     },
     boundaries: {
         simpleMax: -0.05,
@@ -25,7 +25,7 @@ const DEFAULTS: RoutingConfig = {
         largeContextThreshold: 50_000,
     },
     fallback: {
-        maxRetries: 1,
+        maxRetries: 2,
         retryableErrors: [429, 503, 'ETIMEDOUT', 'ECONNRESET'],
     },
     momentum: {

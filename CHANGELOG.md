@@ -9,6 +9,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 ### Added
 
 - **Local AI Gateway MVP**：新增 `/v1/models`、OpenAI-compatible `/v1/chat/completions` 和 Anthropic-compatible `/v1/messages`，支持 Settings / Models 中一键开启、生成 / 重置 per-user gateway Bearer token、文本非流式 / 流式调用、模型 alias / `auto` 路由、usage/cost 记录，以及 Anthropic `tool_use` / `tool_result` 协议透传。
+- **Local AI Gateway model discovery**：`/v1/models` 现在同时返回 Neo alias 和对应 provider model id，减少外部客户端把短 alias 过滤成“无可用模型”的情况。
 - **Skill 搜索**：Settings / Skills 面板新增搜索框，可按技能名、描述、标签实时过滤，搜索无结果时显示空状态提示。
 - **Claude Code 兼容代理接入**：Settings / Models 可保存 Claude Code 代理地址与 Token，并新增 `claude-code*` 模型别名直接用于对话。
 - **AI 回复复制**：Web Chat 的 assistant 回复下方新增复制按钮，可一键复制当前回复正文，并排除工具调用日志。

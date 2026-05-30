@@ -41,7 +41,9 @@ async function writeStream(ctx: Koa.Context, stream: AsyncGenerator<string>, onE
 
 export function aiGateway(router: Router): void {
     router.get('/v1/models', async (ctx) => {
-        ctx.body = await getGatewayModels();
+        const ua = ctx.get('user-agent') ?? '';
+        const claudeCompat = /claude/i.test(ua);
+        ctx.body = await getGatewayModels(claudeCompat ? { claudeCompat: true } : undefined);
     });
 
     router.post('/v1/chat/completions', async (ctx) => {

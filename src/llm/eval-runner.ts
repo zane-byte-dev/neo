@@ -341,7 +341,7 @@ async function updateBaseline(): Promise<void> {
 function parseArgs(): { command: string; model: string } {
     const args = process.argv.slice(2);
     let command = 'run';
-    let model = process.env.EVAL_MODEL ?? 'flash';
+    let model = process.env.EVAL_MODEL ?? 'deepseek';
 
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '--model' && args[i + 1]) {

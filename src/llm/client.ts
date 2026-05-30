@@ -113,7 +113,7 @@ function pickAliases(
 ): string[] {
     const chain = route?.fallbackChain?.length
         ? route.fallbackChain
-        : modelOverride ? [modelOverride] : [GEMINI_MODEL_ENV ?? 'flash', 'deepseek', 'gemma', 'gemini-acp'];
+        : modelOverride ? [modelOverride] : [GEMINI_MODEL_ENV ?? 'deepseek', 'deepseek', 'gemma', 'gemini-acp'];
     if (!forceFreeOnly) return [...new Set(chain)];
     const freeOnly = [...new Set(chain.filter((alias) => isFreeModel(resolveModel(alias))))];
     return freeOnly.length ? freeOnly : ['gemma'];
@@ -200,9 +200,8 @@ export class LLMClient {
             log.warn('AgentRuntime', 'No cloud API key set (GEMINI/DEEPSEEK/OPENAI/ANTHROPIC). Ollama/ACP may still work.');
         }
 
-        // Default: prefer Gemini → DeepSeek → OpenAI → Anthropic → Ollama
-        const defaultModel = geminiKey ? 'flash'
-            : deepseekKey ? 'deepseek'
+        // Default: prefer DeepSeek → OpenAI → Anthropic → Ollama
+        const defaultModel = deepseekKey ? 'deepseek'
             : openaiKey ? 'gpt-4o-mini'
             : anthropicKey ? 'claude-haiku'
             : claudeCodeReady ? 'claude-code-haiku'

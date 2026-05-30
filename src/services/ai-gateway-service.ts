@@ -70,6 +70,13 @@ function getUserDirs(userId: string): UserDirs {
     return { workDir, stateDir };
 }
 
+// Virtual model IDs exposed to specific clients, mapped to real routing targets.
+// e.g. Claude Desktop requires a 'claude-*' model ID in /v1/models to consider the gateway usable.
+// Map to 'auto' so the smart router picks the best available configured provider.
+const VIRTUAL_ALIASES: Record<string, string> = {
+    'claude-opus-4.7': 'auto',
+};
+
 function isKnownAlias(model: string): boolean {
     return Object.prototype.hasOwnProperty.call(MODEL_ALIASES, model);
 }
@@ -96,9 +103,11 @@ function findTier(alias: string): Tier | undefined {
     return undefined;
 }
 
-function selectModels(requestedModel: string, promptText: string, allowFallback: boolean, hasTools: boolean): SelectedModels {
+function selectModels(requestedModelRaw: string, promptText: string, allowFallback: boolean, hasTools: boolean): SelectedModels {
+    // Resolve virtual aliases (e.g. claude-opus-4.7 → auto for Claude Desktop compat)
+    const requestedModel = VIRTUAL_ALIASES[requestedModelRaw] ?? requestedModelRaw;
     if (!isSupportedModelName(requestedModel)) {
-        throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModel}`);
+        throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModelRaw}`);
     }
 
     if (requestedModel === 'auto') {
@@ -269,20 +278,52 @@ function anthropicContentFromParts(content: Array<unknown>, fallbackText: string
     return blocks;
 }
 
-export async function getGatewayModels(): Promise<object> {
-    const data = Object.entries(MODEL_ALIASES)
-        .filter(([alias]) => isModelAliasAvailable(alias))
-        .map(([alias, modelId]) => ({
-            id: alias,
+function providerOwner(modelId: string): string {
+    if (modelId === 'auto') return 'neo';
+    if (modelId.startsWith('gemini')) return 'google';
+    if (modelId.startsWith('acp/')) return 'gemini-acp';
+    if (modelId.startsWith('deepseek')) return 'deepseek';
+    if (modelId.startsWith('ollama/')) return 'ollama';
+    if (modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-') || modelId.startsWith('o4-')) return 'openai';
+    if (modelId.startsWith('claude-code/')) return 'claude-code';
+    if (modelId.startsWith('claude-')) return 'anthropic';
+    return 'neo';
+}
+
+function modelListEntry(id: string, modelId: string, alias?: string): object {
+    return {
+        id,
+        object: 'model',
+        created: 1,
+        owned_by: providerOwner(modelId),
+        x_neo: { modelId, ...(alias ? { alias } : {}) },
+    };
+}
+
+export async function getGatewayModels(options?: { claudeCompat?: boolean }): Promise<object> {
+    const entries = new Map<string, object>();
+    entries.set('auto', modelListEntry('auto', 'auto'));
+
+    if (options?.claudeCompat) {
+        // Claude Desktop requires a claude-* model ID to recognise the gateway as usable.
+        // This virtual entry routes requests via 'auto' to whatever provider is configured.
+        entries.set('claude-opus-4.7', {
+            id: 'claude-opus-4.7',
             object: 'model',
-            created: 0,
-            owned_by: 'neo',
-            x_neo: { modelId },
-        }));
-    if (data.length > 0) {
-        data.unshift({ id: 'auto', object: 'model', created: 0, owned_by: 'neo', x_neo: { modelId: 'auto' } });
+            created: 1,
+            owned_by: 'anthropic',
+            x_neo: { modelId: 'auto', virtual: true },
+        });
     }
-    return { object: 'list', data };
+
+    for (const [alias, modelId] of Object.entries(MODEL_ALIASES)) {
+        if (!isModelAliasAvailable(alias)) continue;
+        entries.set(alias, modelListEntry(alias, modelId, alias));
+        if (modelId !== alias && !entries.has(modelId)) {
+            entries.set(modelId, modelListEntry(modelId, modelId, alias));
+        }
+    }
+    return { object: 'list', data: [...entries.values()] };
 }
 
 export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: GatewayCallContext): Promise<object> {

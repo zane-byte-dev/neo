@@ -327,8 +327,6 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 
 | 别名 | 实际模型 | 提供商 | 说明 |
 |------|---------|--------|------|
-| `flash` | gemini-3-flash-preview | Google Gemini API | 快速响应，适合日常任务 |
-| `pro` | gemini-3-pro-preview | Google Gemini API | 高质量推理 |
 | `gemini-acp` | Gemini (via CLI) | Gemini CLI OAuth | 使用 Google One AI Premium 配额，无需 API Key |
 | `deepseek` | deepseek-chat | DeepSeek API | 成本低，工具调用可靠 |
 | `deepseek-reasoner` | deepseek-reasoner | DeepSeek API | 深度推理 |
@@ -340,7 +338,7 @@ Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
 **智能路由（auto 模式）**：当用户选择 `auto` 时，`model-router.ts` 会先用 `scorer.ts` 对任务复杂度打分，再映射到 `simple` / `standard` / `complex` 三档：
 - `simple` 默认链：`gemma` → `flash` → `gemini-acp`
 - `standard` 默认链：`gemini-acp` → `flash` → `deepseek`
-- `complex` 默认链：`deepseek-reasoner` → `pro` → `deepseek`
+- `complex` 默认链：`deepseek-reasoner` → `deepseek`
 - 工具任务至少提升到 `standard`；超大上下文任务至少提升到 `complex`
 - fallback 链长度受 `ROUTING_CONFIG.fallback.maxRetries` 控制，默认只追加 1 个重试目标
 

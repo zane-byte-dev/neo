@@ -416,8 +416,6 @@
 测试文件: src/llm/__tests__/client.test.ts
 
 用例:
-- resolveModel: "flash" → "gemini-3-flash-preview"
-- resolveModel: "pro" → "gemini-3-pro-preview"
 - resolveModel: "deepseek" → "deepseek-chat"
 - resolveModel: 未知别名原样返回
 - loadSystemInstruction: 从目录加载 AGENTS.md

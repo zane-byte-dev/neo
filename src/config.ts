@@ -123,8 +123,6 @@ export const READ_FILE_CHAR_LIMIT = 50_000;
 
 /** Model short-name aliases → real API IDs */
 export const MODEL_ALIASES: Record<string, string> = {
-    flash: 'gemini-3-flash-preview',
-    pro:   'gemini-3-pro-preview',
     deepseek: 'deepseek-chat',
     'deepseek-chat': 'deepseek-chat',
     'deepseek-reasoner': 'deepseek-reasoner',

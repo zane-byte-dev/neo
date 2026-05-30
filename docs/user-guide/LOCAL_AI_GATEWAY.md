@@ -53,8 +53,10 @@ OPENAI_API_KEY=<neo-gateway-token>
 
 | Endpoint | 说明 |
 |----------|------|
-| `GET /v1/models` | 返回当前可用 Neo 模型别名，包含 `auto` |
+| `GET /v1/models` | 返回 `auto`、当前可用 Neo 模型别名，以及对应 provider model id |
 | `POST /v1/chat/completions` | OpenAI Chat Completions 文本接口，支持非流式和 SSE 流式 |
+
+有些客户端会先做 model discovery，并把不认识的短别名过滤掉。如果看到类似 “Gateway returned no usable models. Set inferenceModels to test inference.”，可以在客户端里手动指定推理模型，例如 `auto`、`deepseek`、`gemma`、`claude`，或 `/v1/models` 返回的 provider model id（例如 `ollama/gemma4:e4b`）。
 
 非流式 curl：
 
@@ -71,7 +73,7 @@ curl http://localhost:3000/v1/chat/completions \
 curl -N http://localhost:3000/v1/chat/completions \
   -H "Authorization: Bearer $NEO_GATEWAY_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"model":"flash","stream":true,"messages":[{"role":"user","content":"Count to three."}]}'
+  -d '{"model":"deepseek","stream":true,"messages":[{"role":"user","content":"Count to three."}]}'
 ```
 
 Node OpenAI SDK 示例：
@@ -122,7 +124,7 @@ curl http://localhost:3000/v1/messages \
 ## 模型选择与 fallback
 
 - `model: "auto"` 使用 Neo 的智能路由和 fallback chain。
-- 指定 Neo alias，例如 `flash`、`deepseek`、`claude`、`gemma`，默认只使用该模型。
+- 指定 Neo alias，例如 `deepseek`、`claude`、`gemma`、`gemini-acp`，默认只使用该模型。
 - 如需允许显式模型 fallback，增加请求头 `x-neo-allow-fallback: true`。
 - Gateway 也接受 canonical provider model id，但推荐外部客户端使用 Neo alias。
 

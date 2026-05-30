@@ -146,9 +146,9 @@ if (lastMessage.length < 40 && 无复杂关键词) → 直接返回 simple
 
 | 层级 | 分数区间 | 映射模型（优先级降序） |
 |------|---------|---------------------|
-| simple | score < -0.05 | Gemma (本地) → Flash → ACP |
-| standard | -0.05 ≤ score < 0.15 | ACP → Flash → DeepSeek |
-| complex | score ≥ 0.15 | DeepSeek Reasoner → Pro → DeepSeek Chat |
+| simple | score < -0.05 | DeepSeek → ACP |
+| standard | -0.05 ≤ score < 0.15 | DeepSeek → ACP |
+| complex | score ≥ 0.15 | DeepSeek Reasoner → DeepSeek Chat |
 
 > 工具调用存在时，层级下限提升到 standard（与 Manifest 一致）。
 > 总 token > 50k 时，层级下限提升到 complex（长上下文需要更强模型）。
@@ -176,9 +176,9 @@ confidence = 1 / (1 + exp(-k × minDistanceToBoundary))
 // src/llm/routing-config.ts
 export const ROUTING_CONFIG = {
     tiers: {
-        simple:   ['gemma', 'flash', 'gemini-acp'],
-        standard: ['gemini-acp', 'flash', 'deepseek'],
-        complex:  ['deepseek-reasoner', 'pro', 'deepseek'],
+        simple:   ['deepseek', 'gemini-acp'],
+        standard: ['deepseek', 'gemini-acp'],
+        complex:  ['deepseek-reasoner', 'deepseek'],
     },
     boundaries: {
         simpleMax: -0.05,
@@ -241,7 +241,6 @@ interface UsageRecord {
 
 ```ts
 const COST_PER_1K: Record<string, { input: number; output: number }> = {
-    'gemini-3-flash-preview': { input: 0.0, output: 0.0 },     // 免费
     'acp/gemini':             { input: 0.0, output: 0.0 },     // OAuth 配额
     'deepseek-chat':          { input: 0.00014, output: 0.00028 },
     'deepseek-reasoner':      { input: 0.00055, output: 0.0022 },
@@ -281,10 +280,9 @@ primary model 失败
 
 | 失败模型 | Fallback 1 | Fallback 2 |
 |---------|-----------|-----------|
-| ACP | Flash | DeepSeek |
-| DeepSeek Reasoner | DeepSeek Chat | Flash |
-| DeepSeek Chat | Flash | Gemma |
-| Flash | DeepSeek | Gemma |
+| DeepSeek (simple/standard) | ACP | — |
+| DeepSeek Reasoner | DeepSeek Chat | — |
+| ACP / DeepSeek Chat | — | 返回错误 |
 | Gemma | — | 返回错误 |
 
 ### 错误分类

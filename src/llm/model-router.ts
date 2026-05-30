@@ -36,7 +36,6 @@ export interface SmartRouteDecision {
 
 export function isModelAliasAvailable(alias: string): boolean {
     if (alias === 'gemini-acp') return isAcpAvailable();
-    if (alias === 'flash' || alias === 'pro') return Boolean(getGeminiApiKey());
     if (alias === 'deepseek' || alias === 'deepseek-chat' || alias === 'deepseek-reasoner') return Boolean(getDeepseekApiKey());
     if (alias === 'gemma') return true;
     if (alias === 'gpt' || alias.startsWith('gpt-')) return Boolean(getOpenAIApiKey());

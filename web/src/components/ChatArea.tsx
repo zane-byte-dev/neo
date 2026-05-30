@@ -1190,11 +1190,9 @@ const FileAttachmentIcon: React.FC<{ filename: string; className?: string }> = (
     return <FileIcon size={14} className={className ?? 'text-text-tertiary'} />
 }
 
-const COMMON_MODEL_ALIASES = ['flash', 'pro', 'deepseek', 'gemma', 'gemini-acp']
+const COMMON_MODEL_ALIASES = ['deepseek', 'gemma', 'gemini-acp']
 
 const MODEL_PRESENTATION: Record<string, { label: string; badge?: string }> = {
-    flash: { label: 'Gemini Flash', badge: 'Google' },
-    pro: { label: 'Gemini Pro', badge: 'Google' },
     deepseek: { label: 'DeepSeek Chat', badge: 'DeepSeek' },
     'deepseek-chat': { label: 'DeepSeek Chat', badge: 'DeepSeek' },
     'deepseek-reasoner': { label: 'DeepSeek Reasoner', badge: 'DeepSeek' },
@@ -1225,7 +1223,7 @@ function titleizeAlias(alias: string): string {
 function inferModelBadge(alias: string): string | undefined {
     if (alias === 'gemma') return 'Local'
     if (alias === 'gemini-acp') return 'CLI'
-    if (alias === 'flash' || alias === 'pro' || alias.startsWith('gemini-')) return 'Google'
+    if (alias.startsWith('gemini-')) return 'Google'
     if (alias === 'deepseek' || alias.startsWith('deepseek-')) return 'DeepSeek'
     if (alias === 'gpt' || alias.startsWith('gpt-')) return 'OpenAI'
     if (alias === 'claude' || alias.startsWith('claude-')) return 'Anthropic'

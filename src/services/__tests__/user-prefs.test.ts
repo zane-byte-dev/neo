@@ -23,16 +23,16 @@ describe('loadUserPreferences', () => {
         await fs.writeFile(
             join(dir, 'preferences.json'),
             JSON.stringify({
-                defaultModel: '  flash  ',
-                enabledModels: ['flash', 'pro', 'flash', '', 5],
+                defaultModel: '  deepseek  ',
+                enabledModels: ['deepseek', 'claude', 'deepseek', '', 5],
                 telegramBotEnabled: true,
                 extra: 'ignored',
             }),
             'utf8',
         );
         const p = await loadUserPreferences(dir);
-        expect(p.defaultModel).toBe('flash');
-        expect(p.enabledModels).toEqual(['flash', 'pro']);
+        expect(p.defaultModel).toBe('deepseek');
+        expect(p.enabledModels).toEqual(['deepseek', 'claude']);
         expect(p.telegramBotEnabled).toBe(true);
         expect((p as Record<string, unknown>).extra).toBeUndefined();
     });
@@ -41,15 +41,15 @@ describe('loadUserPreferences', () => {
 describe('saveUserPreferences', () => {
     it('writes sanitized JSON and returns the cleaned object', async () => {
         const out = await saveUserPreferences(dir, {
-            defaultModel: 'flash',
-            enabledModels: ['flash', '', 'pro'],
+            defaultModel: 'deepseek',
+            enabledModels: ['deepseek', '', 'claude'],
             telegramBotEnabled: false,
         });
-        expect(out.defaultModel).toBe('flash');
-        expect(out.enabledModels).toEqual(['flash', 'pro']);
+        expect(out.defaultModel).toBe('deepseek');
+        expect(out.enabledModels).toEqual(['deepseek', 'claude']);
         expect(out.telegramBotEnabled).toBeUndefined(); // false is dropped
         const raw = JSON.parse(await fs.readFile(join(dir, 'preferences.json'), 'utf8'));
-        expect(raw.defaultModel).toBe('flash');
+        expect(raw.defaultModel).toBe('deepseek');
     });
 
     it('drops empty defaultModel and empty enabledModels', async () => {

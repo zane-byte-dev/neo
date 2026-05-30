@@ -57,6 +57,33 @@ afterEach(() => {
 });
 
 describe('ai gateway service', () => {
+    it('lists Neo aliases and canonical provider model ids for model discovery', async () => {
+        const { getGatewayModels } = await import('../ai-gateway-service.js');
+
+        const response = await getGatewayModels() as { data: Array<{ id: string; created: number; owned_by: string; x_neo: { modelId: string; alias?: string } }> };
+
+        expect(response.data).toEqual(expect.arrayContaining([
+            expect.objectContaining({ id: 'auto', created: 1, owned_by: 'neo' }),
+            expect.objectContaining({ id: 'gemma', created: 1, owned_by: 'ollama', x_neo: expect.objectContaining({ modelId: 'ollama/gemma4:e4b', alias: 'gemma' }) }),
+            expect.objectContaining({ id: 'ollama/gemma4:e4b', created: 1, owned_by: 'ollama', x_neo: expect.objectContaining({ modelId: 'ollama/gemma4:e4b', alias: 'gemma' }) }),
+        ]));
+        // claude-opus-4.7 should NOT appear without claudeCompat flag
+        expect(response.data.map((m) => m.id)).not.toContain('claude-opus-4.7');
+    });
+
+    it('includes claude-opus-4.7 virtual entry when claudeCompat is requested', async () => {
+        const { getGatewayModels } = await import('../ai-gateway-service.js');
+
+        const response = await getGatewayModels({ claudeCompat: true }) as { data: Array<{ id: string; owned_by: string; x_neo: { modelId: string; virtual?: boolean } }> };
+
+        const entry = response.data.find((m) => m.id === 'claude-opus-4.7');
+        expect(entry).toEqual(expect.objectContaining({
+            id: 'claude-opus-4.7',
+            owned_by: 'anthropic',
+            x_neo: expect.objectContaining({ modelId: 'auto', virtual: true }),
+        }));
+    });
+
     it('creates OpenAI-compatible completions and records gateway usage', async () => {
         mocks.generateText.mockResolvedValue({
             text: 'hello',

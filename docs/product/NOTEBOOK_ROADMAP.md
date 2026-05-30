@@ -15,7 +15,7 @@
 ### 前端（React 19 + Zustand 5 + Tailwind 4）
 
 - **API 层**：`web/src/api.ts` 所有 notebook AI 接口都支持 `model` 参数；新增 `notebookArchiveSource`、`notebookRenameSource`。
-- **三栏工作台** `NotebookWorkspace.tsx`：桌面端 Source | Chat | Studio，移动端底部 Tab；顶栏统一模型选择器（Auto / Flash / Pro / DeepSeek / Gemma / Gemini）。
+- **三栏工作台** `NotebookWorkspace.tsx`：桌面端 Source | Chat | Studio，移动端底部 Tab；顶栏统一模型选择器（Auto / DeepSeek / Gemma / Gemini CLI）。
 - **新弹窗组件**：
   - `AddSourceModal.tsx` — 拖拽上传、URL、文本三种导入方式，统一入口。
   - `StudioActionModal.tsx` — 音频（deep-dive/summary/review/debate）、思维导图、报告（briefing/study-guide/faq/timeline/outline/custom）的配置与生成。
