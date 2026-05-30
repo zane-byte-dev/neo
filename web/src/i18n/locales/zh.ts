@@ -582,6 +582,10 @@ const zh: Record<TranslationKeys, string> = {
     annotationStatusResolved: '已解决',
     annotationResolve: '解决',
     annotationReopen: '重开',
+    annotationPanelTitle: '批注面板',
+    annotationRailEmpty: '划词后可在这里写批注；hover 正文下划线后，会在右侧显示对应批注卡片。',
+    annotationRailHoverHint: 'hover 正文下划线后，这里会显示对应批注卡片，方便一边读一边看评论。',
+    annotationHoverCardTitle: '悬浮批注',
 }
 
 export default zh

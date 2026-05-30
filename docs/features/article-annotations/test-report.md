@@ -2,7 +2,7 @@
 
 ## Scope
 
-验证 Article Annotations MVP 的数据持久化、HTTP API、前端类型构建、辅助面板迭代和文档链接。
+验证 Article Annotations MVP 的数据持久化、HTTP API、前端类型构建，以及批注 hover 卡片迁移到文档右侧 rail 后的交互与文档同步。
 
 ## Automated Coverage
 
@@ -17,9 +17,10 @@
 ## Manual / UI Coverage
 
 - Web build 覆盖 `NoteEditor` 与 `NovelEditor` 的 TypeScript 类型。
-- UI smoke：选中文章正文后，气泡菜单新增批注按钮；保存后正文以轻量下划线标记批注，hover 下划线会显示小弹窗。
-- UI smoke：从批注弹窗或紧凑列表删除批注后，会同步移除正文下划线标记。
-- UI smoke：展开“全部批注”后，辅助面板按文章顺序列出批注，支持全部 / 未解决 / 已解决 / 划线 / 段落筛选，并可点击编号或引用跳转正文。
+- UI smoke：选中文章正文后，气泡菜单新增批注按钮；保存后正文以轻量下划线标记批注，草稿输入出现在文档右侧 rail。
+- UI smoke：hover 正文下划线时，文档右侧显示对应批注卡片，可定位、切换状态或删除。
+- UI smoke：从右侧批注卡片或“全部批注”列表删除批注后，会同步移除正文下划线标记。
+- UI smoke：展开右侧“全部批注”后，辅助面板按文章顺序列出批注，支持全部 / 未解决 / 已解决 / 划线 / 段落筛选，并可点击编号或引用跳转正文。
 - Screenshot: <https://github.com/user-attachments/assets/a9c5ecad-fd02-4dc5-a055-f0e563e70d6c>
 
 ## Validation Commands

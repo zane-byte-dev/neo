@@ -108,8 +108,10 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     const [annotationDraft, setAnnotationDraft] = React.useState<AnnotationDraft | null>(null)
     const [annotationBody, setAnnotationBody] = React.useState('')
     const [annotationSaving, setAnnotationSaving] = React.useState(false)
+    const [hoveredAnnotationId, setHoveredAnnotationId] = React.useState<string | null>(null)
     const [focusRange, setFocusRange] = React.useState<{ startOffset: number; endOffset: number; requestId: number } | null>(null)
     const focusRequestIdRef = React.useRef(0)
+    const annotationHoverTimerRef = React.useRef<number | null>(null)
     // Inline summary state
     type SummaryState = 'empty' | 'generating' | 'done'
     const [summaryState, setSummaryState] = React.useState<SummaryState>(() => (note?.summary ?? '').trim() ? 'done' : 'empty')
@@ -386,6 +388,27 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         setAnnotationsExpanded(true)
     }, [])
 
+    const clearAnnotationHoverTimer = React.useCallback(() => {
+        if (annotationHoverTimerRef.current) {
+            window.clearTimeout(annotationHoverTimerRef.current)
+            annotationHoverTimerRef.current = null
+        }
+    }, [])
+
+    const scheduleAnnotationHoverClear = React.useCallback(() => {
+        clearAnnotationHoverTimer()
+        annotationHoverTimerRef.current = window.setTimeout(() => setHoveredAnnotationId(null), 520)
+    }, [clearAnnotationHoverTimer])
+
+    const handleAnnotationHoverChange = React.useCallback((annotation: NotebookAnnotation | null) => {
+        if (annotation) {
+            clearAnnotationHoverTimer()
+            setHoveredAnnotationId(annotation.id)
+            return
+        }
+        scheduleAnnotationHoverClear()
+    }, [clearAnnotationHoverTimer, scheduleAnnotationHoverClear])
+
     const handleCancelAnnotationDraft = React.useCallback(() => {
         if (annotationDraft) editorRef.current?.removeAnnotationMark(annotationDraft)
         setAnnotationDraft(null)
@@ -405,6 +428,8 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                 author: currentDisplayName,
             })
             setAnnotations((items) => [...items, saved].sort((a, b) => a.createdAt - b.createdAt))
+            clearAnnotationHoverTimer()
+            setHoveredAnnotationId(saved.id)
             setAnnotationDraft(null)
             setAnnotationBody('')
         } catch {
@@ -412,7 +437,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         } finally {
             setAnnotationSaving(false)
         }
-    }, [annotationBody, annotationDraft, currentDisplayName, note, notebook])
+    }, [annotationBody, annotationDraft, clearAnnotationHoverTimer, currentDisplayName, note, notebook])
 
     const handleToggleAnnotationStatus = React.useCallback(async (annotation: NotebookAnnotation) => {
         if (!note) return
@@ -436,12 +461,26 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
         const startOffset = annotation.anchor.startOffset
         const endOffset = annotation.anchor.endOffset
         if (typeof startOffset !== 'number' || typeof endOffset !== 'number') return
+        clearAnnotationHoverTimer()
+        setHoveredAnnotationId(annotation.id)
         focusRequestIdRef.current += 1
         setFocusRange({ startOffset, endOffset, requestId: focusRequestIdRef.current })
-    }, [])
+    }, [clearAnnotationHoverTimer])
 
     const articleSourceId = React.useMemo(() => sourceIdFromArticleId(note?.id), [note?.id])
     const articleNotebook = note?.notebook ?? notebook
+    const hoveredAnnotation = React.useMemo(
+        () => annotations.find((annotation) => annotation.id === hoveredAnnotationId) ?? null,
+        [annotations, hoveredAnnotationId],
+    )
+
+    React.useEffect(() => {
+        if (hoveredAnnotationId && !annotations.some((annotation) => annotation.id === hoveredAnnotationId)) {
+            setHoveredAnnotationId(null)
+        }
+    }, [annotations, hoveredAnnotationId])
+
+    React.useEffect(() => () => clearAnnotationHoverTimer(), [clearAnnotationHoverTimer])
 
     const handleGenerateArticleAudio = React.useCallback(async () => {
         if (!note || !articleSourceId || audioGenerating) return
@@ -712,131 +751,144 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
 
             {/* ── Document body: single full-width scroll container ── */}
             <div className="flex-1 overflow-y-auto">
-                {/* Centered content column — fullWidth removes max-w constraint */}
                 <div className={cn(
                     'w-full mx-auto pt-14 pb-20',
-                    fullWidth ? 'px-12' : 'max-w-[46rem] px-16',
-                    smallText ? 'text-sm' : '',
+                    fullWidth ? 'px-6 sm:px-8 lg:px-12' : 'max-w-[82rem] px-6 sm:px-8 lg:px-10 xl:px-12',
                 )}>
-
-                    {/* Title — part of the document flow */}
-                    <textarea
-                        ref={titleRef}
-                        value={title}
-                        onChange={(e) => {
-                            setTitle(e.target.value)
-                            e.target.style.height = 'auto'
-                            e.target.style.height = e.target.scrollHeight + 'px'
-                            scheduleAutoSave()
-                        }}
-                        placeholder="无标题"
-                        rows={1}
-                        className={cn(
-                            'w-full bg-transparent font-bold outline-none resize-none leading-[1.3] mb-1 placeholder:text-gray-200 dark:placeholder:text-white/15 text-[#1a1a1a] dark:text-[#e8e8e8] overflow-hidden',
-                            smallText ? 'text-[1.5rem]' : 'text-[2rem]',
-                        )}
-                        style={{ minHeight: smallText ? '2rem' : '2.6rem' }}
-                    />
-
-                    {/* Divider between title and body — subtle, like Notion */}
-                    <div className="mb-4 mt-2" />
-
-                    {/* ── Inline summary block ── */}
-                    {note && summaryState === 'empty' && (
-                        <button
-                            onClick={() => void handleGenerateSummary()}
-                            className="w-full mb-6 flex items-center gap-2 px-3 h-9 rounded-lg border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/3 text-text-quaternary hover:text-text-tertiary hover:border-gray-300 dark:hover:border-white/20 transition-colors text-[12px]"
-                        >
-                            <Sparkles size={12} className="text-primary-mint shrink-0" />
-                            生成摘要
-                            <span className="text-[11px] text-text-quaternary">· 点击获取 AI 概要</span>
-                        </button>
-                    )}
-                    {note && summaryState === 'generating' && (
-                        <div className="w-full mb-6 flex items-center gap-2 px-3 h-9 rounded-lg border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/3 text-text-quaternary text-[12px]">
-                            <Loader2 size={12} className="text-primary-mint shrink-0 animate-spin" />
-                            正在生成摘要…
-                        </div>
-                    )}
-                    {note && summaryState === 'done' && !summaryCollapsed && (
-                        <div className="w-full mb-6 rounded-xl bg-primary-mint/8 border-l-2 border-primary-mint pl-3 pr-3 py-2.5 flex flex-col gap-1">
-                            <div className="flex items-center gap-1.5">
-                                <Sparkles size={11} className="text-primary-mint shrink-0" />
-                                <span className="text-[11px] font-semibold text-primary-mint flex-1">摘要</span>
-                                <button
-                                    onClick={handleRegenerateSummary}
-                                    className="p-1 rounded text-text-quaternary hover:text-text-secondary hover:bg-white/20 transition-colors"
-                                    title="重新生成"
-                                >
-                                    <RefreshCw size={11} />
-                                </button>
-                                <button
-                                    onClick={handleHideSummary}
-                                    className="p-1 rounded text-text-quaternary hover:text-text-secondary hover:bg-white/20 transition-colors"
-                                    title="隐藏"
-                                >
-                                    <EyeOff size={11} />
-                                </button>
-                            </div>
-                            <p className="text-[13px] text-text-secondary leading-relaxed">{summaryText}</p>
-                        </div>
-                    )}
-                    {note && summaryState === 'done' && summaryCollapsed && (
-                        <button
-                            onClick={handleShowSummary}
-                            className="mb-4 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-text-quaternary hover:bg-fill-secondary/60 hover:text-primary-mint transition-colors"
-                        >
-                            <Sparkles size={12} />
-                            摘要
-                        </button>
-                    )}
-
-                    {note && (
-                        <ArticleAnnotationsBlock
-                            annotations={annotations}
-                            expanded={annotationsExpanded}
-                            draft={annotationDraft}
-                            body={annotationBody}
-                            saving={annotationSaving}
-                            onToggleExpanded={() => setAnnotationsExpanded((v) => !v)}
-                            onBodyChange={setAnnotationBody}
-                            onSave={() => void handleSaveAnnotation()}
-                            onCancelDraft={handleCancelAnnotationDraft}
-                            onJump={handleJumpToAnnotation}
-                            onToggleStatus={(annotation) => void handleToggleAnnotationStatus(annotation)}
-                            onDelete={(annotation) => void handleDeleteAnnotation(annotation)}
-                        />
-                    )}
-
-                    {/* Content — Novel rich-text editor */}
-                    {loading ? (
-                        <div className="flex items-center gap-2 text-gray-300">
-                            <span className="typing-dot" style={{ width: 5, height: 5 }} />
-                            <span className="typing-dot" style={{ width: 5, height: 5 }} />
-                            <span className="typing-dot" style={{ width: 5, height: 5 }} />
-                        </div>
-                    ) : (
-                        <>
-                            <NovelEditor
-                                ref={editorRef}
-                                key={note?.id ?? 'new'}
-                                initialContent={content}
-                                placeholder="开始写作… 输入 / 插入块"
-                                onChange={(md) => {
-                                    setContent(md)
+                    <div className={cn(
+                        'flex flex-col gap-6 lg:flex-row lg:items-start',
+                        note && !fullWidth && 'lg:justify-center',
+                        smallText ? 'text-sm' : '',
+                    )}>
+                        <div className={cn(
+                            'min-w-0 flex-1',
+                            note
+                                ? (fullWidth ? 'lg:max-w-none' : 'lg:max-w-[46rem]')
+                                : (fullWidth ? 'max-w-none' : 'mx-auto max-w-[46rem]'),
+                        )}>
+                            {/* Title — part of the document flow */}
+                            <textarea
+                                ref={titleRef}
+                                value={title}
+                                onChange={(e) => {
+                                    setTitle(e.target.value)
+                                    e.target.style.height = 'auto'
+                                    e.target.style.height = e.target.scrollHeight + 'px'
                                     scheduleAutoSave()
                                 }}
-                                onAnnotateSelection={note ? handleAnnotateSelection : undefined}
-                                annotations={annotations}
-                                onAnnotationJump={handleJumpToAnnotation}
-                                onAnnotationToggleStatus={(annotation) => void handleToggleAnnotationStatus(annotation)}
-                                onAnnotationDelete={(annotation) => void handleDeleteAnnotation(annotation)}
-                                onGenerateInlineResource={note && articleSourceId ? handleGenerateInlineResource : undefined}
-                                focusRange={focusRange}
-                                className="pb-8"
+                                placeholder="无标题"
+                                rows={1}
+                                className={cn(
+                                    'w-full bg-transparent font-bold outline-none resize-none leading-[1.3] mb-1 placeholder:text-gray-200 dark:placeholder:text-white/15 text-[#1a1a1a] dark:text-[#e8e8e8] overflow-hidden',
+                                    smallText ? 'text-[1.5rem]' : 'text-[2rem]',
+                                )}
+                                style={{ minHeight: smallText ? '2rem' : '2.6rem' }}
                             />
-                        </>
-                    )}
+
+                            {/* Divider between title and body — subtle, like Notion */}
+                            <div className="mb-4 mt-2" />
+
+                            {/* ── Inline summary block ── */}
+                            {note && summaryState === 'empty' && (
+                                <button
+                                    onClick={() => void handleGenerateSummary()}
+                                    className="w-full mb-6 flex items-center gap-2 px-3 h-9 rounded-lg border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/3 text-text-quaternary hover:text-text-tertiary hover:border-gray-300 dark:hover:border-white/20 transition-colors text-[12px]"
+                                >
+                                    <Sparkles size={12} className="text-primary-mint shrink-0" />
+                                    生成摘要
+                                    <span className="text-[11px] text-text-quaternary">· 点击获取 AI 概要</span>
+                                </button>
+                            )}
+                            {note && summaryState === 'generating' && (
+                                <div className="w-full mb-6 flex items-center gap-2 px-3 h-9 rounded-lg border border-dashed border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-white/3 text-text-quaternary text-[12px]">
+                                    <Loader2 size={12} className="text-primary-mint shrink-0 animate-spin" />
+                                    正在生成摘要…
+                                </div>
+                            )}
+                            {note && summaryState === 'done' && !summaryCollapsed && (
+                                <div className="w-full mb-6 rounded-xl bg-primary-mint/8 border-l-2 border-primary-mint pl-3 pr-3 py-2.5 flex flex-col gap-1">
+                                    <div className="flex items-center gap-1.5">
+                                        <Sparkles size={11} className="text-primary-mint shrink-0" />
+                                        <span className="text-[11px] font-semibold text-primary-mint flex-1">摘要</span>
+                                        <button
+                                            onClick={handleRegenerateSummary}
+                                            className="p-1 rounded text-text-quaternary hover:text-text-secondary hover:bg-white/20 transition-colors"
+                                            title="重新生成"
+                                        >
+                                            <RefreshCw size={11} />
+                                        </button>
+                                        <button
+                                            onClick={handleHideSummary}
+                                            className="p-1 rounded text-text-quaternary hover:text-text-secondary hover:bg-white/20 transition-colors"
+                                            title="隐藏"
+                                        >
+                                            <EyeOff size={11} />
+                                        </button>
+                                    </div>
+                                    <p className="text-[13px] text-text-secondary leading-relaxed">{summaryText}</p>
+                                </div>
+                            )}
+                            {note && summaryState === 'done' && summaryCollapsed && (
+                                <button
+                                    onClick={handleShowSummary}
+                                    className="mb-4 inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[12px] text-text-quaternary hover:bg-fill-secondary/60 hover:text-primary-mint transition-colors"
+                                >
+                                    <Sparkles size={12} />
+                                    摘要
+                                </button>
+                            )}
+
+                            {/* Content — Novel rich-text editor */}
+                            {loading ? (
+                                <div className="flex items-center gap-2 text-gray-300">
+                                    <span className="typing-dot" style={{ width: 5, height: 5 }} />
+                                    <span className="typing-dot" style={{ width: 5, height: 5 }} />
+                                    <span className="typing-dot" style={{ width: 5, height: 5 }} />
+                                </div>
+                            ) : (
+                                <>
+                                    <NovelEditor
+                                        ref={editorRef}
+                                        key={note?.id ?? 'new'}
+                                        initialContent={content}
+                                        placeholder="开始写作… 输入 / 插入块"
+                                        onChange={(md) => {
+                                            setContent(md)
+                                            scheduleAutoSave()
+                                        }}
+                                        onAnnotateSelection={note ? handleAnnotateSelection : undefined}
+                                        annotations={annotations}
+                                        onAnnotationHoverChange={note ? handleAnnotationHoverChange : undefined}
+                                        onGenerateInlineResource={note && articleSourceId ? handleGenerateInlineResource : undefined}
+                                        focusRange={focusRange}
+                                        className="pb-8"
+                                    />
+                                </>
+                            )}
+                        </div>
+
+                        {note && (
+                            <aside className="w-full shrink-0 lg:sticky lg:top-8 lg:w-[320px] lg:basis-[320px]">
+                                <ArticleAnnotationsRail
+                                    annotations={annotations}
+                                    expanded={annotationsExpanded}
+                                    draft={annotationDraft}
+                                    body={annotationBody}
+                                    saving={annotationSaving}
+                                    hoveredAnnotation={hoveredAnnotation}
+                                    onHoverCardMouseEnter={clearAnnotationHoverTimer}
+                                    onHoverCardMouseLeave={scheduleAnnotationHoverClear}
+                                    onToggleExpanded={() => setAnnotationsExpanded((v) => !v)}
+                                    onBodyChange={setAnnotationBody}
+                                    onSave={() => void handleSaveAnnotation()}
+                                    onCancelDraft={handleCancelAnnotationDraft}
+                                    onJump={handleJumpToAnnotation}
+                                    onToggleStatus={(annotation) => void handleToggleAnnotationStatus(annotation)}
+                                    onDelete={(annotation) => void handleDeleteAnnotation(annotation)}
+                                />
+                            </aside>
+                        )}
+                    </div>
                 </div>
             </div>
             {historyOpen && note && (
@@ -900,12 +952,15 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
     )
 }
 
-const ArticleAnnotationsBlock: React.FC<{
+const ArticleAnnotationsRail: React.FC<{
     annotations: NotebookAnnotation[]
     expanded: boolean
     draft: AnnotationDraft | null
     body: string
     saving: boolean
+    hoveredAnnotation: NotebookAnnotation | null
+    onHoverCardMouseEnter: () => void
+    onHoverCardMouseLeave: () => void
     onToggleExpanded: () => void
     onBodyChange: (value: string) => void
     onSave: () => void
@@ -919,6 +974,9 @@ const ArticleAnnotationsBlock: React.FC<{
     draft,
     body,
     saving,
+    hoveredAnnotation,
+    onHoverCardMouseEnter,
+    onHoverCardMouseLeave,
     onToggleExpanded,
     onBodyChange,
     onSave,
@@ -950,14 +1008,20 @@ const ArticleAnnotationsBlock: React.FC<{
         { id: 'paragraph', label: '段落', count: annotations.filter((annotation) => annotation.kind === 'paragraph').length },
     ]
 
-    if (!draft && annotations.length === 0) {
-        return null
-    }
-
     return (
-        <div className="mb-4 space-y-2">
+        <div className="space-y-3">
+            <div className="rounded-xl border border-border/70 bg-bg-container/90 px-4 py-3 shadow-sm">
+                <div className="flex items-center gap-2 text-[12px] font-semibold text-text-secondary">
+                    <MessageSquare size={13} className="text-primary-mint shrink-0" />
+                    {t('annotationPanelTitle')}
+                </div>
+                <p className="mt-2 text-[12px] leading-relaxed text-text-quaternary">
+                    {annotations.length === 0 ? t('annotationRailEmpty') : t('annotationRailHoverHint')}
+                </p>
+            </div>
+
             {draft && (
-                <div className="rounded-lg border border-border bg-bg-container shadow-sm px-3 py-3">
+                <div className="rounded-xl border border-border bg-bg-container shadow-sm px-3.5 py-3.5">
                     <div className="flex items-center gap-2 text-[12px] font-semibold text-text">
                         <MessageSquarePlus size={13} className="text-primary-mint shrink-0" />
                         {t('annotationNew')}
@@ -990,6 +1054,43 @@ const ArticleAnnotationsBlock: React.FC<{
                     </div>
                 </div>
             )}
+
+            {hoveredAnnotation && (
+                <div
+                    className="rounded-xl border border-primary-mint/20 bg-primary-mint/5 px-3.5 py-3.5 shadow-sm"
+                    onMouseEnter={onHoverCardMouseEnter}
+                    onMouseLeave={onHoverCardMouseLeave}
+                >
+                    <div className="flex items-center gap-2 text-[12px] font-semibold text-text">
+                        <CircleDot size={12} className={hoveredAnnotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
+                        {t('annotationHoverCardTitle')}
+                        <span className="ml-auto text-[11px] text-text-quaternary">
+                            {hoveredAnnotation.status === 'open' ? t('annotationStatusOpen') : t('annotationStatusResolved')}
+                        </span>
+                    </div>
+                    <blockquote className="mt-2 text-[12px] text-text-tertiary border-l-2 border-primary-mint/50 pl-2 line-clamp-3">
+                        {hoveredAnnotation.quote}
+                    </blockquote>
+                    <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-text">
+                        {hoveredAnnotation.body}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-text-quaternary">
+                        <span>{hoveredAnnotation.kind === 'paragraph' ? '段落批注' : '划线批注'}</span>
+                        {hoveredAnnotation.author && <span>{hoveredAnnotation.author}</span>}
+                        <span className="flex-1" />
+                        <button onClick={() => onJump(hoveredAnnotation)} className="hover:text-primary-mint transition-colors">
+                            定位
+                        </button>
+                        <button onClick={() => onToggleStatus(hoveredAnnotation)} className="hover:text-primary-mint transition-colors">
+                            {hoveredAnnotation.status === 'open' ? t('annotationResolve') : t('annotationReopen')}
+                        </button>
+                        <button onClick={() => onDelete(hoveredAnnotation)} className="hover:text-red-500 transition-colors">
+                            {t('delete')}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {annotations.length > 0 && (
                 <div className="space-y-2 text-[12px] text-text-tertiary">
                     <button
@@ -1024,7 +1125,12 @@ const ArticleAnnotationsBlock: React.FC<{
                                     <div className="px-3 py-5 text-center text-[12px] text-text-quaternary">当前筛选下暂无批注</div>
                                 ) : visibleAnnotations.map((annotation, index) => (
                                     <div key={annotation.id} className="border-b border-border/60 px-3 py-3 last:border-b-0">
-                                        <div className="flex items-start gap-2">
+                                        <div className={cn(
+                                            'flex items-start gap-2 rounded-lg border px-2.5 py-2 transition-colors',
+                                            hoveredAnnotation?.id === annotation.id
+                                                ? 'border-primary-mint/25 bg-primary-mint/6'
+                                                : 'border-transparent bg-transparent',
+                                        )}>
                                             <button
                                                 onClick={() => onJump(annotation)}
                                                 className={cn(
@@ -1049,7 +1155,7 @@ const ArticleAnnotationsBlock: React.FC<{
                                                 >
                                                     <span className="line-clamp-2">{annotation.quote}</span>
                                                 </button>
-                                                <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-text">{annotation.body}</p>
+                                                <p className="mt-1.5 text-[13px] leading-relaxed text-text line-clamp-2">{annotation.body}</p>
                                                 <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-text-quaternary">
                                                     <span className="inline-flex items-center gap-1">
                                                         <CircleDot size={10} className={annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />

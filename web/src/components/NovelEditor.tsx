@@ -41,7 +41,7 @@ import {
     Heading1, Heading2, Heading3,
     List, ListOrdered, Quote, Minus, Code2, Type,
     Sparkles, Wand2, ArrowUpRight, ArrowDownToLine, Scissors, CheckSquare,
-    Check, X as XIcon, MessageSquarePlus, Trash2, CircleDot, Brain, FileText,
+    Check, X as XIcon, MessageSquarePlus, Brain, FileText,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { NotebookAnnotation } from '../types'
@@ -641,9 +641,7 @@ interface NovelEditorProps {
     onChange?: (markdown: string) => void
     onAnnotateSelection?: (selection: SelectionAnnotation) => void
     annotations?: NotebookAnnotation[]
-    onAnnotationJump?: (annotation: NotebookAnnotation) => void
-    onAnnotationToggleStatus?: (annotation: NotebookAnnotation) => void
-    onAnnotationDelete?: (annotation: NotebookAnnotation) => void
+    onAnnotationHoverChange?: (annotation: NotebookAnnotation | null) => void
     onGenerateInlineResource?: GenerateInlineResource
     focusRange?: { startOffset: number; endOffset: number; requestId: number } | null
     className?: string
@@ -655,29 +653,13 @@ export const NovelEditor = React.forwardRef<NovelEditorHandle, NovelEditorProps>
     onChange,
     onAnnotateSelection,
     annotations = [],
-    onAnnotationJump,
-    onAnnotationToggleStatus,
-    onAnnotationDelete,
+    onAnnotationHoverChange,
     onGenerateInlineResource,
     focusRange,
     className,
 }, ref) {
     const [pending, setPending] = React.useState<AIPendingState | null>(null)
-    const [annotationPopup, setAnnotationPopup] = React.useState<{ annotation: NotebookAnnotation; left: number; top: number } | null>(null)
     const editorRef = React.useRef<EditorInstance | null>(null)
-    const annotationPopupTimerRef = React.useRef<number | null>(null)
-
-    const clearAnnotationPopupTimer = React.useCallback(() => {
-        if (annotationPopupTimerRef.current) {
-            window.clearTimeout(annotationPopupTimerRef.current)
-            annotationPopupTimerRef.current = null
-        }
-    }, [])
-
-    const scheduleAnnotationPopupHide = React.useCallback(() => {
-        clearAnnotationPopupTimer()
-        annotationPopupTimerRef.current = window.setTimeout(() => setAnnotationPopup(null), 140)
-    }, [clearAnnotationPopupTimer])
 
     const removeAnnotationMark = React.useCallback((selection: AnnotationSelectionLike) => {
         const ed = editorRef.current
@@ -788,7 +770,11 @@ export const NovelEditor = React.forwardRef<NovelEditorHandle, NovelEditorProps>
 
     React.useEffect(() => {
         const root = editorRef.current?.view.dom
-        if (!root || annotations.length === 0) return
+        if (!root) return
+        if (annotations.length === 0) {
+            onAnnotationHoverChange?.(null)
+            return
+        }
 
         const handleMouseOver = (event: MouseEvent) => {
             const target = event.target instanceof Element
@@ -797,31 +783,21 @@ export const NovelEditor = React.forwardRef<NovelEditorHandle, NovelEditorProps>
             if (!target || !root.contains(target)) return
             const annotation = findAnnotationForText(target.textContent ?? '')
             if (!annotation) return
-            const rect = target.getBoundingClientRect()
-            clearAnnotationPopupTimer()
-            setAnnotationPopup({
-                annotation,
-                left: Math.max(144, Math.min(window.innerWidth - 144, rect.left + rect.width / 2)),
-                top: Math.min(window.innerHeight - 150, rect.bottom + 8),
-            })
+            onAnnotationHoverChange?.(annotation)
         }
 
-        const handleMouseOut = (event: MouseEvent) => {
-            const target = event.target instanceof Element
-                ? event.target.closest(`mark[data-color="${ANNOTATION_HIGHLIGHT_COLOR}"]`)
-                : null
-            if (target && root.contains(target)) scheduleAnnotationPopupHide()
+        const handleMouseLeave = () => {
+            onAnnotationHoverChange?.(null)
         }
 
         root.addEventListener('mouseover', handleMouseOver)
-        root.addEventListener('mouseout', handleMouseOut)
+        root.addEventListener('mouseleave', handleMouseLeave)
         return () => {
             root.removeEventListener('mouseover', handleMouseOver)
-            root.removeEventListener('mouseout', handleMouseOut)
+            root.removeEventListener('mouseleave', handleMouseLeave)
+            onAnnotationHoverChange?.(null)
         }
-    }, [annotations.length, clearAnnotationPopupTimer, findAnnotationForText, scheduleAnnotationPopupHide])
-
-    React.useEffect(() => () => clearAnnotationPopupTimer(), [clearAnnotationPopupTimer])
+    }, [annotations.length, findAnnotationForText, onAnnotationHoverChange])
 
     return (
         <AIStateContext.Provider value={{ pending, setPending }}>
@@ -909,53 +885,6 @@ export const NovelEditor = React.forwardRef<NovelEditorHandle, NovelEditorProps>
                         onAccept={handleAccept}
                         onReject={handleReject}
                     />
-                )}
-                {annotationPopup && (
-                    <div
-                        className="fixed z-[140] w-72 -translate-x-1/2 rounded-lg border border-border bg-bg-container shadow-float px-3 py-2.5 text-left animate-slide-up"
-                        style={{ left: annotationPopup.left, top: annotationPopup.top }}
-                        onMouseEnter={clearAnnotationPopupTimer}
-                        onMouseLeave={scheduleAnnotationPopupHide}
-                    >
-                        <div className="text-[11px] text-text-tertiary line-clamp-2 border-l-2 border-primary-mint/50 pl-2">
-                            {annotationPopup.annotation.quote}
-                        </div>
-                        <p className="mt-2 text-[13px] leading-relaxed text-text whitespace-pre-wrap">
-                            {annotationPopup.annotation.body}
-                        </p>
-                        <div className="mt-2 flex items-center gap-2 text-[11px] text-text-quaternary">
-                            <CircleDot size={10} className={annotationPopup.annotation.status === 'open' ? 'text-primary-mint' : 'text-text-quaternary'} />
-                            <span className="flex-1">{annotationPopup.annotation.status === 'open' ? '未解决' : '已解决'}</span>
-                            {onAnnotationJump && (
-                                <button
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onClick={() => { onAnnotationJump(annotationPopup.annotation); setAnnotationPopup(null) }}
-                                    className="hover:text-primary-mint transition-colors"
-                                >
-                                    定位
-                                </button>
-                            )}
-                            {onAnnotationToggleStatus && (
-                                <button
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onClick={() => { onAnnotationToggleStatus(annotationPopup.annotation); setAnnotationPopup(null) }}
-                                    className="hover:text-primary-mint transition-colors"
-                                >
-                                    {annotationPopup.annotation.status === 'open' ? '解决' : '打开'}
-                                </button>
-                            )}
-                            {onAnnotationDelete && (
-                                <button
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onClick={() => { onAnnotationDelete(annotationPopup.annotation); setAnnotationPopup(null) }}
-                                    className="inline-flex items-center gap-1 hover:text-red-500 transition-colors"
-                                >
-                                    <Trash2 size={10} />
-                                    删除
-                                </button>
-                            )}
-                        </div>
-                    </div>
                 )}
             </div>
         </AIStateContext.Provider>

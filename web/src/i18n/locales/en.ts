@@ -580,6 +580,10 @@ const en = {
     annotationStatusResolved: 'Resolved',
     annotationResolve: 'Resolve',
     annotationReopen: 'Reopen',
+    annotationPanelTitle: 'Annotation panel',
+    annotationRailEmpty: 'Create a lightweight note here after selecting text. Hover an underline in the document to reveal its card in the right rail.',
+    annotationRailHoverHint: 'Hover an underline in the document to reveal its annotation card here while you keep reading.',
+    annotationHoverCardTitle: 'Hovered annotation',
 } as const
 
 export default en
