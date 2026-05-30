@@ -2,14 +2,13 @@
  * transcription.ts — Audio transcription service.
  *
  * Converts audio blobs to text using configured LLM providers.
- * Priority order: OpenAI (Whisper) → Gemini (gemini-1.5-flash via inline audio).
+ * Priority order: Gemini (gemini-1.5-flash via inline audio) as primary.
  *
  * Returns the transcribed text, or throws if no provider is configured or
  * transcription fails.
  */
 
-import { createOpenAI } from '@ai-sdk/openai';
-import { getOpenAIApiKey, getGeminiApiKey } from '../config.js';
+import { getGeminiApiKey } from '../config.js';
 import { log } from '../utils/logger.js';
 
 export interface TranscribeOptions {
@@ -17,63 +16,28 @@ export interface TranscribeOptions {
     buffer: Buffer;
     /** MIME type of the audio, e.g. 'audio/webm', 'audio/mp4', 'audio/ogg'. */
     mimeType: string;
-    /** Optional filename hint (used as form field name for OpenAI). */
+    /** Optional filename hint. */
     filename?: string;
     /** BCP-47 language hint, e.g. 'zh', 'en'. If omitted, auto-detect. */
     language?: string;
 }
 
-/** Max audio size accepted (25 MB — OpenAI Whisper limit). */
+/** Max audio size accepted (25 MB). */
 export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 /**
- * Transcribe audio to text.
- * Tries OpenAI Whisper first, falls back to Gemini if OpenAI is not configured.
+ * Transcribe audio to text using Gemini.
  */
 export async function transcribeAudio(opts: TranscribeOptions): Promise<string> {
-    const openaiKey = await getOpenAIApiKey();
-    if (openaiKey) {
-        return transcribeWithOpenAI(opts, openaiKey);
-    }
-
     const geminiKey = await getGeminiApiKey();
     if (geminiKey) {
         return transcribeWithGemini(opts, geminiKey);
     }
 
-    throw new Error('No transcription provider configured. Please add an OpenAI or Gemini API key.');
+    throw new Error('No transcription provider configured. Please add a Gemini API key.');
 }
 
-// ── OpenAI Whisper ────────────────────────────────────────────────────────────
-
-async function transcribeWithOpenAI(opts: TranscribeOptions, apiKey: string): Promise<string> {
-    const { buffer, mimeType, filename = 'audio.webm', language } = opts;
-
-    // Build FormData for the Whisper endpoint.
-    const form = new FormData();
-    const blob = new Blob([buffer], { type: mimeType });
-    form.append('file', blob, filename);
-    form.append('model', 'whisper-1');
-    form.append('response_format', 'text');
-    if (language) form.append('language', language);
-
-    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: form,
-    });
-
-    if (!res.ok) {
-        const msg = await res.text().catch(() => '');
-        throw new Error(`OpenAI transcription failed (${res.status}): ${msg}`);
-    }
-
-    const text = await res.text();
-    log.debug('Transcription', `OpenAI Whisper transcribed ${buffer.byteLength} bytes`);
-    return text.trim();
-}
-
-// ── Gemini multimodal fallback ────────────────────────────────────────────────
+// ── Gemini multimodal transcription ────────────────────────────────────────────
 
 async function transcribeWithGemini(opts: TranscribeOptions, apiKey: string): Promise<string> {
     const { buffer, mimeType } = opts;

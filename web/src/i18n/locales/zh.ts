@@ -265,7 +265,7 @@ const zh: Record<TranslationKeys, string> = {
     systemStatusAccountReady: '当前登录为 {name}。',
     systemStatusAccountFailed: 'Neo 无法确认当前账号。',
     systemStatusModels: '模型',
-    systemStatusModelsReady: '已配置 {count} 个模型，{warnings} 个提供方警告。',
+    systemStatusModelsReady: '已配置 {count} 个模型。',
     systemStatusModelsMissing: '还没有可用的已配置模型。',
     systemStatusOpenModels: '打开模型设置',
     systemStatusAutomation: '自动化',

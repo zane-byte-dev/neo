@@ -4,6 +4,9 @@
  * Wraps AI SDK's streamText / generateText and exposes the same high-level
  * chat methods used throughout the application.  The tool registry, system
  * instruction loading, and prompt construction live here.
+ *
+ * Simplified: always uses DeepSeek (via Anthropic API compat). No multi-model
+ * fallback, no Gemini ACP shortcut, no cost-budget enforcement.
  */
 
 import { join } from 'node:path';
@@ -11,15 +14,13 @@ import { promises as fs } from 'node:fs';
 import { streamText, generateText, stepCountIs, type ModelMessage } from 'ai';
 import { setupLogger, log } from '../utils/logger.js';
 import { recordTokenUsage } from '../utils/token-tracker.js';
-import { DAILY_COST_LIMIT, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, STREAM_FIRST_CHUNK_TIMEOUT_MS, getDeepseekApiKey } from '../config.js';
+import { GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
-import { acpStream, acpGenerate } from './providers/gemini-acp.js';
-import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
+import { appendUsageRecord, estimateCost } from './cost.js';
 import { setToolResult, smartTruncate } from '../utils/tool-result-cache.js';
 import { generateId } from '../utils/id-generator.js';
 import type { SmartRouteDecision } from './model-router.js';
-import { ROUTING_CONFIG } from './routing-config.js';
-import { createLanguageModel, isAcpModel, resolveModel } from './model-factory.js';
+import { createLanguageModel, resolveModel } from './model-factory.js';
 import type {
     StreamCallback,
     Tool,
@@ -55,10 +56,6 @@ export function getToolRegistry(): Map<string, Tool> {
 
 // ── Model helpers ─────────────────────────────────────────────────────────────
 
-function sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function withTimeoutSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(new Error('Request timeout')), timeoutMs);
@@ -89,34 +86,6 @@ function withIdleTimeoutSignal(
     if (signal) signal.addEventListener('abort', () => ctrl.abort(signal.reason), { once: true });
     ctrl.signal.addEventListener('abort', () => clearTimeout(t), { once: true });
     return { signal: ctrl.signal, ping };
-}
-
-type ErrorKind = 'switch-model' | 'retry-same' | 'fatal';
-
-function classifyError(err: unknown): ErrorKind {
-    const e = err as { status?: number; code?: string; message?: string; cause?: { status?: number; code?: string } };
-    const status = e.status ?? e.cause?.status;
-    const code = String(e.code ?? e.cause?.code ?? '');
-    const msg = String(e.message ?? '').toLowerCase();
-    if (status === 400 || status === 401 || status === 403) return 'fatal';
-    if (status === 500) return 'retry-same';
-    if (status === 429 || status === 503) return 'switch-model';
-    if (code === 'ETIMEDOUT' || code === 'ECONNRESET') return 'switch-model';
-    if (msg.includes('timeout')) return 'switch-model';
-    return 'switch-model';
-}
-
-function pickAliases(
-    modelOverride: string | undefined,
-    route: SmartRouteDecision | undefined,
-    forceFreeOnly: boolean,
-): string[] {
-    const chain = route?.fallbackChain?.length
-        ? route.fallbackChain
-        : modelOverride ? [modelOverride] : [GEMINI_MODEL_ENV ?? 'deepseek', 'deepseek', 'gemma', 'gemini-acp'];
-    if (!forceFreeOnly) return [...new Set(chain)];
-    const freeOnly = [...new Set(chain.filter((alias) => isFreeModel(resolveModel(alias))))];
-    return freeOnly.length ? freeOnly : ['gemma'];
 }
 
 // ── System instruction helpers ────────────────────────────────────────────────
@@ -162,18 +131,15 @@ export async function loadSystemInstruction(configDir: string, ...fallbackDirs: 
 /**
  * Build the full system instruction for a tenant, combining:
  * 1. Config files (AGENTS.md, SOUL.md, etc.)
- * 2. Workspace skills ({workDir}/config/skills/)
- * 3. Global OpenClaw skills (~/.openclaw/workspace/skills/)
+ * 2. User profile (USER.md)
  */
 export async function buildTenantSystemInstruction(workDir: string): Promise<string> {
     const configDir = join(workDir, 'config');
     const parts: string[] = [];
 
-    // Try config/ first, fall back to workspace root (where AGENTS.md etc. often live)
     const si = await loadSystemInstruction(configDir, workDir);
     if (si) parts.push(si);
 
-    // Inject USER.md into system prompt so the agent knows the user
     try {
         const userMd = await fs.readFile(join(workDir, 'USER.md'), 'utf8');
         if (userMd.trim()) {
@@ -191,14 +157,7 @@ export class LLMClient {
     private modelId = '';
 
     constructor() {
-        const deepseekKey = getDeepseekApiKey();
-        if (!deepseekKey) {
-            log.warn('AgentRuntime', 'No DEEPSEEK_API_KEY set. Ollama/ACP may still work.');
-        }
-
-        // Default: prefer DeepSeek → Ollama
-        const defaultModel = deepseekKey ? 'deepseek' : 'gemma';
-        this.modelId = resolveModel(GEMINI_MODEL_ENV ?? defaultModel);
+        this.modelId = resolveModel('deepseek');
         this.enabled = true;
         log.info('AgentRuntime', `Initialized (AI SDK). Model: ${this.modelId}`);
     }
@@ -258,22 +217,17 @@ export class LLMClient {
         const workDir = context.workDir;
         const stateDir = context.stateDir;
         const systemInstruction = context.systemInstruction || '';
-        const dayCost = DAILY_COST_LIMIT > 0 ? await getDailyCost(stateDir) : 0;
-        const forceFreeOnly = DAILY_COST_LIMIT > 0 && dayCost >= DAILY_COST_LIMIT;
-        let aliasChain = pickAliases(modelOverride, route, forceFreeOnly);
-        if (!aliasChain.length) aliasChain = ['gemma'];
+        const effectiveModel = modelOverride
+            ? resolveModel(modelOverride)
+            : (route?.model ? resolveModel(route.model) : this.modelId);
 
-        // ── Standard AI SDK path ──────────────────────────────────────────
         const tools = buildAiTools(toolRegistry, workDir, context);
-
-        // Build AI SDK messages array when structured history is available or images are attached
         const useMessages = (Array.isArray(conversationHistory) && conversationHistory.length > 0) || (images?.length ?? 0) > 0;
 
         let prompt: string | undefined;
         const messages: ModelMessage[] = [];
 
         if (useMessages) {
-            // Use structured messages — build prompt without embedded history
             const runtimePrompt = await this.buildPrompt(message, workDir, stateDir, undefined, context.sessionId);
             for (const msg of conversationHistory as Array<{ role: string; content: string }>) {
                 messages.push({
@@ -281,7 +235,6 @@ export class LLMClient {
                     content: msg.content,
                 });
             }
-            // Build multimodal content when images are attached
             if (images?.length) {
                 const parts: Array<{ type: 'text'; text: string } | { type: 'image'; image: URL }> = [
                     { type: 'text', text: runtimePrompt },
@@ -294,228 +247,171 @@ export class LLMClient {
                 messages.push({ role: 'user', content: runtimePrompt });
             }
         } else {
-            // Fallback: embed history as a string in the prompt
             const historyStr = typeof conversationHistory === 'string' ? conversationHistory : '';
             prompt = await this.buildPrompt(message, workDir, stateDir, historyStr || undefined, context.sessionId);
         }
 
         const startedAt = Date.now();
-        const originalAlias = aliasChain[0];
-        let lastError: unknown = null;
 
-        for (let i = 0; i < aliasChain.length; i++) {
-            const alias = aliasChain[i];
-            const effectiveModel = resolveModel(alias);
+        try {
+            const { signal: streamSignal, ping: pingStream } = withIdleTimeoutSignal(signal, STREAM_FIRST_CHUNK_TIMEOUT_MS);
+            const baseOpts = {
+                model: createLanguageModel(effectiveModel),
+                system: systemInstruction,
+                tools,
+                stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
+                abortSignal: streamSignal,
+                temperature: 0.7,
+            };
 
-            // ── ACP shortcut: bypass AI SDK, use Gemini CLI directly ──────
-            if (isAcpModel(effectiveModel)) {
-                const runtimePrompt = await this.buildPrompt(message, workDir, stateDir, undefined, context.sessionId);
-                const fullPrompt = systemInstruction
-                    ? `${systemInstruction}\n\n${runtimePrompt}`
-                    : runtimePrompt;
-                try {
-                    const text = await acpStream(
-                        fullPrompt,
-                        (chunk) => onChunk({ type: 'text', text: chunk }),
-                        (chunk) => onChunk({ type: 'thought', text: chunk }),
-                        workDir,
-                    );
-                    return text || null;
-                } catch (err: unknown) {
-                    if (err instanceof Error && err.name === 'AbortError') throw err;
-                    lastError = err;
-                    if (classifyError(err) === 'fatal' || i >= aliasChain.length - 1) {
-                        log.error('AgentRuntime', 'ACP stream error', { error: err instanceof Error ? err.message : String(err) });
-                        throw err;
+            const result = useMessages
+                ? streamText({ ...baseOpts, messages })
+                : streamText({ ...baseOpts, prompt: prompt! });
+
+            let fullText = '';
+
+            for await (const part of result.fullStream) {
+                pingStream();
+                switch (part.type) {
+                    case 'reasoning-delta':
+                        onChunk({ type: 'thought', text: part.text });
+                        break;
+                    case 'tool-call':
+                        onChunk({ type: 'tool_call', toolName: part.toolName, args: part.input as Record<string, unknown> });
+                        break;
+                    case 'tool-result': {
+                        const r = part.output;
+                        const s = typeof r === 'string' ? r : JSON.stringify(r);
+                        const resultId = generateId();
+                        setToolResult(resultId, {
+                            userId: context.userId,
+                            toolName: part.toolName,
+                            result: s,
+                        });
+                        const preview = smartTruncate(s);
+                        onChunk({
+                            type: 'tool_result',
+                            toolName: part.toolName,
+                            result: preview,
+                            resultId,
+                            truncated: preview.length < s.length,
+                        });
+                        break;
                     }
-                    continue;
+                    case 'text-delta':
+                        onChunk({ type: 'text', text: part.text });
+                        fullText += part.text;
+                        break;
+                    case 'error':
+                        log.error('AgentRuntime', 'Stream error', { error: part.error instanceof Error ? part.error.message : String(part.error) });
+                        onChunk({ type: 'text', text: `\n\nStream error: ${part.error instanceof Error ? part.error.message : String(part.error)}` });
+                        break;
                 }
             }
 
-            let sameModelRetryLeft = ROUTING_CONFIG.fallback.maxRetries;
-            while (true) {
-                try {
-                    // 使用空闲超时：只要持续有 chunk 输出就不会超时
-                    const { signal: streamSignal, ping: pingStream } = withIdleTimeoutSignal(signal, STREAM_FIRST_CHUNK_TIMEOUT_MS);
-                    const baseOpts = {
+            // ── Synthesis fallback when stream stopped due to MAX_TOOL_ITERATIONS ──
+            try {
+                const finishReason = await result.finishReason;
+                const stepsArr = await result.steps;
+                const stoppedAtMaxSteps =
+                    finishReason === 'tool-calls' || stepsArr.length >= MAX_TOOL_ITERATIONS;
+                const textTooShort = fullText.trim().length < 120;
+                if (stoppedAtMaxSteps && textTooShort) {
+                    log.info('AgentRuntime', 'Triggering synthesis after max-iter stop', {
+                        finishReason,
+                        steps: stepsArr.length,
+                        fullTextLen: fullText.length,
+                    });
+                    const responseMsgs = (await result.response).messages;
+                    const synthesisInput: ModelMessage[] = [
+                        ...(useMessages ? messages : [{ role: 'user' as const, content: prompt ?? '' }]),
+                        ...responseMsgs,
+                        {
+                            role: 'user',
+                            content:
+                                '工具调用次数已达上限，无法继续调用工具。请基于以上工具结果与上下文，' +
+                                '直接回答我最初的问题。如果信息不足，请简明指出还缺什么，并给出基于已知信息的最佳推断。' +
+                                '不要再请求调用任何工具。',
+                        },
+                    ];
+                    onChunk({ type: 'text', text: '\n\n' });
+                    const synthesis = streamText({
                         model: createLanguageModel(effectiveModel),
                         system: systemInstruction,
-                        tools,
-                        stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
-                        abortSignal: streamSignal,
-                        temperature: 0.7,
-                    };
-
-                    const result = useMessages
-                        ? streamText({ ...baseOpts, messages })
-                        : streamText({ ...baseOpts, prompt: prompt! });
-
-                    let fullText = '';
-
-                    for await (const part of result.fullStream) {
-                        pingStream(); // 每个 chunk 重置空闲计时器
-                        switch (part.type) {
-                            case 'reasoning-delta':
-                                onChunk({ type: 'thought', text: part.text });
-                                break;
-                            case 'tool-call':
-                                onChunk({ type: 'tool_call', toolName: part.toolName, args: part.input as Record<string, unknown> });
-                                break;
-                            case 'tool-result': {
-                                const r = part.output;
-                                const s = typeof r === 'string' ? r : JSON.stringify(r);
-                                const resultId = generateId();
-                                setToolResult(resultId, {
-                                    userId: context.userId,
-                                    toolName: part.toolName,
-                                    result: s,
-                                });
-                                const preview = smartTruncate(s);
-                                onChunk({
-                                    type: 'tool_result',
-                                    toolName: part.toolName,
-                                    result: preview,
-                                    resultId,
-                                    truncated: preview.length < s.length,
-                                });
-                                break;
-                            }
-                            case 'text-delta':
-                                onChunk({ type: 'text', text: part.text });
-                                fullText += part.text;
-                                break;
-                            case 'error':
-                                log.error('AgentRuntime', 'Stream error', { error: part.error instanceof Error ? part.error.message : String(part.error) });
-                                onChunk({ type: 'text', text: `\n\n🔥 Stream error: ${part.error instanceof Error ? part.error.message : String(part.error)}` });
-                                break;
+                        messages: synthesisInput,
+                        abortSignal: signal,
+                        temperature: 0.5,
+                    });
+                    for await (const sp of synthesis.fullStream) {
+                        if (sp.type === 'text-delta') {
+                            onChunk({ type: 'text', text: sp.text });
+                            fullText += sp.text;
+                        } else if (sp.type === 'reasoning-delta') {
+                            onChunk({ type: 'thought', text: sp.text });
+                        } else if (sp.type === 'error') {
+                            log.warn('AgentRuntime', 'Synthesis stream error', {
+                                error: sp.error instanceof Error ? sp.error.message : String(sp.error),
+                            });
                         }
                     }
-
-                    // ── Synthesis fallback when stream stopped due to MAX_TOOL_ITERATIONS ──
-                    // 当 stopWhen 触发时，模型可能还想继续调用工具但被强制中断，导致最终
-                    // 文本几乎为空。这里基于已收集到的 tool 结果再跑一次无工具的回答，
-                    // 保证用户拿到一段“尽力而为”的总结而不是半句话。
-                    try {
-                        const finishReason = await result.finishReason;
-                        const stepsArr = await result.steps;
-                        const stoppedAtMaxSteps =
-                            finishReason === 'tool-calls' || stepsArr.length >= MAX_TOOL_ITERATIONS;
-                        const textTooShort = fullText.trim().length < 120;
-                        if (stoppedAtMaxSteps && textTooShort) {
-                            log.info('AgentRuntime', 'Triggering synthesis after max-iter stop', {
-                                finishReason,
-                                steps: stepsArr.length,
-                                fullTextLen: fullText.length,
-                            });
-                            const responseMsgs = (await result.response).messages;
-                            const synthesisInput: ModelMessage[] = [
-                                ...(useMessages ? messages : [{ role: 'user' as const, content: prompt ?? '' }]),
-                                ...responseMsgs,
-                                {
-                                    role: 'user',
-                                    content:
-                                        '工具调用次数已达上限，无法继续调用工具。请基于以上工具结果与上下文，' +
-                                        '直接回答我最初的问题。如果信息不足，请简明指出还缺什么，并给出基于已知信息的最佳推断。' +
-                                        '不要再请求调用任何工具。',
-                                },
-                            ];
-                            onChunk({ type: 'text', text: '\n\n' });
-                            const synthesis = streamText({
-                                model: createLanguageModel(effectiveModel),
-                                system: systemInstruction,
-                                messages: synthesisInput,
-                                abortSignal: signal,
-                                temperature: 0.5,
-                            });
-                            for await (const sp of synthesis.fullStream) {
-                                if (sp.type === 'text-delta') {
-                                    onChunk({ type: 'text', text: sp.text });
-                                    fullText += sp.text;
-                                } else if (sp.type === 'reasoning-delta') {
-                                    onChunk({ type: 'thought', text: sp.text });
-                                } else if (sp.type === 'error') {
-                                    log.warn('AgentRuntime', 'Synthesis stream error', {
-                                        error: sp.error instanceof Error ? sp.error.message : String(sp.error),
-                                    });
-                                }
-                            }
-                        }
-                    } catch (synthErr) {
-                        log.warn('AgentRuntime', 'Synthesis pass failed', {
-                            error: synthErr instanceof Error ? synthErr.message : String(synthErr),
-                        });
-                    }
-
-                    // Record token usage (PromiseLike — wrap in Promise.resolve for .catch)
-                    Promise.resolve(result.usage).then((usage) => {
-                        if (usage) {
-                            const promptTokens = usage.inputTokens ?? 0;
-                            const completionTokens = usage.outputTokens ?? 0;
-                            const totalTokens = usage.totalTokens ?? (promptTokens + completionTokens);
-                            recordTokenUsage({
-                                ts: new Date().toISOString(),
-                                model: effectiveModel,
-                                promptTokens,
-                                completionTokens,
-                                totalTokens,
-                                caller: 'chatWithContextStreaming',
-                            });
-                            const baseReason = route?.reason ?? 'scored';
-                            const reason = forceFreeOnly ? `${baseReason}|budget_limited` : baseReason;
-                            // Capture the actual user prompt sent to the model.
-                            // In messages mode, extract user-role messages and join them
-                            // with '---' separators to mirror the multi-turn structure.
-                            let actualUserPrompt: string;
-                            if (useMessages) {
-                                const userParts = messages
-                                    .filter(m => m.role === 'user')
-                                    .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
-                                actualUserPrompt = userParts.join('\n---\n');
-                            } else {
-                                actualUserPrompt = prompt ?? '';
-                            }
-                            void appendUsageRecord({
-                                timestamp: Date.now(),
-                                userId: context.userId,
-                                model: effectiveModel,
-                                tier: route?.tier ?? 'standard',
-                                score: route?.score ?? 0,
-                                confidence: route?.confidence ?? 1,
-                                reason,
-                                promptTokens,
-                                completionTokens,
-                                totalTokens,
-                                estimatedCost: estimateCost(effectiveModel, promptTokens, completionTokens),
-                                durationMs: Date.now() - startedAt,
-                                fallbackUsed: alias !== originalAlias,
-                                originalModel: alias !== originalAlias ? resolveModel(originalAlias) : undefined,
-                                sessionId: context.sessionId,
-                                systemPrompt: systemInstruction || undefined,
-                                userPrompt: actualUserPrompt || undefined,
-                            }, context.stateDir ?? context.workDir).catch(() => { /* never crash over tracking */ });
-                        }
-                    }).catch(() => { /* never crash over tracking */ });
-
-                    return fullText || null;
-                } catch (err: unknown) {
-                    if (err instanceof Error && err.name === 'AbortError') throw err;
-                    lastError = err;
-                    const kind = classifyError(err);
-                    if (kind === 'retry-same' && sameModelRetryLeft > 0) {
-                        sameModelRetryLeft--;
-                        await sleep(1000);
-                        continue;
-                    }
-                    if (kind === 'fatal' || i >= aliasChain.length - 1) {
-                        log.error('AgentRuntime', 'LLM call error', { error: err instanceof Error ? err.message : String(err), model: effectiveModel });
-                        throw err;
-                    }
-                    break;
                 }
+            } catch (synthErr) {
+                log.warn('AgentRuntime', 'Synthesis pass failed', {
+                    error: synthErr instanceof Error ? synthErr.message : String(synthErr),
+                });
             }
-        }
 
-        throw lastError instanceof Error ? lastError : new Error('All fallback models failed');
+            // Record token usage
+            Promise.resolve(result.usage).then((usage) => {
+                if (usage) {
+                    const promptTokens = usage.inputTokens ?? 0;
+                    const completionTokens = usage.outputTokens ?? 0;
+                    const totalTokens = usage.totalTokens ?? (promptTokens + completionTokens);
+                    recordTokenUsage({
+                        ts: new Date().toISOString(),
+                        model: effectiveModel,
+                        promptTokens,
+                        completionTokens,
+                        totalTokens,
+                        caller: 'chatWithContextStreaming',
+                    });
+
+                    let actualUserPrompt: string;
+                    if (useMessages) {
+                        const userParts = messages
+                            .filter(m => m.role === 'user')
+                            .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
+                        actualUserPrompt = userParts.join('\n---\n');
+                    } else {
+                        actualUserPrompt = prompt ?? '';
+                    }
+                    void appendUsageRecord({
+                        timestamp: Date.now(),
+                        userId: context.userId,
+                        model: effectiveModel,
+                        tier: 'standard',
+                        score: 0,
+                        confidence: 1,
+                        reason: route?.reason ?? 'fixed',
+                        promptTokens,
+                        completionTokens,
+                        totalTokens,
+                        estimatedCost: estimateCost(effectiveModel, promptTokens, completionTokens),
+                        durationMs: Date.now() - startedAt,
+                        fallbackUsed: false,
+                        sessionId: context.sessionId,
+                        systemPrompt: systemInstruction || undefined,
+                        userPrompt: actualUserPrompt || undefined,
+                    }, context.stateDir ?? context.workDir).catch(() => { /* never crash over tracking */ });
+                }
+            }).catch(() => { /* never crash over tracking */ });
+
+            return fullText || null;
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') throw err;
+            log.error('AgentRuntime', 'LLM call error', { error: err instanceof Error ? err.message : String(err), model: effectiveModel });
+            throw err;
+        }
     }
 
     /** Non-streaming generation with tool support, used by subagent. */
@@ -529,7 +425,7 @@ export class LLMClient {
         const steps = options?.maxSteps ?? MAX_SUBAGENT_STEPS;
         try {
             const { text, usage } = await generateText({
-                    model: createLanguageModel(modelId),
+                model: createLanguageModel(modelId),
                 prompt,
                 system: options?.system,
                 temperature: options?.temperature ?? 0.7,
@@ -549,7 +445,7 @@ export class LLMClient {
             return text || null;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            return `🔥 Subagent error: ${msg}`;
+            return `Subagent error: ${msg}`;
         }
     }
 
@@ -566,49 +462,37 @@ export class LLMClient {
         options?: { model?: string; system?: string; temperature?: number; userId?: string; context?: string },
     ): Promise<{ text: string; model: string; usage: { inputTokens: number; outputTokens: number; totalTokens: number } } | null> {
         if (!this.enabled) return null;
-        const forceFreeOnly = DAILY_COST_LIMIT > 0 && (await getDailyCost('')) >= DAILY_COST_LIMIT;
-        const aliases = pickAliases(options?.model, undefined, forceFreeOnly);
-        const fallbackAliases = aliases.length ? aliases : ['gemma'];
-        for (let i = 0; i < fallbackAliases.length; i++) {
-            const modelId = resolveModel(fallbackAliases[i]);
-            if (isAcpModel(modelId)) {
-                const fullPrompt = options?.system ? `${options.system}\n\n${prompt}` : prompt;
-                try {
-                    const text = await acpGenerate(fullPrompt);
-                    return text ? { text, model: modelId, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } } : null;
-                } catch { continue; }
-            }
-            try {
-                const { text, usage } = await generateText({
-                    model: createLanguageModel(modelId),
-                    prompt,
-                    system: options?.system,
-                    temperature: options?.temperature,
-                    abortSignal: withTimeoutSignal(undefined, GENERATE_TIMEOUT_MS),
-                });
-                if (usage) {
-                    recordTokenUsage({
-                        ts: new Date().toISOString(),
-                        model: modelId,
-                        promptTokens: usage.inputTokens ?? 0,
-                        completionTokens: usage.outputTokens ?? 0,
-                        totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
-                        caller: options?.context ?? 'generate',
-                    });
-                }
-                const inputTokens = usage?.inputTokens ?? 0;
-                const outputTokens = usage?.outputTokens ?? 0;
-                return {
-                    text: text || '',
+        const modelId = options?.model ? resolveModel(options.model) : this.modelId;
+
+        try {
+            const { text, usage } = await generateText({
+                model: createLanguageModel(modelId),
+                prompt,
+                system: options?.system,
+                temperature: options?.temperature,
+                abortSignal: withTimeoutSignal(undefined, GENERATE_TIMEOUT_MS),
+            });
+            if (usage) {
+                recordTokenUsage({
+                    ts: new Date().toISOString(),
                     model: modelId,
-                    usage: { inputTokens, outputTokens, totalTokens: usage?.totalTokens ?? (inputTokens + outputTokens) },
-                };
-            } catch (err) {
-                log.error('LLMClient', 'generate error', { error: err instanceof Error ? err.message : String(err), model: modelId });
-                if (classifyError(err) === 'fatal' || i >= fallbackAliases.length - 1) return null;
+                    promptTokens: usage.inputTokens ?? 0,
+                    completionTokens: usage.outputTokens ?? 0,
+                    totalTokens: usage.totalTokens ?? ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
+                    caller: options?.context ?? 'generate',
+                });
             }
+            const inputTokens = usage?.inputTokens ?? 0;
+            const outputTokens = usage?.outputTokens ?? 0;
+            return {
+                text: text || '',
+                model: modelId,
+                usage: { inputTokens, outputTokens, totalTokens: usage?.totalTokens ?? (inputTokens + outputTokens) },
+            };
+        } catch (err) {
+            log.error('LLMClient', 'generate error', { error: err instanceof Error ? err.message : String(err), model: modelId });
+            return null;
         }
-        return null;
     }
 
     /** No-op: no subprocess to terminate. */

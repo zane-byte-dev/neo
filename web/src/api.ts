@@ -1357,7 +1357,6 @@ export interface ModelInfo {
     provider: string
     pricing: { input: number; output: number }
     free: boolean
-    tiers: string[]
     configured: boolean
 }
 
@@ -1414,13 +1413,9 @@ export interface RoutingConfigData {
 
 export interface ModelsResponse {
     models: ModelInfo[]
-    providerStatus: ProviderStatus[]
-    routing: RoutingConfigData
-    routingDefaults: RoutingConfigData
     usage: MonthlyUsageSummary
     history: UsageRecord[]
     dailyCost: number
-    dailyCostLimit: number
 }
 
 export function fetchModels(month?: string): Promise<ModelsResponse> {

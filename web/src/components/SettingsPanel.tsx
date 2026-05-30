@@ -203,9 +203,6 @@ const SettingsOverview: React.FC = () => {
     const configuredModels = state?.models.status === 'fulfilled'
         ? state.models.value.models.filter((model) => model.configured).length
         : 0
-    const providerWarnings = state?.models.status === 'fulfilled'
-        ? state.models.value.providerStatus.filter((provider) => !provider.ok).length
-        : 0
     const modelsOk = configuredModels > 0
     const cronCount = state?.crons.status === 'fulfilled' ? state.crons.value.length : 0
     const ready = backendOk && accountOk && modelsOk
@@ -297,11 +294,11 @@ const SettingsOverview: React.FC = () => {
                         title={t('systemStatusModels')}
                         status={modelsOk ? t('systemStatusReadyShort') : t('systemStatusAttentionShort')}
                         summary={modelsOk
-                            ? t('systemStatusModelsReady', { count: configuredModels, warnings: providerWarnings })
+                            ? t('systemStatusModelsReady', { count: configuredModels })
                             : t('systemStatusModelsMissing')}
-                        tone={modelsOk ? (providerWarnings > 0 ? 'neutral' : 'ok') : 'warning'}
-                        actionLabel={!modelsOk || providerWarnings > 0 ? t('systemStatusOpenModels') : undefined}
-                        onAction={!modelsOk || providerWarnings > 0 ? () => navigate('/settings/models') : undefined}
+                        tone={modelsOk ? 'ok' : 'warning'}
+                        actionLabel={!modelsOk ? t('systemStatusOpenModels') : undefined}
+                        onAction={!modelsOk ? () => navigate('/settings/models') : undefined}
                     />
                     <StatusTile
                         icon={<Bot size={15} />}

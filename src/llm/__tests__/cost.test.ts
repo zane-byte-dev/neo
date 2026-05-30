@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimateCost, isFreeModel } from '../cost.js';
+import { estimateCost } from '../cost.js';
 
 describe('cost helpers', () => {
     it('estimates paid model usage cost', () => {
@@ -7,9 +7,7 @@ describe('cost helpers', () => {
         expect(cost).toBeGreaterThan(0);
     });
 
-    it('returns zero for free models', () => {
-        expect(estimateCost('gemini-3-flash-preview', 2000, 2000)).toBe(0);
-        expect(isFreeModel('ollama/gemma4:e4b')).toBe(true);
+    it('returns zero for unknown model', () => {
+        expect(estimateCost('unknown-model', 2000, 2000)).toBe(0);
     });
 });
-

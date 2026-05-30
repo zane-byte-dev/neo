@@ -1,10 +1,7 @@
 import { generateText, streamText, type FinishReason, type LanguageModelUsage, type ModelMessage, type ToolSet } from 'ai';
 import { MODEL_ALIASES, GENERATE_TIMEOUT_MS, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
 import { appendUsageRecord, estimateCost } from '../llm/cost.js';
-import { acpGenerate } from '../llm/providers/gemini-acp.js';
-import { getFallbackChain, ROUTING_CONFIG, type Tier } from '../llm/routing-config.js';
-import { isModelAliasAvailable, resolveSmartRoute, type SmartRouteDecision } from '../llm/model-router.js';
-import { createLanguageModel, isAcpModel, resolveModel } from '../llm/model-factory.js';
+import { createLanguageModel, resolveModel } from '../llm/model-factory.js';
 import { GatewayError, toGatewayError } from '../llm/gateway/errors.js';
 import {
     encodeOpenAIChatCompletion,
@@ -34,8 +31,7 @@ interface GatewayCallContext {
 interface SelectedModels {
     requestedModel: string;
     candidates: string[];
-    route?: SmartRouteDecision;
-    tier: Tier;
+    tier: string;
     score: number;
     confidence: number;
     reason: string;
@@ -72,9 +68,8 @@ function getUserDirs(userId: string): UserDirs {
 
 // Virtual model IDs exposed to specific clients, mapped to real routing targets.
 // e.g. Claude Desktop requires a 'claude-*' model ID in /v1/models to consider the gateway usable.
-// Map to 'auto' so the smart router picks the best available configured provider.
 const VIRTUAL_ALIASES: Record<string, string> = {
-    'claude-opus-4.7': 'auto',
+    'claude-opus-4.7': 'deepseek',
 };
 
 function isKnownAlias(model: string): boolean {
@@ -82,79 +77,32 @@ function isKnownAlias(model: string): boolean {
 }
 
 function isSupportedModelName(model: string): boolean {
-    if (model === 'auto' || isKnownAlias(model)) return true;
+    if (model === 'deepseek' || isKnownAlias(model)) return true;
     if (Object.values(MODEL_ALIASES).includes(model)) return true;
-    return model.startsWith('acp/')
-        || model.startsWith('deepseek')
-        || model.startsWith('ollama/');
+    return model.startsWith('deepseek');
 }
 
-function findTier(alias: string): Tier | undefined {
-    for (const tier of ['simple', 'standard', 'complex'] as Tier[]) {
-        if (ROUTING_CONFIG.tiers[tier].includes(alias)) return tier;
-    }
-    return undefined;
-}
-
-function selectModels(requestedModelRaw: string, promptText: string, allowFallback: boolean, hasTools: boolean): SelectedModels {
-    // Resolve virtual aliases (e.g. claude-opus-4.7 → auto for Claude Desktop compat).
-    // Any unrecognised claude-* model (e.g. claude-haiku-4-5-20251001 from Claude Desktop
-    // subagents) is silently routed to 'auto' so Neo's smart router picks the best
-    // available configured provider instead of attempting a direct Anthropic API call.
+function selectModels(requestedModelRaw: string, _promptText: string, _allowFallback: boolean, _hasTools: boolean): SelectedModels {
     const requestedModel = VIRTUAL_ALIASES[requestedModelRaw]
-        ?? (requestedModelRaw.startsWith('claude-') ? 'auto' : requestedModelRaw);
+        ?? (requestedModelRaw.startsWith('claude-') ? 'deepseek' : requestedModelRaw);
     if (!isSupportedModelName(requestedModel)) {
         throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModelRaw}`);
     }
 
-    if (requestedModel === 'auto') {
-        const route = resolveSmartRoute({
-            hasTools,
-            message: promptText,
-            conversationDepth: 0,
-            toolCount: hasTools ? 1 : 0,
-        });
-        const candidates = route.fallbackChain.length ? route.fallbackChain : [route.model];
-        return {
-            requestedModel,
-            candidates: candidates.filter((candidate) => !isKnownAlias(candidate) || isModelAliasAvailable(candidate)),
-            route,
-            tier: route.tier,
-            score: route.score,
-            confidence: route.confidence,
-            reason: route.reason,
-        };
-    }
-
-    if (isKnownAlias(requestedModel) && !isModelAliasAvailable(requestedModel)) {
-        throw new GatewayError(400, 'provider_not_configured', `Provider for model ${requestedModel} is not configured`);
-    }
-
-    const tier = findTier(requestedModel) ?? 'standard';
-    const candidates = allowFallback && isKnownAlias(requestedModel)
-        ? getFallbackChain(requestedModel, tier)
-        : [requestedModel];
-
+    // Always use DeepSeek. No fallback chain.
+    const resolved = resolveModel('deepseek');
     return {
         requestedModel,
-        candidates,
-        tier,
+        candidates: [resolved],
+        tier: 'standard',
         score: 0,
         confidence: 1,
-        reason: allowFallback && candidates.length > 1 ? 'user_selected_allow_fallback' : 'user_selected',
+        reason: 'fixed',
     };
 }
 
 function classifyError(err: unknown): 'fatal' | 'switch-model' {
     if (err instanceof GatewayError) return err.status >= 500 || err.status === 429 ? 'switch-model' : 'fatal';
-    const e = err as { status?: number; code?: string; message?: string; cause?: { status?: number; code?: string } };
-    const status = e.status ?? e.cause?.status;
-    const code = String(e.code ?? e.cause?.code ?? '');
-    const msg = String(e.message ?? '').toLowerCase();
-    if (status === 400 || status === 401 || status === 403 || status === 404) return 'fatal';
-    if (status === 429 || status === 500 || status === 503) return 'switch-model';
-    if (code === 'ETIMEDOUT' || code === 'ECONNRESET') return 'switch-model';
-    if (msg.includes('timeout')) return 'switch-model';
     return 'switch-model';
 }
 
@@ -195,16 +143,6 @@ async function recordGatewayUsage(meta: UsageMeta): Promise<void> {
     }, meta.stateDir).catch(() => { /* never crash over tracking */ });
 }
 
-function acpPrompt(system: string | undefined, messages: ModelMessage[]): string {
-    const parts: string[] = [];
-    if (system) parts.push(system);
-    for (const msg of messages) {
-        const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
-        parts.push(`${msg.role}: ${content}`);
-    }
-    return parts.join('\n\n');
-}
-
 async function generateWithSelectedModel(args: {
     selection: SelectedModels;
     messages: ModelMessage[];
@@ -217,23 +155,8 @@ async function generateWithSelectedModel(args: {
 }) {
     let lastError: unknown;
     for (let index = 0; index < args.selection.candidates.length; index++) {
-        const candidate = args.selection.candidates[index];
-        const modelId = resolveModel(candidate);
+        const modelId = args.selection.candidates[index];
         try {
-            if (isAcpModel(modelId)) {
-                if (args.tools && Object.keys(args.tools).length > 0) {
-                    throw new GatewayError(400, 'unsupported_model_tools', 'Selected model does not support gateway tool declarations');
-                }
-                const text = await acpGenerate(acpPrompt(args.system, args.messages));
-                return {
-                    modelId,
-                    fallbackUsed: index > 0,
-                    text: text ?? '',
-                    content: [{ type: 'text' as const, text: text ?? '' }],
-                    finishReason: 'stop' as FinishReason,
-                    usage: undefined,
-                };
-            }
             const result = await generateText({
                 model: createLanguageModel(modelId),
                 messages: args.messages,
@@ -276,10 +199,7 @@ function anthropicContentFromParts(content: Array<unknown>, fallbackText: string
 }
 
 function providerOwner(modelId: string): string {
-    if (modelId === 'auto') return 'neo';
-    if (modelId.startsWith('acp/')) return 'gemini-acp';
     if (modelId.startsWith('deepseek')) return 'deepseek';
-    if (modelId.startsWith('ollama/')) return 'ollama';
     return 'neo';
 }
 
@@ -295,22 +215,19 @@ function modelListEntry(id: string, modelId: string, alias?: string): object {
 
 export async function getGatewayModels(options?: { claudeCompat?: boolean }): Promise<object> {
     const entries = new Map<string, object>();
-    entries.set('auto', modelListEntry('auto', 'auto'));
+    entries.set('deepseek', modelListEntry('deepseek', resolveModel('deepseek')));
 
     if (options?.claudeCompat) {
-        // Claude Desktop requires a claude-* model ID to recognise the gateway as usable.
-        // This virtual entry routes requests via 'auto' to whatever provider is configured.
         entries.set('claude-opus-4.7', {
             id: 'claude-opus-4.7',
             object: 'model',
             created: 1,
             owned_by: 'anthropic',
-            x_neo: { modelId: 'auto', virtual: true },
+            x_neo: { modelId: 'deepseek', virtual: true },
         });
     }
 
     for (const [alias, modelId] of Object.entries(MODEL_ALIASES)) {
-        if (!isModelAliasAvailable(alias)) continue;
         entries.set(alias, modelListEntry(alias, modelId, alias));
         if (modelId !== alias && !entries.has(modelId)) {
             entries.set(modelId, modelListEntry(modelId, modelId, alias));
@@ -363,30 +280,9 @@ export async function* streamOpenAIChatCompletion(body: OpenAIChatRequest, ctx: 
     let lastError: unknown;
 
     for (let index = 0; index < selection.candidates.length; index++) {
-        const modelId = resolveModel(selection.candidates[index]);
+        const modelId = selection.candidates[index];
         let emitted = false;
         try {
-            if (isAcpModel(modelId)) {
-                const text = await acpGenerate(acpPrompt(normalized.system, normalized.messages));
-                if (text) yield encodeOpenAIChunk({ id, model: modelId, content: text });
-                yield encodeOpenAIChunk({ id, model: modelId, finishReason: 'stop' });
-                yield encodeOpenAIDone();
-                await recordGatewayUsage({
-                    userId: ctx.userId,
-                    stateDir: dirs.stateDir,
-                    model: modelId,
-                    selection,
-                    promptTokens: 0,
-                    completionTokens: 0,
-                    totalTokens: 0,
-                    startedAt,
-                    fallbackUsed: index > 0,
-                    caller: 'ai-gateway:openai',
-                    system: normalized.system,
-                    promptText: normalized.promptText,
-                });
-                return;
-            }
             const result = streamText({
                 model: createLanguageModel(modelId),
                 messages: normalized.messages,
@@ -476,7 +372,7 @@ export async function* streamAnthropicMessage(body: AnthropicMessagesRequest, ct
     let lastError: unknown;
 
     for (let index = 0; index < selection.candidates.length; index++) {
-        const modelId = resolveModel(selection.candidates[index]);
+        const modelId = selection.candidates[index];
         let emitted = false;
         let blockIndex = 0;
         let textBlockOpen = false;
@@ -485,35 +381,6 @@ export async function* streamAnthropicMessage(body: AnthropicMessagesRequest, ct
                 type: 'message_start',
                 message: { id, type: 'message', role: 'assistant', model: modelId, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } },
             });
-
-            if (isAcpModel(modelId)) {
-                if (normalized.tools) {
-                    throw new GatewayError(400, 'unsupported_model_tools', 'Selected model does not support gateway tool declarations');
-                }
-                const text = await acpGenerate(acpPrompt(normalized.system, normalized.messages));
-                if (text) {
-                    yield encodeAnthropicEvent('content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } });
-                    yield encodeAnthropicEvent('content_block_delta', { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } });
-                    yield encodeAnthropicEvent('content_block_stop', { type: 'content_block_stop', index: 0 });
-                }
-                yield encodeAnthropicEvent('message_delta', { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 0 } });
-                yield encodeAnthropicEvent('message_stop', { type: 'message_stop' });
-                await recordGatewayUsage({
-                    userId: ctx.userId,
-                    stateDir: dirs.stateDir,
-                    model: modelId,
-                    selection,
-                    promptTokens: 0,
-                    completionTokens: 0,
-                    totalTokens: 0,
-                    startedAt,
-                    fallbackUsed: index > 0,
-                    caller: 'ai-gateway:anthropic',
-                    system: normalized.system,
-                    promptText: normalized.promptText,
-                });
-                return;
-            }
 
             const result = streamText({
                 model: createLanguageModel(modelId),

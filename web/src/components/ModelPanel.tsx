@@ -7,16 +7,11 @@ import {
     fetchModelMessages,
     fetchSecrets,
     fetchToolApprovals,
-    resetRouting,
-    saveRouting,
     saveGatewaySettings,
     saveSecrets,
     type GatewayStatus,
     type ModelsResponse,
     type ModelInfo,
-    type ProviderStatus,
-    type RoutingConfigData,
-    type RoutingTier,
     type SecretKey,
     type SecretStatus,
     type ToolApprovalRule,
@@ -104,18 +99,6 @@ const ModelCard: React.FC<{
             </div>
         )}
 
-        {/* Tiers */}
-        <div className="flex flex-wrap gap-1.5 mb-3">
-            {model.tiers.map((t) => (
-                <span key={t} className={cn('px-2 py-0.5 rounded text-[10px] font-medium', TIER_COLORS[t] ?? 'bg-fill text-text-secondary')}>
-                    {t}
-                </span>
-            ))}
-            {model.tiers.length === 0 && (
-                <span className="text-[10px] text-text-quaternary">{t('noAutoTier')}</span>
-            )}
-        </div>
-
         {/* Usage stats */}
         {usage && (
             <div className="border-t border-border-secondary pt-2.5 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
@@ -131,14 +114,13 @@ const ModelCard: React.FC<{
 // ── Usage Summary ────────────────────────────────────────────────────────────
 
 const UsageSummary: React.FC<{ data: ModelsResponse; t: T }> = ({ data, t }) => {
-    const { usage, dailyCost, dailyCostLimit } = data
+    const { usage, dailyCost } = data
     const stats = [
         { label: t('totalCalls'), value: String(usage.callCount) },
         { label: t('totalTokens'), value: formatTokens(usage.totalTokens) },
         { label: t('promptTokens'), value: formatTokens(usage.totalPromptTokens) },
         { label: t('completionTokens'), value: formatTokens(usage.totalCompletionTokens) },
         { label: t('todayCost'), value: formatCost(dailyCost, t) },
-        { label: t('dailyLimit'), value: dailyCostLimit > 0 ? formatCost(dailyCostLimit, t) : t('unlimited') },
     ]
 
     return (
@@ -904,285 +886,7 @@ const AddModelModal: React.FC<{
     )
 }
 
-// ── Provider Status ──────────────────────────────────────────────────────────
-
-const PROVIDER_STATUS_LABEL: Record<ProviderStatus['provider'], string> = {
-    google: 'Google Gemini',
-    'gemini-acp': 'Gemini CLI (ACP)',
-    deepseek: 'DeepSeek',
-    openai: 'OpenAI',
-    anthropic: 'Anthropic',
-    ollama: 'Ollama (Local)',
-}
-
-const ProviderStatusCard: React.FC<{
-    statuses: ProviderStatus[]
-    loading: boolean
-    onRefresh: () => void
-    t: T
-}> = ({ statuses, loading, onRefresh, t }) => (
-    <div className="bg-bg-container border border-border rounded-xl p-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
-        <div className="flex items-start justify-between gap-3 mb-3">
-            <div>
-                <h2 className="text-sm font-semibold text-text">{t('providerStatusTitle')}</h2>
-                <p className="text-xs text-text-tertiary mt-1 leading-relaxed">{t('providerStatusSubtitle')}</p>
-            </div>
-            <button
-                onClick={onRefresh}
-                disabled={loading}
-                className="px-3 py-1.5 bg-fill border border-border rounded-lg text-xs text-text-secondary hover:bg-fill-secondary disabled:opacity-50 shrink-0"
-            >
-                {loading ? '...' : t('providerStatusRefresh')}
-            </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {statuses.map((s) => (
-                <div key={s.provider} className="rounded-lg border border-border-secondary bg-fill/40 p-3">
-                    <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold text-text">{PROVIDER_STATUS_LABEL[s.provider] ?? s.provider}</span>
-                        <span className={cn(
-                            'px-2 py-0.5 rounded-full text-[10px] font-medium',
-                            s.ok
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-                        )}>
-                            {s.ok ? t('providerStatusOk') : t('providerStatusFail')}
-                        </span>
-                    </div>
-                    {s.detail && <p className="text-[11px] text-text-tertiary leading-relaxed">{s.detail}</p>}
-                </div>
-            ))}
-        </div>
-    </div>
-)
-
-// ── Routing Editor ───────────────────────────────────────────────────────────
-
-const TIERS: RoutingTier[] = ['simple', 'standard', 'complex']
-
-const ROUTING_PRESETS = {
-    conservative: { simpleMax: -0.08, standardMax: 0.18, fallbackThreshold: 0.24 },
-    balanced: { simpleMax: -0.05, standardMax: 0.25, fallbackThreshold: 0.2 },
-    aggressive: { simpleMax: 0.02, standardMax: 0.34, fallbackThreshold: 0.16 },
-} as const
-
-type RoutingPresetId = keyof typeof ROUTING_PRESETS
-
-const ROUTING_PRESET_LABEL_KEYS: Record<RoutingPresetId, TranslationKeys> = {
-    conservative: 'routingPresetConservative',
-    balanced: 'routingPresetBalanced',
-    aggressive: 'routingPresetAggressive',
-}
-
-const RoutingEditor: React.FC<{
-    routing: RoutingConfigData
-    onSaved: (next: RoutingConfigData) => void
-    t: T
-}> = ({ routing, onSaved, t }) => {
-    const [draft, setDraft] = React.useState<RoutingConfigData>(routing)
-    const [saving, setSaving] = React.useState(false)
-    const [resetting, setResetting] = React.useState(false)
-    const [error, setError] = React.useState<string | null>(null)
-    const [savedFlash, setSavedFlash] = React.useState(false)
-
-    React.useEffect(() => { setDraft(routing) }, [routing])
-
-    const updateTier = (tier: RoutingTier, raw: string) => {
-        const list = raw.split(',').map((s) => s.trim()).filter(Boolean)
-        setDraft((d) => ({ ...d, tiers: { ...d.tiers, [tier]: list } }))
-    }
-
-    const updateNumber = (path: 'boundaries.simpleMax' | 'boundaries.standardMax' | 'overrides.largeContextThreshold' | 'confidence.k' | 'confidence.fallbackThreshold' | 'momentum.historySize', raw: string) => {
-        const n = Number(raw)
-        if (!Number.isFinite(n)) return
-        setDraft((d) => {
-            const next = structuredClone(d)
-            const [section, field] = path.split('.') as [keyof RoutingConfigData, string]
-            const obj = next[section] as Record<string, number>
-            obj[field] = n
-            return next
-        })
-    }
-
-    const updateFloor = (which: 'toolFloor' | 'largeContextFloor', value: RoutingTier) => {
-        setDraft((d) => ({ ...d, overrides: { ...d.overrides, [which]: value } }))
-    }
-
-    const applyPreset = (presetId: RoutingPresetId) => {
-        const preset = ROUTING_PRESETS[presetId]
-        setDraft((d) => ({
-            ...d,
-            boundaries: {
-                ...d.boundaries,
-                simpleMax: preset.simpleMax,
-                standardMax: preset.standardMax,
-            },
-            confidence: {
-                ...d.confidence,
-                fallbackThreshold: preset.fallbackThreshold,
-            },
-        }))
-    }
-
-    const submit = async () => {
-        setSaving(true)
-        setError(null)
-        try {
-            const res = await saveRouting({
-                tiers: draft.tiers,
-                boundaries: draft.boundaries,
-                overrides: draft.overrides,
-                confidence: draft.confidence,
-                momentum: { ...draft.momentum },
-            })
-            onSaved(res.routing)
-            setSavedFlash(true)
-            setTimeout(() => setSavedFlash(false), 1800)
-        } catch (e) {
-            setError((e as Error).message ?? t('routingSaveFailed'))
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    const reset = async () => {
-        setResetting(true)
-        setError(null)
-        try {
-            const res = await resetRouting()
-            onSaved(res.routing)
-            setDraft(res.routing)
-        } catch (e) {
-            setError((e as Error).message ?? t('routingSaveFailed'))
-        } finally {
-            setResetting(false)
-        }
-    }
-
-    const numField = (label: string, path: Parameters<typeof updateNumber>[0], value: number, step = '0.01', tooltip?: string) => (
-        <label className="flex flex-col gap-1">
-            <span className="text-[11px] text-text-tertiary flex items-center gap-1">
-                {label}
-                {tooltip && (
-                    <span title={tooltip} className="cursor-help text-text-quaternary hover:text-text-tertiary transition-colors">
-                        &#x24D8;
-                    </span>
-                )}
-            </span>
-            <input
-                type="number"
-                step={step}
-                value={value}
-                onChange={(e) => updateNumber(path, e.target.value)}
-                className="bg-bg-container border border-border rounded-md px-2 py-1.5 text-xs text-text font-mono outline-none focus:border-primary-mint"
-            />
-        </label>
-    )
-
-    return (
-        <div className="bg-bg-container border border-border rounded-xl p-4 space-y-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
-            <div>
-                <h2 className="text-sm font-semibold text-text">{t('routingConfig')}</h2>
-                <p className="text-xs text-text-tertiary mt-1 leading-relaxed">{t('routingEditorSubtitle')}</p>
-                {error && <p className="text-[11px] text-destructive mt-2">{error}</p>}
-                {savedFlash && <p className="text-[11px] text-emerald-600 mt-2">{t('routingSaved')}</p>}
-            </div>
-
-            <div className="rounded-lg border border-border bg-fill/30 p-3">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <div className="flex-1">
-                        <p className="text-[11px] font-medium text-text-secondary">{t('routingPresets')}</p>
-                        <p className="text-[11px] text-text-tertiary mt-0.5">{t('routingPresetsHint')}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                        {(Object.keys(ROUTING_PRESETS) as RoutingPresetId[]).map((id) => (
-                            <button
-                                key={id}
-                                type="button"
-                                onClick={() => applyPreset(id)}
-                                className="px-2.5 py-1 rounded-lg border border-border bg-bg-container text-[11px] text-text-secondary hover:bg-fill-secondary transition-colors"
-                            >
-                                {t(ROUTING_PRESET_LABEL_KEYS[id])}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            {/* Tier chains */}
-            <div className="space-y-2">
-                {TIERS.map((tier) => (
-                    <label key={tier} className="block">
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className={cn('px-2 py-0.5 rounded text-[10px] font-medium w-16 text-center', TIER_COLORS[tier])}>{tier}</span>
-                            <span className="text-[11px] text-text-tertiary">{t('routingTierChain', { tier })}</span>
-                        </div>
-                        <input
-                            type="text"
-                            value={draft.tiers[tier].join(', ')}
-                            onChange={(e) => updateTier(tier, e.target.value)}
-                            className="w-full bg-bg-container border border-border rounded-md px-2 py-1.5 text-xs text-text font-mono outline-none focus:border-primary-mint"
-                        />
-                    </label>
-                ))}
-            </div>
-
-            {/* Numeric tunables */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {numField(t('simpleMax'), 'boundaries.simpleMax', draft.boundaries.simpleMax, '0.01', t('simpleMaxTooltip'))}
-                {numField(t('standardMax'), 'boundaries.standardMax', draft.boundaries.standardMax, '0.01', t('standardMaxTooltip'))}
-                {numField(t('confidenceK'), 'confidence.k', draft.confidence.k, '1', t('confidenceKTooltip'))}
-                {numField(t('fallbackThreshold'), 'confidence.fallbackThreshold', draft.confidence.fallbackThreshold, '0.01', t('fallbackThresholdTooltip'))}
-                {numField(t('ctxThreshold'), 'overrides.largeContextThreshold', draft.overrides.largeContextThreshold, '1000', t('ctxThresholdTooltip'))}
-                {numField(t('momentumWindow'), 'momentum.historySize', draft.momentum.historySize, '1', t('momentumWindowTooltip'))}
-            </div>
-
-            {/* Floors */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1">
-                    <span className="text-[11px] text-text-tertiary">{t('toolFloor')}</span>
-                    <select
-                        value={draft.overrides.toolFloor}
-                        onChange={(e) => updateFloor('toolFloor', e.target.value as RoutingTier)}
-                        className="bg-bg-container border border-border rounded-md px-2 py-1.5 text-xs text-text outline-none focus:border-primary-mint"
-                    >
-                        {TIERS.map((tier) => <option key={tier} value={tier}>{tier}</option>)}
-                    </select>
-                </label>
-                <label className="flex flex-col gap-1">
-                    <span className="text-[11px] text-text-tertiary">{t('largeCtxFloor')}</span>
-                    <select
-                        value={draft.overrides.largeContextFloor}
-                        onChange={(e) => updateFloor('largeContextFloor', e.target.value as RoutingTier)}
-                        className="bg-bg-container border border-border rounded-md px-2 py-1.5 text-xs text-text outline-none focus:border-primary-mint"
-                    >
-                        {TIERS.map((tier) => <option key={tier} value={tier}>{tier}</option>)}
-                    </select>
-                </label>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-                <button
-                    type="button"
-                    onClick={reset}
-                    disabled={resetting || saving}
-                    className="px-3 py-1.5 bg-fill border border-border rounded-lg text-xs text-text-secondary hover:bg-fill-secondary disabled:opacity-50"
-                >
-                    {resetting ? '...' : t('routingReset')}
-                </button>
-                <button
-                    type="button"
-                    onClick={submit}
-                    disabled={saving || resetting}
-                    className="px-3 py-1.5 bg-primary-mint text-white rounded-lg text-xs font-medium hover:opacity-90 disabled:opacity-50"
-                >
-                    {saving ? '...' : t('routingSave')}
-                </button>
-            </div>
-        </div>
-    )
-}
+// 类型声明中已不保存 `ProviderStatus` 的相关导入
 
 // ── Main Panel ───────────────────────────────────────────────────────────────
 
@@ -1416,15 +1120,6 @@ export const ModelPanel: React.FC = () => {
                 {activeTab === 'config' && (
                     <>
                         <section>
-                            <ProviderStatusCard
-                                statuses={data.providerStatus ?? []}
-                                loading={loading}
-                                onRefresh={() => { void load() }}
-                                t={t}
-                            />
-                        </section>
-
-                        <section>
                             <GatewaySettingsCard
                                 gateway={gateway}
                                 loading={gatewayLoading}
@@ -1471,13 +1166,6 @@ export const ModelPanel: React.FC = () => {
                             )}
                         </section>
 
-                        <section>
-                            <RoutingEditor
-                                routing={data.routing}
-                                onSaved={(next) => setData((current) => current ? { ...current, routing: next } : current)}
-                                t={t}
-                            />
-                        </section>
                     </>
                 )}
 

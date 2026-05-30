@@ -14,10 +14,7 @@
 
 import { LLMClient } from '../llm/client.js';
 import {
-    getAnthropicApiKey,
     getDeepseekApiKey,
-    getGeminiApiKey,
-    getOpenAIApiKey,
 } from '../config.js';
 import {
     nbListSources,
@@ -32,14 +29,11 @@ import {
     type Artifact,
     type NotebookEntry,
 } from './notebook-service.js';
-import { checkGeminiAcp } from '../llm/provider-status.js';
 import { parseJsonOr } from '../utils/json.js';
 
-const LAST_RESORT_MODEL = 'gemma';
+const LAST_RESORT_MODEL = 'deepseek';
 
-// Max characters fed into a single generation prompt (budgeted context window)
 const CTX_MAX = 60_000;
-// Per-source slice cap when combining multiple sources
 const PER_SOURCE_SLICE = 8_000;
 const GENERATED_BLOCK_RE = /<details\b[^>]*data-neo-generated-block[^>]*>[\s\S]*?<\/details>/gi;
 
@@ -49,15 +43,8 @@ function getClient(): LLMClient {
     return _client;
 }
 
-async function resolveNotebookModel(model?: string): Promise<string> {
-    const explicit = typeof model === 'string' ? model.trim() : '';
-    if (explicit) return explicit;
-    if (getGeminiApiKey()) return 'flash';
-    if (getDeepseekApiKey()) return 'deepseek';
-    if (getOpenAIApiKey()) return 'gpt-4o-mini';
-    if (getAnthropicApiKey()) return 'claude-haiku';
-    if ((await checkGeminiAcp()).ok) return 'gemini-acp';
-    return LAST_RESORT_MODEL;
+async function resolveNotebookModel(_model?: string): Promise<string> {
+    return getDeepseekApiKey() ? 'deepseek' : LAST_RESORT_MODEL;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

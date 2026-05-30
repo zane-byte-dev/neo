@@ -263,7 +263,7 @@ const en = {
     systemStatusAccountReady: 'Signed in as {name}.',
     systemStatusAccountFailed: 'Neo could not confirm the current account.',
     systemStatusModels: 'Models',
-    systemStatusModelsReady: '{count} configured model(s), {warnings} provider warning(s).',
+    systemStatusModelsReady: '{count} configured model(s).',
     systemStatusModelsMissing: 'No configured model is available yet.',
     systemStatusOpenModels: 'Open Models',
     systemStatusAutomation: 'Automation',
