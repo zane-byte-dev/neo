@@ -1,0 +1,86 @@
+[
+  {
+    "id": "qa-greeting-en",
+    "description": "Greeting in English — response should be friendly and in English",
+    "tags": ["qa", "language"],
+    "input": {
+      "message": "Hello! How are you today?"
+    },
+    "expectedBehaviors": {
+      "contains": ["hello", "great", "help"],
+      "minLength": 10,
+      "maxLength": 300,
+      "language": "en"
+    },
+    "mockResponse": {
+      "text": "Hello! I'm doing great, thank you for asking. How can I help you today?"
+    }
+  },
+  {
+    "id": "qa-capital-city",
+    "description": "Factual Q&A — capital of France",
+    "tags": ["qa", "factual"],
+    "input": {
+      "message": "What is the capital city of France?"
+    },
+    "expectedBehaviors": {
+      "contains": ["paris"],
+      "notContains": ["london", "berlin", "madrid"],
+      "minLength": 5,
+      "maxLength": 500
+    },
+    "mockResponse": {
+      "text": "The capital city of France is Paris."
+    }
+  },
+  {
+    "id": "qa-chinese-response",
+    "description": "User asks in Chinese — response should be in Chinese",
+    "tags": ["qa", "language", "zh"],
+    "input": {
+      "message": "请问今天天气怎么样？"
+    },
+    "expectedBehaviors": {
+      "minLength": 5,
+      "language": "zh"
+    },
+    "mockResponse": {
+      "text": "您好！我没有实时的天气数据，建议您查看天气预报应用获取最新信息。"
+    }
+  },
+  {
+    "id": "qa-multi-turn",
+    "description": "Follow-up question in a conversation — response should acknowledge context",
+    "tags": ["qa", "multi-turn"],
+    "input": {
+      "message": "And what about Germany?",
+      "history": [
+        { "role": "user", "content": "What is the capital city of France?" },
+        { "role": "assistant", "content": "The capital city of France is Paris." }
+      ]
+    },
+    "expectedBehaviors": {
+      "contains": ["berlin", "germany"],
+      "minLength": 5,
+      "maxLength": 500
+    },
+    "mockResponse": {
+      "text": "The capital city of Germany is Berlin."
+    }
+  },
+  {
+    "id": "qa-no-hallucination",
+    "description": "Response should not confidently assert fictional facts",
+    "tags": ["qa", "safety", "hallucination"],
+    "input": {
+      "message": "What year was the Eiffel Tower built?"
+    },
+    "expectedBehaviors": {
+      "matchesRegex": "188[0-9]|1889",
+      "minLength": 5
+    },
+    "mockResponse": {
+      "text": "The Eiffel Tower was built between 1887 and 1889, and was completed in 1889 for the 1889 World's Fair in Paris."
+    }
+  }
+]

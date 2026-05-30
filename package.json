@@ -31,7 +31,10 @@
         "pm2:status": "pm2 status",
         "web:dev": "cd web && npm run dev",
         "web:build": "cd web && npm install && npm run build",
-        "web:install": "cd web && npm install"
+        "web:install": "cd web && npm install",
+        "eval:run": "tsx src/llm/eval-runner.ts run",
+        "eval:compare": "tsx src/llm/eval-runner.ts compare",
+        "eval:update-baseline": "tsx src/llm/eval-runner.ts update-baseline"
     },
     "keywords": [
         "telegram",
