@@ -24,17 +24,7 @@ import { userGetStateDir, userGetWorkspaceDir } from './user-service.js';
 
 interface GatewayCallContext {
     userId: string;
-    allowFallback?: boolean;
     abortSignal?: AbortSignal;
-}
-
-interface SelectedModels {
-    requestedModel: string;
-    candidates: string[];
-    tier: string;
-    score: number;
-    confidence: number;
-    reason: string;
 }
 
 interface UserDirs {
@@ -46,12 +36,10 @@ interface UsageMeta {
     userId: string;
     stateDir: string;
     model: string;
-    selection: SelectedModels;
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
     startedAt: number;
-    fallbackUsed: boolean;
     caller: string;
     system?: string;
     promptText: string;
@@ -82,28 +70,17 @@ function isSupportedModelName(model: string): boolean {
     return model.startsWith('deepseek');
 }
 
-function selectModels(requestedModelRaw: string, _promptText: string, _allowFallback: boolean, _hasTools: boolean): SelectedModels {
+/**
+ * Resolve the requested model name to the single DeepSeek model used for all
+ * requests. Validates that the requested name is a recognised alias.
+ */
+function selectModel(requestedModelRaw: string): { requestedModel: string; modelId: string } {
     const requestedModel = VIRTUAL_ALIASES[requestedModelRaw]
         ?? (requestedModelRaw.startsWith('claude-') ? 'deepseek' : requestedModelRaw);
     if (!isSupportedModelName(requestedModel)) {
         throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModelRaw}`);
     }
-
-    // Always use DeepSeek. No fallback chain.
-    const resolved = resolveModel('deepseek');
-    return {
-        requestedModel,
-        candidates: [resolved],
-        tier: 'standard',
-        score: 0,
-        confidence: 1,
-        reason: 'fixed',
-    };
-}
-
-function classifyError(err: unknown): 'fatal' | 'switch-model' {
-    if (err instanceof GatewayError) return err.status >= 500 || err.status === 429 ? 'switch-model' : 'fatal';
-    return 'switch-model';
+    return { requestedModel, modelId: resolveModel('deepseek') };
 }
 
 function usageNumbers(usage: LanguageModelUsage | undefined): { promptTokens: number; completionTokens: number; totalTokens: number } {
@@ -126,25 +103,24 @@ async function recordGatewayUsage(meta: UsageMeta): Promise<void> {
         timestamp: Date.now(),
         userId: meta.userId,
         model: meta.model,
-        tier: meta.selection.tier,
-        score: meta.selection.score,
-        confidence: meta.selection.confidence,
-        reason: meta.selection.reason,
+        tier: 'standard',
+        score: 0,
+        confidence: 1,
+        reason: 'fixed',
         promptTokens: meta.promptTokens,
         completionTokens: meta.completionTokens,
         totalTokens: meta.totalTokens,
         estimatedCost: estimateCost(meta.model, meta.promptTokens, meta.completionTokens),
         durationMs: Date.now() - meta.startedAt,
-        fallbackUsed: meta.fallbackUsed,
-        originalModel: meta.fallbackUsed ? resolveModel(meta.selection.candidates[0]) : undefined,
+        fallbackUsed: false,
         caller: meta.caller,
         systemPrompt: meta.system,
         userPrompt: meta.promptText,
     }, meta.stateDir).catch(() => { /* never crash over tracking */ });
 }
 
-async function generateWithSelectedModel(args: {
-    selection: SelectedModels;
+async function generateWithModel(args: {
+    modelId: string;
     messages: ModelMessage[];
     system?: string;
     temperature?: number;
@@ -153,35 +129,27 @@ async function generateWithSelectedModel(args: {
     tools?: ToolSet;
     abortSignal?: AbortSignal;
 }) {
-    let lastError: unknown;
-    for (let index = 0; index < args.selection.candidates.length; index++) {
-        const modelId = args.selection.candidates[index];
-        try {
-            const result = await generateText({
-                model: createLanguageModel(modelId),
-                messages: args.messages,
-                system: args.system,
-                temperature: args.temperature,
-                maxOutputTokens: args.maxOutputTokens,
-                topP: args.topP,
-                tools: args.tools,
-                abortSignal: args.abortSignal,
-                timeout: { totalMs: GENERATE_TIMEOUT_MS },
-            });
-            return {
-                modelId,
-                fallbackUsed: index > 0,
-                text: result.text,
-                content: result.content,
-                finishReason: result.finishReason,
-                usage: result.totalUsage ?? result.usage,
-            };
-        } catch (err) {
-            lastError = err;
-            if (classifyError(err) === 'fatal' || index >= args.selection.candidates.length - 1) break;
-        }
+    try {
+        const result = await generateText({
+            model: createLanguageModel(args.modelId),
+            messages: args.messages,
+            system: args.system,
+            temperature: args.temperature,
+            maxOutputTokens: args.maxOutputTokens,
+            topP: args.topP,
+            tools: args.tools,
+            abortSignal: args.abortSignal,
+            timeout: { totalMs: GENERATE_TIMEOUT_MS },
+        });
+        return {
+            text: result.text,
+            content: result.content,
+            finishReason: result.finishReason,
+            usage: result.totalUsage ?? result.usage,
+        };
+    } catch (err) {
+        throw toGatewayError(err);
     }
-    throw toGatewayError(lastError);
 }
 
 function anthropicContentFromParts(content: Array<unknown>, fallbackText: string): AnthropicContentBlock[] {
@@ -239,28 +207,23 @@ export async function getGatewayModels(options?: { claudeCompat?: boolean }): Pr
 export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: GatewayCallContext): Promise<object> {
     const normalized = normalizeOpenAIRequest(body);
     const dirs = getUserDirs(ctx.userId);
-    const selection = selectModels(normalized.model, normalized.promptText, ctx.allowFallback === true, false);
-    if (selection.candidates.length === 0) {
-        throw new GatewayError(400, 'provider_not_configured', 'No configured model is available for this request');
-    }
+    const { modelId } = selectModel(normalized.model);
     const startedAt = Date.now();
-    const result = await generateWithSelectedModel({ ...normalized, selection, abortSignal: ctx.abortSignal });
+    const result = await generateWithModel({ ...normalized, modelId, abortSignal: ctx.abortSignal });
     const usage = usageNumbers(result.usage);
     await recordGatewayUsage({
         userId: ctx.userId,
         stateDir: dirs.stateDir,
-        model: result.modelId,
-        selection,
+        model: modelId,
         ...usage,
         startedAt,
-        fallbackUsed: result.fallbackUsed,
         caller: 'ai-gateway:openai',
         system: normalized.system,
         promptText: normalized.promptText,
     });
     return encodeOpenAIChatCompletion({
         id: `chatcmpl-${generateId()}`,
-        model: result.modelId,
+        model: modelId,
         content: result.text,
         finishReason: result.finishReason,
         usage: {
@@ -274,55 +237,44 @@ export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: G
 export async function* streamOpenAIChatCompletion(body: OpenAIChatRequest, ctx: GatewayCallContext): AsyncGenerator<string> {
     const normalized = normalizeOpenAIRequest({ ...body, stream: true });
     const dirs = getUserDirs(ctx.userId);
-    const selection = selectModels(normalized.model, normalized.promptText, ctx.allowFallback === true, false);
+    const { modelId } = selectModel(normalized.model);
     const id = `chatcmpl-${generateId()}`;
     const startedAt = Date.now();
-    let lastError: unknown;
 
-    for (let index = 0; index < selection.candidates.length; index++) {
-        const modelId = selection.candidates[index];
-        let emitted = false;
-        try {
-            const result = streamText({
-                model: createLanguageModel(modelId),
-                messages: normalized.messages,
-                system: normalized.system,
-                temperature: normalized.temperature,
-                maxOutputTokens: normalized.maxOutputTokens,
-                topP: normalized.topP,
-                abortSignal: ctx.abortSignal,
-                timeout: { chunkMs: STREAM_FIRST_CHUNK_TIMEOUT_MS },
-            });
-            for await (const part of result.fullStream) {
-                if (part.type === 'text-delta') {
-                    emitted = true;
-                    yield encodeOpenAIChunk({ id, model: modelId, content: part.text });
-                }
-                if (part.type === 'error') throw part.error;
+    try {
+        const result = streamText({
+            model: createLanguageModel(modelId),
+            messages: normalized.messages,
+            system: normalized.system,
+            temperature: normalized.temperature,
+            maxOutputTokens: normalized.maxOutputTokens,
+            topP: normalized.topP,
+            abortSignal: ctx.abortSignal,
+            timeout: { chunkMs: STREAM_FIRST_CHUNK_TIMEOUT_MS },
+        });
+        for await (const part of result.fullStream) {
+            if (part.type === 'text-delta') {
+                yield encodeOpenAIChunk({ id, model: modelId, content: part.text });
             }
-            const finishReason = await result.finishReason;
-            const usage = usageNumbers(await result.totalUsage);
-            yield encodeOpenAIChunk({ id, model: modelId, finishReason });
-            yield encodeOpenAIDone();
-            await recordGatewayUsage({
-                userId: ctx.userId,
-                stateDir: dirs.stateDir,
-                model: modelId,
-                selection,
-                ...usage,
-                startedAt,
-                fallbackUsed: index > 0,
-                caller: 'ai-gateway:openai',
-                system: normalized.system,
-                promptText: normalized.promptText,
-            });
-            return;
-        } catch (err) {
-            lastError = err;
-            if (emitted || classifyError(err) === 'fatal' || index >= selection.candidates.length - 1) break;
+            if (part.type === 'error') throw part.error;
         }
+        const finishReason = await result.finishReason;
+        const usage = usageNumbers(await result.totalUsage);
+        yield encodeOpenAIChunk({ id, model: modelId, finishReason });
+        yield encodeOpenAIDone();
+        await recordGatewayUsage({
+            userId: ctx.userId,
+            stateDir: dirs.stateDir,
+            model: modelId,
+            ...usage,
+            startedAt,
+            caller: 'ai-gateway:openai',
+            system: normalized.system,
+            promptText: normalized.promptText,
+        });
+    } catch (err) {
+        throw toGatewayError(err);
     }
-    throw toGatewayError(lastError);
 }
 
 export function countAnthropicTokens(body: AnthropicMessagesRequest): object {
@@ -335,28 +287,23 @@ export function countAnthropicTokens(body: AnthropicMessagesRequest): object {
 export async function createAnthropicMessage(body: AnthropicMessagesRequest, ctx: GatewayCallContext): Promise<object> {
     const normalized = normalizeAnthropicRequest(body);
     const dirs = getUserDirs(ctx.userId);
-    const selection = selectModels(normalized.model, normalized.promptText, ctx.allowFallback === true, Boolean(normalized.tools));
-    if (selection.candidates.length === 0) {
-        throw new GatewayError(400, 'provider_not_configured', 'No configured model is available for this request');
-    }
+    const { modelId } = selectModel(normalized.model);
     const startedAt = Date.now();
-    const result = await generateWithSelectedModel({ ...normalized, selection, abortSignal: ctx.abortSignal });
+    const result = await generateWithModel({ ...normalized, modelId, abortSignal: ctx.abortSignal });
     const usage = usageNumbers(result.usage);
     await recordGatewayUsage({
         userId: ctx.userId,
         stateDir: dirs.stateDir,
-        model: result.modelId,
-        selection,
+        model: modelId,
         ...usage,
         startedAt,
-        fallbackUsed: result.fallbackUsed,
         caller: 'ai-gateway:anthropic',
         system: normalized.system,
         promptText: normalized.promptText,
     });
     return encodeAnthropicMessage({
         id: `msg_${generateId()}`,
-        model: result.modelId,
+        model: modelId,
         content: anthropicContentFromParts(result.content, result.text),
         stopReason: mapAnthropicStopReason(result.finishReason),
         usage: { input_tokens: usage.promptTokens, output_tokens: usage.completionTokens },
@@ -366,78 +313,66 @@ export async function createAnthropicMessage(body: AnthropicMessagesRequest, ctx
 export async function* streamAnthropicMessage(body: AnthropicMessagesRequest, ctx: GatewayCallContext): AsyncGenerator<string> {
     const normalized = normalizeAnthropicRequest({ ...body, stream: true });
     const dirs = getUserDirs(ctx.userId);
-    const selection = selectModels(normalized.model, normalized.promptText, ctx.allowFallback === true, Boolean(normalized.tools));
+    const { modelId } = selectModel(normalized.model);
     const id = `msg_${generateId()}`;
     const startedAt = Date.now();
-    let lastError: unknown;
+    let blockIndex = 0;
+    let textBlockOpen = false;
 
-    for (let index = 0; index < selection.candidates.length; index++) {
-        const modelId = selection.candidates[index];
-        let emitted = false;
-        let blockIndex = 0;
-        let textBlockOpen = false;
-        try {
-            yield encodeAnthropicEvent('message_start', {
-                type: 'message_start',
-                message: { id, type: 'message', role: 'assistant', model: modelId, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } },
-            });
+    try {
+        yield encodeAnthropicEvent('message_start', {
+            type: 'message_start',
+            message: { id, type: 'message', role: 'assistant', model: modelId, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 0, output_tokens: 0 } },
+        });
 
-            const result = streamText({
-                model: createLanguageModel(modelId),
-                messages: normalized.messages,
-                system: normalized.system,
-                tools: normalized.tools,
-                temperature: normalized.temperature,
-                maxOutputTokens: normalized.maxOutputTokens,
-                topP: normalized.topP,
-                abortSignal: ctx.abortSignal,
-                timeout: { chunkMs: STREAM_FIRST_CHUNK_TIMEOUT_MS },
-            });
-            for await (const part of result.fullStream) {
-                if (part.type === 'text-delta') {
-                    emitted = true;
-                    if (!textBlockOpen) {
-                        yield encodeAnthropicEvent('content_block_start', { type: 'content_block_start', index: blockIndex, content_block: { type: 'text', text: '' } });
-                        textBlockOpen = true;
-                    }
-                    yield encodeAnthropicEvent('content_block_delta', { type: 'content_block_delta', index: blockIndex, delta: { type: 'text_delta', text: part.text } });
+        const result = streamText({
+            model: createLanguageModel(modelId),
+            messages: normalized.messages,
+            system: normalized.system,
+            tools: normalized.tools,
+            temperature: normalized.temperature,
+            maxOutputTokens: normalized.maxOutputTokens,
+            topP: normalized.topP,
+            abortSignal: ctx.abortSignal,
+            timeout: { chunkMs: STREAM_FIRST_CHUNK_TIMEOUT_MS },
+        });
+        for await (const part of result.fullStream) {
+            if (part.type === 'text-delta') {
+                if (!textBlockOpen) {
+                    yield encodeAnthropicEvent('content_block_start', { type: 'content_block_start', index: blockIndex, content_block: { type: 'text', text: '' } });
+                    textBlockOpen = true;
                 }
-                if (part.type === 'tool-call') {
-                    emitted = true;
-                    if (textBlockOpen) {
-                        yield encodeAnthropicEvent('content_block_stop', { type: 'content_block_stop', index: blockIndex });
-                        blockIndex++;
-                        textBlockOpen = false;
-                    }
-                    yield encodeAnthropicEvent('content_block_start', { type: 'content_block_start', index: blockIndex, content_block: { type: 'tool_use', id: part.toolCallId, name: part.toolName, input: {} } });
-                    yield encodeAnthropicEvent('content_block_delta', { type: 'content_block_delta', index: blockIndex, delta: { type: 'input_json_delta', partial_json: JSON.stringify(part.input ?? {}) } });
+                yield encodeAnthropicEvent('content_block_delta', { type: 'content_block_delta', index: blockIndex, delta: { type: 'text_delta', text: part.text } });
+            }
+            if (part.type === 'tool-call') {
+                if (textBlockOpen) {
                     yield encodeAnthropicEvent('content_block_stop', { type: 'content_block_stop', index: blockIndex });
                     blockIndex++;
+                    textBlockOpen = false;
                 }
-                if (part.type === 'error') throw part.error;
+                yield encodeAnthropicEvent('content_block_start', { type: 'content_block_start', index: blockIndex, content_block: { type: 'tool_use', id: part.toolCallId, name: part.toolName, input: {} } });
+                yield encodeAnthropicEvent('content_block_delta', { type: 'content_block_delta', index: blockIndex, delta: { type: 'input_json_delta', partial_json: JSON.stringify(part.input ?? {}) } });
+                yield encodeAnthropicEvent('content_block_stop', { type: 'content_block_stop', index: blockIndex });
+                blockIndex++;
             }
-            if (textBlockOpen) yield encodeAnthropicEvent('content_block_stop', { type: 'content_block_stop', index: blockIndex });
-            const finishReason = await result.finishReason;
-            const usage = usageNumbers(await result.totalUsage);
-            yield encodeAnthropicEvent('message_delta', { type: 'message_delta', delta: { stop_reason: mapAnthropicStopReason(finishReason), stop_sequence: null }, usage: { output_tokens: usage.completionTokens } });
-            yield encodeAnthropicEvent('message_stop', { type: 'message_stop' });
-            await recordGatewayUsage({
-                userId: ctx.userId,
-                stateDir: dirs.stateDir,
-                model: modelId,
-                selection,
-                ...usage,
-                startedAt,
-                fallbackUsed: index > 0,
-                caller: 'ai-gateway:anthropic',
-                system: normalized.system,
-                promptText: normalized.promptText,
-            });
-            return;
-        } catch (err) {
-            lastError = err;
-            if (emitted || classifyError(err) === 'fatal' || index >= selection.candidates.length - 1) break;
+            if (part.type === 'error') throw part.error;
         }
+        if (textBlockOpen) yield encodeAnthropicEvent('content_block_stop', { type: 'content_block_stop', index: blockIndex });
+        const finishReason = await result.finishReason;
+        const usage = usageNumbers(await result.totalUsage);
+        yield encodeAnthropicEvent('message_delta', { type: 'message_delta', delta: { stop_reason: mapAnthropicStopReason(finishReason), stop_sequence: null }, usage: { output_tokens: usage.completionTokens } });
+        yield encodeAnthropicEvent('message_stop', { type: 'message_stop' });
+        await recordGatewayUsage({
+            userId: ctx.userId,
+            stateDir: dirs.stateDir,
+            model: modelId,
+            ...usage,
+            startedAt,
+            caller: 'ai-gateway:anthropic',
+            system: normalized.system,
+            promptText: normalized.promptText,
+        });
+    } catch (err) {
+        throw toGatewayError(err);
     }
-    throw toGatewayError(lastError);
 }

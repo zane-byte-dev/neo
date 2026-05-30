@@ -106,11 +106,10 @@ describe('/v1 gateway routes', () => {
         const res = await request(app.callback())
             .post('/v1/chat/completions')
             .set('Authorization', 'Bearer gw-token')
-            .set('x-neo-allow-fallback', 'true')
             .send(body);
 
         expect(res.status).toBe(200);
-        expect(createOpenAIChatCompletionMock).toHaveBeenCalledWith(body, expect.objectContaining({ userId: 'u1', allowFallback: true }));
+        expect(createOpenAIChatCompletionMock).toHaveBeenCalledWith(body, expect.objectContaining({ userId: 'u1' }));
     });
 
     it('streams OpenAI SSE chunks', async () => {

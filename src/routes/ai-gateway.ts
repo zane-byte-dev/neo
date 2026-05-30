@@ -5,10 +5,6 @@ import { GatewayError, toGatewayError } from '../llm/gateway/errors.js';
 import { encodeOpenAIError, encodeOpenAIErrorEvent } from '../llm/gateway/openai.js';
 import { encodeAnthropicError, encodeAnthropicErrorEvent } from '../llm/gateway/anthropic.js';
 
-function allowFallback(ctx: Koa.Context): boolean {
-    return ctx.get('x-neo-allow-fallback').toLowerCase() === 'true';
-}
-
 function requestBody(ctx: Koa.Context): Record<string, unknown> {
     return (ctx.request.body && typeof ctx.request.body === 'object') ? ctx.request.body as Record<string, unknown> : {};
 }
@@ -22,10 +18,10 @@ function prepareSse(ctx: Koa.Context): void {
     ctx.res.flushHeaders?.();
 }
 
-function callContext(ctx: Koa.Context): { userId: string; allowFallback: boolean; abortSignal: AbortSignal } {
+function callContext(ctx: Koa.Context): { userId: string; abortSignal: AbortSignal } {
     const ctrl = new AbortController();
     ctx.req.on('close', () => ctrl.abort());
-    return { userId: ctx.state.userId as string, allowFallback: allowFallback(ctx), abortSignal: ctrl.signal };
+    return { userId: ctx.state.userId as string, abortSignal: ctrl.signal };
 }
 
 async function writeStream(ctx: Koa.Context, stream: AsyncGenerator<string>, onError: (err: GatewayError) => string): Promise<void> {
