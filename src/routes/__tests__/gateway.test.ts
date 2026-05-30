@@ -6,10 +6,12 @@ import request from 'supertest';
 import { createTestApp, signedCookie } from '../../__tests__/test-helpers.js';
 
 let previousUsers: string | undefined;
+let previousWebPort: string | undefined;
 let stateDir: string;
 
 beforeEach(() => {
     previousUsers = process.env.USERS;
+    previousWebPort = process.env.WEB_PORT;
     stateDir = mkdtempSync(join(tmpdir(), 'gateway-route-settings-'));
     process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', workDir: stateDir, stateDir }]);
 });
@@ -17,6 +19,8 @@ beforeEach(() => {
 afterEach(() => {
     if (previousUsers === undefined) delete process.env.USERS;
     else process.env.USERS = previousUsers;
+    if (previousWebPort === undefined) delete process.env.WEB_PORT;
+    else process.env.WEB_PORT = previousWebPort;
     rmSync(stateDir, { recursive: true, force: true });
 });
 
@@ -57,5 +61,16 @@ describe('/api/gateway', () => {
 
         const disabled = await request(server).post('/api/gateway').set('Cookie', cookie).send({ enabled: false });
         expect(disabled.body.gateway).toMatchObject({ enabled: false, configured: false, source: 'state' });
+    });
+
+    it('returns backend WEB_PORT base URL when host is vite dev server', async () => {
+        process.env.WEB_PORT = '3000';
+        const cookie = signedCookie('u1');
+        const res = await request(await app())
+            .get('/api/gateway')
+            .set('Cookie', cookie)
+            .set('Host', 'localhost:5173');
+        expect(res.status).toBe(200);
+        expect(res.body.gateway.baseUrl).toBe('http://localhost:3000/v1');
     });
 });

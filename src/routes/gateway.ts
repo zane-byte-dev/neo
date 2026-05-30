@@ -11,6 +11,19 @@ function userConfig(userId: string) {
     return getUsersConfig().find((user) => user.id === userId);
 }
 
+function gatewayBaseUrl(origin: string | null | undefined): string {
+    const rawOrigin = typeof origin === 'string' ? origin : '';
+    try {
+        const url = new URL(rawOrigin);
+        if (url.port === '5173') {
+            url.port = process.env.WEB_PORT ?? '3000';
+        }
+        return `${url.origin}/v1`;
+    } catch {
+        return rawOrigin ? `${rawOrigin.replace(/\/$/, '')}/v1` : '/v1';
+    }
+}
+
 export function gateway(router: Router): void {
     router.get('/api/gateway', async (ctx) => {
         const userId = ctx.state.userId as string | undefined;
@@ -26,7 +39,8 @@ export function gateway(router: Router): void {
             return;
         }
         const userCtx = await calcUser(userId);
-        ctx.body = { gateway: await getGatewayStatus(cfg, userCtx.stateDir, `${ctx.origin}/v1`) };
+        const requestOrigin = ctx.origin ?? `${ctx.protocol}://${ctx.host}`;
+        ctx.body = { gateway: await getGatewayStatus(cfg, userCtx.stateDir, gatewayBaseUrl(requestOrigin)) };
     });
 
     router.post('/api/gateway', async (ctx) => {
@@ -44,11 +58,12 @@ export function gateway(router: Router): void {
         }
         const body = (ctx.request.body ?? {}) as Record<string, unknown>;
         const userCtx = await calcUser(userId);
+        const requestOrigin = ctx.origin ?? `${ctx.protocol}://${ctx.host}`;
         ctx.body = {
             gateway: await updateGatewayStatus(cfg, userCtx.stateDir, {
                 enabled: typeof body.enabled === 'boolean' ? body.enabled : undefined,
                 rotate: body.rotate === true,
-            }, `${ctx.origin}/v1`),
+            }, gatewayBaseUrl(requestOrigin)),
         };
     });
 }
