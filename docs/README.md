@@ -46,6 +46,7 @@ docs/
 | [PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md](product/PRODUCT_EXPERIENCE_REVIEW_2026-05-10.md) | 文档工作者端到端体验报告（2026-05-10） | 🔄 P0.1（window.confirm）仍待处理 |
 | [DOC_REVIEW.md](product/DOC_REVIEW.md) | 文档深度体验报告（README / docs/ 覆盖差距） | ✅ 主要文档缺口已收敛 |
 | [COMPETITIVE_RESEARCH.md](product/COMPETITIVE_RESEARCH.md) | 竞品调研：直接竞品、Agent 框架、记忆层对比 | 内部产品参考，不建议作为用户入口 |
+| [DESKTOP_AI_ASSISTANT_GAP_BRIEF.md](product/DESKTOP_AI_ASSISTANT_GAP_BRIEF.md) | 对标 Claude Desktop 类产品的能力差距补齐 Product Brief | 📝 Draft |
 | [RELEASE_NOTES_v0.1.0.md](product/RELEASE_NOTES_v0.1.0.md) | v0.1.0 发布说明草稿 | 📝 待发布 |
 | [ROADMAP.md](product/ROADMAP.md) | 功能路线图（P0/P1/P2 三档） | 🔄 P0 全完成；P1 部分完成；P2 待规划 |
 | [NOTEBOOK_ROADMAP.md](product/NOTEBOOK_ROADMAP.md) | Notebook 重塑路线图（M1-M2 里程碑） | ✅ M1 全完成；M2 大部分完成 |
@@ -68,6 +69,11 @@ docs/
 | 文章批注 | [brief.md](features/article-annotations/brief.md) | [plan.md](features/article-annotations/plan.md) | [test-report.md](features/article-annotations/test-report.md) | ✅ MVP 已实现 |
 | 文章内资源 | [brief.md](features/article-embedded-resources/brief.md) | [plan.md](features/article-embedded-resources/plan.md) | [test-report.md](features/article-embedded-resources/test-report.md) | ✅ MVP 已实现 |
 | Web 语音输入 | [brief.md](features/web-voice-input/brief.md) | [plan.md](features/web-voice-input/plan.md) | — | ✅ Phase 1 已实现 |
+| 本地 AI Gateway | [brief.md](features/local-ai-gateway/brief.md) | [plan.md](features/local-ai-gateway/plan.md) | — | 📝 方案完成，待实现 |
+| Run Console | [brief.md](features/run-console/brief.md) | [plan.md](features/run-console/plan.md) | — | 📝 Draft |
+| Workflow 模板与向导 | [brief.md](features/workflow-template-wizard/brief.md) | [plan.md](features/workflow-template-wizard/plan.md) | — | 📝 Draft |
+| Connector Center | [brief.md](features/connector-center/brief.md) | [plan.md](features/connector-center/plan.md) | — | 📝 Draft |
+| Semantic Memory RAG | [brief.md](features/semantic-memory-rag/brief.md) | [plan.md](features/semantic-memory-rag/plan.md) | — | 📝 Draft |
 | Workflow 自动化引擎 | [brief.md](features/workflow-automation-engine/brief.md) | [plan.md](features/workflow-automation-engine/plan.md) | [test-report.md](features/workflow-automation-engine/test-report.md) | ✅ MVP 已实现；JSON 编辑器已补保存前校验 |
 | Agent 可恢复运行时 | — | [plan.md](features/agent-runtime/plan.md) | — | ✅ A1-D3 全完成，E2 待处理（附 [issues.md](features/agent-runtime/issues.md)） |
 | 统一知识索引 | [design.md](features/knowledge-index/design.md) | [plan.md](features/knowledge-index/plan.md) | — | ✅ Phase 0-2 完成；Phase 3（embedding）待做 |

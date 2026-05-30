@@ -16,6 +16,7 @@ export interface ConfigUser {
     name: string;
     tenants?: string[];
     webToken?: string | null;
+    gatewayToken?: string | null;
     webhookSecret?: string;
     workDir?: string;
     stateDir?: string;

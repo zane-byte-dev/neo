@@ -32,6 +32,7 @@ const config: LocalConfig = {
             name: 'Your Name',
             tenants: [],
             webToken: 'change-me',
+            gatewayToken: 'change-me-gateway-token',
             workDir: '/absolute/path/to/your/workspace/project',
             stateDir: '/absolute/path/to/your/workspace/state',
         },

@@ -5,6 +5,7 @@
  *   calcUser(userId)  — build and cache the full runtime context for a user.
  */
 import { UserProfileManager } from './user-profile.js';
+import { timingSafeEqual } from 'node:crypto';
 import { loadUserPreferences, type UserPreferences } from './user-prefs.js';
 import { loadUserSkills } from '../skills/skill-registry.js';
 import { loadUserTools } from '../tools/user-tools/loader.js';
@@ -36,18 +37,22 @@ export function userList(): UserRow[] {
     }));
 }
 
+function toUserRow(u: ConfigUser): UserRow {
+    return {
+        id:        u.id,
+        name:      u.name,
+        tenants:   u.tenants ?? [],
+        web_token: u.webToken ?? null,
+        workDir: u.workDir ?? null,
+        stateDir: u.stateDir ?? null,
+    };
+}
+
 export function userGetByTenant(tenantKey: string): UserRow | null {
     const users = _readConfigUsers();
     const user = users.find((u) => (u.tenants ?? []).includes(tenantKey));
     if (!user) return null;
-    return {
-        id: user.id,
-        name: user.name,
-        tenants: user.tenants ?? [],
-        web_token: user.webToken ?? null,
-        workDir: user.workDir ?? null,
-        stateDir: user.stateDir ?? null,
-    };
+    return toUserRow(user);
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -83,14 +88,25 @@ export function userGetByWebToken(token: string): UserRow | null {
     const users = _readConfigUsers();
     const u = users.find(u => u.webToken === token);
     if (!u) return null;
-    return {
-        id:        u.id,
-        name:      u.name,
-        tenants:   u.tenants ?? [],
-        web_token: u.webToken ?? null,
-        workDir: u.workDir ?? null,
-        stateDir: u.stateDir ?? null,
-    };
+    return toUserRow(u);
+}
+
+export function hasGatewayTokenConfigured(): boolean {
+    return _readConfigUsers().some((u) => Boolean(u.gatewayToken?.trim()));
+}
+
+export function userGetByGatewayToken(token: string): UserRow | null {
+    if (!token) return null;
+    for (const user of _readConfigUsers()) {
+        const expected = user.gatewayToken?.trim();
+        if (!expected) continue;
+        const tokenBuffer = Buffer.from(token, 'utf8');
+        const expectedBuffer = Buffer.from(expected, 'utf8');
+        if (tokenBuffer.length === expectedBuffer.length && timingSafeEqual(tokenBuffer, expectedBuffer)) {
+            return toUserRow(user);
+        }
+    }
+    return null;
 }
 
 export interface UserContext {

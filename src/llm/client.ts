@@ -8,13 +8,10 @@
 
 import { join } from 'node:path';
 import { promises as fs } from 'node:fs';
-import { streamText, generateText, stepCountIs, type LanguageModel, type ModelMessage } from 'ai';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
+import { streamText, generateText, stepCountIs, type ModelMessage } from 'ai';
 import { setupLogger, log } from '../utils/logger.js';
 import { recordTokenUsage } from '../utils/token-tracker.js';
-import { DAILY_COST_LIMIT, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, MODEL_ALIASES, OLLAMA_BASE_URL, STREAM_FIRST_CHUNK_TIMEOUT_MS, getAnthropicApiKey, getClaudeCodeBaseUrl, getClaudeCodeToken, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
+import { DAILY_COST_LIMIT, GEMINI_MODEL_ENV, GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, STREAM_FIRST_CHUNK_TIMEOUT_MS, getAnthropicApiKey, getClaudeCodeBaseUrl, getClaudeCodeToken, getDeepseekApiKey, getGeminiApiKey, getOpenAIApiKey } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
 import { acpStream, acpGenerate } from './providers/gemini-acp.js';
 import { appendUsageRecord, estimateCost, getDailyCost, isFreeModel } from './cost.js';
@@ -22,12 +19,15 @@ import { setToolResult, smartTruncate } from '../utils/tool-result-cache.js';
 import { generateId } from '../utils/id-generator.js';
 import type { SmartRouteDecision } from './model-router.js';
 import { ROUTING_CONFIG } from './routing-config.js';
+import { createLanguageModel, isAcpModel, resolveModel } from './model-factory.js';
 import type {
     StreamCallback,
     Tool,
     ToolContext,
 } from './types.js';
 import { recall, renderHits } from '../memory/index.js';
+
+export { resolveModel } from './model-factory.js';
 
 export type {
     StreamChunk,
@@ -54,84 +54,6 @@ export function getToolRegistry(): Map<string, Tool> {
 }
 
 // ── Model helpers ─────────────────────────────────────────────────────────────
-
-/** Resolve a short alias (e.g. "flash") to the canonical model ID. */
-export function resolveModel(alias: string): string {
-    return MODEL_ALIASES[alias] ?? alias;
-}
-
-/** Check if a model ID belongs to the DeepSeek provider. */
-function isDeepSeekModel(modelId: string): boolean {
-    return modelId.startsWith('deepseek');
-}
-
-/** Check if a model ID belongs to a local Ollama instance. */
-function isOllamaModel(modelId: string): boolean {
-    return modelId.startsWith('ollama/');
-}
-
-/** Check if a model ID uses the Gemini CLI ACP provider. */
-function isAcpModel(modelId: string): boolean {
-    return modelId.startsWith('acp/');
-}
-
-/** Check if a model ID belongs to OpenAI (GPT family). */
-function isOpenAIModel(modelId: string): boolean {
-    return modelId.startsWith('gpt-') || modelId.startsWith('o1-') || modelId.startsWith('o3-') || modelId.startsWith('o4-');
-}
-
-/** Check if a model ID belongs to Anthropic (Claude family). */
-function isAnthropicModel(modelId: string): boolean {
-    return modelId.startsWith('claude-') && !modelId.startsWith('claude-code/');
-}
-
-/** Check if a model ID uses a Claude Code compatible endpoint. */
-function isClaudeCodeModel(modelId: string): boolean {
-    return modelId.startsWith('claude-code/');
-}
-
-/** Create an AI SDK LanguageModel for a given model id. */
-function createModel(modelId: string): LanguageModel {
-    if (isDeepSeekModel(modelId)) {
-        const deepseek = createOpenAI({
-            apiKey: getDeepseekApiKey(),
-            baseURL: 'https://api.deepseek.com',
-        });
-        return deepseek.chat(modelId);
-    }
-    if (isOllamaModel(modelId)) {
-        const ollama = createOpenAI({
-            apiKey: 'ollama',
-            baseURL: OLLAMA_BASE_URL,
-        });
-        return ollama.chat(modelId.replace('ollama/', ''));
-    }
-    if (isOpenAIModel(modelId)) {
-        const openai = createOpenAI({ apiKey: getOpenAIApiKey() });
-        return openai.chat(modelId);
-    }
-    if (isClaudeCodeModel(modelId)) {
-        const baseURL = getClaudeCodeBaseUrl();
-        const authToken = getClaudeCodeToken();
-        if (!baseURL || !authToken) {
-            throw new Error('CLAUDE_CODE_BASE_URL and CLAUDE_CODE_TOKEN are required for Claude Code models');
-        }
-        const claudeCode = createAnthropic({
-            baseURL,
-            authToken,
-            name: 'claude-code',
-        });
-        return claudeCode(modelId.replace('claude-code/', ''));
-    }
-    if (isAnthropicModel(modelId)) {
-        const anthropic = createAnthropic({ apiKey: getAnthropicApiKey() });
-        return anthropic(modelId);
-    }
-    // ACP models are handled directly in chatWithContextStreaming / generate
-    // and never reach createModel.
-    const google = createGoogleGenerativeAI({ apiKey: getGeminiApiKey() });
-    return google(modelId);
-}
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -425,7 +347,7 @@ export class LLMClient {
                     // 使用空闲超时：只要持续有 chunk 输出就不会超时
                     const { signal: streamSignal, ping: pingStream } = withIdleTimeoutSignal(signal, STREAM_FIRST_CHUNK_TIMEOUT_MS);
                     const baseOpts = {
-                        model: createModel(effectiveModel),
+                        model: createLanguageModel(effectiveModel),
                         system: systemInstruction,
                         tools,
                         stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
@@ -508,7 +430,7 @@ export class LLMClient {
                             ];
                             onChunk({ type: 'text', text: '\n\n' });
                             const synthesis = streamText({
-                                model: createModel(effectiveModel),
+                                model: createLanguageModel(effectiveModel),
                                 system: systemInstruction,
                                 messages: synthesisInput,
                                 abortSignal: signal,
@@ -616,7 +538,7 @@ export class LLMClient {
         const steps = options?.maxSteps ?? MAX_SUBAGENT_STEPS;
         try {
             const { text, usage } = await generateText({
-                model: createModel(modelId),
+                    model: createLanguageModel(modelId),
                 prompt,
                 system: options?.system,
                 temperature: options?.temperature ?? 0.7,
@@ -667,7 +589,7 @@ export class LLMClient {
             }
             try {
                 const { text, usage } = await generateText({
-                    model: createModel(modelId),
+                    model: createLanguageModel(modelId),
                     prompt,
                     system: options?.system,
                     temperature: options?.temperature,
