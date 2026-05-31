@@ -2,8 +2,6 @@
  * src/sandbox/types.ts — Public sandbox types.
  */
 
-export type SandboxLanguage = 'bash' | 'python' | 'node';
-
 export interface SandboxRunOptions {
     /** Working directory that is mounted / used as cwd */
     workDir: string;

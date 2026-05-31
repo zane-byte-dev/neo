@@ -144,17 +144,6 @@ export function matchesGatewayTokenSync(user: ConfigUser, token: string): boolea
     return expected ? safeEqual(token, expected) : false;
 }
 
-export function getGatewayStatusSync(user: ConfigUser, baseUrl = '/v1'): GatewayStatus {
-    const state = readStateSync(user.stateDir);
-    if (state) {
-        if (state.enabled === true && (state.tokenHash || state.token)) return statusFromState(state, baseUrl);
-        return { enabled: false, configured: false, source: 'state', masked: '', baseUrl };
-    }
-    const configToken = user.gatewayToken?.trim() ?? '';
-    if (configToken) return statusFrom(configToken, 'config', baseUrl);
-    return { enabled: false, configured: false, source: 'none', masked: '', baseUrl };
-}
-
 export async function getGatewayStatus(user: ConfigUser, stateDir: string, baseUrl = '/v1'): Promise<GatewayStatus> {
     const state = await readState(stateDir);
     if (state) {

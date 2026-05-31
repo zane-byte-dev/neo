@@ -29,11 +29,6 @@ export interface OpenAIUsage {
     total_tokens: number;
 }
 
-export interface OpenAIChoiceMessage {
-    role: 'assistant';
-    content: string | null;
-}
-
 function readTextContent(content: unknown): string {
     if (typeof content === 'string') return content;
     if (!Array.isArray(content)) {

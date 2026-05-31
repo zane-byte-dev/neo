@@ -6,7 +6,7 @@
  */
 
 import { promises as fs } from 'node:fs';
-import { basename, extname, join, posix, relative, sep } from 'node:path';
+import { extname, join, posix, relative, sep } from 'node:path';
 import { log } from '../utils/logger.js';
 import { SANDBOX_MODE, SANDBOX_OUTPUT_DIR } from './config.js';
 import { isDockerAvailable, runInDocker } from './docker-runner.js';
@@ -14,7 +14,6 @@ import { runOnHost } from './host-runner.js';
 import type { SandboxArtifact, SandboxResult, SandboxRunOptions } from './types.js';
 
 export * from './types.js';
-export { SANDBOX_MODE, SANDBOX_OUTPUT_DIR } from './config.js';
 
 const MIME_BY_EXT: Record<string, string> = {
     '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
@@ -117,17 +116,4 @@ export function formatSandboxResult(r: SandboxResult): string {
         parts.push(`[artifacts]\n${lines.join('\n')}`);
     }
     return parts.join('\n').trim() || '(no output)';
-}
-
-/** For a compact single-word label in logs/UX. */
-export function describeSandbox(): string {
-    return `${SANDBOX_MODE}${SANDBOX_MODE === 'docker' ? ' (docker)' : ''}`;
-}
-
-/** Expose a lightweight util so the output-dir path is consistent everywhere. */
-export function outputDirName(): string { return SANDBOX_OUTPUT_DIR; }
-
-/** Strip noise so a small result-preview doesn't include huge artifact files. */
-export function clipArtifactBasename(name: string): string {
-    return basename(name);
 }

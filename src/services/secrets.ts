@@ -199,10 +199,6 @@ export function getSecret(key: SecretKey): string {
     return fromEnv && fromEnv.length > 0 ? fromEnv : '';
 }
 
-export async function loadSecrets(): Promise<SecretStore> {
-    return readStoreFromDisk();
-}
-
 function maskValue(value: string): string {
     if (!value) return '';
     const tail = value.slice(-4);

@@ -177,7 +177,7 @@ function normalizeStep(rawStep: unknown, index: number): WorkflowStep {
     throw new Error(`Workflow step ${id} has unsupported type`);
 }
 
-export function normalizeWorkflowInput(id: string, input: unknown, existing?: WorkflowDefinition): WorkflowDefinition {
+function normalizeWorkflowInput(id: string, input: unknown, existing?: WorkflowDefinition): WorkflowDefinition {
     assertWorkflowId(id);
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
         throw new Error('Workflow body must be an object');

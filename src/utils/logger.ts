@@ -90,11 +90,6 @@ function writeEntry(entry: Record<string, unknown>): void {
 
 // ── Core emit ─────────────────────────────────────────────────────────────────
 
-export interface LogData {
-    module?: string;
-    [key: string]: unknown;
-}
-
 function emit(level: Level, module: string, msg: string, data?: Record<string, unknown>): void {
     if (LEVEL_RANK[level] < LEVEL_RANK[MIN_LEVEL]) return;
 
@@ -185,7 +180,3 @@ export function setupLogger(): void {
         toFile('ERROR', args);
     };
 }
-
-// ── Exposed for introspection ─────────────────────────────────────────────────
-
-export const isDebugEnabled = (): boolean => LEVEL_RANK[MIN_LEVEL] <= LEVEL_RANK['DEBUG'];

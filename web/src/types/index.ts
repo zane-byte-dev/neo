@@ -95,43 +95,6 @@ export interface NoteEntry {
     content?: string
 }
 
-export type TodoStatus = 'not-started' | 'completed'
-
-export interface TodoItem {
-    id: string
-    content: string
-    status: TodoStatus
-    priority: string | null
-    remind_at: string | null
-    created_at: string
-    updated_at: string
-}
-
-export interface TodoAnalysis {
-    content: string
-    remind_at: string | null
-    priority: string | null
-}
-
-export interface InboxNote {
-    id: number
-    content: string
-    date: string
-    time: string
-    created_at: number
-    tags: string | null    // JSON stringified string[] or null
-}
-
-export interface NoteHeatmapDay {
-    date: string
-    count: number
-}
-
-export interface NoteTag {
-    tag: string
-    count: number
-}
-
 // ── Cron ─────────────────────────────────────────────────────────────────────
 
 export interface CronJobInfo {
@@ -146,17 +109,6 @@ export interface CronJobInfo {
     last_duration_ms: number | null
     last_error: string | null
     last_summary: string | null
-}
-
-export interface CronRunInfo {
-    id: string
-    job_name: string
-    status: string           // 'running' | 'success' | 'error'
-    started_at: number
-    finished_at: number | null
-    duration_ms: number | null
-    error: string | null
-    summary: string | null
 }
 
 // ── Workflows ────────────────────────────────────────────────────────────────

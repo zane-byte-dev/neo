@@ -154,11 +154,3 @@ async function _safeAppend(
         /* best-effort */
     }
 }
-
-/** Helper: status that the sweeper considers "in flight" before sweeping. */
-export const SWEEPABLE_STATUSES: ReadonlySet<RunStatus> = new Set([
-    'queued',
-    'running',
-    'waiting_confirm',
-    'waiting_input',
-]);

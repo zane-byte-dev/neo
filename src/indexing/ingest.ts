@@ -166,7 +166,3 @@ export async function rebuildKnowledgeIndex(workDir: string, stateDir = workDir)
     summary.semanticFacts = await indexSemanticMemory(workDir, stateDir);
     return summary;
 }
-
-export function indexNotebookSourceFromEntryId(workDir: string, notebook: string, entryId: string): boolean {
-    return indexNotebookSource(workDir, notebook, sourceIdFromEntryId(entryId));
-}

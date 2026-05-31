@@ -98,7 +98,7 @@ export function expandBraces(pattern: string): string[] {
     return alternatives.flatMap((alt) => expandBraces(prefix + alt + suffix));
 }
 
-export function globToRegex(pattern: string, options: { matchAnywhere?: boolean } = {}): RegExp {
+function globToRegex(pattern: string, options: { matchAnywhere?: boolean } = {}): RegExp {
     const regexStr = pattern
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')
         .replace(/\*\*/g, '\x00')

@@ -87,6 +87,14 @@ export function normalizeMindMapMarkdown(value: unknown, fallbackTitle = '思维
     ].join('\n')
 }
 
+function stripListMarker(line: string): string {
+    return line
+        .replace(/^#{1,6}\s+/, '')
+        .replace(/^[-*+]\s+/, '')
+        .replace(/^\d+[.)]\s+/, '')
+        .trim()
+}
+
 function mindMapTreeToMarkdown(value: unknown, depth = 1): string {
     if (!value) return ''
     if (typeof value === 'string') return normalizeMindMapMarkdown(value)
@@ -113,35 +121,6 @@ function mindMapTreeToMarkdown(value: unknown, depth = 1): string {
         if (childMarkdown) lines.push(childMarkdown)
     }
     return lines.join('\n')
-}
-
-export function buildMindMapPreview(markdown: string): string[] {
-    const lines = markdown
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-
-    const headings = lines
-        .filter((line) => /^#{1,6}\s+/.test(line))
-        .map((line) => line.replace(/^#{1,6}\s+/, '').trim())
-        .filter(Boolean)
-    if (headings.length) return headings.slice(0, 4)
-
-    const bullets = lines
-        .filter((line) => /^[-*+]\s+\S/.test(line) || /^\d+[.)]\s+\S/.test(line))
-        .map(stripListMarker)
-        .filter(Boolean)
-    if (bullets.length) return bullets.slice(0, 4)
-
-    return lines.map(stripListMarker).slice(0, 4)
-}
-
-function stripListMarker(line: string): string {
-    return line
-        .replace(/^#{1,6}\s+/, '')
-        .replace(/^[-*+]\s+/, '')
-        .replace(/^\d+[.)]\s+/, '')
-        .trim()
 }
 
 export function getAudioScript(artifact: Artifact): AudioLine[] {
@@ -245,14 +224,4 @@ export function formatDuration(seconds: number): string {
     const hours = Math.floor(minutes / 60)
     const rest = minutes % 60
     return rest ? `约 ${hours} 小时 ${rest} 分钟` : `约 ${hours} 小时`
-}
-
-export function stripMarkdown(markdown: string): string {
-    return markdown
-        .replace(/```[\s\S]*?```/g, ' ')
-        .replace(/^#{1,6}\s+/gm, '')
-        .replace(/[*_`>#-]/g, '')
-        .replace(/\[[^\]]+\]\([^)]+\)/g, (match) => match.replace(/^\[|\]\([^)]+\)$/g, ''))
-        .replace(/\s+/g, ' ')
-        .trim()
 }

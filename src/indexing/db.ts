@@ -38,8 +38,3 @@ export function closeKnowledgeDb(workDir: string): void {
     db.close();
     _dbCache.delete(resolvedWorkDir);
 }
-
-export function closeAllKnowledgeDbs(): void {
-    for (const [, db] of _dbCache) db.close();
-    _dbCache.clear();
-}

@@ -294,10 +294,6 @@ export function fetchPreferences(): Promise<PreferencesResponse> {
     return apiGet<PreferencesResponse>('/api/preferences')
 }
 
-export function savePreferences(preferences: UserPreferences): Promise<PreferencesResponse> {
-    return _post('/api/preferences', preferences).then((r) => _jsonOrThrow<PreferencesResponse>(r))
-}
-
 export type SecretKey =
     | 'GEMINI_API_KEY'
     | 'DEEPSEEK_API_KEY'
@@ -772,7 +768,7 @@ export function notebookRenameFolder(name: string, newName: string): Promise<{ o
 // ── Notebook workspace (NotebookLM-style) ────────────────────────────────────
 
 import type {
-    SourceMeta, SourceGuide, NotebookConfig, NotebookNote, NotebookAnnotation, NotebookAnnotationAnchor, Artifact, ArtifactType,
+    SourceMeta, NotebookNote, NotebookAnnotation, NotebookAnnotationAnchor, Artifact, ArtifactType,
 } from './types'
 
 async function _jsonOrThrow<T>(r: Response): Promise<T> {
@@ -782,29 +778,6 @@ async function _jsonOrThrow<T>(r: Response): Promise<T> {
         throw new Error((body as Record<string, string>).error ?? `HTTP ${r.status}`)
     }
     return r.json() as Promise<T>
-}
-
-// Sources
-export function notebookListSources(notebook: string): Promise<SourceMeta[]> {
-    return apiGet(`/api/notebook/source?action=list&notebook=${encodeURIComponent(notebook)}`)
-}
-
-export function notebookListSourcesWithGuides(notebook: string): Promise<(SourceMeta & { guide: SourceGuide | null })[]> {
-    return apiGet(`/api/notebook/source?action=list-with-guides&notebook=${encodeURIComponent(notebook)}`)
-}
-
-export function notebookGetSource(notebook: string, sourceId: string) {
-    return apiGet<{ id: string; content: string } & SourceMeta>(
-        `/api/notebook/source?action=read&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`,
-    )
-}
-
-export function notebookGetSourceGuide(notebook: string, sourceId: string): Promise<SourceGuide> {
-    return apiGet(`/api/notebook/source?action=guide&notebook=${encodeURIComponent(notebook)}&sourceId=${encodeURIComponent(sourceId)}`)
-}
-
-export function notebookGenerateSourceGuide(notebook: string, sourceId: string, model?: string): Promise<SourceGuide> {
-    return _post('/api/notebook/source-guide', { notebook, sourceId, ...(model ? { model } : {}) }).then((r) => _jsonOrThrow<SourceGuide>(r))
 }
 
 export interface ImportSourcePayload {
@@ -820,32 +793,6 @@ export interface ImportSourcePayload {
 
 export function notebookImportSource(payload: ImportSourcePayload): Promise<SourceMeta> {
     return _post('/api/notebook/import', payload).then((r) => _jsonOrThrow<SourceMeta>(r))
-}
-
-export function notebookArchiveSource(notebook: string, sourceId: string): Promise<{ ok: boolean }> {
-    return _post('/api/notebook/source/archive', { notebook, sourceId }).then((r) => _jsonOrThrow<{ ok: boolean }>(r))
-}
-
-export function notebookRenameSource(notebook: string, sourceId: string, title: string): Promise<SourceMeta> {
-    return _post('/api/notebook/source/rename', { notebook, sourceId, title }).then((r) => _jsonOrThrow<SourceMeta>(r))
-}
-
-// Config
-export function notebookGetConfig(notebook: string): Promise<NotebookConfig> {
-    return apiGet(`/api/notebook?action=config&notebook=${encodeURIComponent(notebook)}`)
-}
-
-export function notebookUpdateConfig(notebook: string, partial: Partial<NotebookConfig>): Promise<NotebookConfig> {
-    return fetch('/api/notebook/config', {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notebook, ...partial }),
-    }).then((r) => _jsonOrThrow<NotebookConfig>(r))
-}
-
-export function notebookGenerateOverview(notebook: string, sourceIds?: string[], model?: string): Promise<{ overview: string }> {
-    return _post('/api/notebook/overview', { notebook, sourceIds, ...(model ? { model } : {}) }).then((r) => _jsonOrThrow<{ overview: string }>(r))
 }
 
 // Notes
@@ -912,10 +859,6 @@ export function notebookListArtifacts(notebook: string, type?: ArtifactType): Pr
     return apiGet(`/api/notebook/studio?action=artifacts&notebook=${encodeURIComponent(notebook)}${t}`)
 }
 
-export function notebookGetArtifact(notebook: string, id: string): Promise<Artifact> {
-    return apiGet(`/api/notebook/studio?action=artifact&notebook=${encodeURIComponent(notebook)}&id=${encodeURIComponent(id)}`)
-}
-
 export interface GenerateArtifactPayload {
     notebook: string
     type: ArtifactType
@@ -938,23 +881,6 @@ export function notebookDeleteArtifact(notebook: string, id: string) {
     return fetch(`/api/notebook/artifact?notebook=${encodeURIComponent(notebook)}&id=${encodeURIComponent(id)}`, {
         method: 'DELETE', credentials: 'include',
     }).then((r) => _jsonOrThrow<{ ok: true }>(r))
-}
-
-// ── Session API ───────────────────────────────────────────────────────────────
-
-export function sessionNew(sessionId: string, title: string) {
-    return _post('/api/session/new', { sessionId, title })
-}
-
-export function sessionClear(sessionId: string, projectRoot?: string | null) {
-    return _post('/api/session/clear', {
-        sessionId,
-        ...(projectRoot ? { projectRoot } : {}),
-    })
-}
-
-export function sessionList() {
-    return apiGet<Array<{ sessionId: string; title: string; updatedAt: string }>>('/api/session/list')
 }
 
 export function fetchSessions() {
@@ -1108,109 +1034,12 @@ export function emptyTrash() {
     }).then((r) => _jsonOrThrow<{ ok: boolean; count: number }>(r))
 }
 
-// ── Todo API ──────────────────────────────────────────────────────────────────
-import type { TodoItem, TodoAnalysis, InboxNote, NoteHeatmapDay, NoteTag } from './types'
-
-export function todoList() {
-    return apiGet<TodoItem[]>('/api/todos')
-}
-
-export function todoAnalyze(content: string) {
-    return _post('/api/todos/analyze', { content }).then((r) => r.json() as Promise<TodoAnalysis>)
-}
-
-export function todoCreate(content: string, priority?: string | null, remindAt?: string | null) {
-    return _post('/api/todos', { content, priority: priority ?? undefined, remind_at: remindAt ?? undefined })
-        .then((r) => r.json() as Promise<TodoItem>)
-}
-
-export function todoUpdateStatus(id: string, status: string) {
-    return fetch(`/api/todos/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-    }).then((r) => r.json())
-}
-
-export function todoUpdate(id: string, patch: { content?: string; remind_at?: string | null; priority?: string | null }) {
-    return fetch(`/api/todos/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-    }).then((r) => r.json())
-}
-
-export function todoDelete(id: string) {
-    return fetch(`/api/todos/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        credentials: 'include',
-    }).then((r) => r.json())
-}
-
-// ── Notes (Inbox) API ─────────────────────────────────────────────────────────
-
-export function noteList(opts?: { date?: string; tag?: string }) {
-    const params = new URLSearchParams()
-    if (opts?.date) params.set('date', opts.date)
-    if (opts?.tag) params.set('tag', opts.tag)
-    const qs = params.toString() ? `?${params}` : ''
-    return apiGet<InboxNote[]>(`/api/notes${qs}`)
-}
-
-export function noteCreate(content: string, tags?: string[]) {
-    return _post('/api/notes', { content, ...(tags?.length ? { tags } : {}) })
-        .then((r) => r.json() as Promise<InboxNote>)
-}
-
-export function noteDelete(id: number) {
-    return fetch(`/api/notes/${id}`, { method: 'DELETE', credentials: 'include' }).then((r) => r.json())
-}
-
-export function noteStats() {
-    return apiGet<NoteHeatmapDay[]>('/api/notes/stats')
-}
-
-export function noteTags() {
-    return apiGet<NoteTag[]>('/api/notes/tags')
-}
-
 // ── Cron API ──────────────────────────────────────────────────────────────────
 
-import type { CronJobInfo, CronRunInfo, WorkflowDefinition, WorkflowRunInfo } from './types'
+import type { CronJobInfo, WorkflowDefinition, WorkflowRunInfo } from './types'
 
 export function cronList() {
     return apiGet<CronJobInfo[]>('/api/crons')
-}
-
-export function cronToggle(name: string, enabled: boolean) {
-    return fetch(`/api/crons/${encodeURIComponent(name)}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-    }).then((r) => r.json())
-}
-
-export function cronUpdateSchedule(name: string, schedule: string) {
-    return fetch(`/api/crons/${encodeURIComponent(name)}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ schedule }),
-    }).then((r) => r.json())
-}
-
-export function cronRuns(name: string, limit = 20) {
-    return apiGet<CronRunInfo[]>(`/api/crons/${encodeURIComponent(name)}/runs?limit=${limit}`)
-}
-
-export function cronTrigger(name: string) {
-    return fetch(`/api/crons/${encodeURIComponent(name)}/run`, {
-        method: 'POST',
-        credentials: 'include',
-    }).then((r) => r.json()) as Promise<{ status: string; summary?: string; error?: string }>
 }
 
 export interface McpServerConfig {
@@ -1285,10 +1114,6 @@ export function workflowRun(id: string, input: unknown = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input }),
     }).then((r) => _jsonOrThrow<{ ok: boolean; run: WorkflowRunInfo }>(r))
-}
-
-export function workflowRuns(id: string, limit = 20) {
-    return apiGet<{ runs: WorkflowRunInfo[] }>(`/api/workflows/${encodeURIComponent(id)}/runs?limit=${limit}`)
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1395,23 +1220,6 @@ export interface UsageRecord {
     userPrompt?: string
 }
 
-export interface ProviderStatus {
-    provider: 'google' | 'gemini-acp' | 'deepseek' | 'openai' | 'anthropic' | 'ollama'
-    ok: boolean
-    detail?: string
-    meta?: Record<string, string | number | boolean | undefined>
-}
-
-export type RoutingTier = 'simple' | 'standard' | 'complex'
-
-export interface RoutingConfigData {
-    tiers: Record<RoutingTier, string[]>
-    boundaries: { simpleMax: number; standardMax: number }
-    overrides: { toolFloor: RoutingTier; largeContextFloor: RoutingTier; largeContextThreshold: number }
-    momentum: { historySize: number; maxWeight: number; messageThreshold: number }
-    confidence: { k: number; fallbackThreshold: number }
-}
-
 export interface ModelsResponse {
     models: ModelInfo[]
     usage: MonthlyUsageSummary
@@ -1422,29 +1230,6 @@ export interface ModelsResponse {
 export function fetchModels(month?: string): Promise<ModelsResponse> {
     const qs = month ? `?month=${encodeURIComponent(month)}` : ''
     return apiGet<ModelsResponse>(`/api/models${qs}`)
-}
-
-export async function saveRouting(partial: Partial<RoutingConfigData>): Promise<{ ok: boolean; routing: RoutingConfigData }> {
-    const res = await fetch('/api/models/routing', {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(partial),
-    })
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(data.error ?? `HTTP ${res.status}`)
-    }
-    return res.json()
-}
-
-export async function resetRouting(): Promise<{ ok: boolean; routing: RoutingConfigData }> {
-    const res = await _post('/api/models/routing/reset')
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(data.error ?? `HTTP ${res.status}`)
-    }
-    return res.json()
 }
 
 export interface SessionMessage {

@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
-    "@types/diff": "^7.0.2",
-    "@uiw/react-md-editor": "^4.1.0",
     "clsx": "^2.1.1",
     "diff": "^9.0.0",
     "highlight.js": "^11.11.1",
@@ -39,7 +37,6 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
     "tailwindcss": "^4.1.4",
     "typescript": "~5.8.3",
     "vite": "^6.3.0"

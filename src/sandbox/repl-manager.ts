@@ -14,7 +14,6 @@
 
 import { ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { log } from '../utils/logger.js';
 import {
     SANDBOX_CPUS, SANDBOX_IMAGE, SANDBOX_MAX_TIMEOUT_MS, SANDBOX_MEMORY_MB,
     SANDBOX_MODE, SANDBOX_NETWORK, SANDBOX_PIDS,
@@ -56,7 +55,6 @@ interface ReplSession {
 }
 
 const SESSIONS = new Map<string, ReplSession>();
-const SESSION_IDLE_TIMEOUT_MS = 30 * 60_000;
 const DEFAULT_REPL_TIMEOUT_MS = 60_000;
 
 function sessionKey(userId: string, sessionId: string, lang: ReplLanguage): string {
@@ -268,32 +266,6 @@ async function closeSession(session: ReplSession): Promise<void> {
     if (session.backend === 'docker' && session.containerName) {
         await killDockerContainer(session.containerName);
     }
-}
-
-/** Public: close any sessions belonging to a (userId, sessionId) pair. */
-export async function closeRepl(userId: string, sessionId: string): Promise<void> {
-    const prefix = `${userId}:${sessionId}:`;
-    await Promise.all(
-        [...SESSIONS.values()]
-            .filter(s => s.key.startsWith(prefix))
-            .map(closeSession),
-    );
-}
-
-/** Idle-session sweeper — cancelled by the caller; returns a stop fn. */
-export function startIdleSweeper(): () => void {
-    const h = setInterval(() => {
-        const now = Date.now();
-        for (const s of [...SESSIONS.values()]) {
-            if (!s.busy && now - s.lastUsedAt > SESSION_IDLE_TIMEOUT_MS) {
-                log.info('Sandbox', `Closing idle REPL session ${s.key}`);
-                void closeSession(s);
-            }
-        }
-    }, 60_000);
-    // Don't hold the event loop open.
-    if (typeof h.unref === 'function') h.unref();
-    return () => clearInterval(h);
 }
 
 /** For tests: number of live sessions. */

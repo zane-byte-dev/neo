@@ -41,7 +41,7 @@ interface Pending {
 const _pending = new Map<string, Pending>();
 
 /** Default wait time before auto-deny. */
-export const DEFAULT_CONFIRM_TIMEOUT_MS = 60_000;
+const DEFAULT_CONFIRM_TIMEOUT_MS = 60_000;
 
 export interface CreateConfirmOptions {
     timeoutMs?: number;

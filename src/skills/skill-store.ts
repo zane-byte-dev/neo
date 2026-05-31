@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { parseSkillFile } from './skill-parser.js';
 import type { SkillDefinition } from './skill-parser.js';
 
-export const SKILL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+const SKILL_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
 const FRONTMATTER_RE = /^(---\r?\n)([\s\S]*?)(\r?\n---(?:\r?\n|$))([\s\S]*)$/;
 
@@ -30,11 +30,11 @@ export function isValidSkillName(name: string): boolean {
     return SKILL_NAME_RE.test(name);
 }
 
-export function skillsDirPath(stateDir: string): string {
+function skillsDirPath(stateDir: string): string {
     return join(stateDir, 'skills');
 }
 
-export function skillFilePath(stateDir: string, name: string): string {
+function skillFilePath(stateDir: string, name: string): string {
     return join(skillsDirPath(stateDir), `${name}.skill.md`);
 }
 

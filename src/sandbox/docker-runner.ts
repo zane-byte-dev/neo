@@ -36,17 +36,6 @@ export async function isDockerAvailable(): Promise<boolean> {
     return dockerAvailable;
 }
 
-/** For tests: force a value (without hitting the docker CLI). */
-export function _setDockerAvailableForTest(value: boolean | undefined): void {
-    if (value === undefined) {
-        dockerChecked = false;
-        dockerAvailable = false;
-    } else {
-        dockerChecked = true;
-        dockerAvailable = value;
-    }
-}
-
 export function buildDockerRunArgs(opts: { workDir: string; readonly: boolean; image?: string; }): string[] {
     const mountFlag = opts.readonly ? 'ro' : 'rw';
     const uid = typeof process.getuid === 'function' ? process.getuid() : 0;

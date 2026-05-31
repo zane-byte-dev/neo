@@ -11,7 +11,7 @@ export function escapeHtml(s: string): string {
 }
 
 /** Convert inline Markdown formatting to Telegram HTML */
-export function inlineFormat(text: string): string {
+function inlineFormat(text: string): string {
     // Escape HTML entities first, then apply formatting
     let s = escapeHtml(text);
 

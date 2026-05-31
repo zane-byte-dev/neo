@@ -557,17 +557,6 @@ export function nbListNotebooksProper(workDir: string): string[] {
         .sort();
 }
 
-/** Delete an entire notebook folder (workDir + stateDir metadata). */
-export function nbDeleteNotebook(workDir: string, stateDir: string, name: string): boolean {
-    if (!name || name.startsWith('.') || name.includes('/') || name.includes('\\')) return false;
-    const contentDir = join(workDir, 'notebooks', name);
-    const metaDir = join(stateDir, 'notebooks', name);
-    if (!existsSync(contentDir)) return false;
-    rmSync(contentDir, { recursive: true, force: true });
-    if (existsSync(metaDir)) rmSync(metaDir, { recursive: true, force: true });
-    return true;
-}
-
 /** Rename a notebook folder (workDir + stateDir metadata). */
 export function nbRenameNotebook(workDir: string, stateDir: string, name: string, newName: string): boolean {
     if (!name || !newName) return false;

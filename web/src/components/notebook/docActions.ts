@@ -28,8 +28,6 @@ export interface DocInsightAction {
     buildPrompt: (title: string, content: string) => string
 }
 
-export type DocAction = DocEditAction | DocInsightAction
-
 // ── Import icons lazily to avoid circular deps ───────────────────────────────
 // Consumers are responsible for importing icons and passing them if needed;
 // here we export plain action metadata (no JSX).

@@ -141,23 +141,3 @@ export function diffStats(ops: DiffOp[], hunks: Hunk[]): DiffStats {
     }
     return { hunks: hunks.length, added, deleted }
 }
-
-// ── AI output post-processing ────────────────────────────────────────────────
-
-/**
- * Strip common AI wrapper patterns from a doc-edit response,
- * returning clean document content only.
- */
-export function extractDocContent(raw: string): string {
-    let text = raw.trim()
-
-    // Remove fenced code blocks (```markdown ... ``` or just ``` ... ```)
-    const fenced = text.match(/^```(?:markdown|md|text|plaintext)?\n?([\s\S]*?)\n?```\s*$/i)
-    if (fenced) return fenced[1].trim()
-
-    // Strip common Chinese AI preambles (one line at a time from the top)
-    const preamble = /^(以下是|下面是|这是|优化后的|格式化后的|翻译后的|改写后的)[^\n]*[:：]\s*/
-    text = text.replace(preamble, '')
-
-    return text.trim()
-}
