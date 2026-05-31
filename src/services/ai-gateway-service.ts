@@ -1,8 +1,8 @@
 import { generateText, streamText, type FinishReason, type LanguageModelUsage, type ModelMessage, type ToolSet } from 'ai';
 import { MODEL_ALIASES, GENERATE_TIMEOUT_MS, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
-import { appendUsageRecord, estimateCost } from '../llm/cost.js';
 import { createLanguageModel, resolveModel } from '../llm/model-factory.js';
 import { GatewayError, toGatewayError } from '../llm/gateway/errors.js';
+import { extractUsageNumbers, recordUsage } from '../llm/invoke.js';
 import {
     encodeOpenAIChatCompletion,
     encodeOpenAIChunk,
@@ -18,7 +18,6 @@ import {
     type AnthropicContentBlock,
     type AnthropicMessagesRequest,
 } from '../llm/gateway/anthropic.js';
-import { recordTokenUsage } from '../utils/token-tracker.js';
 import { generateId } from '../utils/id-generator.js';
 import { userGetStateDir, userGetWorkspaceDir } from './user-service.js';
 
@@ -30,19 +29,6 @@ interface GatewayCallContext {
 interface UserDirs {
     workDir: string;
     stateDir: string;
-}
-
-interface UsageMeta {
-    userId: string;
-    stateDir: string;
-    model: string;
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-    startedAt: number;
-    caller: string;
-    system?: string;
-    promptText: string;
 }
 
 function getUserDirs(userId: string): UserDirs {
@@ -81,42 +67,6 @@ function selectModel(requestedModelRaw: string): { requestedModel: string; model
         throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModelRaw}`);
     }
     return { requestedModel, modelId: resolveModel('deepseek') };
-}
-
-function usageNumbers(usage: LanguageModelUsage | undefined): { promptTokens: number; completionTokens: number; totalTokens: number } {
-    const promptTokens = usage?.inputTokens ?? 0;
-    const completionTokens = usage?.outputTokens ?? 0;
-    const totalTokens = usage?.totalTokens ?? (promptTokens + completionTokens);
-    return { promptTokens, completionTokens, totalTokens };
-}
-
-async function recordGatewayUsage(meta: UsageMeta): Promise<void> {
-    recordTokenUsage({
-        ts: new Date().toISOString(),
-        model: meta.model,
-        promptTokens: meta.promptTokens,
-        completionTokens: meta.completionTokens,
-        totalTokens: meta.totalTokens,
-        caller: meta.caller,
-    });
-    await appendUsageRecord({
-        timestamp: Date.now(),
-        userId: meta.userId,
-        model: meta.model,
-        tier: 'standard',
-        score: 0,
-        confidence: 1,
-        reason: 'fixed',
-        promptTokens: meta.promptTokens,
-        completionTokens: meta.completionTokens,
-        totalTokens: meta.totalTokens,
-        estimatedCost: estimateCost(meta.model, meta.promptTokens, meta.completionTokens),
-        durationMs: Date.now() - meta.startedAt,
-        fallbackUsed: false,
-        caller: meta.caller,
-        systemPrompt: meta.system,
-        userPrompt: meta.promptText,
-    }, meta.stateDir).catch(() => { /* never crash over tracking */ });
 }
 
 async function generateWithModel(args: {
@@ -210,16 +160,16 @@ export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: G
     const { modelId } = selectModel(normalized.model);
     const startedAt = Date.now();
     const result = await generateWithModel({ ...normalized, modelId, abortSignal: ctx.abortSignal });
-    const usage = usageNumbers(result.usage);
-    await recordGatewayUsage({
+    const usageNums = extractUsageNumbers(result.usage);
+    await recordUsage({
         userId: ctx.userId,
         stateDir: dirs.stateDir,
         model: modelId,
-        ...usage,
+        ...usageNums,
         startedAt,
         caller: 'ai-gateway:openai',
-        system: normalized.system,
-        promptText: normalized.promptText,
+        systemPrompt: normalized.system,
+        userPrompt: normalized.promptText,
     });
     return encodeOpenAIChatCompletion({
         id: `chatcmpl-${generateId()}`,
@@ -227,9 +177,9 @@ export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: G
         content: result.text,
         finishReason: result.finishReason,
         usage: {
-            prompt_tokens: usage.promptTokens,
-            completion_tokens: usage.completionTokens,
-            total_tokens: usage.totalTokens,
+            prompt_tokens: usageNums.promptTokens,
+            completion_tokens: usageNums.completionTokens,
+            total_tokens: usageNums.totalTokens,
         },
     });
 }
@@ -259,18 +209,18 @@ export async function* streamOpenAIChatCompletion(body: OpenAIChatRequest, ctx: 
             if (part.type === 'error') throw part.error;
         }
         const finishReason = await result.finishReason;
-        const usage = usageNumbers(await result.totalUsage);
+        const usageNums = extractUsageNumbers(await result.totalUsage);
         yield encodeOpenAIChunk({ id, model: modelId, finishReason });
         yield encodeOpenAIDone();
-        await recordGatewayUsage({
+        await recordUsage({
             userId: ctx.userId,
             stateDir: dirs.stateDir,
             model: modelId,
-            ...usage,
+            ...usageNums,
             startedAt,
             caller: 'ai-gateway:openai',
-            system: normalized.system,
-            promptText: normalized.promptText,
+            systemPrompt: normalized.system,
+            userPrompt: normalized.promptText,
         });
     } catch (err) {
         throw toGatewayError(err);
@@ -290,23 +240,23 @@ export async function createAnthropicMessage(body: AnthropicMessagesRequest, ctx
     const { modelId } = selectModel(normalized.model);
     const startedAt = Date.now();
     const result = await generateWithModel({ ...normalized, modelId, abortSignal: ctx.abortSignal });
-    const usage = usageNumbers(result.usage);
-    await recordGatewayUsage({
+    const usageNums = extractUsageNumbers(result.usage);
+    await recordUsage({
         userId: ctx.userId,
         stateDir: dirs.stateDir,
         model: modelId,
-        ...usage,
+        ...usageNums,
         startedAt,
         caller: 'ai-gateway:anthropic',
-        system: normalized.system,
-        promptText: normalized.promptText,
+        systemPrompt: normalized.system,
+        userPrompt: normalized.promptText,
     });
     return encodeAnthropicMessage({
         id: `msg_${generateId()}`,
         model: modelId,
         content: anthropicContentFromParts(result.content, result.text),
         stopReason: mapAnthropicStopReason(result.finishReason),
-        usage: { input_tokens: usage.promptTokens, output_tokens: usage.completionTokens },
+        usage: { input_tokens: usageNums.promptTokens, output_tokens: usageNums.completionTokens },
     });
 }
 
@@ -359,18 +309,18 @@ export async function* streamAnthropicMessage(body: AnthropicMessagesRequest, ct
         }
         if (textBlockOpen) yield encodeAnthropicEvent('content_block_stop', { type: 'content_block_stop', index: blockIndex });
         const finishReason = await result.finishReason;
-        const usage = usageNumbers(await result.totalUsage);
-        yield encodeAnthropicEvent('message_delta', { type: 'message_delta', delta: { stop_reason: mapAnthropicStopReason(finishReason), stop_sequence: null }, usage: { output_tokens: usage.completionTokens } });
+        const usageNums = extractUsageNumbers(await result.totalUsage);
+        yield encodeAnthropicEvent('message_delta', { type: 'message_delta', delta: { stop_reason: mapAnthropicStopReason(finishReason), stop_sequence: null }, usage: { output_tokens: usageNums.completionTokens } });
         yield encodeAnthropicEvent('message_stop', { type: 'message_stop' });
-        await recordGatewayUsage({
+        await recordUsage({
             userId: ctx.userId,
             stateDir: dirs.stateDir,
             model: modelId,
-            ...usage,
+            ...usageNums,
             startedAt,
             caller: 'ai-gateway:anthropic',
-            system: normalized.system,
-            promptText: normalized.promptText,
+            systemPrompt: normalized.system,
+            userPrompt: normalized.promptText,
         });
     } catch (err) {
         throw toGatewayError(err);

@@ -241,11 +241,7 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
     const effectiveUserModel = rawModel && rawModel !== 'auto'
         ? rawModel
         : userCtx.preferences.defaultModel ?? rawModel;
-    const route = resolveSmartRoute({
-        userModel: effectiveUserModel,
-        hasTools: true,
-        message,
-    });
+    const route = resolveSmartRoute({ userModel: effectiveUserModel });
     const model = route.model;
 
     log.info(MODULE, 'Turn start', {
@@ -253,9 +249,6 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         sessionId,
         runId,
         model,
-        tier: route.tier,
-        score: route.score,
-        confidence: route.confidence,
         messageLen: message.length,
         preview: message.slice(0, 100),
     });
@@ -264,12 +257,7 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
     await appendRunEventSafe(stateDir, runId, 'run_started', {
         startedAt: new Date().toISOString(),
     });
-    await appendRunEventSafe(stateDir, runId, 'route_resolved', {
-        model,
-        ...(route.tier !== undefined && { tier: route.tier }),
-        ...(route.score !== undefined && { score: route.score }),
-        ...(route.confidence !== undefined && { confidence: route.confidence }),
-    });
+    await appendRunEventSafe(stateDir, runId, 'route_resolved', { model });
 
     const session = await sessionGet(sessionId, userId) ?? await sessionCreate(userId, sessionId);
     const historyRows = await messageList(sessionId, userId);

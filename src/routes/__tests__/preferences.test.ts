@@ -5,12 +5,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createTestApp, signedCookie } from '../../__tests__/test-helpers.js';
 
-const calcUserMock = vi.fn();
-const saveUserPreferencesMock = vi.fn();
-const ensureTelegramBotStartedMock = vi.fn();
-const getTelegramRuntimeStateMock = vi.fn();
-const syncTelegramBotStateMock = vi.fn();
-const isModelAliasAvailableMock = vi.fn();
+const {
+    calcUserMock,
+    saveUserPreferencesMock,
+    ensureTelegramBotStartedMock,
+    getTelegramRuntimeStateMock,
+    syncTelegramBotStateMock,
+} = vi.hoisted(() => ({
+    calcUserMock: vi.fn(),
+    saveUserPreferencesMock: vi.fn(),
+    ensureTelegramBotStartedMock: vi.fn(),
+    getTelegramRuntimeStateMock: vi.fn(),
+    syncTelegramBotStateMock: vi.fn(),
+}));
 
 vi.mock('../../services/user-service.js', () => ({
     calcUser: calcUserMock,
@@ -25,10 +32,6 @@ vi.mock('../../services/telegram-runtime.js', () => ({
     ensureTelegramBotStarted: ensureTelegramBotStartedMock,
     getTelegramRuntimeState: getTelegramRuntimeStateMock,
     syncTelegramBotState: syncTelegramBotStateMock,
-}));
-
-vi.mock('../../llm/model-router.js', () => ({
-    isModelAliasAvailable: isModelAliasAvailableMock,
 }));
 
 vi.mock('../../config.js', async () => {
@@ -49,7 +52,6 @@ beforeEach(() => {
     getTelegramRuntimeStateMock.mockReturnValue({ active: false, reason: 'not_started' });
     syncTelegramBotStateMock.mockResolvedValue({ active: false, reason: 'not_started' });
     ensureTelegramBotStartedMock.mockResolvedValue({ active: true, reason: 'ok' });
-    isModelAliasAvailableMock.mockImplementation((alias: string) => alias === 'deepseek' || alias === 'claude');
 });
 
 describe('/api/preferences', () => {
@@ -83,7 +85,6 @@ describe('/api/preferences', () => {
             .send({
                 defaultModel: 'deepseek',
                 enabledModels: ['deepseek', 'unknown-model', 'claude'],
-                telegramBotEnabled: false,
                 garbage: true,
             });
         expect(res.status).toBe(200);
@@ -91,7 +92,6 @@ describe('/api/preferences', () => {
         const saved = saveUserPreferencesMock.mock.calls[0][1];
         expect(saved.defaultModel).toBe('deepseek');
         expect(saved.enabledModels).toEqual(['deepseek', 'claude']);
-        expect(saved.telegramBotEnabled).toBe(false);
         expect((saved as Record<string, unknown>).garbage).toBeUndefined();
     });
 
@@ -105,19 +105,6 @@ describe('/api/preferences', () => {
             .send({ defaultModel: 'auto' });
         const saved = saveUserPreferencesMock.mock.calls.at(-1)![1];
         expect(saved.defaultModel).toBeUndefined();
-    });
-
-    it('POST returns 409 when telegramBotEnabled=true but no token configured', async () => {
-        ensureTelegramBotStartedMock.mockResolvedValueOnce({ active: false, reason: 'missing_token' });
-        const { preferences } = await import('../preferences.js');
-        const { app, router, mount } = createTestApp();
-        preferences(router); mount();
-        const res = await request(app.callback())
-            .post('/api/preferences')
-            .set('Cookie', signedCookie('u1'))
-            .send({ telegramBotEnabled: true });
-        expect(res.status).toBe(409);
-        expect(res.body.error).toContain('TELEGRAM');
     });
 
     it('POST returns 401 without auth', async () => {

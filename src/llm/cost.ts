@@ -16,17 +16,12 @@ export interface UsageRecord {
     timestamp: number;
     userId: string;
     model: string;
-    tier: string;
-    score: number;
-    confidence: number;
     reason: string;
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
     estimatedCost: number;
     durationMs: number;
-    fallbackUsed: boolean;
-    originalModel?: string;
     sessionId?: string;
     caller?: string;
     systemPrompt?: string;

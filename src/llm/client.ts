@@ -16,7 +16,7 @@ import { setupLogger, log } from '../utils/logger.js';
 import { recordTokenUsage } from '../utils/token-tracker.js';
 import { GENERATE_TIMEOUT_MS, MAX_SUBAGENT_STEPS, MAX_TOOL_ITERATIONS, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
 import { buildAiTools } from './ai-tools.js';
-import { appendUsageRecord, estimateCost } from './cost.js';
+import { extractUsageNumbers, recordUsage } from './invoke.js';
 import { setToolResult, smartTruncate } from '../utils/tool-result-cache.js';
 import { generateId } from '../utils/id-generator.js';
 import type { SmartRouteDecision } from './model-router.js';
@@ -364,45 +364,21 @@ export class LLMClient {
             // Record token usage
             Promise.resolve(result.usage).then((usage) => {
                 if (usage) {
-                    const promptTokens = usage.inputTokens ?? 0;
-                    const completionTokens = usage.outputTokens ?? 0;
-                    const totalTokens = usage.totalTokens ?? (promptTokens + completionTokens);
-                    recordTokenUsage({
-                        ts: new Date().toISOString(),
-                        model: effectiveModel,
-                        promptTokens,
-                        completionTokens,
-                        totalTokens,
-                        caller: 'chatWithContextStreaming',
-                    });
-
-                    let actualUserPrompt: string;
-                    if (useMessages) {
-                        const userParts = messages
-                            .filter(m => m.role === 'user')
-                            .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
-                        actualUserPrompt = userParts.join('\n---\n');
-                    } else {
-                        actualUserPrompt = prompt ?? '';
-                    }
-                    void appendUsageRecord({
-                        timestamp: Date.now(),
+                    const actualUserPrompt = useMessages
+                        ? messages.filter(m => m.role === 'user').map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n---\n')
+                        : (prompt ?? '');
+                    void recordUsage({
                         userId: context.userId,
+                        stateDir: context.stateDir ?? context.workDir,
                         model: effectiveModel,
-                        tier: 'standard',
-                        score: 0,
-                        confidence: 1,
-                        reason: route?.reason ?? 'fixed',
-                        promptTokens,
-                        completionTokens,
-                        totalTokens,
-                        estimatedCost: estimateCost(effectiveModel, promptTokens, completionTokens),
-                        durationMs: Date.now() - startedAt,
-                        fallbackUsed: false,
-                        sessionId: context.sessionId,
+                        ...extractUsageNumbers(usage),
+                        startedAt,
+                        caller: 'chatWithContextStreaming',
                         systemPrompt: systemInstruction || undefined,
                         userPrompt: actualUserPrompt || undefined,
-                    }, context.stateDir ?? context.workDir).catch(() => { /* never crash over tracking */ });
+                        sessionId: context.sessionId,
+                        reason: route?.reason ?? 'fixed',
+                    });
                 }
             }).catch(() => { /* never crash over tracking */ });
 
