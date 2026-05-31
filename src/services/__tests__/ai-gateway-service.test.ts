@@ -25,7 +25,7 @@ vi.mock('../../utils/token-tracker.js', () => ({
 vi.mock('../../llm/model-factory.js', () => ({
     createLanguageModel: vi.fn(() => ({ provider: 'mock', modelId: 'mock' })),
     isAcpModel: vi.fn((modelId: string) => modelId.startsWith('acp/')),
-    resolveModel: vi.fn((model: string) => model === 'gemma' ? 'ollama/gemma4:e4b' : model),
+    resolveModel: vi.fn((model: string) => model === 'deepseek' ? 'deepseek-chat' : model),
 }));
 
 function usage(inputTokens = 3, outputTokens = 4) {
@@ -63,9 +63,9 @@ describe('ai gateway service', () => {
         const response = await getGatewayModels() as { data: Array<{ id: string; created: number; owned_by: string; x_neo: { modelId: string; alias?: string } }> };
 
         expect(response.data).toEqual(expect.arrayContaining([
-            expect.objectContaining({ id: 'auto', created: 1, owned_by: 'neo' }),
-            expect.objectContaining({ id: 'gemma', created: 1, owned_by: 'ollama', x_neo: expect.objectContaining({ modelId: 'ollama/gemma4:e4b', alias: 'gemma' }) }),
-            expect.objectContaining({ id: 'ollama/gemma4:e4b', created: 1, owned_by: 'ollama', x_neo: expect.objectContaining({ modelId: 'ollama/gemma4:e4b', alias: 'gemma' }) }),
+            expect.objectContaining({ id: 'deepseek', created: 1, owned_by: 'deepseek', x_neo: expect.objectContaining({ modelId: 'deepseek-chat' }) }),
+            expect.objectContaining({ id: 'deepseek-chat', created: 1, owned_by: 'deepseek', x_neo: expect.objectContaining({ modelId: 'deepseek-chat' }) }),
+            expect.objectContaining({ id: 'deepseek-reasoner', created: 1, owned_by: 'deepseek', x_neo: expect.objectContaining({ modelId: 'deepseek-reasoner' }) }),
         ]));
         // claude-opus-4.7 should NOT appear without claudeCompat flag
         expect(response.data.map((m) => m.id)).not.toContain('claude-opus-4.7');
@@ -80,7 +80,7 @@ describe('ai gateway service', () => {
         expect(entry).toEqual(expect.objectContaining({
             id: 'claude-opus-4.7',
             owned_by: 'anthropic',
-            x_neo: expect.objectContaining({ modelId: 'auto', virtual: true }),
+            x_neo: expect.objectContaining({ modelId: 'deepseek', virtual: true }),
         }));
     });
 
@@ -95,17 +95,17 @@ describe('ai gateway service', () => {
         const { createOpenAIChatCompletion } = await import('../ai-gateway-service.js');
 
         const response = await createOpenAIChatCompletion({
-            model: 'gemma',
+            model: 'deepseek',
             messages: [{ role: 'user', content: 'hi' }],
         }, { userId: 'u1' }) as { model: string; choices: Array<{ message: { content: string } }> };
 
-        expect(response.model).toBe('ollama/gemma4:e4b');
+        expect(response.model).toBe('deepseek-chat');
         expect(response.choices[0].message.content).toBe('hello');
         expect(mocks.recordTokenUsage).toHaveBeenCalledWith(expect.objectContaining({ caller: 'ai-gateway:openai' }));
 
         const history = await fs.readFile(join(workDir, 'usage.jsonl'), 'utf8');
         expect(history).toContain('"caller":"ai-gateway:openai"');
-        expect(history).toContain('"model":"ollama/gemma4:e4b"');
+        expect(history).toContain('"model":"deepseek-chat"');
     });
 
     it('returns Anthropic tool_use blocks without executing tools', async () => {
@@ -119,7 +119,7 @@ describe('ai gateway service', () => {
         const { createAnthropicMessage } = await import('../ai-gateway-service.js');
 
         const response = await createAnthropicMessage({
-            model: 'gemma',
+            model: 'deepseek',
             tools: [{ name: 'read_file', input_schema: { type: 'object', properties: { path: { type: 'string' } } } }],
             messages: [{ role: 'user', content: 'read package.json' }],
         }, { userId: 'u1' }) as { content: Array<{ type: string; id?: string; name?: string; input?: unknown }> };
