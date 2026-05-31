@@ -535,6 +535,7 @@ const HistoryTable: React.FC<{ records: UsageRecord[]; t: T; onViewDetail: (r: U
                             <th className="px-3 py-2 text-right font-medium">{t('colCost')}</th>
                             <th className="px-3 py-2 text-right font-medium">{t('colDuration')}</th>
                             <th className="px-3 py-2 text-left font-medium">{t('colReason')}</th>
+                            <th className="px-3 py-2 text-left font-medium">{t('colCaller')}</th>
                             <th className="px-3 py-2 text-center font-medium w-16"></th>
                         </tr>
                     </thead>
@@ -558,6 +559,17 @@ const HistoryTable: React.FC<{ records: UsageRecord[]; t: T; onViewDetail: (r: U
                                 <td className="px-3 py-2 text-right font-mono text-text-secondary">{formatCost(r.estimatedCost, t)}</td>
                                 <td className="px-3 py-2 text-right font-mono text-text-secondary">{r.durationMs > 0 ? `${(r.durationMs / 1000).toFixed(1)}s` : '-'}</td>
                                 <td className="px-3 py-2 text-text-tertiary">{r.reason}</td>
+                                <td className="px-3 py-2">
+                                    {r.caller?.startsWith('ai-gateway') ? (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                            {t('callerGateway')}
+                                        </span>
+                                    ) : r.caller ? (
+                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-fill text-text-tertiary">
+                                            {t('callerChat')}
+                                        </span>
+                                    ) : null}
+                                </td>
                                 <td className="px-3 py-2 text-center">
                                     <button
                                         onClick={() => onViewDetail(r)}
@@ -629,6 +641,7 @@ const DetailModal: React.FC<{
                             [t('colScore'), record.score.toFixed(3)],
                             ['Confidence', record.confidence.toFixed(2)],
                             [t('colReason'), record.reason],
+                            [t('colCaller'), record.caller ?? '-'],
                             [t('promptTokens'), formatTokens(record.promptTokens)],
                             [t('completionTokens'), formatTokens(record.completionTokens)],
                             [t('totalTokens'), formatTokens(record.totalTokens)],

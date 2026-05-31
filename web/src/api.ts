@@ -1390,6 +1390,7 @@ export interface UsageRecord {
     fallbackUsed: boolean
     originalModel?: string
     sessionId?: string
+    caller?: string
     systemPrompt?: string
     userPrompt?: string
 }
