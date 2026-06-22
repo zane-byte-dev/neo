@@ -1,5 +1,7 @@
 # GitHub Copilot AI Loop
 
+> **注意**：实际约束以 `.github/prompts/` 下的 prompt 文件为准，本文档仅作为流程参考和项目知识保留。
+
 > Neo 的第一版 AI 工作流面向 GitHub Copilot 落地：用仓库文档作为角色交接物，让产品、开发、测试在同一个代码库里形成可追踪闭环。
 
 ## 目标
