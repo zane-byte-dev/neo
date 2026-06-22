@@ -162,7 +162,7 @@ export class LLMClient {
         log.info('AgentRuntime', `Initialized (AI SDK). Model: ${this.modelId}`);
     }
 
-    private async buildPrompt(message: string, workDir: string, stateDir: string, history?: string, sessionId?: string): Promise<string> {
+    private async buildPrompt(message: string, workDir: string, stateDir: string, history?: string, sessionId?: string, memoryMode?: 'off' | 'read' | 'read-write'): Promise<string> {
         const now = new Date().toLocaleString('zh-CN');
         let prompt = `[Runtime Context]\n- Current Time: ${now}\n`;
 
@@ -176,19 +176,22 @@ export class LLMClient {
             }
         } catch { /* NOW.md not found */ }
 
-        // Inject relevant memory recall hits (episodic + semantic)
-        try {
-            const hits = await recall(workDir, message, {
-                topK: 5,
-                budgetTokens: 1200,
-                stateDir,
-                sessionId,
-            });
-            const rendered = renderHits(hits);
-            if (rendered) {
-                prompt += `\n[Relevant Memory]\n${rendered}\n`;
-            }
-        } catch { /* memory recall is best-effort */ }
+        // Inject relevant memory recall hits (episodic + semantic).
+        // Skipped entirely when the active profile sets memory: 'off'.
+        if (memoryMode !== 'off') {
+            try {
+                const hits = await recall(workDir, message, {
+                    topK: 5,
+                    budgetTokens: 1200,
+                    stateDir,
+                    sessionId,
+                });
+                const rendered = renderHits(hits);
+                if (rendered) {
+                    prompt += `\n[Relevant Memory]\n${rendered}\n`;
+                }
+            } catch { /* memory recall is best-effort */ }
+        }
 
         if (history?.trim()) {
             prompt += `\n[Previous Conversation History]\n${history}\n`;
@@ -228,7 +231,7 @@ export class LLMClient {
         const messages: ModelMessage[] = [];
 
         if (useMessages) {
-            const runtimePrompt = await this.buildPrompt(message, workDir, stateDir, undefined, context.sessionId);
+            const runtimePrompt = await this.buildPrompt(message, workDir, stateDir, undefined, context.sessionId, context.profile?.memory);
             for (const msg of conversationHistory as Array<{ role: string; content: string }>) {
                 messages.push({
                     role: msg.role === 'assistant' ? 'assistant' : 'user',
@@ -248,7 +251,7 @@ export class LLMClient {
             }
         } else {
             const historyStr = typeof conversationHistory === 'string' ? conversationHistory : '';
-            prompt = await this.buildPrompt(message, workDir, stateDir, historyStr || undefined, context.sessionId);
+            prompt = await this.buildPrompt(message, workDir, stateDir, historyStr || undefined, context.sessionId, context.profile?.memory);
         }
 
         const startedAt = Date.now();

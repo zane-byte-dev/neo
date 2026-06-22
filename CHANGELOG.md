@@ -8,6 +8,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Added
 
+- **Agent Profiles MVP**：新增声明式 `AgentProfile`，可按入口（web-chat / telegram / cron / webhook / workflow 等）或显式请求选择不同的能力与行为边界——工具 allow/deny 与权限层级上限、模型覆盖、人格注入、记忆策略（`off` / `read` / `read-write`）。内置 `default`（不做任何约束，保持现状）、`research`（只读）、`coding`（禁危险 shell）三个 profile，可通过 `LocalConfig.PROFILES` / `LocalConfig.ENTRYPOINT_PROFILES`（或同名环境变量）覆盖与绑定。详见 [user-guide/AGENT_PROFILES.md](docs/user-guide/AGENT_PROFILES.md)。
 - **Local AI Gateway MVP**：新增 `/v1/models`、OpenAI-compatible `/v1/chat/completions` 和 Anthropic-compatible `/v1/messages`，支持 Settings / Models 中一键开启、生成 / 重置 per-user gateway Bearer token、文本非流式 / 流式调用、模型 alias / `auto` 路由、usage/cost 记录，以及 Anthropic `tool_use` / `tool_result` 协议透传。
 - **Local AI Gateway model discovery**：`/v1/models` 现在同时返回 Neo alias 和对应 provider model id，减少外部客户端把短 alias 过滤成“无可用模型”的情况。
 - **Skill 搜索**：Settings / Skills 面板新增搜索框，可按技能名、描述、标签实时过滤，搜索无结果时显示空状态提示。

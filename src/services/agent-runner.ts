@@ -18,6 +18,8 @@
 import { LLMClient } from '../llm/client.js';
 import type { StreamChunk, ToolContext } from '../llm/types.js';
 import { resolveSmartRoute } from '../llm/model-router.js';
+import { resolveAgentProfile } from '../agent/profiles/index.js';
+import type { ResolvedProfile } from '../agent/profiles/types.js';
 import { rememberTurn } from '../memory/index.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
@@ -84,6 +86,8 @@ export interface AgentRunOptions {
     entrypoint?: RunEntrypoint;
     /** Triggering event type (default: `user_message`). */
     triggerType?: RunTriggerType;
+    /** Optional agent profile id to apply (overrides entrypoint binding). */
+    profile?: string;
     /** Optional notebook id when the run originates from a notebook. */
     notebook?: string;
     /** Optional parent run id for nested / forked executions. */
@@ -172,6 +176,8 @@ interface PreparedTurnContext {
     projectRoot: string;
     /** System instruction with optional {projectRoot}/.neo/AGENTS.md appended. */
     systemInstruction: string;
+    /** Effective agent profile resolved for this turn. */
+    profile: ResolvedProfile;
 }
 
 function normalizeRunOptions(opts: AgentRunOptions): NormalizedRunOptions {
@@ -199,6 +205,7 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         metadata,
         persistUserMessage,
         onRunCreated,
+        profile: requestedProfileId,
     } = options;
 
     const userCtx = await calcUser(userId);
@@ -238,9 +245,15 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
     }
     onRunCreated?.(runId);
 
-    const effectiveUserModel = rawModel && rawModel !== 'auto'
+    // Resolve the effective agent profile for this turn (explicit request >
+    // entrypoint binding > default). The `default` profile is unconstrained,
+    // so absent config reproduces current behaviour.
+    const profile = resolveAgentProfile(entrypoint, requestedProfileId);
+
+    const userPickedModel = !!rawModel && rawModel !== 'auto';
+    const effectiveUserModel = userPickedModel
         ? rawModel
-        : userCtx.preferences.defaultModel ?? rawModel;
+        : profile.model ?? userCtx.preferences.defaultModel ?? rawModel;
     const route = resolveSmartRoute({ userModel: effectiveUserModel });
     const model = route.model;
 
@@ -320,6 +333,14 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
             : notebookRules;
     }
 
+    // Inject profile personality (if any) as the final system-prompt block.
+    if (profile.personality && profile.personality.trim()) {
+        const personalityBlock = `[Agent Profile — ${profile.name}]\n${profile.personality.trim()}`;
+        systemInstruction = systemInstruction
+            ? `${systemInstruction}\n\n${personalityBlock}`
+            : personalityBlock;
+    }
+
     return {
         t0,
         options,
@@ -332,6 +353,7 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         history,
         projectRoot,
         systemInstruction,
+        profile,
     };
 }
 
@@ -348,6 +370,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         history,
         projectRoot,
         systemInstruction,
+        profile,
     } = prepared;
     const {
         userId,
@@ -508,6 +531,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         ...(wrappedVideo && { videoCallback: wrappedVideo }),
         ...(wrappedTodo && { todoCallback: wrappedTodo }),
         ...(confirmCallback && { confirmCallback }),
+        profile,
     };
 
     let fullResponse = '';
@@ -601,13 +625,16 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                 contentLength: output.length,
                 ...(previewText(output) !== undefined && { contentPreview: previewText(output)! }),
             });
-            // Persist this turn to episodic memory (best-effort, non-blocking)
-            void rememberTurn(projectRoot, {
-                sessionId: session.id,
-                userId,
-                userMsg: message,
-                assistantMsg: output,
-            }, stateDir);
+            // Persist this turn to episodic memory (best-effort, non-blocking).
+            // Gated by the profile memory policy — only `read-write` persists.
+            if (profile.memory === 'read-write') {
+                void rememberTurn(projectRoot, {
+                    sessionId: session.id,
+                    userId,
+                    userMsg: message,
+                    assistantMsg: output,
+                }, stateDir);
+            }
         }
         if (citations.length > 0) {
             await appendRunEventSafe(stateDir, runId, 'notebook_citations', { citations });

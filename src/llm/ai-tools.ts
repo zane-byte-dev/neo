@@ -8,6 +8,7 @@
 import { tool, jsonSchema, type ToolSet } from 'ai';
 import { executeTool, TOOL_DECLARATIONS } from '../tools/executor.js';
 import { isAllowedInPlanMode } from '../tools/tool-permissions.js';
+import { isAllowedByProfile } from '../agent/profiles/enforcement.js';
 import { createToolLoopGuard, type ToolLoopGuard } from './tool-loop-guard.js';
 import type { Tool, ToolContext } from './types.js';
 
@@ -28,6 +29,7 @@ export function buildAiTools(
     const isPlanMode = context?.mode === 'plan';
     const isNotebookMode = context?.mode === 'notebook';
     const isReadOnlyMode = isPlanMode || isNotebookMode;
+    const profile = context?.profile;
     const guard = createToolLoopGuard();
 
     const wrapExecute = (
@@ -44,6 +46,7 @@ export function buildAiTools(
     // Built-in tools (bash, read_file, write_file, list_dir)
     for (const decl of TOOL_DECLARATIONS) {
         if (isReadOnlyMode && !isAllowedInPlanMode(decl.name)) continue;
+        if (profile && !isAllowedByProfile(decl.name, undefined, profile)) continue;
         tools[decl.name] = tool({
             description: decl.description,
             inputSchema: jsonSchema(decl.parameters),
@@ -56,6 +59,7 @@ export function buildAiTools(
     // Custom tools from the registry
     for (const [name, t] of toolRegistry) {
         if (isReadOnlyMode && !isAllowedInPlanMode(name, t)) continue;
+        if (profile && !isAllowedByProfile(name, t, profile)) continue;
         tools[name] = tool({
             description: t.declaration.description,
             inputSchema: jsonSchema(t.declaration.parameters),
@@ -70,6 +74,7 @@ export function buildAiTools(
     if (userTools) {
         for (const [name, t] of userTools) {
             if (isReadOnlyMode && !isAllowedInPlanMode(name, t)) continue;
+            if (profile && !isAllowedByProfile(name, t, profile)) continue;
             tools[name] = tool({
                 description: t.declaration.description,
                 inputSchema: jsonSchema(t.declaration.parameters),

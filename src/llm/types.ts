@@ -75,6 +75,12 @@ export interface ToolContext {
      * dangerous tools run without prompting (legacy behaviour).
      */
     confirmCallback?: (req: { toolName: string; args: Record<string, unknown> }) => Promise<boolean>;
+    /**
+     * Effective agent profile for this turn. Gates tool exposure (allow/deny/
+     * tier cap) on top of plan-mode rules. When omitted, no profile gating is
+     * applied (legacy behaviour).
+     */
+    profile?: import('../agent/profiles/types.js').ResolvedProfile;
 }
 
 // ── Tool registration types ───────────────────────────────────────────────────

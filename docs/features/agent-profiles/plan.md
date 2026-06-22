@@ -2,7 +2,14 @@
 
 ## Status
 
-Draft. No implementation has started.
+Implemented (first slice). See [test-report.md](test-report.md).
+
+Shipped: `AgentProfile` schema + loader/validator, resolver with precedence,
+enforcement of tool allow/deny + tier cap, model/personality/memory selection at
+the `agent-runner` convergence point, and an unconstrained `default` profile that
+preserves current behaviour. Profiles and per-entrypoint bindings are configured
+via `LocalConfig.PROFILES` / `LocalConfig.ENTRYPOINT_PROFILES` (or the matching
+`PROFILES` / `ENTRYPOINT_PROFILES` env vars).
 
 ## Scope
 

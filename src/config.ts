@@ -8,6 +8,7 @@
 
 import { getSecret } from './services/secrets.js';
 import { loadOrBootstrapHomeConfig, printBootstrapBanner } from './services/bootstrap-config.js';
+import type { AgentProfile, EntrypointProfileBindings } from './agent/profiles/types.js';
 
 // ── Local config (gitignored) ────────────────────────────────────────────────
 
@@ -25,6 +26,10 @@ export interface ConfigUser {
 export interface LocalConfig {
     USERS?: ConfigUser[];
     SESSION_SECRET?: string;
+    /** Optional declarative agent profiles (override built-ins by id). */
+    PROFILES?: AgentProfile[];
+    /** Optional per-entrypoint default profile bindings. */
+    ENTRYPOINT_PROFILES?: EntrypointProfileBindings;
 }
 
 let localConfig: LocalConfig = {};
@@ -66,6 +71,31 @@ export function getUsersConfig(): ConfigUser[] {
     }
     if (Array.isArray(localConfig.USERS)) return localConfig.USERS;
     return [];
+}
+
+/** Optional declarative agent profiles from config (absent → built-ins only). */
+export function getProfilesConfig(): AgentProfile[] {
+    const raw = process.env.PROFILES;
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+            if (Array.isArray(parsed)) return parsed as AgentProfile[];
+        } catch { /* fall through to local config */ }
+    }
+    if (Array.isArray(localConfig.PROFILES)) return localConfig.PROFILES;
+    return [];
+}
+
+/** Optional per-entrypoint profile bindings from config (absent → default). */
+export function getEntrypointProfiles(): EntrypointProfileBindings {
+    const raw = process.env.ENTRYPOINT_PROFILES;
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw) as unknown;
+            if (parsed && typeof parsed === 'object') return parsed as EntrypointProfileBindings;
+        } catch { /* fall through to local config */ }
+    }
+    return localConfig.ENTRYPOINT_PROFILES ?? {};
 }
 
 if (!process.env.NEO_STATE_DIR) {
