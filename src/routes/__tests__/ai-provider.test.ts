@@ -5,14 +5,14 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/test-helpers.js';
 
-const getGatewayModelsMock = vi.fn();
+const getModelsMock = vi.fn();
 const createOpenAIChatCompletionMock = vi.fn();
 const streamOpenAIChatCompletionMock = vi.fn();
 const createAnthropicMessageMock = vi.fn();
 const streamAnthropicMessageMock = vi.fn();
 
-vi.mock('../../services/ai-gateway-service.js', () => ({
-    getGatewayModels: getGatewayModelsMock,
+vi.mock('../../services/ai-provider-service.js', () => ({
+    getModels: getModelsMock,
     createOpenAIChatCompletion: createOpenAIChatCompletionMock,
     streamOpenAIChatCompletion: streamOpenAIChatCompletionMock,
     createAnthropicMessage: createAnthropicMessageMock,
@@ -28,9 +28,9 @@ let workDir: string;
 
 beforeEach(() => {
     previousUsers = process.env.USERS;
-    workDir = mkdtempSync(join(tmpdir(), 'gateway-route-'));
+    workDir = mkdtempSync(join(tmpdir(), 'provider-route-'));
     process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', gatewayToken: 'gw-token', workDir, stateDir: workDir }]);
-    getGatewayModelsMock.mockResolvedValue({ object: 'list', data: [{ id: 'auto' }] });
+    getModelsMock.mockResolvedValue({ object: 'list', data: [{ id: 'auto' }] });
     createOpenAIChatCompletionMock.mockResolvedValue({ id: 'chatcmpl-test', choices: [] });
     streamOpenAIChatCompletionMock.mockReturnValue(chunks('data: {"ok":true}\n\n', 'data: [DONE]\n\n'));
     createAnthropicMessageMock.mockResolvedValue({ id: 'msg_test', type: 'message' });
@@ -44,63 +44,63 @@ afterEach(() => {
     vi.clearAllMocks();
 });
 
-describe('/v1 gateway routes', () => {
-    it('returns 403 when gateway token is not configured', async () => {
+describe('/v1 provider routes', () => {
+    it('returns 403 when API token is not configured', async () => {
         process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', workDir, stateDir: workDir }]);
-        const { aiGateway } = await import('../ai-gateway.js');
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp();
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const res = await request(app.callback()).get('/v1/models').set('Authorization', 'Bearer gw-token');
         expect(res.status).toBe(403);
-        expect(res.body.error.code).toBe('gateway_disabled');
-        expect(getGatewayModelsMock).not.toHaveBeenCalled();
+        expect(res.body.error.code).toBe('api_disabled');
+        expect(getModelsMock).not.toHaveBeenCalled();
     });
 
     it('requires a Bearer token', async () => {
-        const { aiGateway } = await import('../ai-gateway.js');
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp();
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const res = await request(app.callback()).get('/v1/models');
         expect(res.status).toBe(401);
-        expect(res.body.error.code).toBe('missing_gateway_token');
+        expect(res.body.error.code).toBe('missing_api_token');
     });
 
     it('rejects an invalid Bearer token', async () => {
-        const { aiGateway } = await import('../ai-gateway.js');
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp();
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const res = await request(app.callback()).get('/v1/models').set('Authorization', 'Bearer wrong');
         expect(res.status).toBe(401);
-        expect(res.body.error.code).toBe('invalid_gateway_token');
+        expect(res.body.error.code).toBe('invalid_api_token');
     });
 
-    it('returns model list with a valid gateway token', async () => {
-        const { aiGateway } = await import('../ai-gateway.js');
+    it('returns model list with a valid API token', async () => {
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp();
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const res = await request(app.callback()).get('/v1/models').set('Authorization', 'Bearer gw-token');
         expect(res.status).toBe(200);
         expect(res.body.data[0].id).toBe('auto');
-        expect(getGatewayModelsMock).toHaveBeenCalledTimes(1);
+        expect(getModelsMock).toHaveBeenCalledTimes(1);
     });
 
-    it('does not require Basic Auth on gateway routes', async () => {
-        const { aiGateway } = await import('../ai-gateway.js');
+    it('does not require Basic Auth on provider routes', async () => {
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp({ basicAuthUser: 'admin', basicAuthPass: 'secret' });
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const res = await request(app.callback()).get('/v1/models').set('Authorization', 'Bearer gw-token');
         expect(res.status).toBe(200);
     });
 
-    it('routes OpenAI non-streaming requests to the gateway service', async () => {
-        const { aiGateway } = await import('../ai-gateway.js');
+    it('routes OpenAI non-streaming requests to the provider service', async () => {
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp();
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const body = { model: 'auto', messages: [{ role: 'user', content: 'hi' }] };
         const res = await request(app.callback())
@@ -113,9 +113,9 @@ describe('/v1 gateway routes', () => {
     });
 
     it('streams OpenAI SSE chunks', async () => {
-        const { aiGateway } = await import('../ai-gateway.js');
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp();
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const res = await request(app.callback())
             .post('/v1/chat/completions')
@@ -128,10 +128,10 @@ describe('/v1 gateway routes', () => {
         expect(streamOpenAIChatCompletionMock).toHaveBeenCalled();
     });
 
-    it('routes Anthropic non-streaming requests to the gateway service', async () => {
-        const { aiGateway } = await import('../ai-gateway.js');
+    it('routes Anthropic non-streaming requests to the provider service', async () => {
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp();
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const body = { model: 'claude', messages: [{ role: 'user', content: 'hi' }] };
         const res = await request(app.callback())
@@ -144,9 +144,9 @@ describe('/v1 gateway routes', () => {
     });
 
     it('streams Anthropic SSE events', async () => {
-        const { aiGateway } = await import('../ai-gateway.js');
+        const { aiProvider } = await import('../ai-provider.js');
         const { app, router, mount } = createTestApp();
-        aiGateway(router); mount();
+        aiProvider(router); mount();
 
         const res = await request(app.callback())
             .post('/v1/messages')

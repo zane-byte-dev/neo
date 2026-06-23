@@ -13,7 +13,7 @@ import { setupTools } from './tools/index.js';
 import { setupRoutes } from './routes/index.js';
 import { SESSION_COOKIE } from './const/cookie.js';
 import { sweepAllUserWorkspaces } from './runtime/sweeper.js';
-import { hasGatewayTokenConfigured, userGetByGatewayToken, userList } from './services/user-service.js';
+import { hasApiTokenConfigured, userGetByApiToken, userList } from './services/user-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -179,23 +179,23 @@ function _safeEqual(a: string, b: string): boolean {
 function _authMiddleware(): Koa.Middleware {
     return async (ctx, next) => {
         if (ctx.path.startsWith('/v1/')) {
-            if (!hasGatewayTokenConfigured()) {
+            if (!hasApiTokenConfigured()) {
                 ctx.status = 403;
-                ctx.body = { error: { message: 'AI gateway is disabled', code: 'gateway_disabled' } };
+                ctx.body = { error: { message: 'Neo provider API is disabled', code: 'api_disabled' } };
                 return;
             }
 
             const auth = ctx.get('authorization');
             if (!auth.startsWith('Bearer ')) {
                 ctx.status = 401;
-                ctx.body = { error: { message: 'Missing gateway token', code: 'missing_gateway_token' } };
+                ctx.body = { error: { message: 'Missing API token', code: 'missing_api_token' } };
                 return;
             }
 
-            const user = userGetByGatewayToken(auth.slice('Bearer '.length).trim());
+            const user = userGetByApiToken(auth.slice('Bearer '.length).trim());
             if (!user) {
                 ctx.status = 401;
-                ctx.body = { error: { message: 'Invalid gateway token', code: 'invalid_gateway_token' } };
+                ctx.body = { error: { message: 'Invalid API token', code: 'invalid_api_token' } };
                 return;
             }
             ctx.state.userId = user.id;

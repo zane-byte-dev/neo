@@ -1,8 +1,8 @@
 /**
  * src/llm/invoke.ts — Shared usage recording helpers for LLM calls.
  *
- * Both the internal agent (llm/client.ts) and the external AI Gateway
- * (services/ai-gateway-service.ts) call the same underlying model and record
+ * Both the internal agent (llm/client.ts) and the provider API
+ * (services/ai-provider-service.ts) call the same underlying model and record
  * the same usage metrics.  This module extracts that shared logic so neither
  * path duplicates it.
  */

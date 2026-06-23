@@ -1,7 +1,7 @@
-import { generateText, streamText, type FinishReason, type LanguageModelUsage, type ModelMessage, type ToolSet } from 'ai';
+import { generateText, streamText, type ModelMessage, type ToolSet } from 'ai';
 import { MODEL_ALIASES, GENERATE_TIMEOUT_MS, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
 import { createLanguageModel, resolveModel } from '../llm/model-factory.js';
-import { GatewayError, toGatewayError } from '../llm/gateway/errors.js';
+import { GatewayError, toGatewayError } from '../llm/protocol/errors.js';
 import { extractUsageNumbers, recordUsage } from '../llm/invoke.js';
 import {
     encodeOpenAIChatCompletion,
@@ -9,7 +9,7 @@ import {
     encodeOpenAIDone,
     normalizeOpenAIRequest,
     type OpenAIChatRequest,
-} from '../llm/gateway/openai.js';
+} from '../llm/protocol/openai.js';
 import {
     encodeAnthropicEvent,
     encodeAnthropicMessage,
@@ -17,11 +17,11 @@ import {
     normalizeAnthropicRequest,
     type AnthropicContentBlock,
     type AnthropicMessagesRequest,
-} from '../llm/gateway/anthropic.js';
+} from '../llm/protocol/anthropic.js';
 import { generateId } from '../utils/id-generator.js';
 import { userGetStateDir, userGetWorkspaceDir } from './user-service.js';
 
-interface GatewayCallContext {
+interface ProviderCallContext {
     userId: string;
     abortSignal?: AbortSignal;
 }
@@ -35,16 +35,10 @@ function getUserDirs(userId: string): UserDirs {
     const workDir = userGetWorkspaceDir(userId);
     const stateDir = userGetStateDir(userId);
     if (!workDir || !stateDir) {
-        throw new GatewayError(500, 'gateway_user_not_configured', 'Gateway user workspace is not configured', 'server_error');
+        throw new GatewayError(500, 'provider_user_not_configured', 'Provider user workspace is not configured', 'server_error');
     }
     return { workDir, stateDir };
 }
-
-// Virtual model IDs exposed to specific clients, mapped to real routing targets.
-// e.g. Claude Desktop requires a 'claude-*' model ID in /v1/models to consider the gateway usable.
-const VIRTUAL_ALIASES: Record<string, string> = {
-    'claude-opus-4.7': 'deepseek',
-};
 
 function isKnownAlias(model: string): boolean {
     return Object.prototype.hasOwnProperty.call(MODEL_ALIASES, model);
@@ -56,15 +50,9 @@ function isSupportedModelName(model: string): boolean {
     return model.startsWith('deepseek');
 }
 
-/**
- * Resolve the requested model name to the single DeepSeek model used for all
- * requests. Validates that the requested name is a recognised alias.
- */
-function selectModel(requestedModelRaw: string): { requestedModel: string; modelId: string } {
-    const requestedModel = VIRTUAL_ALIASES[requestedModelRaw]
-        ?? (requestedModelRaw.startsWith('claude-') ? 'deepseek' : requestedModelRaw);
+function selectModel(requestedModel: string): { requestedModel: string; modelId: string } {
     if (!isSupportedModelName(requestedModel)) {
-        throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModelRaw}`);
+        throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModel}`);
     }
     return { requestedModel, modelId: resolveModel('deepseek') };
 }
@@ -116,35 +104,19 @@ function anthropicContentFromParts(content: Array<unknown>, fallbackText: string
     return blocks;
 }
 
-function providerOwner(modelId: string): string {
-    if (modelId.startsWith('deepseek')) return 'deepseek';
-    return 'neo';
-}
-
 function modelListEntry(id: string, modelId: string, alias?: string): object {
     return {
         id,
         object: 'model',
         created: 1,
-        owned_by: providerOwner(modelId),
+        owned_by: 'neo',
         x_neo: { modelId, ...(alias ? { alias } : {}) },
     };
 }
 
-export async function getGatewayModels(options?: { claudeCompat?: boolean }): Promise<object> {
+export async function getModels(): Promise<object> {
     const entries = new Map<string, object>();
     entries.set('deepseek', modelListEntry('deepseek', resolveModel('deepseek')));
-
-    if (options?.claudeCompat) {
-        entries.set('claude-opus-4.7', {
-            id: 'claude-opus-4.7',
-            object: 'model',
-            created: 1,
-            owned_by: 'anthropic',
-            x_neo: { modelId: 'deepseek', virtual: true },
-        });
-    }
-
     for (const [alias, modelId] of Object.entries(MODEL_ALIASES)) {
         entries.set(alias, modelListEntry(alias, modelId, alias));
         if (modelId !== alias && !entries.has(modelId)) {
@@ -154,7 +126,7 @@ export async function getGatewayModels(options?: { claudeCompat?: boolean }): Pr
     return { object: 'list', data: [...entries.values()] };
 }
 
-export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: GatewayCallContext): Promise<object> {
+export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: ProviderCallContext): Promise<object> {
     const normalized = normalizeOpenAIRequest(body);
     const dirs = getUserDirs(ctx.userId);
     const { modelId } = selectModel(normalized.model);
@@ -167,7 +139,7 @@ export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: G
         model: modelId,
         ...usageNums,
         startedAt,
-        caller: 'ai-gateway:openai',
+        caller: 'provider:openai',
         systemPrompt: normalized.system,
         userPrompt: normalized.promptText,
     });
@@ -184,7 +156,7 @@ export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: G
     });
 }
 
-export async function* streamOpenAIChatCompletion(body: OpenAIChatRequest, ctx: GatewayCallContext): AsyncGenerator<string> {
+export async function* streamOpenAIChatCompletion(body: OpenAIChatRequest, ctx: ProviderCallContext): AsyncGenerator<string> {
     const normalized = normalizeOpenAIRequest({ ...body, stream: true });
     const dirs = getUserDirs(ctx.userId);
     const { modelId } = selectModel(normalized.model);
@@ -218,7 +190,7 @@ export async function* streamOpenAIChatCompletion(body: OpenAIChatRequest, ctx: 
             model: modelId,
             ...usageNums,
             startedAt,
-            caller: 'ai-gateway:openai',
+            caller: 'provider:openai',
             systemPrompt: normalized.system,
             userPrompt: normalized.promptText,
         });
@@ -234,7 +206,7 @@ export function countAnthropicTokens(body: AnthropicMessagesRequest): object {
     return { input_tokens: inputTokens };
 }
 
-export async function createAnthropicMessage(body: AnthropicMessagesRequest, ctx: GatewayCallContext): Promise<object> {
+export async function createAnthropicMessage(body: AnthropicMessagesRequest, ctx: ProviderCallContext): Promise<object> {
     const normalized = normalizeAnthropicRequest(body);
     const dirs = getUserDirs(ctx.userId);
     const { modelId } = selectModel(normalized.model);
@@ -247,7 +219,7 @@ export async function createAnthropicMessage(body: AnthropicMessagesRequest, ctx
         model: modelId,
         ...usageNums,
         startedAt,
-        caller: 'ai-gateway:anthropic',
+        caller: 'provider:anthropic',
         systemPrompt: normalized.system,
         userPrompt: normalized.promptText,
     });
@@ -260,7 +232,7 @@ export async function createAnthropicMessage(body: AnthropicMessagesRequest, ctx
     });
 }
 
-export async function* streamAnthropicMessage(body: AnthropicMessagesRequest, ctx: GatewayCallContext): AsyncGenerator<string> {
+export async function* streamAnthropicMessage(body: AnthropicMessagesRequest, ctx: ProviderCallContext): AsyncGenerator<string> {
     const normalized = normalizeAnthropicRequest({ ...body, stream: true });
     const dirs = getUserDirs(ctx.userId);
     const { modelId } = selectModel(normalized.model);
@@ -318,7 +290,7 @@ export async function* streamAnthropicMessage(body: AnthropicMessagesRequest, ct
             model: modelId,
             ...usageNums,
             startedAt,
-            caller: 'ai-gateway:anthropic',
+            caller: 'provider:anthropic',
             systemPrompt: normalized.system,
             userPrompt: normalized.promptText,
         });

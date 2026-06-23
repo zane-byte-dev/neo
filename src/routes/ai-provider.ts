@@ -1,9 +1,9 @@
 import type Koa from 'koa';
 import type Router from '@koa/router';
-import { getGatewayModels, createOpenAIChatCompletion, streamOpenAIChatCompletion, createAnthropicMessage, streamAnthropicMessage, countAnthropicTokens } from '../services/ai-gateway-service.js';
-import { GatewayError, toGatewayError } from '../llm/gateway/errors.js';
-import { encodeOpenAIError, encodeOpenAIErrorEvent } from '../llm/gateway/openai.js';
-import { encodeAnthropicError, encodeAnthropicErrorEvent } from '../llm/gateway/anthropic.js';
+import { getModels, createOpenAIChatCompletion, streamOpenAIChatCompletion, createAnthropicMessage, streamAnthropicMessage, countAnthropicTokens } from '../services/ai-provider-service.js';
+import { GatewayError, toGatewayError } from '../llm/protocol/errors.js';
+import { encodeOpenAIError, encodeOpenAIErrorEvent } from '../llm/protocol/openai.js';
+import { encodeAnthropicError, encodeAnthropicErrorEvent } from '../llm/protocol/anthropic.js';
 
 function requestBody(ctx: Koa.Context): Record<string, unknown> {
     return (ctx.request.body && typeof ctx.request.body === 'object') ? ctx.request.body as Record<string, unknown> : {};
@@ -35,11 +35,9 @@ async function writeStream(ctx: Koa.Context, stream: AsyncGenerator<string>, onE
     }
 }
 
-export function aiGateway(router: Router): void {
+export function aiProvider(router: Router): void {
     router.get('/v1/models', async (ctx) => {
-        const ua = ctx.get('user-agent') ?? '';
-        const claudeCompat = /claude/i.test(ua);
-        ctx.body = await getGatewayModels(claudeCompat ? { claudeCompat: true } : undefined);
+        ctx.body = await getModels();
     });
 
     router.post('/v1/chat/completions', async (ctx) => {
@@ -52,9 +50,9 @@ export function aiGateway(router: Router): void {
         try {
             ctx.body = await createOpenAIChatCompletion(body, callCtx);
         } catch (err) {
-            const gatewayError = toGatewayError(err);
-            ctx.status = gatewayError.status;
-            ctx.body = encodeOpenAIError(gatewayError);
+            const e = toGatewayError(err);
+            ctx.status = e.status;
+            ctx.body = encodeOpenAIError(e);
         }
     });
 
@@ -68,9 +66,9 @@ export function aiGateway(router: Router): void {
         try {
             ctx.body = await createAnthropicMessage(body, callCtx);
         } catch (err) {
-            const gatewayError = toGatewayError(err);
-            ctx.status = gatewayError.status;
-            ctx.body = encodeAnthropicError(gatewayError);
+            const e = toGatewayError(err);
+            ctx.status = e.status;
+            ctx.body = encodeAnthropicError(e);
         }
     });
 
@@ -78,9 +76,9 @@ export function aiGateway(router: Router): void {
         try {
             ctx.body = countAnthropicTokens(requestBody(ctx));
         } catch (err) {
-            const gatewayError = toGatewayError(err);
-            ctx.status = gatewayError.status;
-            ctx.body = encodeAnthropicError(gatewayError);
+            const e = toGatewayError(err);
+            ctx.status = e.status;
+            ctx.body = encodeAnthropicError(e);
         }
     });
 }

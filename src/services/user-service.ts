@@ -91,11 +91,11 @@ export function userGetByWebToken(token: string): UserRow | null {
     return toUserRow(u);
 }
 
-export function hasGatewayTokenConfigured(): boolean {
+export function hasApiTokenConfigured(): boolean {
     return _readConfigUsers().some((u) => hasEffectiveGatewayTokenSync(u));
 }
 
-export function userGetByGatewayToken(token: string): UserRow | null {
+export function userGetByApiToken(token: string): UserRow | null {
     if (!token) return null;
     for (const user of _readConfigUsers()) {
         if (matchesGatewayTokenSync(user, token)) {

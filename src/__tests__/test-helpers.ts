@@ -9,7 +9,7 @@ import { timingSafeEqual } from 'crypto';
 import Keygrip from 'keygrip';
 import { SESSION_SECRET } from '../config.js';
 import { SESSION_COOKIE } from '../const/cookie.js';
-import { hasGatewayTokenConfigured, userGetByGatewayToken } from '../services/user-service.js';
+import { hasApiTokenConfigured, userGetByApiToken } from '../services/user-service.js';
 
 export interface TestAppOptions {
     basicAuthUser?: string;
@@ -65,21 +65,21 @@ export function createTestApp(opts: TestAppOptions = {}) {
     // Cookie auth (same as server.ts _authMiddleware)
     app.use(async (ctx, next) => {
         if (ctx.path.startsWith('/v1/')) {
-            if (!hasGatewayTokenConfigured()) {
+            if (!hasApiTokenConfigured()) {
                 ctx.status = 403;
-                ctx.body = { error: { message: 'AI gateway is disabled', code: 'gateway_disabled' } };
+                ctx.body = { error: { message: 'Neo provider API is disabled', code: 'api_disabled' } };
                 return;
             }
             const auth = ctx.get('authorization');
             if (!auth.startsWith('Bearer ')) {
                 ctx.status = 401;
-                ctx.body = { error: { message: 'Missing gateway token', code: 'missing_gateway_token' } };
+                ctx.body = { error: { message: 'Missing API token', code: 'missing_api_token' } };
                 return;
             }
-            const user = userGetByGatewayToken(auth.slice('Bearer '.length).trim());
+            const user = userGetByApiToken(auth.slice('Bearer '.length).trim());
             if (!user) {
                 ctx.status = 401;
-                ctx.body = { error: { message: 'Invalid gateway token', code: 'invalid_gateway_token' } };
+                ctx.body = { error: { message: 'Invalid API token', code: 'invalid_api_token' } };
                 return;
             }
             ctx.state.userId = user.id;

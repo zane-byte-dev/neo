@@ -10,8 +10,8 @@ import {
     userGetWorkDir,
     userGetWorkspaceDir,
     userGetStateDir,
-    hasGatewayTokenConfigured,
-    userGetByGatewayToken,
+    hasApiTokenConfigured,
+    userGetByApiToken,
     getWebhookSecret,
 } from '../user-service.js';
 
@@ -90,12 +90,12 @@ describe('userGetByWebToken', () => {
 
 describe('gateway token helpers', () => {
     it('detects configured gateway tokens', () => {
-        expect(hasGatewayTokenConfigured()).toBe(true);
+        expect(hasApiTokenConfigured()).toBe(true);
     });
 
     it('matches gateway token with timing-safe lookup', () => {
-        expect(userGetByGatewayToken('gw-alice')?.id).toBe('alice');
-        expect(userGetByGatewayToken('wrong')).toBeNull();
+        expect(userGetByApiToken('gw-alice')?.id).toBe('alice');
+        expect(userGetByApiToken('wrong')).toBeNull();
     });
 
     it('matches UI-managed gateway tokens from stateDir', () => {
@@ -108,9 +108,9 @@ describe('gateway token helpers', () => {
         }), 'utf8');
         process.env.USERS = JSON.stringify([{ id: 'ui', name: 'UI', workDir: stateDir, stateDir }]);
 
-        expect(hasGatewayTokenConfigured()).toBe(true);
-        expect(userGetByGatewayToken('ui-gateway')?.id).toBe('ui');
-        expect(userGetByGatewayToken('gw-alice')).toBeNull();
+        expect(hasApiTokenConfigured()).toBe(true);
+        expect(userGetByApiToken('ui-gateway')?.id).toBe('ui');
+        expect(userGetByApiToken('gw-alice')).toBeNull();
     });
 
     it('lets disabled UI state override config gatewayToken', () => {
@@ -119,8 +119,8 @@ describe('gateway token helpers', () => {
         writeFileSync(join(stateDir, 'gateway.json'), JSON.stringify({ enabled: false }), 'utf8');
         process.env.USERS = JSON.stringify([{ id: 'ui', name: 'UI', gatewayToken: 'legacy-gateway', workDir: stateDir, stateDir }]);
 
-        expect(hasGatewayTokenConfigured()).toBe(false);
-        expect(userGetByGatewayToken('legacy-gateway')).toBeNull();
+        expect(hasApiTokenConfigured()).toBe(false);
+        expect(userGetByApiToken('legacy-gateway')).toBeNull();
     });
 });
 
