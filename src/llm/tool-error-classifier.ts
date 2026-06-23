@@ -168,3 +168,13 @@ export function classifyToolError(
 export function formatErrorHint(c: ClassifiedError): string {
     return `\n\n[ToolError] type=${c.type} retryable=${c.retryable}\nsuggestion: ${c.suggestion}`;
 }
+
+/** 从已注入提示块的结果字符串里解析出分类信息，用于可观测性。 */
+export function parseErrorHint(result: string): Pick<ClassifiedError, 'type' | 'retryable'> | null {
+    const m = result.match(/\[ToolError\]\s+type=(\w+)\s+retryable=(true|false)/);
+    if (!m) return null;
+    return {
+        type: m[1] as ToolErrorType,
+        retryable: m[2] === 'true',
+    };
+}

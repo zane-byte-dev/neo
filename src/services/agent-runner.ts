@@ -20,6 +20,7 @@ import type { StreamChunk, ToolContext } from '../llm/types.js';
 import { resolveSmartRoute } from '../llm/model-router.js';
 import { resolveAgentProfile } from '../agent/profiles/index.js';
 import type { ResolvedProfile } from '../agent/profiles/types.js';
+import { parseErrorHint } from '../llm/tool-error-classifier.js';
 import { rememberTurn } from '../memory/index.js';
 import { calcUser } from './user-service.js';
 import { messageAdd, messageList, sessionCreate, sessionGet } from './chat-service.js';
@@ -447,14 +448,16 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
             }
             const durationMs = startMs ? Date.now() - startMs : undefined;
             const previewSrc = (chunk as { result?: string }).result;
+            const errHint = typeof previewSrc === 'string' ? parseErrorHint(previewSrc) : null;
             void appendRunEventSafe(stateDir, runId, 'tool_call_finished', {
                 toolName: toolName ?? 'unknown',
-                outcome: 'success',
+                outcome: errHint ? 'error' : 'success',
                 ...(durationMs !== undefined && { durationMs }),
                 ...(resultId !== undefined && { resultId }),
                 ...(previewText(previewSrc) !== undefined && {
                     resultPreview: previewText(previewSrc)!,
                 }),
+                ...(errHint && { errorType: errHint.type, retryable: errHint.retryable }),
             });
         }
     };

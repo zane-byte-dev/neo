@@ -268,6 +268,10 @@ export type ToolCallFinishedEvent = RunEventBase<'tool_call_finished', {
     durationMs?: number;
     resultPreview?: string;
     resultId?: string;
+    /** 仅当 outcome === 'error' 时出现：工具错误的结构化分类。 */
+    errorType?: 'transient' | 'quota' | 'permanent' | 'validation' | 'unknown';
+    /** 配合 errorType 使用：是否值得重试。 */
+    retryable?: boolean;
 }>;
 
 export type TodoUpdatedEvent = RunEventBase<'todo_updated', {

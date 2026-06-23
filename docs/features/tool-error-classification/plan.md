@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented (2026-06-22). Phase 1–3 完成：集中式分类器 + `wrapExecute` 回灌 + `ToolMeta.classifyError` 覆盖（fetch_url 迁移）。Phase 4（写入 run 事件可观测性）保持 defer。验证结果见 [test-report.md](test-report.md)。
+Implemented (2026-06-23). Phase 1–4 全部完成：集中式分类器 + `wrapExecute` 回灌 + `ToolMeta.classifyError` 覆盖（fetch_url 迁移）+ run 事件可观测性（Phase 4）。验证结果见 [test-report.md](test-report.md)。
 
 ## Scope
 
@@ -91,9 +91,11 @@ Approach:
 - Move `search_web` / `fetch_url` signatures onto classifier/override.
 - Verify existing short-circuit regression still passes.
 
-### Phase 4: Optional Observability
+### Phase 4: Optional Observability ✅
 
-- (Stretch) Emit classified failure into `src/runtime/` events for the run console.
+- 扩展 `ToolCallFinishedEvent` payload，新增 `errorType` / `retryable` 可选字段。
+- 在 `tool-error-classifier.ts` 导出 `parseErrorHint()`，从已注入提示块的结果字符串中反解分类。
+- `agent-runner.ts` 的 `tool_result` 处理：调用 `parseErrorHint()` 检测失败结果，失败时把 `outcome` 设为 `'error'` 并写入 `errorType` / `retryable`。
 
 ## Testing
 

@@ -1,6 +1,6 @@
 # Tool Error Classification — Test Report
 
-> Status update (2026-06-22): Phase 1–3 已落地并通过验证。Phase 4（把分类结果写入 `src/runtime/` run 事件用于可观测性）保持 defer。
+> Status update (2026-06-23): Phase 1–4 全部落地并通过验证。
 
 ## 范围
 
@@ -28,11 +28,13 @@
 - ✅ 按工具 `classifyError` 覆盖优先于通用启发式；覆盖返回 null / 抛错时回退启发式。
 - ✅ `tool-loop-guard` 既有短路回归测试不变。
 
+- ✅ 工具失败时 `tool_call_finished` 事件 `outcome` 设为 `'error'`，并携带 `errorType` / `retryable` 字段；成功时 `outcome` 保持 `'success'`，无多余字段。
+
 ## 验证命令
 
 ```bash
-npm run build                       # OK
-npx vitest run src/llm src/tools    # 23 files / 236 tests passed
+npm run build                                    # OK
+npx vitest run src/llm src/tools src/services   # 43 files / 427 tests passed
 ```
 
 新增测试：
@@ -42,5 +44,4 @@ npx vitest run src/llm src/tools    # 23 files / 236 tests passed
 
 ## 备注 / Deferred
 
-- Phase 4 可观测性（分类结果写入 run 事件日志）未做。
 - `quota` 暂未联动 `src/llm/cost.ts` 限流，仅作模型可读提示。
