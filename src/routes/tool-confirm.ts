@@ -21,11 +21,7 @@ import type Router from '@koa/router';
 import { resolveConfirm, lookupConfirmOwner } from '../utils/pending-confirm.js';
 import { calcUser } from '../services/user-service.js';
 import { resumeRun } from '../services/agent-runner.js';
-import { resolvePendingAction, loadPendingAction } from '../runtime/pending-actions.js';
-import { appendRunEventSafe, updateRunStatusSafe } from '../runtime/executor.js';
-import { loadRun } from '../runtime/store.js';
-import { saveToolApproval } from '../runtime/tool-approvals.js';
-import type { JsonObject, ToolApprovalScope } from '../runtime/types.js';
+import { appendRunEventSafe, loadPendingAction, loadRun, resolvePendingAction, saveToolApproval, updateRunStatusSafe, type JsonObject, type ToolApprovalScope } from '../runtime/index.js';
 import { log } from '../utils/logger.js';
 
 async function persistApprovalRule(

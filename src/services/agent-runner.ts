@@ -15,8 +15,9 @@
  * run from elsewhere.
  */
 
-import { LLMClient } from '../llm/client.js';
 import type { StreamChunk, ToolContext } from '../llm/types.js';
+import { AiSdkAgentExecutor } from '../executors/ai-sdk-executor.js';
+import { getToolRegistry } from '../llm/client.js';
 import { resolveSmartRoute } from '../llm/model-router.js';
 import { resolveAgentProfile } from '../agent/profiles/index.js';
 import type { ResolvedProfile } from '../agent/profiles/types.js';
@@ -29,28 +30,30 @@ import { touchProject } from './project-registry.js';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { log } from '../utils/logger.js';
-import { createRun, loadRun, newRunId } from '../runtime/store.js';
-import { loadCheckpoint } from '../runtime/checkpoint.js';
-import { loadPendingAction } from '../runtime/pending-actions.js';
+import { createNeoToolExecutor } from '../app/tool-executor.js';
 import {
     appendRunEventSafe,
     bumpRunMetrics,
+    createRun,
     deleteRunCheckpointSafe,
+    loadCheckpoint,
+    loadPendingAction,
+    loadRun,
+    newRunId,
     previewText,
     saveRunCheckpointSafe,
     startCancellationProbe,
     updateRunStatusSafe,
-} from '../runtime/executor.js';
-import type {
-    JsonObject,
-    RunEntrypoint,
-    RunTriggerType,
-    RunTodoItem,
-} from '../runtime/types.js';
+    type JsonObject,
+    type RunEntrypoint,
+    type RunTodoItem,
+    type RunTriggerType,
+} from '../runtime/index.js';
 
 const MODULE = 'AgentRunner';
 
-const llm = new LLMClient();
+const agentExecutor = new AiSdkAgentExecutor();
+const toolExecutor = createNeoToolExecutor(getToolRegistry());
 
 export interface AgentRunOptions {
     userId: string;
@@ -536,6 +539,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         ...(confirmCallback && { confirmCallback }),
         profile,
         toolDocsMode: userCtx.preferences.toolContext ?? 'lazy',
+        toolExecutor,
     };
 
     let fullResponse = '';
@@ -551,34 +555,38 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
 
     try {
         try {
-            await llm.chatWithContextStreaming(
-                message,
-                history,
-                toolContext,
-                (chunk) => {
-                    if (chunk.type === 'text') {
-                        const { emitted, remainingPrefix } = trimResumedPrefix(chunk.text, remainingSuppressedText);
-                        remainingSuppressedText = remainingPrefix;
-                        if (emitted) wrappedChunk({ ...chunk, text: emitted });
-                        fullResponse += chunk.text;
-                        const now = Date.now();
-                        if (now - lastCheckpoint > 1_000) {
-                            lastCheckpoint = now;
-                            void saveRunCheckpointSafe(stateDir, {
-                                runId,
-                                updatedAt: new Date().toISOString(),
-                                phase: 'streaming',
-                                partialResponse: fullResponse,
-                            });
-                        }
-                        return;
-                    }
-                    wrappedChunk(chunk);
+            await agentExecutor.run(
+                {
+                    message,
+                    history,
+                    model,
+                    route,
+                    images,
                 },
-                effectiveSignal,
-                model,
-                route,
-                images,
+                {
+                    toolContext,
+                    onEvent: (chunk) => {
+                        if (chunk.type === 'text') {
+                            const { emitted, remainingPrefix } = trimResumedPrefix(chunk.text, remainingSuppressedText);
+                            remainingSuppressedText = remainingPrefix;
+                            if (emitted) wrappedChunk({ ...chunk, text: emitted });
+                            fullResponse += chunk.text;
+                            const now = Date.now();
+                            if (now - lastCheckpoint > 1_000) {
+                                lastCheckpoint = now;
+                                void saveRunCheckpointSafe(stateDir, {
+                                    runId,
+                                    updatedAt: new Date().toISOString(),
+                                    phase: 'streaming',
+                                    partialResponse: fullResponse,
+                                });
+                            }
+                            return;
+                        }
+                        wrappedChunk(chunk);
+                    },
+                    signal: effectiveSignal,
+                },
             );
         } catch (err: unknown) {
             const elapsed = Date.now() - t0;

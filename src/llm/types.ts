@@ -3,6 +3,7 @@
  */
 
 import type { ClassifiedError } from './tool-error-classifier.js';
+import type { ToolExecutor } from '../runtime/index.js';
 
 // ── Stream types ─────────────────────────────────────────────────────────────
 
@@ -91,6 +92,11 @@ export interface ToolContext {
      * Only affects injected documentation — all tools stay callable.
      */
     toolDocsMode?: 'lazy' | 'full';
+    /**
+     * Runtime-owned tool executor. Agent executors must route tool calls through
+     * this boundary so Neo keeps approval, sandbox, cwd, and result policies.
+     */
+    toolExecutor?: ToolExecutor;
 }
 
 // ── Tool registration types ───────────────────────────────────────────────────

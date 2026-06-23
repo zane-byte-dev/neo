@@ -84,7 +84,9 @@ export function buildAiTools(
             description: describe(decl),
             inputSchema: jsonSchema(decl.parameters),
             execute: wrapExecute(decl.name, (args) =>
-                executeTool(decl.name, args, workDir, toolRegistry, context),
+                context?.toolExecutor
+                    ? context.toolExecutor.execute({ name: decl.name, args, workDir, context })
+                    : executeTool(decl.name, args, workDir, toolRegistry, context),
             ),
         });
     }
@@ -98,7 +100,9 @@ export function buildAiTools(
             inputSchema: jsonSchema(t.declaration.parameters),
             execute: wrapExecute(
                 name,
-                (args) => executeTool(name, args, workDir, toolRegistry, context),
+                (args) => context?.toolExecutor
+                    ? context.toolExecutor.execute({ name, args, workDir, context })
+                    : executeTool(name, args, workDir, toolRegistry, context),
                 t,
             ),
         });
@@ -113,7 +117,13 @@ export function buildAiTools(
             tools[name] = tool({
                 description: describe(t.declaration),
                 inputSchema: jsonSchema(t.declaration.parameters),
-                execute: wrapExecute(name, (args) => t.handler(args, workDir, context), t),
+                execute: wrapExecute(
+                    name,
+                    (args) => context?.toolExecutor
+                        ? context.toolExecutor.execute({ name, args, workDir, context })
+                        : t.handler(args, workDir, context),
+                    t,
+                ),
             });
         }
     }

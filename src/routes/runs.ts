@@ -12,10 +12,9 @@
  */
 
 import type Router from '@koa/router';
+import { neoAgentRuntime } from '../app/agent-runtime.js';
 import { calcUser } from '../services/user-service.js';
-import { listRunIds, loadRun, saveRun } from '../runtime/store.js';
-import { listRunEvents } from '../runtime/events.js';
-import type { JsonObject } from '../runtime/types.js';
+import { listRunIds, loadRun } from '../runtime/index.js';
 
 export function runsRoute(router: Router): void {
     // ── GET /api/runs ────────────────────────────────────────────────
@@ -53,45 +52,52 @@ export function runsRoute(router: Router): void {
     router.get('/api/runs/:id/events', async (ctx) => {
         const userId = ctx.state.userId as string | undefined;
         if (!userId) { ctx.status = 401; ctx.body = { error: 'unauthorized' }; return; }
-        const userCtx = await calcUser(userId);
-        const stateDir = userCtx.stateDir ?? userCtx.workDir;
         const id = ctx.params.id;
-
-        // Authorise against run.json before reading events.
-        const run = await loadRun(stateDir, id);
-        if (!run) { ctx.status = 404; ctx.body = { error: 'not_found' }; return; }
-        if (run.userId !== userId) { ctx.status = 403; ctx.body = { error: 'forbidden' }; return; }
 
         const cursor = _parseInt(ctx.query.cursor, -1);
         const limit = _parseLimit(ctx.query.limit, 200, 1000);
-        const events = await listRunEvents(stateDir, id, {
-            afterIndex: cursor,
-            limit,
-        });
-        const nextCursor = events.length > 0 ? events[events.length - 1].index : cursor;
-        ctx.body = { events, nextCursor };
+        try {
+            ctx.body = await neoAgentRuntime.events(userId, id, {
+                afterIndex: cursor,
+                limit,
+            });
+        } catch (err) {
+            _respondRuntimeError(ctx, err);
+        }
     });
 
     // ── POST /api/runs/:id/cancel ────────────────────────────────────
     router.post('/api/runs/:id/cancel', async (ctx) => {
         const userId = ctx.state.userId as string | undefined;
         if (!userId) { ctx.status = 401; ctx.body = { error: 'unauthorized' }; return; }
-        const userCtx = await calcUser(userId);
-        const stateDir = userCtx.stateDir ?? userCtx.workDir;
         const id = ctx.params.id;
-        const run = await loadRun(stateDir, id);
-        if (!run) { ctx.status = 404; ctx.body = { error: 'not_found' }; return; }
-        if (run.userId !== userId) { ctx.status = 403; ctx.body = { error: 'forbidden' }; return; }
 
         // Setting `metadata.cancelRequested` is observed by the
         // executor's cancellation probe (see runtime/executor.ts).
         // Terminal-state runs return ok with a no-op flag.
-        const terminal = ['completed', 'failed', 'cancelled', 'expired'].includes(run.status);
-        if (terminal) { ctx.body = { ok: true, alreadyTerminal: true, status: run.status }; return; }
-        const meta: JsonObject = { ...(run.metadata ?? {}), cancelRequested: true };
-        await saveRun(stateDir, { ...run, metadata: meta });
-        ctx.body = { ok: true, status: 'cancel_requested' };
+        try {
+            ctx.body = await neoAgentRuntime.cancelRun(userId, id);
+        } catch (err) {
+            _respondRuntimeError(ctx, err);
+        }
     });
+}
+
+function _respondRuntimeError(ctx: { status: number; body: unknown }, err: unknown): void {
+    const code = typeof err === 'object' && err !== null && 'code' in err
+        ? String((err as { code?: unknown }).code)
+        : '';
+    if (code === 'not_found') {
+        ctx.status = 404;
+        ctx.body = { error: 'not_found' };
+        return;
+    }
+    if (code === 'forbidden') {
+        ctx.status = 403;
+        ctx.body = { error: 'forbidden' };
+        return;
+    }
+    throw err;
 }
 
 function _parseInt(v: unknown, fallback: number): number {

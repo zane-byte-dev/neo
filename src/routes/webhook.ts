@@ -15,8 +15,7 @@ import { log } from '../utils/logger.js';
 import { MAX_INPUT_LENGTH } from '../config.js';
 import { calcUser, getWebhookSecret } from '../services/user-service.js';
 import { timingSafeEqual } from 'node:crypto';
-import { persistImageArtifact, readRunOutcome } from '../runtime/outcome.js';
-import { pruneTextChunkEventsSafe } from '../runtime/executor.js';
+import { persistImageArtifact, pruneTextChunkEventsSafe, readRunOutcome } from '../runtime/index.js';
 
 const MODULE = 'Webhook';
 

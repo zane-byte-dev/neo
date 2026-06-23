@@ -6,7 +6,9 @@ import request from 'supertest';
 import { createTestApp } from '../../__tests__/test-helpers.js';
 import { SESSION_COOKIE } from '../../const/cookie.js';
 
-const userGetByWebTokenMock = vi.fn();
+const { userGetByWebTokenMock } = vi.hoisted(() => ({
+    userGetByWebTokenMock: vi.fn(),
+}));
 
 vi.mock('../../services/user-service.js', () => ({
     userGetByWebToken: userGetByWebTokenMock,

@@ -20,6 +20,8 @@
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest",
         "clean": "rm -rf dist",
+        "cli": "tsx src/cli.ts",
+        "start:cli": "node dist/cli.js",
         "dev:bot": "tsx src/main.ts",
         "start:bot": "node dist/main.js",
         "index:rebuild": "tsx src/indexing/rebuild.ts",

@@ -37,6 +37,7 @@ export type RunStatus = typeof RUN_STATUS_VALUES[number];
 
 export const RUN_ENTRYPOINT_VALUES = [
     'web-chat',
+    'cli',
     'cron',
     'telegram',
     'webhook',

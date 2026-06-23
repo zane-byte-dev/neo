@@ -50,6 +50,40 @@ describe('buildAiTools', () => {
         expect(out).toHaveProperty('user_thing');
     });
 
+    it('routes tool execution through the runtime toolExecutor when provided', async () => {
+        let registryHandlerCalled = false;
+        let userHandlerCalled = false;
+        const registryTool = makeTool('registry_tool');
+        registryTool.handler = async () => {
+            registryHandlerCalled = true;
+            return 'direct-registry';
+        };
+        const userTool = makeTool('user_tool');
+        userTool.handler = async () => {
+            userHandlerCalled = true;
+            return 'direct-user';
+        };
+
+        const calls: string[] = [];
+        const ctx: ToolContext = {
+            ...baseCtx,
+            userTools: new Map([['user_tool', userTool]]),
+            toolExecutor: {
+                async execute(req) {
+                    calls.push(req.name);
+                    return `runtime-${req.name}`;
+                },
+            },
+        };
+        const out = buildAiTools(new Map([['registry_tool', registryTool]]), '/tmp', ctx);
+
+        await expect(exec(out.registry_tool)).resolves.toBe('runtime-registry_tool');
+        await expect(exec(out.user_tool)).resolves.toBe('runtime-user_tool');
+        expect(calls).toEqual(['registry_tool', 'user_tool']);
+        expect(registryHandlerCalled).toBe(false);
+        expect(userHandlerCalled).toBe(false);
+    });
+
     it('keeps full descriptions when toolDocsMode is full/omitted', () => {
         const reg = new Map<string, Tool>([['my_tool', makeTool('my_tool')]]);
         const out = buildAiTools(reg, '/tmp', baseCtx) as Record<string, { description?: string }>;

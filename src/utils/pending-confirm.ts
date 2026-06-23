@@ -18,14 +18,14 @@
 import { generateId } from './id-generator.js';
 import { log } from './logger.js';
 import {
+    appendRunEventSafe,
+    resolvePendingAction,
     resolvePendingAction,
     savePendingAction,
-} from '../runtime/pending-actions.js';
-import type { ToolApprovalScope } from '../runtime/types.js';
-import {
-    appendRunEventSafe,
+    type JsonObject,
+    type ToolApprovalScope,
     updateRunStatusSafe,
-} from '../runtime/executor.js';
+} from '../runtime/index.js';
 
 const MODULE = 'PendingConfirm';
 
@@ -128,8 +128,8 @@ export function createConfirm(
     // Persist the pending action when caller provided run context.
     if (opts.runId && opts.workDir) {
         const expiresAt = new Date(Date.now() + timeoutMs).toISOString();
-        const argsJson = opts.request?.args as unknown as import('../runtime/types.js').JsonObject | undefined;
-        const requestPayload: import('../runtime/types.js').JsonObject = {};
+        const argsJson = opts.request?.args as unknown as JsonObject | undefined;
+        const requestPayload: JsonObject = {};
         if (opts.request?.toolName !== undefined) requestPayload.toolName = opts.request.toolName;
         if (argsJson !== undefined) requestPayload.args = argsJson;
         void savePendingAction(opts.workDir, {

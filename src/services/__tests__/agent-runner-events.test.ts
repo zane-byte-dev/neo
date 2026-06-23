@@ -11,7 +11,7 @@ const { mockChat, mockWorkDir, mockStateDir } = vi.hoisted(() => ({
 
 vi.mock('../../llm/client.js', () => {
     class MockLLMClient { chatWithContextStreaming = mockChat; }
-    return { LLMClient: MockLLMClient };
+    return { LLMClient: MockLLMClient, getToolRegistry: vi.fn(() => new Map()) };
 });
 
 vi.mock('../../services/user-service.js', () => ({

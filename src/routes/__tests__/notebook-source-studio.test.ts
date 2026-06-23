@@ -9,22 +9,35 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { createTestApp, signedCookie } from '../../__tests__/test-helpers.js';
 
-const calcUserMock = vi.fn();
+const {
+    calcUserMock,
+    nbListSourcesMock,
+    nbListSourcesWithGuidesMock,
+    nbGetSourceEntryMock,
+    nbGetSourceGuideMock,
+    nbImportSourceMock,
+    nbArchiveSourceMock,
+    nbRenameSourceMock,
+    nbListArtifactsMock,
+    nbGetArtifactMock,
+    nbDeleteArtifactMock,
+} = vi.hoisted(() => ({
+    calcUserMock: vi.fn(),
+    nbListSourcesMock: vi.fn(),
+    nbListSourcesWithGuidesMock: vi.fn(),
+    nbGetSourceEntryMock: vi.fn(),
+    nbGetSourceGuideMock: vi.fn(),
+    nbImportSourceMock: vi.fn(),
+    nbArchiveSourceMock: vi.fn(),
+    nbRenameSourceMock: vi.fn(),
+    nbListArtifactsMock: vi.fn(),
+    nbGetArtifactMock: vi.fn(),
+    nbDeleteArtifactMock: vi.fn(),
+}));
 
 vi.mock('../../services/user-service.js', () => ({
     calcUser: calcUserMock,
 }));
-
-const nbListSourcesMock = vi.fn();
-const nbListSourcesWithGuidesMock = vi.fn();
-const nbGetSourceEntryMock = vi.fn();
-const nbGetSourceGuideMock = vi.fn();
-const nbImportSourceMock = vi.fn();
-const nbArchiveSourceMock = vi.fn();
-const nbRenameSourceMock = vi.fn();
-const nbListArtifactsMock = vi.fn();
-const nbGetArtifactMock = vi.fn();
-const nbDeleteArtifactMock = vi.fn();
 
 vi.mock('../../services/notebook-service.js', () => ({
     nbListSources: nbListSourcesMock,
@@ -455,4 +468,3 @@ describe('DELETE /api/notebook/artifact', () => {
         expect(res.status).toBe(200);
     });
 });
-

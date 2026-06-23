@@ -8,7 +8,9 @@ import { join } from 'node:path';
 import request from 'supertest';
 import { createTestApp, signedCookie } from '../../__tests__/test-helpers.js';
 
-const calcUserMock = vi.fn();
+const { calcUserMock } = vi.hoisted(() => ({
+    calcUserMock: vi.fn(),
+}));
 vi.mock('../../services/user-service.js', () => ({
     calcUser: calcUserMock,
 }));
