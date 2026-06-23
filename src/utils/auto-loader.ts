@@ -44,7 +44,7 @@ export async function autoLoad<T>(
     for (const entry of entries) {
         if (entry.isDirectory()) {
             // Recurse into subdirectories (skip _ prefixed dirs)
-            if (!entry.name.startsWith('_')) {
+            if (!entry.name.startsWith('_') && entry.name !== '__tests__') {
                 const subResults = await autoLoad(join(dir, entry.name), predicate, depth + 1);
                 results.push(...subResults);
             }
@@ -53,6 +53,7 @@ export async function autoLoad<T>(
 
         const name = entry.name;
         if (!(name.endsWith('.ts') || name.endsWith('.js')) || shouldSkip(name)) continue;
+        if (name.includes('.test.') || name.includes('.spec.')) continue;
 
         const filePath = join(dir, name);
         const mod = await import(pathToFileURL(filePath).href);
