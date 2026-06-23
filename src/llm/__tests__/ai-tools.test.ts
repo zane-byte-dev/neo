@@ -49,6 +49,27 @@ describe('buildAiTools', () => {
         const out = buildAiTools(new Map(), '/tmp', ctx);
         expect(out).toHaveProperty('user_thing');
     });
+
+    it('keeps full descriptions when toolDocsMode is full/omitted', () => {
+        const reg = new Map<string, Tool>([['my_tool', makeTool('my_tool')]]);
+        const out = buildAiTools(reg, '/tmp', baseCtx) as Record<string, { description?: string }>;
+        expect(out.my_tool.description).toBe('desc-my_tool');
+    });
+
+    it('replaces descriptions with one-line summaries in lazy mode', () => {
+        const reg = new Map<string, Tool>([
+            ['my_tool', makeTool('my_tool')],
+            ['search_tools', makeTool('search_tools')],
+        ]);
+        const lazyCtx = { ...baseCtx, toolDocsMode: 'lazy' as const };
+        const out = buildAiTools(reg, '/tmp', lazyCtx) as Record<string, { description?: string }>;
+        // unknown tool falls back to first line of its description
+        expect(out.my_tool.description).toBe('desc-my_tool');
+        // built-in keeps its curated one-line summary (shorter than full description)
+        expect(out.read_file.description).toBe('读取指定文件');
+        // search_tools keeps its full description so the model can use the escape hatch
+        expect(out.search_tools.description).toBe('desc-search_tools');
+    });
 });
 
 describe('buildAiToolSubset', () => {

@@ -8,10 +8,17 @@
 import { tool, jsonSchema, type ToolSet } from 'ai';
 import { executeTool, TOOL_DECLARATIONS } from '../tools/executor.js';
 import { isAllowedInPlanMode } from '../tools/tool-permissions.js';
+import { summaryFor } from '../tools/tool-catalog.js';
 import { isAllowedByProfile } from '../agent/profiles/enforcement.js';
 import { createToolLoopGuard, type ToolLoopGuard } from './tool-loop-guard.js';
 import { classifyToolError, formatErrorHint } from './tool-error-classifier.js';
-import type { Tool, ToolContext } from './types.js';
+import type { FunctionDeclaration, Tool, ToolContext } from './types.js';
+
+/**
+ * `search_tools` is the escape hatch for the lazy catalog — it must keep its
+ * full description so the model knows how to expand other tools' detail.
+ */
+const ALWAYS_FULL_DESC = new Set(['search_tools']);
 
 /**
  * Build an AI SDK tools record from our built-in declarations + custom tool registry.
@@ -31,7 +38,19 @@ export function buildAiTools(
     const isNotebookMode = context?.mode === 'notebook';
     const isReadOnlyMode = isPlanMode || isNotebookMode;
     const profile = context?.profile;
+    const isLazyDocs = context?.toolDocsMode === 'lazy';
     const guard = createToolLoopGuard();
+
+    /**
+     * Description handed to the AI SDK. In lazy mode every tool (except the
+     * `search_tools` escape hatch) is reduced to its one-line summary; the model
+     * expands full detail on demand. Schemas are always kept full so tool calls
+     * stay valid — lazy only trims documentation, never callability.
+     */
+    const describe = (decl: FunctionDeclaration): string => {
+        if (!isLazyDocs || ALWAYS_FULL_DESC.has(decl.name)) return decl.description;
+        return summaryFor(decl.name, decl);
+    };
 
     const wrapExecute = (
         name: string,
@@ -62,7 +81,7 @@ export function buildAiTools(
         if (isReadOnlyMode && !isAllowedInPlanMode(decl.name)) continue;
         if (profile && !isAllowedByProfile(decl.name, undefined, profile)) continue;
         tools[decl.name] = tool({
-            description: decl.description,
+            description: describe(decl),
             inputSchema: jsonSchema(decl.parameters),
             execute: wrapExecute(decl.name, (args) =>
                 executeTool(decl.name, args, workDir, toolRegistry, context),
@@ -75,7 +94,7 @@ export function buildAiTools(
         if (isReadOnlyMode && !isAllowedInPlanMode(name, t)) continue;
         if (profile && !isAllowedByProfile(name, t, profile)) continue;
         tools[name] = tool({
-            description: t.declaration.description,
+            description: describe(t.declaration),
             inputSchema: jsonSchema(t.declaration.parameters),
             execute: wrapExecute(
                 name,
@@ -92,7 +111,7 @@ export function buildAiTools(
             if (isReadOnlyMode && !isAllowedInPlanMode(name, t)) continue;
             if (profile && !isAllowedByProfile(name, t, profile)) continue;
             tools[name] = tool({
-                description: t.declaration.description,
+                description: describe(t.declaration),
                 inputSchema: jsonSchema(t.declaration.parameters),
                 execute: wrapExecute(name, (args) => t.handler(args, workDir, context), t),
             });

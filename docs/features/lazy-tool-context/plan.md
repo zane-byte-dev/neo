@@ -2,7 +2,47 @@
 
 ## Status
 
-Draft. No implementation has started.
+First slice implemented (2026-06-23). Lazy tool documentation is the default for
+chat turns; full mode remains available as a per-user fallback.
+
+### Discovery during implementation
+
+`buildBuiltinToolsGuide()` (the `builtin-guide.ts` block this plan assumed was the
+prompt-side injection point) is **not wired into the live system prompt** — it is
+only exercised by tests, and per-user `TOOLS.md` files carry tool docs instead.
+The real per-request tool-context token lever is `buildAiTools()` in
+[src/llm/ai-tools.ts](../../../src/llm/ai-tools.ts), which hands every tool's full
+`description` + `inputSchema` to the AI SDK on each turn.
+
+The first slice therefore applies lazy documentation at that real lever: in lazy
+mode `buildAiTools()` replaces each tool's full description with its one-line
+catalog summary (schemas stay intact so calls remain valid), and the new
+`search_tools` tool expands full detail on demand. The compact catalog renderer
+(`builtin-guide.ts` `compact` mode) is implemented and tested as a reusable
+foundation for any future prompt-side injection.
+
+### Delivered
+
+- `src/tools/tool-catalog.ts` — single metadata source: `buildToolCatalog`,
+  `summaryFor`, `renderCompactCatalog`, `lookupToolDetail`, `renderToolDetail`,
+  shared `TOOL_SUMMARIES` / `TOOL_DISPLAY_ORDER`.
+- `src/tools/builtin-guide.ts` — `buildBuiltinToolsGuide(registry, mode, context)`
+  with `compact` mode; `full` mode byte-compatible with the legacy output.
+- `src/tools/internal/search-tools.ts` — `search_tools` (read tier), respects
+  plan / notebook filtering, matches by `name` / `query` / `category`.
+- `ToolContext.toolDocsMode` + `UserPreferences.toolContext` (`'lazy'` default,
+  `'full'` fallback); threaded through `agent-runner.ts`.
+- `buildAiTools()` lazy descriptions (schemas untouched; `search_tools` always
+  keeps its full description).
+
+### Not yet done (follow-ups)
+
+- Surfacing `toolContext` in the Settings UI (config source exists; default is
+  enough to validate).
+- Prompt-side compact-catalog injection (renderer ready, but no live injection
+  point currently consumes it).
+- Token-delta measurement against `usage.jsonl` (Phase 4).
+- Lazy docs for workflow / subagent / skill execution paths (currently full).
 
 ## Scope
 

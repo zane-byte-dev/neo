@@ -83,6 +83,14 @@ export interface ToolContext {
      * applied (legacy behaviour).
      */
     profile?: import('../agent/profiles/types.js').ResolvedProfile;
+    /**
+     * Tool documentation density for this turn.
+     *   - 'lazy': inject a compact tool catalog; full per-tool descriptions are
+     *     replaced by one-line summaries and expanded on demand via `search_tools`.
+     *   - 'full' (default when omitted): every tool keeps its full description.
+     * Only affects injected documentation — all tools stay callable.
+     */
+    toolDocsMode?: 'lazy' | 'full';
 }
 
 // ── Tool registration types ───────────────────────────────────────────────────

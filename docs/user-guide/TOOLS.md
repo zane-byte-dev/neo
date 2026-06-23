@@ -118,6 +118,18 @@ suggestion: 永久性错误（鉴权 / 权限 / 资源不存在）。原样重�
 - 与连续失败短路保护（`tool-loop-guard`）协同：分类负责“这次失败的性质”，短路负责“同一失败重复太多次”的兜底。
 - 自定义工具默认走通用启发式；如需精确控制，可在 `tool.yaml` / 工具 `meta` 中提供 `classifyError` 覆盖（仅内置工具支持）。
 
+## 工具上下文懒加载
+
+为减少长会话中固定的 prompt 开销、并提升工具选择准确率，Neo 默认对工具说明做“懒加载”：
+
+- **默认（`lazy`）**：每个工具只向模型注入一句话用途摘要；完整参数 schema 仍然保留，所有工具都能直接调用。
+- 当模型需要某个工具的完整说明 / 参数 / 示例时，调用内置工具 `search_tools` 按需展开：
+  - `search_tools(name: "edit_file")` —— 按工具名精确展开；
+  - `search_tools(query: "目录")` —— 按关键词在名称 / 用途 / 说明中检索；
+  - `search_tools(category: "web")` —— 按分类列出一组工具。
+- `search_tools` 是只读工具，在 plan / notebook 只读模式下不会返回写 / 危险工具的说明。
+- 想恢复旧的“全量注入”行为，把用户偏好 `preferences.json` 里的 `toolContext` 设为 `"full"` 即可（默认 `"lazy"`）。
+
 ## 调试建议
 
 - 修改工具后调用 `/api/reload` 或重启后端，让用户工具重新加载。

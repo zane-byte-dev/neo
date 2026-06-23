@@ -535,6 +535,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         ...(wrappedTodo && { todoCallback: wrappedTodo }),
         ...(confirmCallback && { confirmCallback }),
         profile,
+        toolDocsMode: userCtx.preferences.toolContext ?? 'lazy',
     };
 
     let fullResponse = '';

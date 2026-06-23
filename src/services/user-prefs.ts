@@ -15,6 +15,12 @@ export interface UserPreferences {
     defaultModel?: string;
     /** Whitelist of model aliases exposed in the UI. Empty/undefined = all. */
     enabledModels?: string[];
+    /**
+     * Tool documentation density injected into the prompt.
+     *   - 'lazy' (default): compact catalog + on-demand `search_tools` expansion.
+     *   - 'full': legacy full descriptions for every tool.
+     */
+    toolContext?: 'lazy' | 'full';
 }
 
 const FILE_NAME = 'preferences.json';
@@ -49,6 +55,9 @@ function sanitize(input: UserPreferences): UserPreferences {
             .map((m) => m.trim())
             .filter(Boolean);
         if (list.length) out.enabledModels = [...new Set(list)];
+    }
+    if (input.toolContext === 'lazy' || input.toolContext === 'full') {
+        out.toolContext = input.toolContext;
     }
     return out;
 }
