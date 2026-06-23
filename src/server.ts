@@ -12,7 +12,7 @@ import { log } from './utils/logger.js';
 import { setupTools } from './tools/index.js';
 import { setupRoutes } from './routes/index.js';
 import { SESSION_COOKIE } from './const/cookie.js';
-import { sweepAllUserWorkspaces } from './runtime/sweeper.js';
+import { sweepAllUserWorkspaces } from '@neo/runtime';
 import { hasApiTokenConfigured, userGetByApiToken, userList } from './services/user-service.js';
 
 const __filename = fileURLToPath(import.meta.url);

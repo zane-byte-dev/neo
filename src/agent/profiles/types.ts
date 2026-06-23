@@ -14,7 +14,7 @@
  * behaviour exactly.
  */
 
-import type { RunEntrypoint } from '../../runtime/types.js';
+import type { RunEntrypoint } from '@neo/runtime';
 import type { ToolPermission } from '../../llm/types.js';
 
 /** Memory policy for a profile. */

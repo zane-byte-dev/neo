@@ -8,7 +8,7 @@ import { sessionGet, sessionGetByNotebook, sessionCreate, sessionPatch } from '.
 import { MAX_INPUT_LENGTH } from '../config.js';
 import { createSSEResponse } from '../utils/sse.js';
 import { createConfirm } from '../utils/pending-confirm.js';
-import { newRunId, pruneTextChunkEventsSafe } from '../runtime/index.js';
+import { newRunId, pruneTextChunkEventsSafe } from '@neo/runtime';
 
 export function chatRoute(router: Router): void {
     router.post('/api/chat', async (ctx) => {

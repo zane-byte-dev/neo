@@ -1,6 +1,6 @@
 import type Router from '@koa/router';
 import { calcUser } from '../services/user-service.js';
-import { deleteToolApproval, listToolApprovals } from '../runtime/index.js';
+import { deleteToolApproval, listToolApprovals } from '@neo/runtime';
 
 export function toolApprovalsRoute(router: Router): void {
     router.get('/api/tool-approvals', async (ctx) => {

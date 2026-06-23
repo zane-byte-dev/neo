@@ -28,7 +28,7 @@ import type {
     RunRecord,
     RunStatus,
 } from './types.js';
-import { log } from '../utils/logger.js';
+import { log } from './internal/logger.js';
 
 const MODULE = 'RuntimeExecutor';
 

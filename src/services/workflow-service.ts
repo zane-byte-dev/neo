@@ -1,9 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { runAgentTurn } from './agent-runner.js';
+import { neoAgentRuntime } from '../app/agent-runtime.js';
 import { calcUser } from './user-service.js';
 import { executeSkill } from '../skills/skill-executor.js';
-import { persistImageArtifact, pruneTextChunkEventsSafe, readRunOutcome } from '../runtime/index.js';
+import { newRunId, persistImageArtifact, pruneTextChunkEventsSafe, readRunOutcome } from '@neo/runtime';
 import { generateId } from '../utils/id-generator.js';
 import { parseJsonOr } from '../utils/json.js';
 import type { ToolContext } from '../llm/types.js';
@@ -309,21 +309,21 @@ export async function runWorkflow(
                 output = renderTemplate(step.template, variables);
             } else if (step.type === 'agent') {
                 const message = renderTemplate(step.message, variables);
-                let agentRunId: string | undefined;
-                const text = await runAgentTurn({
+                const agentRunId = newRunId();
+                const result = await neoAgentRuntime.startRun({
                     userId,
                     sessionId: `workflow-${workflow.id}-${run.id}-${step.id}`,
+                    runId: agentRunId,
                     message,
                     entrypoint: 'workflow',
                     triggerType: `workflow_${triggerType}`,
                     metadata: { workflowId: workflow.id, workflowRunId: run.id, stepId: step.id },
-                    onRunCreated: (id) => { agentRunId = id; },
                     onImage: async (data, mimeType, caption) => {
-                        if (!agentRunId) return undefined;
                         return persistImageArtifact(userCtx.stateDir, agentRunId, data, mimeType, caption);
                     },
                     onVideo: async (url) => ({ url }),
                 });
+                const text = result.output;
                 if (agentRunId) await pruneTextChunkEventsSafe(userCtx.stateDir, agentRunId);
                 const outcome = agentRunId ? await readRunOutcome(userCtx.stateDir, agentRunId, { fallbackText: text }) : null;
                 output = outcome?.responseText ?? text;

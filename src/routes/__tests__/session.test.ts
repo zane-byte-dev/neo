@@ -26,6 +26,7 @@ vi.mock('../../services/trash-service.js', () => ({
 }));
 
 vi.mock('../../runtime/store.js', () => ({
+    createRun: vi.fn(),
     listRunIds: vi.fn().mockReturnValue(['run_1']),
     loadRun: vi.fn().mockResolvedValue({
         id: 'run_1',
@@ -33,9 +34,13 @@ vi.mock('../../runtime/store.js', () => ({
         sessionId: 'sess1',
         createdAt: '2026-01-01T00:00:00Z',
     }),
+    saveRun: vi.fn(),
+    updateRunStatus: vi.fn(),
 }));
 
 vi.mock('../../runtime/events.js', () => ({
+    appendEvent: vi.fn(),
+    lastEventIndex: vi.fn().mockResolvedValue(2),
     listRunEvents: vi.fn().mockResolvedValue([
         {
             id: 'evt1',
@@ -62,6 +67,7 @@ vi.mock('../../runtime/events.js', () => ({
             payload: { role: 'assistant', sessionId: 'sess1', contentLength: 7, contentPreview: 'hi back' },
         },
     ]),
+    pruneTextChunkEvents: vi.fn(),
 }));
 
 import { newSession } from '../session.js';

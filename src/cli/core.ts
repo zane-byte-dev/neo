@@ -1,5 +1,5 @@
 import type { Writable } from 'node:stream';
-import type { AgentRuntime, RunEvent } from '../runtime/index.js';
+import type { AgentRuntime, RunEvent } from '@neo/runtime';
 
 export interface CliUser {
     id: string;

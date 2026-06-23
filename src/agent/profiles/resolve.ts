@@ -10,7 +10,7 @@
  * so a stale binding can never break a turn.
  */
 
-import type { RunEntrypoint } from '../../runtime/types.js';
+import type { RunEntrypoint } from '@neo/runtime';
 import { DEFAULT_PROFILE, DEFAULT_PROFILE_ID } from './builtins.js';
 import { resolveDefaults } from './loader.js';
 import type {

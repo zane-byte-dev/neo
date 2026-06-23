@@ -9,13 +9,13 @@
  * the result when complete.
  */
 import type Router from '@koa/router';
-import { runAgentTurn } from '../services/agent-runner.js';
+import { neoAgentRuntime } from '../app/agent-runtime.js';
 import { generateId } from '../utils/id-generator.js';
 import { log } from '../utils/logger.js';
 import { MAX_INPUT_LENGTH } from '../config.js';
 import { calcUser, getWebhookSecret } from '../services/user-service.js';
 import { timingSafeEqual } from 'node:crypto';
-import { persistImageArtifact, pruneTextChunkEventsSafe, readRunOutcome } from '../runtime/index.js';
+import { newRunId, persistImageArtifact, pruneTextChunkEventsSafe, readRunOutcome } from '@neo/runtime';
 
 const MODULE = 'Webhook';
 
@@ -70,22 +70,20 @@ export function webhookRoute(router: Router): void {
         try {
             const userCtx = await calcUser(userId);
             const stateDir = userCtx.stateDir ?? userCtx.workDir;
-            let runId: string | undefined;
-            const output = await runAgentTurn({
+            const runId = newRunId();
+            const result = await neoAgentRuntime.startRun({
                 userId,
                 sessionId,
+                runId,
                 message,
                 entrypoint: 'webhook',
                 triggerType: 'webhook_call',
-                onRunCreated: (id) => {
-                    runId = id;
-                },
                 onImage: async (data, mimeType, caption) => {
-                    if (!runId) return undefined;
                     return persistImageArtifact(stateDir, runId, data, mimeType, caption);
                 },
                 onVideo: async (url) => ({ url }),
             });
+            const output = result.output;
             if (stateDir && runId) await pruneTextChunkEventsSafe(stateDir, runId);
             const outcome = runId
                 ? await readRunOutcome(stateDir, runId, { fallbackText: output })

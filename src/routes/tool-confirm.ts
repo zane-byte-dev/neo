@@ -20,8 +20,8 @@
 import type Router from '@koa/router';
 import { resolveConfirm, lookupConfirmOwner } from '../utils/pending-confirm.js';
 import { calcUser } from '../services/user-service.js';
-import { resumeRun } from '../services/agent-runner.js';
-import { appendRunEventSafe, loadPendingAction, loadRun, resolvePendingAction, saveToolApproval, updateRunStatusSafe, type JsonObject, type ToolApprovalScope } from '../runtime/index.js';
+import { neoAgentRuntime } from '../app/agent-runtime.js';
+import { appendRunEventSafe, loadPendingAction, loadRun, resolvePendingAction, saveToolApproval, updateRunStatusSafe, type JsonObject, type ToolApprovalScope } from '@neo/runtime';
 import { log } from '../utils/logger.js';
 
 async function persistApprovalRule(
@@ -154,7 +154,7 @@ export function toolConfirmRoute(router: Router): void {
                     ...(approved && effectiveScope ? { approvalScope: effectiveScope } : {}),
                 });
                 if (approved) {
-                    void resumeRun({ userId, runId }).catch((error) => {
+                    void neoAgentRuntime.resumeRun({ userId, runId }).catch((error) => {
                         log.warn('ToolConfirmRoute', 'failed to resume disk-backed run after approval', {
                             runId,
                             actionId: effectiveId,

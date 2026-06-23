@@ -3,7 +3,7 @@
  */
 
 import { getEntrypointProfiles, getProfilesConfig } from '../../config.js';
-import type { RunEntrypoint } from '../../runtime/types.js';
+import type { RunEntrypoint } from '@neo/runtime';
 import { loadProfiles } from './loader.js';
 import { resolveProfile } from './resolve.js';
 import type { ResolvedProfile } from './types.js';

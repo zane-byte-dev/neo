@@ -7,7 +7,7 @@
 
 import { executeTool } from '../tools/executor.js';
 import type { Tool, ToolContext } from '../llm/types.js';
-import type { RuntimeToolCallRequest, ToolExecutor } from '../runtime/index.js';
+import type { RuntimeToolCallRequest, ToolExecutor } from '@neo/runtime';
 
 export function createNeoToolExecutor(toolRegistry: Map<string, Tool>): ToolExecutor {
     return {

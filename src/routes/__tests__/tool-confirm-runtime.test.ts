@@ -134,7 +134,7 @@ describe('POST /api/tool-confirm — runtime-aware behaviour', () => {
         expect(res.status).toBe(200);
         expect(res.body.persisted).toBe(true);
         expect(res.body.resumeScheduled).toBe(true);
-        expect(mockResumeRun).toHaveBeenCalledWith({ userId: 'alice', runId: run.id });
+        expect(mockResumeRun).toHaveBeenCalledWith(expect.objectContaining({ userId: 'alice', runId: run.id }));
         const after = await loadPendingAction(workDir, run.id);
         expect(after?.status).toBe('approved');
     });

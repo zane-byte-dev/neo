@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import { resolve } from 'node:path';
 import { sessionCreate, sessionList, sessionPatch, sessionDelete, sessionSoftDelete, sessionGetByNotebook, messageList, messageAdd } from '../services/chat-service.js';
 import { calcUser } from '../services/user-service.js';
-import { listRunEvents, listRunIds, loadRun, type RunEvent, type ToolApprovalScope } from '../runtime/index.js';
+import { listRunEvents, listRunIds, loadRun, type RunEvent, type ToolApprovalScope } from '@neo/runtime';
 import { trashRegisterSession } from '../services/trash-service.js';
 
 interface ActivityItemResponse {

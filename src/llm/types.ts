@@ -3,7 +3,7 @@
  */
 
 import type { ClassifiedError } from './tool-error-classifier.js';
-import type { ToolExecutor } from '../runtime/index.js';
+import type { ToolExecutor } from '@neo/runtime';
 
 // ── Stream types ─────────────────────────────────────────────────────────────
 

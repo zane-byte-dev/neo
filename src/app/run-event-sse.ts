@@ -5,7 +5,7 @@
  * Web chat StreamChunk shape and handles polling until a terminal event.
  */
 
-import { listRunEvents, type RunEvent } from '../runtime/index.js';
+import { listRunEvents, type RunEvent } from '@neo/runtime';
 import { log } from '../utils/logger.js';
 
 const MODULE = 'RunEventSseAdapter';

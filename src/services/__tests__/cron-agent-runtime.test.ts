@@ -17,8 +17,10 @@ vi.mock('node-cron', () => ({
     }),
 }));
 
-vi.mock('../agent-runner.js', () => ({
-    runAgentTurn: vi.fn(),
+vi.mock('../../app/agent-runtime.js', () => ({
+    neoAgentRuntime: {
+        startRun: vi.fn(),
+    },
 }));
 
 vi.mock('../user-service.js', () => ({
@@ -31,7 +33,7 @@ vi.mock('../../utils/logger.js', () => ({
 }));
 
 import { startCronAgent, stopCronAgent } from '../cron-agent.js';
-import { runAgentTurn } from '../agent-runner.js';
+import { neoAgentRuntime } from '../../app/agent-runtime.js';
 import { createRun } from '../../runtime/store.js';
 import { appendEvent } from '../../runtime/events.js';
 
@@ -59,9 +61,8 @@ describe('cron-agent runtime outcome delivery', () => {
     });
 
     it('runs scheduled task and produces outcome', async () => {
-        vi.mocked(runAgentTurn).mockImplementation(async (opts) => {
-            const runId = 'run_cron_test';
-            opts.onRunCreated?.(runId);
+        vi.mocked(neoAgentRuntime.startRun).mockImplementation(async (opts) => {
+            const runId = opts.runId ?? 'run_cron_test';
             await createRun(workDir, {
                 id: runId,
                 userId: 'alice',
@@ -85,7 +86,7 @@ describe('cron-agent runtime outcome delivery', () => {
                 responseLength: 2,
                 outputPreview: 'ok',
             });
-            return 'ok';
+            return { runId, output: 'ok' };
         });
 
         await startCronAgent();
@@ -94,6 +95,6 @@ describe('cron-agent runtime outcome delivery', () => {
 
         await job!.callback();
 
-        expect(runAgentTurn).toHaveBeenCalledTimes(1);
+        expect(neoAgentRuntime.startRun).toHaveBeenCalledTimes(1);
     });
 });

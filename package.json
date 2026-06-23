@@ -4,6 +4,9 @@
     "description": "Neo — self-hosted personal AI assistant: web chat + notebook + Telegram bot, with multi-LLM routing and a pluggable tool/skill system.",
     "type": "module",
     "main": "dist/index.js",
+    "workspaces": [
+        "packages/*"
+    ],
     "repository": {
         "type": "git",
         "url": "https://github.com/zane-byte-dev/neo.git"
@@ -14,14 +17,20 @@
     },
     "scripts": {
         "prebuild": "rm -rf dist",
-        "build": "tsc",
+        "build": "npm run build:runtime && tsc",
+        "build:runtime": "npm --workspace @neo/runtime run build",
         "docs:check": "node scripts/check-doc-links.mjs",
+        "pretest": "npm run build:runtime",
         "test": "vitest run",
+        "pretest:coverage": "npm run build:runtime",
         "test:coverage": "vitest run --coverage",
+        "pretest:watch": "npm run build:runtime",
         "test:watch": "vitest",
-        "clean": "rm -rf dist",
+        "clean": "rm -rf dist packages/runtime/dist",
+        "precli": "npm run build:runtime",
         "cli": "tsx src/cli.ts",
         "start:cli": "node dist/cli.js",
+        "predev:bot": "npm run build:runtime",
         "dev:bot": "tsx src/main.ts",
         "start:bot": "node dist/main.js",
         "index:rebuild": "tsx src/indexing/rebuild.ts",

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { generateId } from '../utils/id-generator.js';
+import { generateId } from './internal/id-generator.js';
 import type { JsonObject, JsonValue, ToolApprovalScope } from './types.js';
 
 const TOOL_APPROVALS_VERSION = 3;

@@ -14,7 +14,7 @@
 import type Router from '@koa/router';
 import { neoAgentRuntime } from '../app/agent-runtime.js';
 import { calcUser } from '../services/user-service.js';
-import { listRunIds, loadRun } from '../runtime/index.js';
+import { listRunIds, loadRun } from '@neo/runtime';
 
 export function runsRoute(router: Router): void {
     // ── GET /api/runs ────────────────────────────────────────────────

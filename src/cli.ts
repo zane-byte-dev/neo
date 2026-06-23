@@ -31,7 +31,7 @@ const [
     import('./app/agent-runtime.js'),
     import('./services/user-service.js'),
     import('./services/chat-service.js'),
-    import('./runtime/index.js'),
+    import('@neo/runtime'),
 ]);
 
 const code = await runCli(cliArgs, {

@@ -19,8 +19,10 @@ vi.mock('../user-service.js', () => ({
     })),
 }));
 
-vi.mock('../agent-runner.js', () => ({
-    runAgentTurn: vi.fn(),
+vi.mock('../../app/agent-runtime.js', () => ({
+    neoAgentRuntime: {
+        startRun: vi.fn(),
+    },
 }));
 
 let root: string;

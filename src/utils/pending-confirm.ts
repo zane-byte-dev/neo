@@ -20,12 +20,11 @@ import { log } from './logger.js';
 import {
     appendRunEventSafe,
     resolvePendingAction,
-    resolvePendingAction,
     savePendingAction,
     type JsonObject,
     type ToolApprovalScope,
     updateRunStatusSafe,
-} from '../runtime/index.js';
+} from '@neo/runtime';
 
 const MODULE = 'PendingConfirm';
 

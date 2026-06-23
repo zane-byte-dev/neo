@@ -17,8 +17,8 @@
 import { schedule as cronSchedule, validate as cronValidate, type ScheduledTask as CronTask } from 'node-cron';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import { runAgentTurn } from '../services/agent-runner.js';
-import { persistImageArtifact, pruneTextChunkEventsSafe, readRunOutcome, renderArtifactReferences } from '../runtime/index.js';
+import { neoAgentRuntime } from '../app/agent-runtime.js';
+import { newRunId, persistImageArtifact, pruneTextChunkEventsSafe, readRunOutcome, renderArtifactReferences } from '@neo/runtime';
 import { generateId } from '../utils/id-generator.js';
 import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
@@ -75,22 +75,21 @@ export async function runScheduledTask(userId: string, task: ScheduledTask): Pro
     log.info(MODULE, 'Executing scheduled task', { userId, taskId: task.id, sessionId });
 
     try {
-        let runId: string | undefined;
-        const output = await runAgentTurn({
+        const runId = newRunId();
+        const result = await neoAgentRuntime.startRun({
             userId,
             sessionId,
+            runId,
             message: task.message,
             entrypoint: 'cron',
             triggerType: 'scheduled_task',
             metadata: { taskId: task.id, cron: task.cron },
-            onRunCreated: (id) => {
-                runId = id;
-            },
             onImage: stateDir
-                ? async (data, mimeType, caption) => persistImageArtifact(stateDir, runId ?? 'unknown', data, mimeType, caption)
+                ? async (data, mimeType, caption) => persistImageArtifact(stateDir, runId, data, mimeType, caption)
                 : undefined,
             onVideo: async (url) => ({ url }),
         });
+        const output = result.output;
         if (stateDir && runId) await pruneTextChunkEventsSafe(stateDir, runId);
         const outcome = stateDir && runId
             ? await readRunOutcome(stateDir, runId, { fallbackText: output })

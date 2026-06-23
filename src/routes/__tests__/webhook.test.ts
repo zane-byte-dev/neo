@@ -12,8 +12,10 @@ const { mockWorkDir, mockSecret } = vi.hoisted(() => ({
     mockSecret: { value: 'secret-123' },
 }));
 
-vi.mock('../../services/agent-runner.js', () => ({
-    runAgentTurn: vi.fn(),
+vi.mock('../../app/agent-runtime.js', () => ({
+    neoAgentRuntime: {
+        startRun: vi.fn(),
+    },
 }));
 
 vi.mock('../../services/user-service.js', () => ({
@@ -35,7 +37,7 @@ vi.mock('../../utils/logger.js', () => ({
 }));
 
 import { webhookRoute } from '../webhook.js';
-import { runAgentTurn } from '../../services/agent-runner.js';
+import { neoAgentRuntime } from '../../app/agent-runtime.js';
 import { createRun } from '../../runtime/store.js';
 import { appendEvent } from '../../runtime/events.js';
 
@@ -64,9 +66,8 @@ describe('POST /api/webhook/:userId', () => {
     });
 
     it('returns artifacts collected from runtime events', async () => {
-        vi.mocked(runAgentTurn).mockImplementation(async (opts) => {
-            const runId = 'run_webhook_test';
-            opts.onRunCreated?.(runId);
+        vi.mocked(neoAgentRuntime.startRun).mockImplementation(async (opts) => {
+            const runId = opts.runId ?? 'run_webhook_test';
             await createRun(workDir, {
                 id: runId,
                 userId: 'alice',
@@ -90,7 +91,7 @@ describe('POST /api/webhook/:userId', () => {
                 responseLength: 5,
                 outputPreview: 'hello',
             });
-            return 'hello';
+            return { runId, output: 'hello' };
         });
 
         const res = await request(buildApp().callback())
@@ -99,7 +100,7 @@ describe('POST /api/webhook/:userId', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.ok).toBe(true);
-        expect(res.body.runId).toBe('run_webhook_test');
+        expect(res.body.runId).toBe(res.body.artifacts[0].runId);
         expect(res.body.response).toBe('hello');
         expect(res.body.artifacts).toHaveLength(1);
         expect(res.body.artifacts[0].url).toBe('https://example.com/demo.mp4');

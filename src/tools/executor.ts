@@ -8,7 +8,7 @@ import { logDangerousCommand } from '../utils/audit-logger.js';
 import { log } from '../utils/logger.js';
 import { recordToolCall, classifyOutcome } from '../utils/tool-stats.js';
 import { autoCommitWorkspaceChanges, captureGitSnapshot } from '../utils/git-auto-commit.js';
-import { matchToolApprovalScope } from '../runtime/index.js';
+import { matchToolApprovalScope } from '@neo/runtime';
 import { resolveToolPermission } from './tool-permissions.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
 import { formatSandboxResult, runInSandbox } from '../sandbox/index.js';

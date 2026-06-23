@@ -34,11 +34,8 @@ import { createNeoToolExecutor } from '../app/tool-executor.js';
 import {
     appendRunEventSafe,
     bumpRunMetrics,
-    createRun,
     deleteRunCheckpointSafe,
-    loadCheckpoint,
-    loadPendingAction,
-    loadRun,
+    fileRuntimeStore,
     newRunId,
     previewText,
     saveRunCheckpointSafe,
@@ -46,9 +43,10 @@ import {
     updateRunStatusSafe,
     type JsonObject,
     type RunEntrypoint,
+    type RuntimeStore,
     type RunTodoItem,
     type RunTriggerType,
-} from '../runtime/index.js';
+} from '@neo/runtime';
 
 const MODULE = 'AgentRunner';
 
@@ -98,6 +96,11 @@ export interface AgentRunOptions {
     parentRunId?: string;
     /** Free-form metadata persisted on `run.json`. */
     metadata?: JsonObject;
+    /**
+     * Internal runtime persistence adapter. App-level runtimes pass this in so
+     * runner compatibility facades do not pin execution to the file store.
+     */
+    runtimeStore?: RuntimeStore;
     /** Internal: skip persisting the current user message because it already exists in history. */
     persistUserMessage?: boolean;
     /** Internal: suppress an already-streamed text prefix when resuming a run. */
@@ -127,6 +130,7 @@ export interface ResumeRunOptions {
     onVideo?: (url: string) => Promise<AgentArtifactInfo | void>;
     onTodo?: (todos: { id: number; title: string; status: string }[]) => void;
     confirmCallback?: (req: { toolName: string; args: Record<string, unknown> }) => Promise<boolean>;
+    runtimeStore?: RuntimeStore;
 }
 
 function trimResumedPrefix(text: string, prefix: string): { emitted: string; remainingPrefix: string } {
@@ -171,6 +175,7 @@ interface PreparedTurnContext {
     options: NormalizedRunOptions;
     userCtx: AgentUserContext;
     stateDir: string;
+    store: RuntimeStore;
     runId: string;
     route: ReturnType<typeof resolveSmartRoute>;
     model: string;
@@ -207,6 +212,7 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         notebook,
         parentRunId,
         metadata,
+        runtimeStore,
         persistUserMessage,
         onRunCreated,
         profile: requestedProfileId,
@@ -214,12 +220,13 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
 
     const userCtx = await calcUser(userId);
     const stateDir = userCtx.stateDir ?? userCtx.workDir;
+    const store = runtimeStore ?? fileRuntimeStore;
 
     const runId = requestedRunId ?? newRunId();
-    const wantsCreate = !requestedRunId || !(await loadRun(stateDir, runId));
+    const wantsCreate = !requestedRunId || !(await store.loadRun(stateDir, runId));
     if (wantsCreate) {
         try {
-            await createRun(stateDir, {
+            await store.createRun(stateDir, {
                 id: runId,
                 userId,
                 entrypoint,
@@ -238,7 +245,7 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
                 status: 'queued',
                 entrypoint,
                 triggerType,
-            });
+            }, undefined, store);
         } catch (err: unknown) {
             log.warn(MODULE, 'createRun failed', {
                 runId,
@@ -270,11 +277,11 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         preview: message.slice(0, 100),
     });
 
-    await updateRunStatusSafe(stateDir, runId, 'running');
+    await updateRunStatusSafe(stateDir, runId, 'running', undefined, store);
     await appendRunEventSafe(stateDir, runId, 'run_started', {
         startedAt: new Date().toISOString(),
-    });
-    await appendRunEventSafe(stateDir, runId, 'route_resolved', { model });
+    }, undefined, store);
+    await appendRunEventSafe(stateDir, runId, 'route_resolved', { model }, undefined, store);
 
     const session = await sessionGet(sessionId, userId) ?? await sessionCreate(userId, sessionId);
     const historyRows = await messageList(sessionId, userId);
@@ -297,7 +304,7 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
             sessionId: session.id,
             contentLength: message.length,
             ...(previewText(message) !== undefined && { contentPreview: previewText(message)! }),
-        });
+        }, undefined, store);
     }
 
     // Resolve effective project root for this turn. Defaults to the user's
@@ -350,6 +357,7 @@ async function prepareRunContext(options: NormalizedRunOptions, t0: number): Pro
         options,
         userCtx,
         stateDir,
+        store,
         runId,
         route,
         model,
@@ -367,6 +375,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         options,
         userCtx,
         stateDir,
+        store,
         runId,
         route,
         model,
@@ -390,7 +399,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
         suppressTextPrefix,
     } = options;
 
-    const cancelProbe = startCancellationProbe(stateDir, runId);
+    const cancelProbe = startCancellationProbe(stateDir, runId, store);
     const cancelController = new AbortController();
     const onCancel = () => cancelController.abort();
     if (signal) {
@@ -433,14 +442,14 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
             ...(args !== undefined && { args: args as JsonObject }),
             ...(resultId !== undefined && { resultId }),
             ...(truncated !== undefined && { truncated }),
-        });
+        }, undefined, store);
         if (chunk.type === 'tool_call') {
             toolCallCount += 1;
             toolStarts.set(`${toolName ?? 'tool'}:${toolCallCount}`, Date.now());
             void appendRunEventSafe(stateDir, runId, 'tool_call_started', {
                 toolName: toolName ?? 'unknown',
                 ...(args !== undefined && { args: args as JsonObject }),
-            });
+            }, undefined, store);
         } else if (chunk.type === 'tool_result') {
             let startMs: number | undefined;
             for (const [k, v] of toolStarts) {
@@ -461,7 +470,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                     resultPreview: previewText(previewSrc)!,
                 }),
                 ...(errHint && { errorType: errHint.type, retryable: errHint.retryable }),
-            });
+            }, undefined, store);
         }
     };
 
@@ -475,7 +484,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                     ? t.status
                     : 'not-started') as RunTodoItem['status'],
             }));
-            void appendRunEventSafe(stateDir, runId, 'todo_updated', { todos: normalised });
+            void appendRunEventSafe(stateDir, runId, 'todo_updated', { todos: normalised }, undefined, store);
         }
         : undefined;
 
@@ -494,7 +503,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                     ...((artifactInfo?.title ?? caption) !== undefined && { title: artifactInfo?.title ?? caption }),
                     ...(artifactInfo?.metadata !== undefined && { metadata: artifactInfo.metadata }),
                 },
-            });
+            }, undefined, store);
         }
         : undefined;
 
@@ -513,7 +522,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                     ...(artifactInfo?.title !== undefined && { title: artifactInfo.title }),
                     ...(artifactInfo?.metadata !== undefined && { metadata: artifactInfo.metadata }),
                 },
-            });
+            }, undefined, store);
         }
         : undefined;
 
@@ -579,7 +588,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                                     updatedAt: new Date().toISOString(),
                                     phase: 'streaming',
                                     partialResponse: fullResponse,
-                                });
+                                }, store);
                             }
                             return;
                         }
@@ -607,19 +616,19 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                 ...(isErrorObj && err.stack !== undefined && { stack: err.stack }),
             };
             if (cancelled || isAbort) {
-                await updateRunStatusSafe(stateDir, runId, 'cancelled', { lastError: errorInfo });
+                await updateRunStatusSafe(stateDir, runId, 'cancelled', { lastError: errorInfo }, store);
             } else {
-                await updateRunStatusSafe(stateDir, runId, 'failed', { lastError: errorInfo });
+                await updateRunStatusSafe(stateDir, runId, 'failed', { lastError: errorInfo }, store);
             }
             await appendRunEventSafe(stateDir, runId, 'run_failed', {
                 finishedAt: new Date().toISOString(),
                 error: errorInfo,
-            });
+            }, undefined, store);
             await bumpRunMetrics(stateDir, runId, {
                 toolCallCount,
                 totalDurationMs: elapsed,
-            });
-            await deleteRunCheckpointSafe(stateDir, runId);
+            }, store);
+            await deleteRunCheckpointSafe(stateDir, runId, store);
             throw err;
         }
 
@@ -636,7 +645,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
                 sessionId: session.id,
                 contentLength: output.length,
                 ...(previewText(output) !== undefined && { contentPreview: previewText(output)! }),
-            });
+            }, undefined, store);
             // Persist this turn to episodic memory (best-effort, non-blocking).
             // Gated by the profile memory policy — only `read-write` persists.
             if (profile.memory === 'read-write') {
@@ -649,7 +658,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
             }
         }
         if (citations.length > 0) {
-            await appendRunEventSafe(stateDir, runId, 'notebook_citations', { citations });
+            await appendRunEventSafe(stateDir, runId, 'notebook_citations', { citations }, undefined, store);
         }
 
         const elapsed = Date.now() - t0;
@@ -658,18 +667,18 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
             updatedAt: new Date().toISOString(),
             phase: 'finalizing',
             partialResponse: fullResponse,
-        });
+        }, store);
         await bumpRunMetrics(stateDir, runId, {
             toolCallCount,
             totalDurationMs: elapsed,
-        });
-        await updateRunStatusSafe(stateDir, runId, 'completed');
+        }, store);
+        await updateRunStatusSafe(stateDir, runId, 'completed', undefined, store);
         await appendRunEventSafe(stateDir, runId, 'run_completed', {
             finishedAt: new Date().toISOString(),
             responseLength: output.length,
             ...(previewText(output) !== undefined && { outputPreview: previewText(output)! }),
-        });
-        await deleteRunCheckpointSafe(stateDir, runId);
+        }, undefined, store);
+        await deleteRunCheckpointSafe(stateDir, runId, store);
 
         log.info(MODULE, 'Turn done', {
             userId,
@@ -704,7 +713,8 @@ export async function runAgentTurn(opts: AgentRunOptions): Promise<string> {
 export async function resumeRun(opts: ResumeRunOptions): Promise<string> {
     const userCtx = await calcUser(opts.userId);
     const stateDir = userCtx.stateDir ?? userCtx.workDir;
-    const run = await loadRun(stateDir, opts.runId);
+    const store = opts.runtimeStore ?? fileRuntimeStore;
+    const run = await store.loadRun(stateDir, opts.runId);
 
     if (!run) throw new Error(`Run not found: ${opts.runId}`);
     if (run.userId !== opts.userId) throw new Error(`Run does not belong to user: ${opts.runId}`);
@@ -717,8 +727,8 @@ export async function resumeRun(opts: ResumeRunOptions): Promise<string> {
         throw new Error('Resume currently supports text-only runs');
     }
 
-    const checkpoint = await loadCheckpoint(stateDir, run.id);
-    const pending = await loadPendingAction(stateDir, run.id);
+    const checkpoint = await store.loadCheckpoint(stateDir, run.id);
+    const pending = await store.loadPendingAction(stateDir, run.id);
 
     if (pending?.status === 'pending') {
         throw new Error('Run is still waiting for a pending action decision');
@@ -735,7 +745,7 @@ export async function resumeRun(opts: ResumeRunOptions): Promise<string> {
         : undefined;
     let approvedPendingConsumed = false;
 
-    await updateRunStatusSafe(stateDir, run.id, 'running', { pendingActionId: undefined });
+    await updateRunStatusSafe(stateDir, run.id, 'running', { pendingActionId: undefined }, store);
 
     return runAgentTurn({
         userId: opts.userId,
@@ -752,6 +762,7 @@ export async function resumeRun(opts: ResumeRunOptions): Promise<string> {
         onImage: opts.onImage,
         onVideo: opts.onVideo,
         onTodo: opts.onTodo,
+        runtimeStore: store,
         confirmCallback: async (req) => {
             if (
                 pending?.status === 'approved'
