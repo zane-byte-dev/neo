@@ -1,15 +1,12 @@
 import React from 'react'
-import { ChevronLeft, ChevronRight, Copy, KeyRound, RotateCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import {
     deleteToolApproval,
-    fetchGatewaySettings,
     fetchModels,
     fetchModelMessages,
     fetchSecrets,
     fetchToolApprovals,
-    saveGatewaySettings,
     saveSecrets,
-    type GatewayStatus,
     type ModelsResponse,
     type ModelInfo,
     type SecretKey,
@@ -244,126 +241,6 @@ const SecretFieldsEditor: React.FC<{
     )
 }
 
-const GatewaySettingsCard: React.FC<{
-    gateway: GatewayStatus | null
-    loading: boolean
-    saving: boolean
-    error: string | null
-    newToken: string | null
-    copied: string | null
-    t: T
-    onToggle: () => void
-    onRotate: () => void
-    onCopy: (label: string, value: string) => void
-}> = ({ gateway, loading, saving, error, newToken, copied, t, onToggle, onRotate, onCopy }) => {
-    const enabled = Boolean(gateway?.enabled)
-    const baseUrl = gateway?.baseUrl ?? `${window.location.origin.replace(/:\d+$/, ':3000')}/v1`
-    const sourceLabel = gateway?.source === 'config'
-        ? t('gatewaySourceConfig')
-        : gateway?.source === 'state'
-            ? t('gatewaySourceSettings')
-            : t('gatewaySourceNone')
-
-    return (
-        <div className="bg-bg-container border border-border rounded-xl p-4 space-y-4" style={{ boxShadow: 'var(--shadow-soft)' }}>
-            <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-fill text-text-tertiary">
-                            <KeyRound size={15} />
-                        </span>
-                        <h2 className="text-sm font-semibold text-text">{t('localGateway')}</h2>
-                        <span className={cn(
-                            'px-2 py-0.5 rounded-full text-[10px] font-medium',
-                            enabled ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-fill text-text-tertiary',
-                        )}>
-                            {loading ? '...' : enabled ? t('gatewayEnabled') : t('gatewayDisabled')}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-fill text-[10px] font-medium text-text-tertiary">
-                            {sourceLabel}
-                        </span>
-                    </div>
-                    <p className="text-xs text-text-tertiary leading-relaxed">
-                        {t('localGatewayDescription')}
-                    </p>
-                </div>
-
-                <button
-                    type="button"
-                    role="switch"
-                    aria-checked={enabled}
-                    aria-label={t('localGateway')}
-                    disabled={loading || saving}
-                    onClick={onToggle}
-                    className={cn(
-                        'relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors duration-200',
-                        enabled ? 'bg-primary-mint border-primary-mint' : 'bg-fill border-border',
-                        (loading || saving) && 'cursor-not-allowed opacity-60',
-                    )}
-                >
-                    <span
-                        className={cn(
-                            'inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-                            enabled ? 'translate-x-6' : 'translate-x-1',
-                        )}
-                    />
-                </button>
-            </div>
-
-            {error && <p className="text-[11px] text-destructive">{error}</p>}
-
-            <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-lg border border-border-secondary bg-fill/30 p-3">
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium text-text-tertiary">{t('gatewayBaseUrl')}</span>
-                        <button
-                            type="button"
-                            onClick={() => onCopy('baseUrl', baseUrl)}
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-container px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-fill-secondary"
-                        >
-                            <Copy size={11} />
-                            {copied === 'baseUrl' ? t('copied') : t('copy')}
-                        </button>
-                    </div>
-                    <div className="break-all rounded-md border border-border bg-bg-container px-2 py-1.5 font-mono text-[11px] text-text-secondary">
-                        {baseUrl}
-                    </div>
-                </div>
-
-                <div className="rounded-lg border border-border-secondary bg-fill/30 p-3">
-                    <div className="mb-1.5 flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-medium text-text-tertiary">{t('gatewayToken')}</span>
-                        <button
-                            type="button"
-                            onClick={onRotate}
-                            disabled={loading || saving}
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-bg-container px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-fill-secondary disabled:opacity-50"
-                        >
-                            <RotateCw size={11} className={cn(saving && 'animate-spin')} />
-                            {enabled ? t('gatewayResetToken') : t('gatewayGenerateToken')}
-                        </button>
-                    </div>
-                    <div className="break-all rounded-md border border-border bg-bg-container px-2 py-1.5 font-mono text-[11px] text-text-secondary">
-                        {newToken ?? gateway?.masked ?? t('gatewayTokenNotGenerated')}
-                    </div>
-                    {newToken ? (
-                        <button
-                            type="button"
-                            onClick={() => onCopy('token', newToken)}
-                            className="mt-2 inline-flex items-center gap-1 rounded-md border border-border bg-bg-container px-2 py-1 text-[10px] font-medium text-text-secondary hover:bg-fill-secondary"
-                        >
-                            <Copy size={11} />
-                            {copied === 'token' ? t('copied') : t('gatewayCopyToken')}
-                        </button>
-                    ) : (
-                        <p className="mt-2 text-[10px] leading-relaxed text-text-tertiary">{t('gatewayTokenHint')}</p>
-                    )}
-                </div>
-            </div>
-        </div>
-    )
-}
-
 const ToolApprovalsCard: React.FC<{
     rules: ToolApprovalRule[]
     loading: boolean
@@ -560,9 +437,9 @@ const HistoryTable: React.FC<{ records: UsageRecord[]; t: T; onViewDetail: (r: U
                                 <td className="px-3 py-2 text-right font-mono text-text-secondary">{r.durationMs > 0 ? `${(r.durationMs / 1000).toFixed(1)}s` : '-'}</td>
                                 <td className="px-3 py-2 text-text-tertiary">{r.reason}</td>
                                 <td className="px-3 py-2">
-                                    {r.caller?.startsWith('ai-gateway') ? (
+                                    {r.caller?.startsWith('provider') ? (
                                         <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
-                                            {t('callerGateway')}
+                                            {t('callerProvider')}
                                         </span>
                                     ) : r.caller ? (
                                         <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-fill text-text-tertiary">
@@ -918,12 +795,6 @@ export const ModelPanel: React.FC = () => {
     const [secretsLoading, setSecretsLoading] = React.useState(true)
     const [secretsError, setSecretsError] = React.useState<string | null>(null)
     const [savingSecretKey, setSavingSecretKey] = React.useState<SecretKey | null>(null)
-    const [gateway, setGateway] = React.useState<GatewayStatus | null>(null)
-    const [gatewayLoading, setGatewayLoading] = React.useState(true)
-    const [gatewaySaving, setGatewaySaving] = React.useState(false)
-    const [gatewayError, setGatewayError] = React.useState<string | null>(null)
-    const [gatewayToken, setGatewayToken] = React.useState<string | null>(null)
-    const [gatewayCopied, setGatewayCopied] = React.useState<string | null>(null)
     const [modelConfigOpen, setModelConfigOpen] = React.useState(false)
     const [activeTab, setActiveTab] = React.useState<'config' | 'history' | 'approvals'>('config')
 
@@ -966,19 +837,6 @@ export const ModelPanel: React.FC = () => {
         }
     }
 
-    const loadGateway = async () => {
-        setGatewayLoading(true)
-        setGatewayError(null)
-        try {
-            const res = await fetchGatewaySettings()
-            setGateway(res.gateway)
-        } catch (e: unknown) {
-            setGatewayError((e as Error).message ?? t('gatewayLoadFailed'))
-        } finally {
-            setGatewayLoading(false)
-        }
-    }
-
     const saveSecret = async (key: SecretKey, value: string) => {
         setSavingSecretKey(key)
         setSecretsError(null)
@@ -995,29 +853,6 @@ export const ModelPanel: React.FC = () => {
         }
     }
 
-    const saveGateway = async (patch: { enabled?: boolean; rotate?: boolean }) => {
-        setGatewaySaving(true)
-        setGatewayError(null)
-        try {
-            const res = await saveGatewaySettings(patch)
-            setGateway(res.gateway)
-            setGatewayToken(res.gateway.token ?? null)
-        } catch (e: unknown) {
-            setGatewayError((e as Error).message ?? t('gatewaySaveFailed'))
-        } finally {
-            setGatewaySaving(false)
-        }
-    }
-
-    const copyGatewayValue = (label: string, value: string) => {
-        navigator.clipboard?.writeText(value).then(() => {
-            setGatewayCopied(label)
-            window.setTimeout(() => setGatewayCopied(null), 1600)
-        }).catch(() => {
-            setGatewayError(t('gatewayCopyFailed'))
-        })
-    }
-
     React.useEffect(() => {
         void load(month)
     }, [month])
@@ -1028,10 +863,6 @@ export const ModelPanel: React.FC = () => {
 
     React.useEffect(() => {
         void loadSecrets()
-    }, [])
-
-    React.useEffect(() => {
-        void loadGateway()
     }, [])
 
     const revokeApproval = async (ruleId: string) => {
@@ -1100,7 +931,6 @@ export const ModelPanel: React.FC = () => {
                                 void load()
                                 void loadToolApprovals()
                                 void loadSecrets()
-                                void loadGateway()
                             }}
                             disabled={loading}
                             className="px-3 py-1.5 bg-fill border border-border rounded-lg text-xs text-text-secondary hover:bg-fill-secondary transition-colors disabled:opacity-50"
@@ -1132,21 +962,6 @@ export const ModelPanel: React.FC = () => {
                 {/* Model Config tab */}
                 {activeTab === 'config' && (
                     <>
-                        <section>
-                            <GatewaySettingsCard
-                                gateway={gateway}
-                                loading={gatewayLoading}
-                                saving={gatewaySaving}
-                                error={gatewayError}
-                                newToken={gatewayToken}
-                                copied={gatewayCopied}
-                                t={t}
-                                onToggle={() => { void saveGateway({ enabled: !Boolean(gateway?.enabled) }) }}
-                                onRotate={() => { void saveGateway({ enabled: true, rotate: true }) }}
-                                onCopy={copyGatewayValue}
-                            />
-                        </section>
-
                         <section>
                             <div className="flex items-start justify-between gap-4 mb-2.5">
                                 <div>

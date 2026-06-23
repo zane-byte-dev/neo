@@ -44,7 +44,7 @@ let workDir: string;
 beforeEach(() => {
     previousUsers = process.env.USERS;
     workDir = mkdtempSync(join(tmpdir(), 'provider-service-'));
-    process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', gatewayToken: 'gw-token', workDir, stateDir: workDir }]);
+    process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', apiToken: 'gw-token', workDir, stateDir: workDir }]);
     mocks.generateText.mockReset();
     mocks.streamText.mockReset();
     mocks.recordTokenUsage.mockReset();

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -21,7 +20,7 @@ const SAMPLE = [
         name: 'Alice',
         tenants: ['tg:111'],
         webToken: 'tok-alice',
-        gatewayToken: 'gw-alice',
+        apiToken: 'gw-alice',
         webhookSecret: 'whk-alice',
         workDir: '/tmp/alice/proj',
         stateDir: '/tmp/alice/state',
@@ -88,39 +87,20 @@ describe('userGetByWebToken', () => {
     });
 });
 
-describe('gateway token helpers', () => {
-    it('detects configured gateway tokens', () => {
+describe('API token helpers', () => {
+    it('detects configured API tokens', () => {
         expect(hasApiTokenConfigured()).toBe(true);
     });
 
-    it('matches gateway token with timing-safe lookup', () => {
+    it('matches API token with timing-safe lookup', () => {
         expect(userGetByApiToken('gw-alice')?.id).toBe('alice');
         expect(userGetByApiToken('wrong')).toBeNull();
     });
 
-    it('matches UI-managed gateway tokens from stateDir', () => {
-        const stateDir = mkdtempSync(join(tmpdir(), 'user-service-gateway-'));
-        tempDirs.push(stateDir);
-        writeFileSync(join(stateDir, 'gateway.json'), JSON.stringify({
-            enabled: true,
-            tokenHash: createHash('sha256').update('ui-gateway').digest('hex'),
-            tokenTail: 'ateway',
-        }), 'utf8');
-        process.env.USERS = JSON.stringify([{ id: 'ui', name: 'UI', workDir: stateDir, stateDir }]);
-
-        expect(hasApiTokenConfigured()).toBe(true);
-        expect(userGetByApiToken('ui-gateway')?.id).toBe('ui');
-        expect(userGetByApiToken('gw-alice')).toBeNull();
-    });
-
-    it('lets disabled UI state override config gatewayToken', () => {
-        const stateDir = mkdtempSync(join(tmpdir(), 'user-service-gateway-'));
-        tempDirs.push(stateDir);
-        writeFileSync(join(stateDir, 'gateway.json'), JSON.stringify({ enabled: false }), 'utf8');
-        process.env.USERS = JSON.stringify([{ id: 'ui', name: 'UI', gatewayToken: 'legacy-gateway', workDir: stateDir, stateDir }]);
-
+    it('reports not configured when no user has apiToken', () => {
+        process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', workDir: '/tmp' }]);
         expect(hasApiTokenConfigured()).toBe(false);
-        expect(userGetByApiToken('legacy-gateway')).toBeNull();
+        expect(userGetByApiToken('any')).toBeNull();
     });
 });
 

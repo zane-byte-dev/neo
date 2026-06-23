@@ -29,7 +29,7 @@ let workDir: string;
 beforeEach(() => {
     previousUsers = process.env.USERS;
     workDir = mkdtempSync(join(tmpdir(), 'provider-route-'));
-    process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', gatewayToken: 'gw-token', workDir, stateDir: workDir }]);
+    process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', apiToken: 'gw-token', workDir, stateDir: workDir }]);
     getModelsMock.mockResolvedValue({ object: 'list', data: [{ id: 'auto' }] });
     createOpenAIChatCompletionMock.mockResolvedValue({ id: 'chatcmpl-test', choices: [] });
     streamOpenAIChatCompletionMock.mockReturnValue(chunks('data: {"ok":true}\n\n', 'data: [DONE]\n\n'));
