@@ -8,11 +8,11 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { ConfigUser } from '../config.js';
 
-export function hasEffectiveGatewayTokenSync(user: ConfigUser): boolean {
+export function hasApiTokenSync(user: ConfigUser): boolean {
     return Boolean(user.apiToken?.trim());
 }
 
-export function matchesGatewayTokenSync(user: ConfigUser, token: string): boolean {
+export function matchesApiTokenSync(user: ConfigUser, token: string): boolean {
     if (!token) return false;
     const expected = user.apiToken?.trim() ?? '';
     if (!expected) return false;

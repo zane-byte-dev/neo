@@ -6,7 +6,7 @@
  */
 import { UserProfileManager } from './user-profile.js';
 import { loadUserPreferences, type UserPreferences } from './user-prefs.js';
-import { hasEffectiveGatewayTokenSync, matchesGatewayTokenSync } from './gateway-settings.js';
+import { hasApiTokenSync, matchesApiTokenSync } from './api-auth.js';
 import { loadUserSkills } from '../skills/skill-registry.js';
 import { loadUserTools } from '../tools/user-tools/loader.js';
 import { loadMcpTools } from '../mcp/loader.js';
@@ -92,13 +92,13 @@ export function userGetByWebToken(token: string): UserRow | null {
 }
 
 export function hasApiTokenConfigured(): boolean {
-    return _readConfigUsers().some((u) => hasEffectiveGatewayTokenSync(u));
+    return _readConfigUsers().some((u) => hasApiTokenSync(u));
 }
 
 export function userGetByApiToken(token: string): UserRow | null {
     if (!token) return null;
     for (const user of _readConfigUsers()) {
-        if (matchesGatewayTokenSync(user, token)) {
+        if (matchesApiTokenSync(user, token)) {
             return toUserRow(user);
         }
     }
