@@ -59,7 +59,7 @@ function readNumber(value: unknown, code: string): number | undefined {
 
 export function normalizeOpenAIRequest(body: OpenAIChatRequest): NormalizedOpenAIRequest {
     if (body.tools !== undefined || body.tool_choice !== undefined) {
-        throw new GatewayError(400, 'unsupported_tools', 'OpenAI tool calling is not supported by the gateway MVP');
+        throw new GatewayError(400, 'unsupported_tools', 'OpenAI tool calling is not supported yet');
     }
     const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : 'auto';
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
