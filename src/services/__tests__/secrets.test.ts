@@ -1,25 +1,18 @@
-/**
- * Tests for secrets storage module — encrypted round-trip + env fallback.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 let tmp: string;
-const ORIGINAL_PATH = process.env.NEO_SECRETS_PATH;
-const ORIGINAL_STATE_DIR = process.env.NEO_STATE_DIR;
+const ORIGINAL_CONFIG_PATH = process.env.NEO_CONFIG_PATH;
 const ORIGINAL_GEMINI = process.env.GEMINI_API_KEY;
 const ORIGINAL_OPENAI = process.env.OPENAI_API_KEY;
 const ORIGINAL_CLAUDE_CODE_BASE_URL = process.env.CLAUDE_CODE_BASE_URL;
 const ORIGINAL_CLAUDE_CODE_TOKEN = process.env.CLAUDE_CODE_TOKEN;
-const ORIGINAL_SESSION = process.env.SESSION_SECRET;
 
 beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'secrets-'));
-    process.env.NEO_SECRETS_PATH = join(tmp, 'secrets.enc');
-    delete process.env.NEO_STATE_DIR;
-    process.env.SESSION_SECRET = 'unit-test-secret';
+    process.env.NEO_CONFIG_PATH = join(tmp, 'config.json');
     delete process.env.GEMINI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     delete process.env.CLAUDE_CODE_BASE_URL;
@@ -28,10 +21,8 @@ beforeEach(() => {
 
 afterEach(async () => {
     rmSync(tmp, { recursive: true, force: true });
-    if (ORIGINAL_PATH === undefined) delete process.env.NEO_SECRETS_PATH;
-    else process.env.NEO_SECRETS_PATH = ORIGINAL_PATH;
-    if (ORIGINAL_STATE_DIR === undefined) delete process.env.NEO_STATE_DIR;
-    else process.env.NEO_STATE_DIR = ORIGINAL_STATE_DIR;
+    if (ORIGINAL_CONFIG_PATH === undefined) delete process.env.NEO_CONFIG_PATH;
+    else process.env.NEO_CONFIG_PATH = ORIGINAL_CONFIG_PATH;
     if (ORIGINAL_GEMINI === undefined) delete process.env.GEMINI_API_KEY;
     else process.env.GEMINI_API_KEY = ORIGINAL_GEMINI;
     if (ORIGINAL_OPENAI === undefined) delete process.env.OPENAI_API_KEY;
@@ -40,8 +31,6 @@ afterEach(async () => {
     else process.env.CLAUDE_CODE_BASE_URL = ORIGINAL_CLAUDE_CODE_BASE_URL;
     if (ORIGINAL_CLAUDE_CODE_TOKEN === undefined) delete process.env.CLAUDE_CODE_TOKEN;
     else process.env.CLAUDE_CODE_TOKEN = ORIGINAL_CLAUDE_CODE_TOKEN;
-    if (ORIGINAL_SESSION === undefined) delete process.env.SESSION_SECRET;
-    else process.env.SESSION_SECRET = ORIGINAL_SESSION;
     vi.resetModules();
     const mod = await import('../secrets.js');
     mod.resetSecretsCache();
@@ -56,19 +45,18 @@ describe('secrets store', () => {
         expect(getSecret('GEMINI_API_KEY')).toBe('');
     });
 
-    it('persists and decrypts values; file value overrides env', async () => {
+    it('reads from config.json secrets field; file overrides env', async () => {
         process.env.OPENAI_API_KEY = 'sk-from-env';
-        const { updateSecrets, getSecret, getSecretsStatus, resetSecretsCache } = await import('../secrets.js');
+        writeFileSync(process.env.NEO_CONFIG_PATH!, JSON.stringify({
+            secrets: {
+                GEMINI_API_KEY: 'AIza-real',
+                OPENAI_API_KEY: 'sk-real',
+                CLAUDE_CODE_BASE_URL: 'https://proxy.example.com/v1',
+                CLAUDE_CODE_TOKEN: 'cc-real',
+            },
+        }));
 
-        await updateSecrets({
-            GEMINI_API_KEY: 'AIza-real',
-            OPENAI_API_KEY: 'sk-real',
-            CLAUDE_CODE_BASE_URL: 'https://proxy.example.com/v1',
-            CLAUDE_CODE_TOKEN: 'cc-real',
-        });
-        expect(existsSync(process.env.NEO_SECRETS_PATH!)).toBe(true);
-
-        // Fresh read from disk
+        const { getSecret, getSecretsStatus, resetSecretsCache } = await import('../secrets.js');
         resetSecretsCache();
         expect(getSecret('GEMINI_API_KEY')).toBe('AIza-real');
         expect(getSecret('OPENAI_API_KEY')).toBe('sk-real');
@@ -79,9 +67,20 @@ describe('secrets store', () => {
         expect(status.GEMINI_API_KEY.source).toBe('file');
         expect(status.GEMINI_API_KEY.masked.endsWith('real')).toBe(true);
         expect(status.OPENAI_API_KEY.source).toBe('file');
-        expect(status.CLAUDE_CODE_BASE_URL.source).toBe('file');
-        expect(status.CLAUDE_CODE_TOKEN.source).toBe('file');
         expect(status.DEEPSEEK_API_KEY.source).toBe('none');
+    });
+
+    it('updateSecrets persists and merges into existing config', async () => {
+        writeFileSync(process.env.NEO_CONFIG_PATH!, JSON.stringify({ existingKey: 'keep' }));
+        const { updateSecrets, getSecret, resetSecretsCache } = await import('../secrets.js');
+
+        await updateSecrets({ GEMINI_API_KEY: 'AIza-new' });
+        resetSecretsCache();
+        expect(getSecret('GEMINI_API_KEY')).toBe('AIza-new');
+
+        const raw = JSON.parse(require('fs').readFileSync(process.env.NEO_CONFIG_PATH!, 'utf8'));
+        expect(raw.existingKey).toBe('keep');
+        expect(raw.secrets.GEMINI_API_KEY).toBe('AIza-new');
     });
 
     it('clears entry on empty string and falls back to env', async () => {
@@ -104,5 +103,4 @@ describe('secrets store', () => {
         expect(status.GEMINI_API_KEY.hasValue).toBe(true);
         expect(Object.keys(status)).not.toContain('FOO_BAR');
     });
-
 });
