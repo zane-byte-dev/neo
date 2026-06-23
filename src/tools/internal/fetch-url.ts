@@ -57,7 +57,24 @@ const tryFetch = async (
 };
 
 export const fetchUrlTool: Tool = {
-    meta: { category: 'web', version: '1.0.0', permission: 'read' },
+    meta: {
+        category: 'web',
+        version: '1.1.0',
+        permission: 'read',
+        // Per-tool override: fetch_url 的失败语义比通用启发式更明确。
+        classifyError: (result) => {
+            if (typeof result !== 'string' || !result.startsWith('[Error]')) return null;
+            // 所有镜像都失败 —— 原样重试无意义。
+            if (/Google Cache 和 Wayback Machine 均无法获取/.test(result)) {
+                return {
+                    type: 'permanent',
+                    retryable: false,
+                    suggestion: '该页面拒绝访问且镜像均不可用。请换一个来源或域名，不要再 fetch 同一 URL。',
+                };
+            }
+            return null; // 其余交给通用启发式（HTTP 状态码 / 网络错误等）。
+        },
+    },
     declaration: {
         name: 'fetch_url',
         description:

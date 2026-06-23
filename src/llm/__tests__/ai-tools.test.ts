@@ -68,3 +68,65 @@ describe('buildAiToolSubset', () => {
         expect(Object.keys(out).sort()).toEqual(['a', 'read_file']);
     });
 });
+
+function exec(t: unknown, args: Record<string, unknown> = {}): Promise<string> {
+    // AI SDK CoreTool exposes an async `execute(args, options)`.
+    return (t as { execute: (a: unknown, o: unknown) => Promise<string> }).execute(args, {});
+}
+
+describe('buildAiTools — error classification hint injection', () => {
+    function resultTool(name: string, result: string): Tool {
+        return {
+            declaration: { name, description: 'd', parameters: { type: 'object', properties: {} } },
+            handler: async () => result,
+            meta: { permission: 'read' },
+        };
+    }
+
+    it('appends a structured hint to a failed result', async () => {
+        const reg = new Map<string, Tool>([['boom', resultTool('boom', '[Error] HTTP 403 — denied')]]);
+        const out = buildAiTools(reg, '/tmp', baseCtx);
+        const res = await exec(out.boom);
+        expect(res).toContain('[Error] HTTP 403');
+        expect(res).toContain('[ToolError] type=permanent retryable=false');
+    });
+
+    it('does not append a hint to a successful result', async () => {
+        const reg = new Map<string, Tool>([['ok', resultTool('ok', 'all good here')]]);
+        const out = buildAiTools(reg, '/tmp', baseCtx);
+        const res = await exec(out.ok);
+        expect(res).toBe('all good here');
+        expect(res).not.toContain('[ToolError]');
+    });
+
+    it('classifies a thrown handler error and surfaces a hint', async () => {
+        const thrower: Tool = {
+            declaration: { name: 'throws', description: 'd', parameters: { type: 'object', properties: {} } },
+            handler: async () => {
+                throw new Error('connection reset by peer');
+            },
+            meta: { permission: 'read' },
+        };
+        const reg = new Map<string, Tool>([['throws', thrower]]);
+        const out = buildAiTools(reg, '/tmp', baseCtx);
+        const res = await exec(out.throws);
+        expect(res).toContain('connection reset by peer');
+        expect(res).toContain('[ToolError] type=transient retryable=true');
+    });
+
+    it('honors a per-tool classifyError override', async () => {
+        const overridden: Tool = {
+            declaration: { name: 'ov', description: 'd', parameters: { type: 'object', properties: {} } },
+            handler: async () => '[Error] HTTP 503 transient-looking',
+            meta: {
+                permission: 'read',
+                classifyError: () => ({ type: 'permanent', retryable: false, suggestion: 'switch source' }),
+            },
+        };
+        const reg = new Map<string, Tool>([['ov', overridden]]);
+        const out = buildAiTools(reg, '/tmp', baseCtx);
+        const res = await exec(out.ov);
+        expect(res).toContain('[ToolError] type=permanent retryable=false');
+        expect(res).toContain('switch source');
+    });
+});

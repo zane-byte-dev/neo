@@ -2,6 +2,8 @@
  * src/llm/types.ts — Core type definitions for the LLM subsystem.
  */
 
+import type { ClassifiedError } from './tool-error-classifier.js';
+
 // ── Stream types ─────────────────────────────────────────────────────────────
 
 export type StreamChunk =
@@ -105,6 +107,12 @@ export interface ToolMeta {
     requiresEnv?: string[];
     /** Permission tier — defaults to 'write' when omitted (safe default) */
     permission?: ToolPermission;
+    /**
+     * Optional per-tool error classifier override. Consulted before the
+     * general heuristics in `tool-error-classifier.ts`. Return a
+     * `ClassifiedError` to override, or `null` to fall back to heuristics.
+     */
+    classifyError?: (result: unknown, error?: unknown) => ClassifiedError | null;
 }
 
 export interface Tool {

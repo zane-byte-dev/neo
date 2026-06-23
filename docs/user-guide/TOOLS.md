@@ -104,6 +104,20 @@ env:
 
 完整最小示例见 [examples/tools/my-first-tool/](../../examples/tools/my-first-tool)。
 
+## 工具错误分类
+
+工具失败时，Neo 会对错误结果做一次集中式分类，并在返回给模型的 tool result 末尾附加一段结构化提示，帮助模型判断是否值得重试：
+
+```
+[ToolError] type=permanent retryable=false
+suggestion: 永久性错误（鉴权 / 权限 / 资源不存在）。原样重试无意义，请改用其它工具、换凭证或换来源。
+```
+
+- 分类：`transient`（网络 / 超时 / 5xx，建议重试）、`quota`（限流 / 配额，短暂等待后再试）、`permanent`（鉴权 / 权限 / 404，重试无意义）、`validation`（参数 / 格式非法，需修正参数）、`unknown`（无法判定，保守不重试）。
+- 框架本身不做自动 backoff —— 是否重试由模型决定。
+- 与连续失败短路保护（`tool-loop-guard`）协同：分类负责“这次失败的性质”，短路负责“同一失败重复太多次”的兜底。
+- 自定义工具默认走通用启发式；如需精确控制，可在 `tool.yaml` / 工具 `meta` 中提供 `classifyError` 覆盖（仅内置工具支持）。
+
 ## 调试建议
 
 - 修改工具后调用 `/api/reload` 或重启后端，让用户工具重新加载。

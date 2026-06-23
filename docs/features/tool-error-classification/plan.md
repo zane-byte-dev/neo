@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft. No implementation has started.
+Implemented (2026-06-22). Phase 1–3 完成：集中式分类器 + `wrapExecute` 回灌 + `ToolMeta.classifyError` 覆盖（fetch_url 迁移）。Phase 4（写入 run 事件可观测性）保持 defer。验证结果见 [test-report.md](test-report.md)。
 
 ## Scope
 

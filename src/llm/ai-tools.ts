@@ -10,6 +10,7 @@ import { executeTool, TOOL_DECLARATIONS } from '../tools/executor.js';
 import { isAllowedInPlanMode } from '../tools/tool-permissions.js';
 import { isAllowedByProfile } from '../agent/profiles/enforcement.js';
 import { createToolLoopGuard, type ToolLoopGuard } from './tool-loop-guard.js';
+import { classifyToolError, formatErrorHint } from './tool-error-classifier.js';
 import type { Tool, ToolContext } from './types.js';
 
 /**
@@ -35,12 +36,25 @@ export function buildAiTools(
     const wrapExecute = (
         name: string,
         run: (args: Record<string, unknown>) => Promise<string>,
+        toolDef?: Tool,
     ) => async (args: Record<string, unknown>) => {
         const sc = guard.shortCircuit(name, args);
         if (sc) return sc;
-        const result = await run(args);
+        let result: string;
+        try {
+            result = await run(args);
+        } catch (err) {
+            // Execution threw — classify, record as a failure, and surface a hint.
+            const errResult = `[Error] ${err instanceof Error ? err.message : String(err)}`;
+            const thrown = classifyToolError(name, errResult, err, toolDef);
+            guard.record(name, args, errResult);
+            return thrown ? errResult + formatErrorHint(thrown) : errResult;
+        }
+        // Classify the (possibly failed) result and append a structured hint.
+        const classified = classifyToolError(name, result, undefined, toolDef);
+        // Record the original (un-annotated) result so loop-guard signatures stay stable.
         guard.record(name, args, result);
-        return result;
+        return classified ? result + formatErrorHint(classified) : result;
     };
 
     // Built-in tools (bash, read_file, write_file, list_dir)
@@ -63,8 +77,10 @@ export function buildAiTools(
         tools[name] = tool({
             description: t.declaration.description,
             inputSchema: jsonSchema(t.declaration.parameters),
-            execute: wrapExecute(name, (args) =>
-                executeTool(name, args, workDir, toolRegistry, context),
+            execute: wrapExecute(
+                name,
+                (args) => executeTool(name, args, workDir, toolRegistry, context),
+                t,
             ),
         });
     }
@@ -78,7 +94,7 @@ export function buildAiTools(
             tools[name] = tool({
                 description: t.declaration.description,
                 inputSchema: jsonSchema(t.declaration.parameters),
-                execute: wrapExecute(name, (args) => t.handler(args, workDir, context)),
+                execute: wrapExecute(name, (args) => t.handler(args, workDir, context), t),
             });
         }
     }

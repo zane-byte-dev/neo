@@ -8,6 +8,7 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Added
 
+- **工具错误分类 MVP**：新增集中式错误分类器 `src/llm/tool-error-classifier.ts`，工具失败时给出结构化标签（`transient` / `quota` / `permanent` / `validation` / `unknown` + `retryable` + 建议动作），并在 `buildAiTools()` 的执行收敛点把提示追加到 tool result 末尾回灌给模型，由模型自行决定是否重试（框架不做自动 backoff）。基于通用启发式（HTTP 状态码、权限 / 参数 / 网络 / 限流关键词，中英文），工具可通过 `meta.classifyError` 声明按工具覆盖；与现有 `tool-loop-guard` 协同，短路兜底行为不变。详见 [user-guide/TOOLS.md](docs/user-guide/TOOLS.md)。
 - **Agent Profiles MVP**：新增声明式 `AgentProfile`，可按入口（web-chat / telegram / cron / webhook / workflow 等）或显式请求选择不同的能力与行为边界——工具 allow/deny 与权限层级上限、模型覆盖、人格注入、记忆策略（`off` / `read` / `read-write`）。内置 `default`（不做任何约束，保持现状）、`research`（只读）、`coding`（禁危险 shell）三个 profile，可通过 `LocalConfig.PROFILES` / `LocalConfig.ENTRYPOINT_PROFILES`（或同名环境变量）覆盖与绑定。详见 [user-guide/AGENT_PROFILES.md](docs/user-guide/AGENT_PROFILES.md)。
 - **Local AI Gateway MVP**：新增 `/v1/models`、OpenAI-compatible `/v1/chat/completions` 和 Anthropic-compatible `/v1/messages`，支持 Settings / Models 中一键开启、生成 / 重置 per-user gateway Bearer token、文本非流式 / 流式调用、模型 alias / `auto` 路由、usage/cost 记录，以及 Anthropic `tool_use` / `tool_result` 协议透传。
 - **Local AI Gateway model discovery**：`/v1/models` 现在同时返回 Neo alias 和对应 provider model id，减少外部客户端把短 alias 过滤成“无可用模型”的情况。
