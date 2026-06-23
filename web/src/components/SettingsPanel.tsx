@@ -1,6 +1,6 @@
 import React from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Cpu, Zap, LayoutGrid, ExternalLink, Upload, Trash2, Plus, X, Loader2, Server, Clock, Activity, AlertTriangle, CheckCircle2, RefreshCw, UserRound, Bot, Plug, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Zap, LayoutGrid, ExternalLink, Upload, Trash2, Plus, X, Loader2, Server, Clock, Activity, AlertTriangle, CheckCircle2, RefreshCw, UserRound, Bot, Plug, ToggleLeft, ToggleRight } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
 import {
@@ -22,18 +22,15 @@ import {
     workflowDelete,
     workflowRun,
     fetchMe,
-    fetchModels,
     fetchPreferences,
     type UserAppInfo,
     type McpServerConfig,
     type ConnectorTemplateSummary,
     type McpConnectionResult,
     type MeInfo,
-    type ModelsResponse,
     type PreferencesResponse,
 } from '../api'
 import type { CronJobInfo, WorkflowDefinition } from '../types'
-import { ModelPanel } from './ModelPanel'
 import { SkillsPanel } from './SkillsPanel'
 import { toast } from './Toast'
 import { confirm as confirmDialog } from './ConfirmDialog'
@@ -136,7 +133,6 @@ const workflowInlineError = (t: TranslateFn, error: WorkflowFormError): string =
 
 type OverviewState = {
     me: PromiseSettledResult<MeInfo>
-    models: PromiseSettledResult<ModelsResponse>
     preferences: PromiseSettledResult<PreferencesResponse>
     crons: PromiseSettledResult<CronJobInfo[]>
     loadedAt: number
@@ -195,25 +191,21 @@ const SettingsOverview: React.FC = () => {
 
     const load = React.useCallback(() => {
         setLoading(true)
-        Promise.allSettled([fetchMe(), fetchModels(), fetchPreferences(), cronList()])
-            .then(([me, models, preferences, crons]) => {
-                setState({ me, models, preferences, crons, loadedAt: Date.now() })
+        Promise.allSettled([fetchMe(), fetchPreferences(), cronList()])
+            .then(([me, preferences, crons]) => {
+                setState({ me, preferences, crons, loadedAt: Date.now() })
             })
             .finally(() => setLoading(false))
     }, [])
 
     React.useEffect(() => { load() }, [load])
 
-    const backendOk = Boolean(state && [state.me, state.models, state.preferences].every((item) => item.status === 'fulfilled'))
+    const backendOk = Boolean(state && [state.me, state.preferences].every((item) => item.status === 'fulfilled'))
     const accountOk = state?.me.status === 'fulfilled' && Boolean(state.me.value.userId)
-    const configuredModels = state?.models.status === 'fulfilled'
-        ? state.models.value.models.filter((model) => model.configured).length
-        : 0
-    const modelsOk = configuredModels > 0
     const cronCount = state?.crons.status === 'fulfilled' ? state.crons.value.length : 0
-    const ready = backendOk && accountOk && modelsOk
+    const ready = backendOk && accountOk
     const firstError = state
-        ? [state.me, state.models, state.preferences, state.crons].find((item) => item.status === 'rejected') as PromiseRejectedResult | undefined
+        ? [state.me, state.preferences, state.crons].find((item) => item.status === 'rejected') as PromiseRejectedResult | undefined
         : undefined
 
     return (
@@ -251,15 +243,6 @@ const SettingsOverview: React.FC = () => {
                                 </p>
                             </div>
                         </div>
-                        {!modelsOk && !loading && (
-                            <button
-                                type="button"
-                                onClick={() => navigate('/settings/models')}
-                                className="inline-flex items-center justify-center rounded-lg bg-primary-mint px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
-                            >
-                                {t('systemStatusConfigureModels')}
-                            </button>
-                        )}
                     </div>
                 </section>
 
@@ -294,17 +277,6 @@ const SettingsOverview: React.FC = () => {
                         tone={accountOk ? 'ok' : 'warning'}
                         actionLabel={!accountOk ? t('retry') : undefined}
                         onAction={!accountOk ? load : undefined}
-                    />
-                    <StatusTile
-                        icon={<Cpu size={15} />}
-                        title={t('systemStatusModels')}
-                        status={modelsOk ? t('systemStatusReadyShort') : t('systemStatusAttentionShort')}
-                        summary={modelsOk
-                            ? t('systemStatusModelsReady', { count: configuredModels })
-                            : t('systemStatusModelsMissing')}
-                        tone={modelsOk ? 'ok' : 'warning'}
-                        actionLabel={!modelsOk ? t('systemStatusOpenModels') : undefined}
-                        onAction={!modelsOk ? () => navigate('/settings/models') : undefined}
                     />
                     <StatusTile
                         icon={<Bot size={15} />}
@@ -1243,19 +1215,18 @@ const AutomationsTab: React.FC = () => {
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'models' | 'skills' | 'apps' | 'mcp' | 'automations'
+type TabId = 'overview' | 'skills' | 'apps' | 'mcp' | 'automations'
 type TabGroup = 'basic' | 'advanced'
 
 interface TabDef {
     id: TabId
-    labelKey: 'settingsOverview' | 'models' | 'skills' | 'apps' | 'mcpServers' | 'automations'
+    labelKey: 'settingsOverview' | 'skills' | 'apps' | 'mcpServers' | 'automations'
     group: TabGroup
     icon: React.ReactNode
 }
 
 const TABS: TabDef[] = [
     { id: 'overview', labelKey: 'settingsOverview', group: 'basic', icon: <Activity size={14} /> },
-    { id: 'models', labelKey: 'models', group: 'basic', icon: <Cpu size={14} /> },
     { id: 'skills', labelKey: 'skills', group: 'basic', icon: <Zap size={14} /> },
     { id: 'apps',   labelKey: 'apps', group: 'advanced', icon: <LayoutGrid size={14} /> },
     { id: 'mcp', labelKey: 'mcpServers', group: 'advanced', icon: <Server size={14} /> },
@@ -1313,7 +1284,6 @@ export const SettingsPanel: React.FC = () => {
             {/* Tab content */}
             <div className="flex-1 min-h-0 overflow-hidden">
                 {activeTab === 'overview' && <SettingsOverview />}
-                {activeTab === 'models' && <ModelPanel />}
                 {activeTab === 'skills' && <SkillsPanel />}
                 {activeTab === 'apps'   && <AppsTab />}
                 {activeTab === 'mcp' && <McpTab />}

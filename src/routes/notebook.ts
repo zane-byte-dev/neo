@@ -50,7 +50,6 @@ import {
 const execFileAsync = promisify(execFile);
 import { generateAndSaveSourceGuide } from '../services/notebook-ai.js';
 import { calcUser } from '../services/user-service.js';
-import { getMonthlyUsage } from '../utils/token-tracker.js';
 import { trashArticle, trashNotebook } from '../services/trash-service.js';
 
 const MAX_ANNOTATION_CONTEXT_TEXT = 200;
@@ -125,12 +124,6 @@ export function notebookGet(router: Router): void {
                 if (!nb || !articleId) { ctx.status = 400; ctx.body = { error: 'notebook + articleId required' }; return; }
                 if (!nbGet(workDir, articleId)) { ctx.status = 404; ctx.body = { error: 'Article not found' }; return; }
                 ctx.body = nbListAnnotations(workDir, nb, articleId, stateDir);
-                break;
-            }
-            // ── Token usage ───────────────────────────────────────────────
-            case 'token-usage': {
-                const month = q.month?.trim() || undefined;
-                ctx.body = await getMonthlyUsage(month);
                 break;
             }
             // ── Version history (git log) ──────────────────────────────────

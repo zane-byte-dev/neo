@@ -6,7 +6,6 @@
  * which is gitignored — copy src/config.local.example.ts to bootstrap.
  */
 
-import { getSecret } from './services/secrets.js';
 import { loadOrBootstrapHomeConfig, printBootstrapBanner } from './services/bootstrap-config.js';
 import type { AgentProfile, EntrypointProfileBindings } from './agent/profiles/types.js';
 
@@ -103,12 +102,11 @@ if (!process.env.NEO_STATE_DIR) {
     if (defaultStateDir) process.env.NEO_STATE_DIR = defaultStateDir;
 }
 
-// ── Runtime accessors for credentials (encrypted store first, then process.env) ─
+// ── Runtime accessors for credentials (read from process.env) ─
 
-export const getDeepseekApiKey = (): string => getSecret('DEEPSEEK_API_KEY');
+export const getDeepseekApiKey = (): string => process.env.DEEPSEEK_API_KEY ?? '';
 
-// Gemini API key is used by generate_video and as fallback for transcription.
-export const getGeminiApiKey   = (): string => getSecret('GEMINI_API_KEY');
+export const getGeminiApiKey   = (): string => process.env.GEMINI_API_KEY ?? '';
 
 /** Maximum agentic tool-call iterations before forcing stop */
 export const MAX_TOOL_ITERATIONS = 25;

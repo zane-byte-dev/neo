@@ -1,8 +1,8 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BarChart2, BookOpen, CheckCircle2, Circle, FolderOpen, MessageSquare, PenLine, Settings, X } from 'lucide-react'
+import { BarChart2, BookOpen, CheckCircle2, Circle, FolderOpen, MessageSquare, PenLine, X } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
-import { fetchModels, notebookList, notebookListNotebooks } from '../api'
+import { notebookList, notebookListNotebooks } from '../api'
 import { useT } from '../i18n'
 
 const GhostLogo: React.FC = () => (
@@ -67,7 +67,6 @@ export const WelcomeScreen: React.FC = () => {
         firstRunChecklistDismissed,
         setFirstRunChecklistDismissed,
     } = useAppStore()
-    const [hasConfiguredModel, setHasConfiguredModel] = React.useState(false)
     const [hasNotebookEntry, setHasNotebookEntry] = React.useState(false)
     const [checklistLoading, setChecklistLoading] = React.useState(false)
 
@@ -86,12 +85,8 @@ export const WelcomeScreen: React.FC = () => {
 
         async function loadChecklistState() {
             try {
-                const [models, notebooks] = await Promise.all([
-                    fetchModels().catch(() => null),
-                    notebookListNotebooks().catch(() => []),
-                ])
+                const notebooks = await notebookListNotebooks().catch(() => [])
                 if (cancelled) return
-                setHasConfiguredModel(models?.models.some((model) => model.configured) ?? false)
 
                 let foundNotebookEntry = false
                 for (const notebook of notebooks) {
@@ -126,15 +121,6 @@ export const WelcomeScreen: React.FC = () => {
     }
 
     const checklistItems = [
-        {
-            id: 'model',
-            icon: Settings,
-            done: hasConfiguredModel,
-            title: t('firstRunChecklistModelTitle'),
-            desc: t('firstRunChecklistModelDesc'),
-            actionLabel: t('firstRunChecklistModelAction'),
-            onAction: () => navigate('/settings/models'),
-        },
         {
             id: 'message',
             icon: MessageSquare,

@@ -294,32 +294,6 @@ export function fetchPreferences(): Promise<PreferencesResponse> {
     return apiGet<PreferencesResponse>('/api/preferences')
 }
 
-export type SecretKey =
-    | 'GEMINI_API_KEY'
-    | 'DEEPSEEK_API_KEY'
-    | 'OPENAI_API_KEY'
-    | 'ANTHROPIC_API_KEY'
-    | 'CLAUDE_CODE_BASE_URL'
-    | 'CLAUDE_CODE_TOKEN'
-
-export interface SecretStatus {
-    hasValue: boolean
-    source: 'file' | 'env' | 'none'
-    masked: string
-}
-
-export interface SecretsResponse {
-    secrets: Record<SecretKey, SecretStatus>
-}
-
-export function fetchSecrets(): Promise<SecretsResponse> {
-    return apiGet<SecretsResponse>('/api/secrets')
-}
-
-export function saveSecrets(patch: Partial<Record<SecretKey, string>>): Promise<SecretsResponse> {
-    return _post('/api/secrets', patch).then((r) => _jsonOrThrow<SecretsResponse>(r))
-}
-
 export function fetchToolApprovals(): Promise<ToolApprovalsResponse> {
     return apiGet<ToolApprovalsResponse>('/api/tool-approvals')
 }
@@ -1210,74 +1184,3 @@ export async function initializeWorkspace(): Promise<MeInfo & { ok: boolean }> {
     return res.json()
 }
 
-// ── Model / usage API ─────────────────────────────────────────────────────────
-
-export interface ModelInfo {
-    alias: string
-    modelId: string
-    provider: string
-    pricing: { input: number; output: number }
-    free: boolean
-    configured: boolean
-}
-
-export interface MonthlyUsageSummary {
-    month: string
-    totalPromptTokens: number
-    totalCompletionTokens: number
-    totalTokens: number
-    callCount: number
-    byModel: Record<string, {
-        promptTokens: number
-        completionTokens: number
-        totalTokens: number
-        callCount: number
-    }>
-}
-
-export interface UsageRecord {
-    timestamp: number
-    userId: string
-    model: string
-    tier: string
-    score: number
-    confidence: number
-    reason: string
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-    estimatedCost: number
-    durationMs: number
-    fallbackUsed: boolean
-    originalModel?: string
-    sessionId?: string
-    caller?: string
-    systemPrompt?: string
-    userPrompt?: string
-}
-
-export interface ModelsResponse {
-    models: ModelInfo[]
-    usage: MonthlyUsageSummary
-    history: UsageRecord[]
-    dailyCost: number
-}
-
-export function fetchModels(month?: string): Promise<ModelsResponse> {
-    const qs = month ? `?month=${encodeURIComponent(month)}` : ''
-    return apiGet<ModelsResponse>(`/api/models${qs}`)
-}
-
-export interface SessionMessage {
-    id: number
-    session_id: string
-    user_id: string
-    role: string
-    content: string
-    user_name: string | null
-    timestamp: string
-}
-
-export function fetchModelMessages(sessionId: string): Promise<{ messages: SessionMessage[] }> {
-    return apiGet(`/api/models/messages?sessionId=${encodeURIComponent(sessionId)}`)
-}
