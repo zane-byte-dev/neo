@@ -70,6 +70,38 @@ describe('buildAiTools', () => {
         // search_tools keeps its full description so the model can use the escape hatch
         expect(out.search_tools.description).toBe('desc-search_tools');
     });
+
+    it('lazy mode meaningfully shrinks the injected tool-doc payload', () => {
+        // A realistic registry: several tools with verbose multi-sentence docs.
+        const longDesc = (n: string) =>
+            `Tool ${n} does a very specific thing. It accepts several parameters and ` +
+            `behaves differently depending on flags. Use it when you need ${n}-style ` +
+            `processing. Avoid it for unrelated tasks. See the docs for caveats and ` +
+            `edge cases around concurrency, retries, and partial failures.`;
+        const reg = new Map<string, Tool>(
+            ['alpha', 'bravo', 'charlie', 'delta', 'echo'].map((n) => {
+                const t = makeTool(n);
+                t.declaration.description = longDesc(n);
+                return [n, t] as const;
+            }),
+        );
+
+        const sumDescriptions = (set: Record<string, { description?: string }>) =>
+            Object.values(set).reduce((acc, t) => acc + (t.description?.length ?? 0), 0);
+
+        const full = buildAiTools(reg, '/tmp', baseCtx) as Record<string, { description?: string }>;
+        const lazy = buildAiTools(reg, '/tmp', { ...baseCtx, toolDocsMode: 'lazy' }) as Record<
+            string,
+            { description?: string }
+        >;
+
+        const fullChars = sumDescriptions(full);
+        const lazyChars = sumDescriptions(lazy);
+
+        // Lazy descriptions must be strictly smaller, and substantially so.
+        expect(lazyChars).toBeLessThan(fullChars);
+        expect(lazyChars).toBeLessThan(fullChars * 0.6);
+    });
 });
 
 describe('buildAiToolSubset', () => {

@@ -2,7 +2,28 @@
 
 ## Status
 
-Draft. No implementation has started.
+Backend slice 1 + frontend slice 2 implemented. `mcp.json` stays primary (Option A).
+
+Implemented (Option A — `mcp.json` stays primary):
+
+- `src/mcp/connector-templates.ts` — template catalog (`filesystem`, `github`, `custom-stdio`) with `expandTemplate()` that produces stdio configs and reports missing required fields plus secret keys.
+- `src/mcp/test-connection.ts` — `testMcpConnection()` + pure `classifyConnectionError()` returning structured codes (`ok`, `missing_secret`, `cwd_not_found`, `command_not_found`, `process_exited`, `timeout`, `invalid_rpc`, `no_tools`, `unknown`).
+- `src/mcp/stdio-client.ts` — spawn `error` events now reject pending requests so `ENOENT` surfaces as `command_not_found` instead of timing out.
+- `src/mcp/loader.ts` — reads top-level `disabledTools` from `mcp.json` and filters disabled tools server-side before registration.
+- `src/routes/mcp-config.ts` — new routes: `GET /api/mcp/templates`, `POST /api/mcp/test` (draft config or template), `POST /api/mcp/:name/test` (stored server), `PATCH /api/mcp/:name/tools/:tool` (enable/disable). `GET /api/mcp` and `writeConfig` now round-trip `disabledTools`.
+
+Storage decision: `disabledTools` is stored as a top-level map in `{workDir}/mcp.json`. Connector secrets encryption (env values via the secrets service) remains a follow-up; templates already flag secret fields via `secretKeys`.
+
+Frontend (slice 2):
+
+- `web/src/components/SettingsPanel.tsx` (MCP tab) — template picker (Manual / Filesystem / GitHub / Custom stdio) that renders template fields, a **Test connection** action for both draft configs and saved servers showing the structured status code + tool count, and per-tool enable/disable toggles backed by `disabledTools`.
+- `web/src/api.ts` — `mcpTemplates()`, `mcpTestDraft()`, `mcpTestServer()`, `mcpToggleTool()`; `mcpList()` now returns `disabledTools`.
+- `POST /api/mcp/test` echoes the resolved config so the UI can save a template-expanded server without re-implementing expansion client-side.
+
+Deferred:
+
+- Encrypted storage of connector env secrets (currently written to `mcp.json` like any other env).
+- Remote HTTP / OAuth MCP transports.
 
 ## Scope
 

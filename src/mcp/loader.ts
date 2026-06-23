@@ -39,6 +39,12 @@ interface McpServerConfig {
 
 interface McpConfigFile {
     mcpServers?: Record<string, McpServerConfig>;
+    /**
+     * Per-server list of tool names the user has disabled. Disabled tools are
+     * never registered, so the agent cannot call them. Enforced server-side
+     * (not just hidden in the UI).
+     */
+    disabledTools?: Record<string, string[]>;
 }
 
 /** Sanitise tool name for use inside our registry (snake/alphanum). */
@@ -98,7 +104,9 @@ export async function loadMcpTools(workDir: string): Promise<Map<string, Tool>> 
     }
 
     const servers = config.mcpServers ?? {};
+    const disabled = config.disabledTools ?? {};
     for (const [serverName, cfg] of Object.entries(servers)) {
+        const disabledForServer = new Set(disabled[serverName] ?? []);
         const client = new StdioMcpClient({
             command: cfg.command,
             args: cfg.args,
@@ -108,8 +116,13 @@ export async function loadMcpTools(workDir: string): Promise<Map<string, Tool>> 
         try {
             await client.start();
             const defs = await client.listTools();
-            log.info(MODULE, `connected to "${serverName}" — ${defs.length} tools`);
-            for (const def of defs) {
+            const enabledDefs = defs.filter((def) => !disabledForServer.has(def.name));
+            log.info(
+                MODULE,
+                `connected to "${serverName}" — ${enabledDefs.length}/${defs.length} tools` +
+                    (disabledForServer.size ? ` (${disabledForServer.size} disabled)` : ''),
+            );
+            for (const def of enabledDefs) {
                 const fullName = mcpToolName(serverName, def.name);
                 tools.set(fullName, {
                     declaration: buildDeclaration(fullName, def),

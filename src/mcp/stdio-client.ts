@@ -109,6 +109,16 @@ export class StdioMcpClient {
         });
         this.child.on('error', (err) => {
             log.error('mcp', `[${command}] spawn error`, { error: err.message });
+            // Surface spawn failures (e.g. ENOENT) to any in-flight request so
+            // callers can classify them instead of waiting for a timeout.
+            const e = err as NodeJS.ErrnoException;
+            const detail = e.code ? `${e.code}: ${e.message}` : e.message;
+            for (const [, p] of this.pending) {
+                clearTimeout(p.timer);
+                p.reject(new Error(`MCP server "${command}" failed to spawn (${detail})`));
+            }
+            this.pending.clear();
+            this.child = null;
         });
 
         await this.request('initialize', {

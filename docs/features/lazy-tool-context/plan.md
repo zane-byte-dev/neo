@@ -41,8 +41,8 @@ foundation for any future prompt-side injection.
   enough to validate).
 - Prompt-side compact-catalog injection (renderer ready, but no live injection
   point currently consumes it).
-- Token-delta measurement against `usage.jsonl` (Phase 4).
-- Lazy docs for workflow / subagent / skill execution paths (currently full).
+- Lazy docs for workflow / skill execution paths (currently full). Subagents
+  already inherit lazy mode through `buildAiToolSubset(..., ctx)`.
 
 ## Scope
 

@@ -37,7 +37,9 @@ New:
 - `src/tools/internal/__tests__/search-tools.test.ts` — declaration tier, missing
   params, exact-name detail, miss message, plan-mode hiding, keyword query.
 - `src/llm/__tests__/ai-tools.test.ts` (extended) — full descriptions by default,
-  one-line summaries in lazy mode, `search_tools` keeps full description.
+  one-line summaries in lazy mode, `search_tools` keeps full description, and a
+  token-delta assertion proving lazy descriptions are < 60% of full payload
+  (Phase 4).
 
 ## Commands
 
@@ -51,5 +53,5 @@ npx vitest run src/tools src/llm src/services
 
 - No Settings UI for `toolContext` yet (config source only).
 - No live prompt-side injection of the compact catalog renderer.
-- Token-delta measurement (Phase 4) not yet captured.
-- Workflow / subagent / skill paths still use full descriptions.
+- Workflow / skill paths still use full descriptions (subagents inherit lazy
+  mode via `buildAiToolSubset`).

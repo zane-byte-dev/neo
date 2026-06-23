@@ -1,6 +1,6 @@
 import React from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Cpu, Zap, LayoutGrid, ExternalLink, Upload, Trash2, Plus, X, Loader2, Server, Clock, Activity, AlertTriangle, CheckCircle2, RefreshCw, UserRound, Bot } from 'lucide-react'
+import { Cpu, Zap, LayoutGrid, ExternalLink, Upload, Trash2, Plus, X, Loader2, Server, Clock, Activity, AlertTriangle, CheckCircle2, RefreshCw, UserRound, Bot, Plug, ToggleLeft, ToggleRight } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useT } from '../i18n'
 import {
@@ -10,6 +10,10 @@ import {
     mcpList,
     mcpSave,
     mcpDelete,
+    mcpTemplates,
+    mcpTestDraft,
+    mcpTestServer,
+    mcpToggleTool,
     cronList,
     cronSave,
     cronDelete,
@@ -22,6 +26,8 @@ import {
     fetchPreferences,
     type UserAppInfo,
     type McpServerConfig,
+    type ConnectorTemplateSummary,
+    type McpConnectionResult,
     type MeInfo,
     type ModelsResponse,
     type PreferencesResponse,
@@ -535,26 +541,65 @@ const parseEnv = (value: string): Record<string, string> => Object.fromEntries(
         .filter(([key]) => key)
 )
 
+const CONN_CODE_KEY: Record<McpConnectionResult['code'], TranslationKeys> = {
+    ok: 'mcpConnOk',
+    missing_secret: 'mcpConnMissingSecret',
+    cwd_not_found: 'mcpConnCwdNotFound',
+    command_not_found: 'mcpConnCommandNotFound',
+    process_exited: 'mcpConnProcessExited',
+    timeout: 'mcpConnTimeout',
+    invalid_rpc: 'mcpConnInvalidRpc',
+    no_tools: 'mcpConnNoTools',
+    unknown: 'mcpConnUnknown',
+}
+
+const ConnectionResultBadge: React.FC<{ result: McpConnectionResult }> = ({ result }) => {
+    const t = useT()
+    const ok = result.ok
+    return (
+        <div className={cn('flex items-start gap-2 rounded-lg px-3 py-2 text-xs', ok ? 'bg-primary-mint/10 text-primary-mint' : 'bg-destructive/10 text-destructive')}>
+            {ok ? <CheckCircle2 size={14} className="mt-0.5 shrink-0" /> : <AlertTriangle size={14} className="mt-0.5 shrink-0" />}
+            <div className="min-w-0">
+                <p className="font-medium">{t(CONN_CODE_KEY[result.code])}{ok && typeof result.toolCount === 'number' ? ` · ${result.toolCount}` : ''}</p>
+                <p className="text-text-tertiary break-words">{result.message}</p>
+            </div>
+        </div>
+    )
+}
+
 const McpTab: React.FC = () => {
     const t = useT()
     const [servers, setServers] = React.useState<Record<string, McpServerConfig>>({})
+    const [disabledTools, setDisabledTools] = React.useState<Record<string, string[]>>({})
+    const [templates, setTemplates] = React.useState<ConnectorTemplateSummary[]>([])
     const [loading, setLoading] = React.useState(true)
     const [saving, setSaving] = React.useState(false)
     const [loadError, setLoadError] = React.useState<string | null>(null)
     const [saveError, setSaveError] = React.useState<string | null>(null)
     const [editingName, setEditingName] = React.useState('')
+    const [templateId, setTemplateId] = React.useState('')
+    const [templateInputs, setTemplateInputs] = React.useState<Record<string, string>>({})
     const [command, setCommand] = React.useState('')
     const [args, setArgs] = React.useState('')
     const [cwd, setCwd] = React.useState('')
     const [env, setEnv] = React.useState('')
+    const [testing, setTesting] = React.useState(false)
+    const [draftResult, setDraftResult] = React.useState<McpConnectionResult | null>(null)
+    const [serverTests, setServerTests] = React.useState<Record<string, McpConnectionResult>>({})
+    const [testingServer, setTestingServer] = React.useState<string | null>(null)
     const nameInputRef = React.useRef<HTMLInputElement>(null)
     const commandInputRef = React.useRef<HTMLInputElement>(null)
+
+    const activeTemplate = templates.find((tpl) => tpl.id === templateId) ?? null
 
     const reload = () => {
         setLoading(true)
         setLoadError(null)
         mcpList()
-            .then((res) => setServers(res.servers))
+            .then((res) => {
+                setServers(res.servers)
+                setDisabledTools(res.disabledTools ?? {})
+            })
             .catch((error: unknown) => {
                 setServers({})
                 setLoadError(errorMessage(error, t('mcpLoadFailed')))
@@ -564,35 +609,93 @@ const McpTab: React.FC = () => {
     }
 
     React.useEffect(() => { reload() }, [])
+    React.useEffect(() => {
+        mcpTemplates().then((res) => setTemplates(res.templates)).catch(() => setTemplates([]))
+    }, [])
 
     const edit = (name: string, server: McpServerConfig) => {
+        setTemplateId('')
         setEditingName(name)
         setCommand(server.command)
         setArgs((server.args ?? []).join(' '))
         setCwd(server.cwd ?? '')
         setEnv(Object.entries(server.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'))
+        setDraftResult(null)
     }
 
     const resetForm = () => {
         setEditingName('')
+        setTemplateId('')
+        setTemplateInputs({})
         setCommand('')
         setArgs('')
         setCwd('')
         setEnv('')
+        setDraftResult(null)
+    }
+
+    const pickTemplate = (id: string) => {
+        setTemplateId(id)
+        setTemplateInputs({})
+        setDraftResult(null)
+    }
+
+    // Build the request body for /api/mcp/test (and the basis for save).
+    const draftBody = (): McpServerConfig | { templateId: string; inputs: Record<string, string> } | null => {
+        if (templateId) {
+            return { templateId, inputs: templateInputs }
+        }
+        if (!command.trim()) return null
+        return {
+            command: command.trim(),
+            args: parseSpaceDelimitedArgs(args),
+            ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
+            env: parseEnv(env),
+        }
+    }
+
+    const testDraft = async () => {
+        const body = draftBody()
+        if (!body) return
+        setTesting(true)
+        setDraftResult(null)
+        try {
+            setDraftResult(await mcpTestDraft(body))
+        } catch (e) {
+            toast.error(errorMessage(e, t('mcpConnUnknown')))
+        } finally {
+            setTesting(false)
+        }
+    }
+
+    const canSave = (): boolean => {
+        if (!editingName.trim()) return false
+        if (templateId) {
+            return (activeTemplate?.fields ?? []).every((f) => !f.required || (templateInputs[f.key] ?? '').trim())
+        }
+        return !!command.trim()
     }
 
     const save = async () => {
         const name = editingName.trim()
-        if (!name || !command.trim()) return
+        if (!canSave()) return
         setSaving(true)
         setSaveError(null)
         try {
-            await mcpSave(name, {
-                command: command.trim(),
-                args: parseSpaceDelimitedArgs(args),
-                ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
-                env: parseEnv(env),
-            })
+            if (templateId) {
+                // Resolve the template server-side (also validates required fields),
+                // then persist the expanded config.
+                const res = await mcpTestDraft({ templateId, inputs: templateInputs })
+                if (!res.config) throw new Error(res.message || t('mcpSaveFailed'))
+                await mcpSave(name, res.config)
+            } else {
+                await mcpSave(name, {
+                    command: command.trim(),
+                    args: parseSpaceDelimitedArgs(args),
+                    ...(cwd.trim() ? { cwd: cwd.trim() } : {}),
+                    env: parseEnv(env),
+                })
+            }
             toast.success(t('mcpSaved'))
             resetForm()
             reload()
@@ -614,6 +717,37 @@ const McpTab: React.FC = () => {
             toast.error(t('mcpDeleteFailed'))
         }
     }
+
+    const testServer = async (name: string) => {
+        setTestingServer(name)
+        try {
+            const res = await mcpTestServer(name)
+            setServerTests((prev) => ({ ...prev, [name]: res }))
+        } catch (e) {
+            toast.error(errorMessage(e, t('mcpConnUnknown')))
+        } finally {
+            setTestingServer(null)
+        }
+    }
+
+    const toggleTool = async (name: string, tool: string, enabled: boolean) => {
+        try {
+            await mcpToggleTool(name, tool, enabled)
+            setDisabledTools((prev) => {
+                const current = new Set(prev[name] ?? [])
+                if (enabled) current.delete(tool)
+                else current.add(tool)
+                const next = { ...prev }
+                if (current.size > 0) next[name] = [...current]
+                else delete next[name]
+                return next
+            })
+        } catch (e) {
+            toast.error(errorMessage(e, t('mcpToggleFailed')))
+        }
+    }
+
+    const isToolDisabled = (name: string, tool: string) => (disabledTools[name] ?? []).includes(tool)
 
     return (
         <div className="flex flex-col h-full">
@@ -644,16 +778,55 @@ const McpTab: React.FC = () => {
                 )}
                 <div className="bg-bg-container border border-border rounded-xl p-4 space-y-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
                     <h3 className="text-sm font-semibold text-text">{editingName && servers[editingName] ? t('editMcpServer') : t('newMcpServer')}</h3>
+                    {/* Template picker (only when creating a new server). */}
+                    {!(editingName && servers[editingName]) && templates.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Plug size={13} className="text-text-tertiary" />
+                            <button
+                                onClick={() => pickTemplate('')}
+                                className={cn('px-2.5 py-1 rounded-lg border text-xs transition-colors', !templateId ? 'border-primary-mint/50 bg-primary-mint/10 text-primary-mint' : 'border-border text-text-secondary hover:bg-fill')}
+                            >{t('mcpManual')}</button>
+                            {templates.map((tpl) => (
+                                <button
+                                    key={tpl.id}
+                                    onClick={() => pickTemplate(tpl.id)}
+                                    className={cn('px-2.5 py-1 rounded-lg border text-xs transition-colors', templateId === tpl.id ? 'border-primary-mint/50 bg-primary-mint/10 text-primary-mint' : 'border-border text-text-secondary hover:bg-fill')}
+                                >{tpl.label}</button>
+                            ))}
+                        </div>
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input ref={nameInputRef} value={editingName} onChange={(e) => setEditingName(e.target.value)} placeholder={t('mcpNamePlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
-                        <input ref={commandInputRef} value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t('mcpCommandPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50" />
-                        <input value={args} onChange={(e) => setArgs(e.target.value)} placeholder={t('mcpArgsPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
-                        <input value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder={t('mcpCwdPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
-                        <textarea value={env} onChange={(e) => setEnv(e.target.value)} placeholder={t('mcpEnvPlaceholder')} rows={3} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2 font-mono" />
+                        <input ref={nameInputRef} value={editingName} onChange={(e) => setEditingName(e.target.value)} placeholder={t('mcpNamePlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                        {activeTemplate ? (
+                            <>
+                                {activeTemplate.description && (
+                                    <p className="text-xs text-text-tertiary md:col-span-2">{activeTemplate.description}</p>
+                                )}
+                                {activeTemplate.fields.map((field) => (
+                                    <input
+                                        key={field.key}
+                                        type={field.secret ? 'password' : 'text'}
+                                        value={templateInputs[field.key] ?? ''}
+                                        onChange={(e) => setTemplateInputs((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                                        placeholder={`${field.label}${field.required ? ' *' : ''}${field.placeholder ? ` — ${field.placeholder}` : ''}`}
+                                        className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2"
+                                    />
+                                ))}
+                            </>
+                        ) : (
+                            <>
+                                <input ref={commandInputRef} value={command} onChange={(e) => setCommand(e.target.value)} placeholder={t('mcpCommandPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                                <input value={args} onChange={(e) => setArgs(e.target.value)} placeholder={t('mcpArgsPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                                <input value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder={t('mcpCwdPlaceholder')} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2" />
+                                <textarea value={env} onChange={(e) => setEnv(e.target.value)} placeholder={t('mcpEnvPlaceholder')} rows={3} className="bg-fill-secondary border border-border rounded-lg px-3 py-2 text-xs text-text outline-none focus:border-primary-mint/50 md:col-span-2 font-mono" />
+                            </>
+                        )}
                     </div>
+                    {draftResult && <ConnectionResultBadge result={draftResult} />}
                     <div className="flex justify-end gap-2">
                         <button onClick={resetForm} className="px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:bg-fill transition-colors">{t('cancel')}</button>
-                        <button disabled={!editingName.trim() || !command.trim() || saving} onClick={() => void save()} className="px-3 py-1.5 rounded-lg bg-primary-mint text-white text-xs font-medium hover:opacity-90 disabled:opacity-50">{saving ? '...' : t('save')}</button>
+                        <button disabled={!draftBody() || testing} onClick={() => void testDraft()} className="px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:bg-fill transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">{testing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}{testing ? t('mcpTesting') : t('mcpTestConnection')}</button>
+                        <button disabled={!canSave() || saving} onClick={() => void save()} className="px-3 py-1.5 rounded-lg bg-primary-mint text-white text-xs font-medium hover:opacity-90 disabled:opacity-50">{saving ? '...' : t('save')}</button>
                     </div>
                 </div>
                 {loading ? (
@@ -661,18 +834,49 @@ const McpTab: React.FC = () => {
                 ) : Object.keys(servers).length === 0 ? (
                     <div className="py-12 text-center text-sm text-text-quaternary">{t('mcpEmpty')}</div>
                 ) : (
-                    <div className="bg-bg-container border border-border rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-soft)' }}>
-                        {Object.entries(servers).map(([name, server]) => (
-                            <div key={name} className="flex items-center gap-3 px-4 py-3 border-b border-border/60 last:border-b-0">
-                                <Server size={15} className="text-text-tertiary" />
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-[13px] font-semibold text-text truncate">{name}</p>
-                                    <p className="text-xs text-text-tertiary truncate font-mono">{server.command} {(server.args ?? []).join(' ')}</p>
+                    <div className="space-y-3">
+                        {Object.entries(servers).map(([name, server]) => {
+                            const test = serverTests[name]
+                            return (
+                                <div key={name} className="bg-bg-container border border-border rounded-xl overflow-hidden" style={{ boxShadow: 'var(--shadow-soft)' }}>
+                                    <div className="flex items-center gap-3 px-4 py-3">
+                                        <Server size={15} className="text-text-tertiary" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-[13px] font-semibold text-text truncate">{name}</p>
+                                            <p className="text-xs text-text-tertiary truncate font-mono">{server.command} {(server.args ?? []).join(' ')}</p>
+                                        </div>
+                                        <button disabled={testingServer === name} onClick={() => void testServer(name)} className="px-2 py-1 text-xs rounded border border-border text-text-secondary hover:bg-fill disabled:opacity-50 inline-flex items-center gap-1">{testingServer === name ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}{t('mcpTestConnection')}</button>
+                                        <button onClick={() => edit(name, server)} className="px-2 py-1 text-xs rounded border border-border text-text-secondary hover:bg-fill">{t('edit')}</button>
+                                        <button onClick={() => void remove(name)} className="p-1.5 rounded-lg text-text-tertiary hover:text-destructive hover:bg-destructive/10"><Trash2 size={13} /></button>
+                                    </div>
+                                    {(test || (disabledTools[name]?.length ?? 0) > 0) && (
+                                        <div className="px-4 pb-3 space-y-2 border-t border-border/60 pt-3">
+                                            {test && <ConnectionResultBadge result={test} />}
+                                            {test?.tools && test.tools.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <p className="text-[11px] font-medium text-text-tertiary uppercase tracking-wide">{t('mcpToolsTitle')}</p>
+                                                    {test.tools.map((tool) => {
+                                                        const disabled = isToolDisabled(name, tool.name)
+                                                        return (
+                                                            <div key={tool.name} className="flex items-center gap-2 text-xs">
+                                                                <button onClick={() => void toggleTool(name, tool.name, disabled)} className={cn('inline-flex items-center', disabled ? 'text-text-quaternary' : 'text-primary-mint')} title={disabled ? t('mcpToolDisabled') : t('mcpToolEnabled')}>
+                                                                    {disabled ? <ToggleLeft size={18} /> : <ToggleRight size={18} />}
+                                                                </button>
+                                                                <span className={cn('font-mono', disabled && 'line-through text-text-quaternary')}>{tool.name}</span>
+                                                                {tool.description && <span className="text-text-quaternary truncate">— {tool.description}</span>}
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
+                                            {!test && (disabledTools[name]?.length ?? 0) > 0 && (
+                                                <p className="text-xs text-text-tertiary">{t('mcpToolDisabled')}: <span className="font-mono">{(disabledTools[name] ?? []).join(', ')}</span></p>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                <button onClick={() => edit(name, server)} className="px-2 py-1 text-xs rounded border border-border text-text-secondary hover:bg-fill">{t('edit')}</button>
-                                <button onClick={() => void remove(name)} className="p-1.5 rounded-lg text-text-tertiary hover:text-destructive hover:bg-destructive/10"><Trash2 size={13} /></button>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 )}
             </div>

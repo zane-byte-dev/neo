@@ -1049,8 +1049,65 @@ export interface McpServerConfig {
     cwd?: string
 }
 
+export interface ConnectorTemplateField {
+    key: string
+    label: string
+    placeholder?: string
+    required: boolean
+    secret: boolean
+}
+
+export interface ConnectorTemplateSummary {
+    id: string
+    label: string
+    description: string
+    fields: ConnectorTemplateField[]
+}
+
+export type McpConnectionCode =
+    | 'ok'
+    | 'missing_secret'
+    | 'cwd_not_found'
+    | 'command_not_found'
+    | 'process_exited'
+    | 'timeout'
+    | 'invalid_rpc'
+    | 'no_tools'
+    | 'unknown'
+
+export interface McpConnectionResult {
+    ok: boolean
+    code: McpConnectionCode
+    message: string
+    toolCount?: number
+    tools?: Array<{ name: string; description?: string }>
+    /** Present on draft template tests — the resolved server config to save. */
+    config?: McpServerConfig
+}
+
 export function mcpList() {
-    return apiGet<{ servers: Record<string, McpServerConfig> }>('/api/mcp')
+    return apiGet<{ servers: Record<string, McpServerConfig>; disabledTools: Record<string, string[]> }>('/api/mcp')
+}
+
+export function mcpTemplates() {
+    return apiGet<{ templates: ConnectorTemplateSummary[] }>('/api/mcp/templates')
+}
+
+export function mcpTestDraft(body: McpServerConfig | { templateId: string; inputs: Record<string, string> }) {
+    return _post('/api/mcp/test', body).then((r) => _jsonOrThrow<McpConnectionResult>(r))
+}
+
+export function mcpTestServer(name: string) {
+    return _post(`/api/mcp/${encodeURIComponent(name)}/test`).then((r) => _jsonOrThrow<McpConnectionResult>(r))
+}
+
+export function mcpToggleTool(name: string, tool: string, enabled: boolean) {
+    return fetch(`/api/mcp/${encodeURIComponent(name)}/tools/${encodeURIComponent(tool)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    }).then((r) => _jsonOrThrow<{ ok: true; name: string; tool: string; enabled: boolean }>(r))
 }
 
 export function mcpSave(name: string, server: McpServerConfig) {
