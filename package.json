@@ -13,13 +13,14 @@
         "url": "https://github.com/zane-byte-dev/neo/issues"
     },
     "scripts": {
+        "prebuild": "rm -rf dist",
         "build": "tsc",
         "docs:check": "node scripts/check-doc-links.mjs",
         "test": "vitest run",
         "test:coverage": "vitest run --coverage",
         "test:watch": "vitest",
         "clean": "rm -rf dist",
-        "dev:bot": "tsc && node --enable-source-maps dist/main.js",
+        "dev:bot": "tsx src/main.ts",
         "start:bot": "node dist/main.js",
         "index:rebuild": "tsx src/indexing/rebuild.ts",
         "deploy": "npm run build && npm run web:build && pm2 start ecosystem.config.cjs",
