@@ -25,7 +25,7 @@ vi.mock('../../services/user-service.js', () => ({
 }));
 
 import { toolApprovalsRoute } from '../tool-approvals.js';
-import { saveToolApproval } from '../../runtime/tool-approvals.js';
+import { saveToolApproval } from '@neo/runtime';
 
 function buildApp(userId?: string): Koa {
     const app = new Koa();

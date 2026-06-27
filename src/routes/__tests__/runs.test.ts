@@ -22,8 +22,7 @@ vi.mock('../../services/user-service.js', () => ({
 }));
 
 import { runsRoute } from '../runs.js';
-import { createRun, saveRun, loadRun } from '../../runtime/store.js';
-import { appendEvent } from '../../runtime/events.js';
+import { createRun, saveRun, loadRun, appendEvent } from '@neo/runtime';
 
 function buildApp(userId?: string): Koa {
     const app = new Koa();

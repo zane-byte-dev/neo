@@ -42,11 +42,7 @@ vi.mock('../../utils/logger.js', () => ({
 
 import { runAgentTurn } from '../agent-runner.js';
 import { resumeRun } from '../agent-runner.js';
-import { listRunEvents } from '../../runtime/events.js';
-import { createRun, loadRun } from '../../runtime/store.js';
-import { newRunId } from '../../runtime/store.js';
-import { saveCheckpoint } from '../../runtime/checkpoint.js';
-import { resolvePendingAction, savePendingAction } from '../../runtime/pending-actions.js';
+import { listRunEvents, createRun, loadRun, newRunId, saveCheckpoint, resolvePendingAction, savePendingAction } from '@neo/runtime';
 import { messageAdd, messageList } from '../../services/chat-service.js';
 
 let workDir: string;

@@ -34,8 +34,7 @@ vi.mock('../../utils/logger.js', () => ({
 
 import { startCronAgent, stopCronAgent } from '../cron-agent.js';
 import { neoAgentRuntime } from '../../app/agent-runtime.js';
-import { createRun } from '../../runtime/store.js';
-import { appendEvent } from '../../runtime/events.js';
+import { createRun, appendEvent } from '@neo/runtime';
 
 let workDir: string;
 

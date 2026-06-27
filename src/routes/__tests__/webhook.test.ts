@@ -38,8 +38,7 @@ vi.mock('../../utils/logger.js', () => ({
 
 import { webhookRoute } from '../webhook.js';
 import { neoAgentRuntime } from '../../app/agent-runtime.js';
-import { createRun } from '../../runtime/store.js';
-import { appendEvent } from '../../runtime/events.js';
+import { createRun, appendEvent } from '@neo/runtime';
 
 function buildApp(): Koa {
     const app = new Koa();

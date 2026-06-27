@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { executeTool } from '../executor.js';
 import type { Tool } from '../../llm/types.js';
-import { saveToolApproval } from '../../runtime/tool-approvals.js';
+import { saveToolApproval } from '@neo/runtime';
 
 vi.mock('../../utils/audit-logger.js', () => ({
     logDangerousCommand: vi.fn(),

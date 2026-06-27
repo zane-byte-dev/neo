@@ -4,20 +4,8 @@ import { join, relative } from 'node:path';
 
 const REPO_ROOT = process.cwd();
 const ROOT = join(REPO_ROOT, 'src');
-const RUNTIME_DIR = join(ROOT, 'runtime');
 const RUNTIME_PACKAGE_DIR = join(REPO_ROOT, 'packages', 'runtime', 'src');
 const SRC_DIR = ROOT;
-const FORBIDDEN_IMPORTS = [
-    '../routes/',
-    '../services/',
-    '../app/',
-    '../tools/',
-    '../llm/',
-    '../skills/',
-    '../memory/',
-    '../agent/',
-    '../../web/',
-] as const;
 
 function listTsFiles(dir: string): string[] {
     const out: string[] = [];
@@ -35,25 +23,10 @@ function listTsFiles(dir: string): string[] {
 }
 
 describe('runtime import boundary', () => {
-    it('does not import app, route, service, or web layers', () => {
-        const violations: string[] = [];
-        for (const file of listTsFiles(RUNTIME_DIR)) {
-            const text = readFileSync(file, 'utf8');
-            for (const forbidden of FORBIDDEN_IMPORTS) {
-                const pattern = new RegExp(`from\\s+['"]${forbidden.replaceAll('/', '\\/')}`);
-                if (pattern.test(text)) {
-                    violations.push(`${relative(ROOT, file)} imports ${forbidden}`);
-                }
-            }
-        }
-        expect(violations).toEqual([]);
-    });
-
     it('production code imports runtime through the workspace package', () => {
         const violations: string[] = [];
         for (const file of listTsFiles(SRC_DIR)) {
             if (file.includes('/__tests__/')) continue;
-            if (relative(ROOT, file).startsWith('runtime/')) continue;
             const text = readFileSync(file, 'utf8');
             const pattern = /from\s+['"]((?:\.\.\/)+|\.\/)runtime(?:\/([^'"]+))?['"]/g;
             for (const match of text.matchAll(pattern)) {

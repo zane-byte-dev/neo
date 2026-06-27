@@ -26,7 +26,7 @@ vi.mock('../../services/user-service.js', () => ({
 
 import { runAgentTurn } from '../../services/agent-runner.js';
 import { chatRoute } from '../chat.js';
-import { appendEvent } from '../../runtime/events.js';
+import { appendEvent } from '@neo/runtime';
 import { _resetPending } from '../../utils/pending-confirm.js';
 
 const cookie = signedCookie('testuser');

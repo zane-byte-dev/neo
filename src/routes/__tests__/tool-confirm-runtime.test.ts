@@ -30,10 +30,7 @@ vi.mock('../../services/agent-runner.js', () => ({
 
 import { toolConfirmRoute } from '../tool-confirm.js';
 import { _resetPending, createConfirm } from '../../utils/pending-confirm.js';
-import { createRun, loadRun } from '../../runtime/store.js';
-import { savePendingAction, loadPendingAction } from '../../runtime/pending-actions.js';
-import { listRunEvents } from '../../runtime/events.js';
-import { matchToolApprovalScope } from '../../runtime/tool-approvals.js';
+import { createRun, loadRun, savePendingAction, loadPendingAction, listRunEvents, matchToolApprovalScope } from '@neo/runtime';
 
 function buildApp(userId?: string): Koa {
     const app = new Koa();

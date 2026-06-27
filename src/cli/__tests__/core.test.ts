@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseCliArgs, runCli } from '../core.js';
 import type { CliDeps } from '../core.js';
-import type { AgentRuntime } from '../../runtime/contracts.js';
-import type { RunEvent } from '../../runtime/types.js';
+import type { AgentRuntime } from '@neo/runtime';
+import type { RunEvent } from '@neo/runtime';
 
 describe('parseCliArgs', () => {
     it('parses options and message', () => {
