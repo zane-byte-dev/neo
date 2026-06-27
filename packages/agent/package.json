@@ -1,0 +1,34 @@
+{
+    "name": "@neo/agent",
+    "version": "0.1.0",
+    "description": "Neo agent core: LLM client, tools, skills, memory, profiles, and executor.",
+    "type": "module",
+    "private": true,
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./*.js": {
+            "types": "./dist/*.d.ts",
+            "import": "./dist/*.js"
+        }
+    },
+    "typesVersions": {
+        "*": {
+            "*": ["./dist/*"]
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "clean": "rm -rf dist"
+    },
+    "dependencies": {
+        "@neo/runtime": "*"
+    }
+}

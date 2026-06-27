@@ -1,10 +1,8 @@
 {
     "compilerOptions": {
         "target": "ES2022",
-        "module": "ESNext",
-        "moduleResolution": "Bundler",
-        "outDir": "./dist",
-        "rootDir": "./src",
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
@@ -18,19 +16,6 @@
         ],
         "types": [
             "node"
-        ],
-        "paths": {
-            "telegraf": ["./src/types/telegraf.d.ts"]
-        }
-    },
-    "include": [
-        "src/**/*"
-    ],
-    "exclude": [
-        "node_modules",
-        "dist",
-        "python-legacy",
-        "src/**/__tests__",
-        "src/**/*.test.ts"
-    ]
+        ]
+    }
 }

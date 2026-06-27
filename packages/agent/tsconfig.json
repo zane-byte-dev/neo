@@ -1,0 +1,20 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "rootDir": "./src",
+        "outDir": "./dist",
+        "composite": true,
+        "tsBuildInfoFile": "./dist/.tsbuildinfo",
+        "paths": {
+            "telegraf": ["./src/types/telegraf.d.ts"]
+        }
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "dist",
+        "src/**/__tests__",
+        "src/**/*.test.ts"
+    ]
+}
