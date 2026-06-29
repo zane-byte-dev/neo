@@ -160,7 +160,7 @@
 
 - Google NotebookLM 产品文档：<https://notebooklm.google.com>
 - 现有代码锚点：
-  - 服务 / agent 层：[src/services/notebook-service.ts](../../src/services/notebook-service.ts)、[src/services/notebook-ai.ts](../../src/services/notebook-ai.ts)、[src/services/agent-runner.ts](../../src/services/agent-runner.ts)
-  - 路由：[src/routes/notebook.ts](../../src/routes/notebook.ts)、[src/routes/chat.ts](../../src/routes/chat.ts)
+  - 服务 / agent 层：[src/services/notebook-service.ts](../../packages/agent/src/services/notebook-service.ts)、[src/services/notebook-ai.ts](../../packages/app/src/services/notebook-ai.ts)、[src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts)
+  - 路由：[src/routes/notebook.ts](../../packages/app/src/routes/notebook.ts)、[src/routes/chat.ts](../../packages/app/src/routes/chat.ts)
   - 前端入口：[web/src/components/notebook/NotebookWorkspace.tsx](../../web/src/components/notebook/NotebookWorkspace.tsx)
-  - 模型路由：[src/llm/model-router.ts](../../src/llm/model-router.ts)
+  - 模型路由：[src/llm/model-router.ts](../../packages/agent/src/llm/model-router.ts)

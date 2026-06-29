@@ -12,11 +12,12 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import type { LocalConfig } from '../config.js';
+import { writeJsonAtomicSync } from '../utils/atomic-file.js';
 
 const NEO_HOME = join(homedir(), '.neo');
 const CONFIG_PATH = join(NEO_HOME, 'config.json');
@@ -63,7 +64,7 @@ export function loadOrBootstrapHomeConfig(): { config: LocalConfig; bootstrapped
         SESSION_SECRET: randomBytes(48).toString('hex'),
     };
 
-    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', { encoding: 'utf8' });
+    writeJsonAtomicSync(CONFIG_PATH, config);
     try { chmodSync(CONFIG_PATH, 0o600); } catch { /* best-effort on Windows */ }
 
     return { config, bootstrapped: true };

@@ -34,8 +34,8 @@ M1 Runtime Foundation
 
 ### In scope
 
-- 新增 [src/runtime/store.ts](../../src/runtime/store.ts)
-- 新增 [src/runtime/events.ts](../../src/runtime/events.ts)
+- 新增 [src/runtime/store.ts](../../packages/runtime/src/store.ts)
+- 新增 [src/runtime/events.ts](../../packages/runtime/src/events.ts)
 - 为 `{stateDir}/runs/{runId}/` 提供文件读写能力
 - 支持追加式 `events.jsonl`
 - 支持按 cursor 增量读取事件

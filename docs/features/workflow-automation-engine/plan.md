@@ -9,9 +9,9 @@ Phase 1 MVP 聚焦把现有 Cron / Webhook / Agent Runtime / Skill 底座升级�
 ## Freshness Check
 
 - [brief.md](brief.md) 已确认现有自动化只有单步 Cron / Webhook。
-- [../../../src/services/cron-agent.ts](../../../src/services/cron-agent.ts) 已能按计划触发 Agent turn。
-- [../../../src/routes/webhook.ts](../../../src/routes/webhook.ts) 已能用用户 `webhookSecret` 触发 Agent。
-- [../../../src/skills/skill-store.ts](../../../src/skills/skill-store.ts) 与 [../../../src/skills/skill-executor.ts](../../../src/skills/skill-executor.ts) 已提供 Skill 存储和执行能力。
+- [../../../src/services/cron-agent.ts](../../../packages/app/src/services/cron-agent.ts) 已能按计划触发 Agent turn。
+- [../../../src/routes/webhook.ts](../../../packages/app/src/routes/webhook.ts) 已能用用户 `webhookSecret` 触发 Agent。
+- [../../../src/skills/skill-store.ts](../../../packages/agent/src/skills/skill-store.ts) 与 [../../../src/skills/skill-executor.ts](../../../packages/agent/src/skills/skill-executor.ts) 已提供 Skill 存储和执行能力。
 
 ## Implementation Plan
 
@@ -26,9 +26,9 @@ Phase 1 MVP 聚焦把现有 Cron / Webhook / Agent Runtime / Skill 底座升级�
 
 ## Delivered MVP
 
-- 后端服务：[../../../src/services/workflow-service.ts](../../../src/services/workflow-service.ts)
-- HTTP 路由：[../../../src/routes/workflows.ts](../../../src/routes/workflows.ts)
-- Cron 历史：[../../../src/services/cron-history.ts](../../../src/services/cron-history.ts)
+- 后端服务：[../../../src/services/workflow-service.ts](../../../packages/app/src/services/workflow-service.ts)
+- HTTP 路由：[../../../src/routes/workflows.ts](../../../packages/app/src/routes/workflows.ts)
+- Cron 历史：[../../../src/services/cron-history.ts](../../../packages/app/src/services/cron-history.ts)
 - Automations UI：[../../../web/src/components/SettingsPanel.tsx](../../../web/src/components/SettingsPanel.tsx)
 - JSON 编辑器保存前校验：[../../../web/src/lib/workflow-validation.ts](../../../web/src/lib/workflow-validation.ts)
 

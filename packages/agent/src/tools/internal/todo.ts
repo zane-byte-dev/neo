@@ -7,9 +7,10 @@
  *   - persistent: stored in {stateDir}/memory/tasks.json — survives across sessions
  */
 import { promises as fs } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import type { Tool, ToolContext } from '../_base.js';
 import { parseJsonOr } from '../../utils/json.js';
+import { writeJsonAtomic } from '../../utils/atomic-file.js';
 
 interface TodoItem {
     id: number;
@@ -48,8 +49,7 @@ async function saveTodos(
     context?: ToolContext,
 ): Promise<void> {
     const p = todosPath(stateDir, sessionId, scope);
-    await fs.mkdir(dirname(p), { recursive: true });
-    await fs.writeFile(p, JSON.stringify(todos, null, 2), 'utf-8');
+    await writeJsonAtomic(p, todos);
     // Push real-time update to the client via SSE (session scope only)
     if (scope === 'session') {
         context?.todoCallback?.(todos);

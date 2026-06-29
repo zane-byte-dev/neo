@@ -20,10 +20,10 @@
 
 ## Automated Coverage
 
-- [../../../src/services/__tests__/workflow-service.test.ts](../../../src/services/__tests__/workflow-service.test.ts)：覆盖 transform 串行执行与 `previous` 输出传递。
-- [../../../src/routes/__tests__/workflows.test.ts](../../../src/routes/__tests__/workflows.test.ts)：覆盖 Workflow 创建、列表与手动运行。
-- [../../../src/routes/__tests__/cron.test.ts](../../../src/routes/__tests__/cron.test.ts)：覆盖 Cron 最近运行字段。
-- [../../../src/services/__tests__/cron-agent-runtime.test.ts](../../../src/services/__tests__/cron-agent-runtime.test.ts)：回归 Cron Agent artifact 交付路径。
+- [../../../src/services/__tests__/workflow-service.test.ts](../../../packages/app/src/services/__tests__/workflow-service.test.ts)：覆盖 transform 串行执行与 `previous` 输出传递。
+- [../../../src/routes/__tests__/workflows.test.ts](../../../packages/app/src/routes/__tests__/workflows.test.ts)：覆盖 Workflow 创建、列表与手动运行。
+- [../../../src/routes/__tests__/cron.test.ts](../../../packages/app/src/routes/__tests__/cron.test.ts)：覆盖 Cron 最近运行字段。
+- [../../../src/services/__tests__/cron-agent-runtime.test.ts](../../../packages/app/src/services/__tests__/cron-agent-runtime.test.ts)：回归 Cron Agent artifact 交付路径。
 
 ## Validation Commands
 

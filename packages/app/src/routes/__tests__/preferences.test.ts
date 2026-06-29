@@ -4,25 +4,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import { createTestApp, signedCookie } from '../../__tests__/test-helpers.js';
+import { preferences, type PreferencesRouteDeps } from '../preferences.js';
 
-const {
-    calcUserMock,
-    saveUserPreferencesMock,
-} = vi.hoisted(() => ({
-    calcUserMock: vi.fn(),
-    saveUserPreferencesMock: vi.fn(),
-}));
+const modelAliases = ['deepseek', 'deepseek-reasoner'] as const;
+const calcUserMock = vi.fn();
+const invalidateUserCacheMock = vi.fn();
+const saveUserPreferencesMock = vi.fn();
 
-vi.mock('@neo/agent/services/user-service.js', () => ({
+const deps: PreferencesRouteDeps = {
     calcUser: calcUserMock,
-    invalidateUserCache: vi.fn(),
-}));
-
-vi.mock('@neo/agent/services/user-prefs.js', () => ({
+    invalidateUserCache: invalidateUserCacheMock,
     saveUserPreferences: saveUserPreferencesMock,
-}));
+    availableModelAliases: modelAliases,
+    isSelectableModelAlias: (model: string) => modelAliases.includes(model as (typeof modelAliases)[number]),
+};
+
+function mountPreferences() {
+    const { app, router, mount } = createTestApp();
+    preferences(router, deps);
+    mount();
+    return app;
+}
 
 beforeEach(() => {
+    vi.clearAllMocks();
     calcUserMock.mockResolvedValue({
         workDir: '/tmp/work',
         stateDir: '/tmp/state',
@@ -33,17 +38,13 @@ beforeEach(() => {
 
 describe('/api/preferences', () => {
     it('GET returns 401 without auth', async () => {
-        const { preferences } = await import('../preferences.js');
-        const { app, router, mount } = createTestApp();
-        preferences(router); mount();
+        const app = mountPreferences();
         const res = await request(app.callback()).get('/api/preferences');
         expect(res.status).toBe(401);
     });
 
     it('GET returns user preferences and only runtime-available models', async () => {
-        const { preferences } = await import('../preferences.js');
-        const { app, router, mount } = createTestApp();
-        preferences(router); mount();
+        const app = mountPreferences();
         const res = await request(app.callback())
             .get('/api/preferences')
             .set('Cookie', signedCookie('u1'));
@@ -53,9 +54,7 @@ describe('/api/preferences', () => {
     });
 
     it('POST sanitizes incoming preferences and saves them', async () => {
-        const { preferences } = await import('../preferences.js');
-        const { app, router, mount } = createTestApp();
-        preferences(router); mount();
+        const app = mountPreferences();
         const res = await request(app.callback())
             .post('/api/preferences')
             .set('Cookie', signedCookie('u1'))
@@ -73,9 +72,7 @@ describe('/api/preferences', () => {
     });
 
     it('POST defaultModel="auto" clears the default', async () => {
-        const { preferences } = await import('../preferences.js');
-        const { app, router, mount } = createTestApp();
-        preferences(router); mount();
+        const app = mountPreferences();
         await request(app.callback())
             .post('/api/preferences')
             .set('Cookie', signedCookie('u1'))
@@ -85,9 +82,7 @@ describe('/api/preferences', () => {
     });
 
     it('POST returns 401 without auth', async () => {
-        const { preferences } = await import('../preferences.js');
-        const { app, router, mount } = createTestApp();
-        preferences(router); mount();
+        const app = mountPreferences();
         const res = await request(app.callback()).post('/api/preferences').send({});
         expect(res.status).toBe(401);
     });

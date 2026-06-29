@@ -1,4 +1,5 @@
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 
@@ -23,4 +24,20 @@ export async function writeFileAtomic(targetPath: string, data: string | Uint8Ar
 
 export async function writeJsonAtomic(targetPath: string, value: unknown): Promise<void> {
     await writeFileAtomic(targetPath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+export function writeFileAtomicSync(targetPath: string, data: string | Uint8Array): void {
+    mkdirSync(dirname(targetPath), { recursive: true });
+    const tmp = tempPathFor(targetPath);
+    try {
+        writeFileSync(tmp, data);
+        renameSync(tmp, targetPath);
+    } catch (err) {
+        try { rmSync(tmp, { force: true }); } catch { /* ignore cleanup failure */ }
+        throw err;
+    }
+}
+
+export function writeJsonAtomicSync(targetPath: string, value: unknown): void {
+    writeFileAtomicSync(targetPath, `${JSON.stringify(value, null, 2)}\n`);
 }

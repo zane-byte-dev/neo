@@ -32,9 +32,9 @@
 
 当前仓库里还没有 SQLite 相关依赖，Notebook 和 Memory 也都基于文件系统与内存检索：
 
-- [src/services/notebook-service.ts](../../../src/services/notebook-service.ts) 明确仍是 file-system based service
-- [src/routes/chat.ts](../../../src/routes/chat.ts) + [src/tools/internal/notebook-search.ts](../../../src/tools/internal/notebook-search.ts) 承接 Notebook 模式下的对话入口、来源检索与引用注册
-- [src/memory/retriever.ts](../../../src/memory/retriever.ts) 仍是 pure in-memory BM25-lite retriever
+- [src/services/notebook-service.ts](../../../packages/agent/src/services/notebook-service.ts) 明确仍是 file-system based service
+- [src/routes/chat.ts](../../../packages/app/src/routes/chat.ts) + [src/tools/internal/notebook-search.ts](../../../packages/agent/src/tools/internal/notebook-search.ts) 承接 Notebook 模式下的对话入口、来源检索与引用注册
+- [src/memory/retriever.ts](../../../packages/agent/src/memory/retriever.ts) 仍是 pure in-memory BM25-lite retriever
 - [package.json](../../../package.json) 当前未包含 SQLite 驱动
 
 所以 MVP 的正确路径不是直接上复杂向量库，而是先把下面三件事做稳：
@@ -140,8 +140,8 @@ src/indexing/
 
 来源：
 
-- [src/services/notebook-service.ts](../../../src/services/notebook-service.ts) 中的 `nbListSources`
-- [src/services/notebook-service.ts](../../../src/services/notebook-service.ts) 中的 `nbGetSourceEntry`
+- [src/services/notebook-service.ts](../../../packages/agent/src/services/notebook-service.ts) 中的 `nbListSources`
+- [src/services/notebook-service.ts](../../../packages/agent/src/services/notebook-service.ts) 中的 `nbGetSourceEntry`
 
 映射建议：
 
@@ -154,7 +154,7 @@ src/indexing/
 
 来源：
 
-- [src/services/notebook-service.ts](../../../src/services/notebook-service.ts) 中的 `nbListNotes`
+- [src/services/notebook-service.ts](../../../packages/agent/src/services/notebook-service.ts) 中的 `nbListNotes`
 
 映射建议：
 
@@ -166,7 +166,7 @@ src/indexing/
 
 来源：
 
-- [src/memory/semantic-store.ts](../../../src/memory/semantic-store.ts) 中的 `readFacts`
+- [src/memory/semantic-store.ts](../../../packages/agent/src/memory/semantic-store.ts) 中的 `readFacts`
 
 映射建议：
 
@@ -253,7 +253,7 @@ type KnowledgeHit = {
 
 ### 9.1 Notebook Chat
 
-当前 [src/routes/chat.ts](../../../src/routes/chat.ts) 会在 Notebook 模式下触发 agent turn，而 [src/tools/internal/notebook-search.ts](../../../src/tools/internal/notebook-search.ts) 负责：
+当前 [src/routes/chat.ts](../../../packages/app/src/routes/chat.ts) 会在 Notebook 模式下触发 agent turn，而 [src/tools/internal/notebook-search.ts](../../../packages/agent/src/tools/internal/notebook-search.ts) 负责：
 
 1. 绑定当前 notebook / sourceIds
 2. 调用 `searchKnowledge()` 检索 `notebook_source` chunk
@@ -281,7 +281,7 @@ type ParsedCitation = {
 
 ### 9.2 Memory Recall
 
-当前 [src/memory/retriever.ts](../../../src/memory/retriever.ts) 是内存检索。
+当前 [src/memory/retriever.ts](../../../packages/agent/src/memory/retriever.ts) 是内存检索。
 
 MVP 接法：
 

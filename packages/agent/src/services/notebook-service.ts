@@ -7,12 +7,13 @@
  * Files may contain optional YAML frontmatter (title, date, author, tags, summary).
  * IDs are "{notebookName}/{filename}" strings — no SQLite dependency.
  */
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, rmSync, renameSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, mkdirSync, existsSync, unlinkSync, rmSync, renameSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseJsonLines, readJsonFileSyncOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
 import { generateId } from '../utils/id-generator.js';
 import { isInsidePath } from '../utils/path-security.js';
+import { writeFileAtomicSync, writeJsonAtomicSync } from '../utils/atomic-file.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -274,7 +275,7 @@ export function nbCreate(workDir: string, notebook: string, data: NotebookCreate
         tags:    tagsArr.length ? tagsArr : undefined,
     };
 
-    writeFileSync(filePath, serializeFrontmatter(meta, data.content ?? ''), 'utf8');
+    writeFileAtomicSync(filePath, serializeFrontmatter(meta, data.content ?? ''));
     const entryId = `notebooks/${notebook}/${filename}`;
     scheduleNotebookSourceIndexFromEntryId(workDir, entryId);
     const stat = statSync(filePath);
@@ -315,7 +316,7 @@ export function nbUpdate(workDir: string, id: string, data: NotebookUpdateInput)
     };
 
     const body = data.content !== undefined ? (data.content ?? '') : (existing.content ?? '');
-    writeFileSync(filePath, serializeFrontmatter(meta, body), 'utf8');
+    writeFileAtomicSync(filePath, serializeFrontmatter(meta, body));
     scheduleNotebookSourceIndexFromEntryId(workDir, id);
     const stat = statSync(filePath);
 
@@ -683,7 +684,7 @@ export function nbArchiveSource(workDir: string, notebook: string, sourceId: str
     const raw = readFileSync(filePath, 'utf8');
     const { meta, body } = parseFrontmatter(raw);
     meta.archived = true;
-    writeFileSync(filePath, serializeFrontmatter(meta, body), 'utf8');
+    writeFileAtomicSync(filePath, serializeFrontmatter(meta, body));
     scheduleNotebookSourceRemoval(workDir, notebook, sourceId);
     return true;
 }
@@ -742,7 +743,7 @@ export function nbSaveSourceGuide(workDir: string, notebook: string, guide: Sour
     const dir = sourceGuideDir(stateDir, notebook);
     ensureDir(dir);
     const file = sourceGuideFilePath(stateDir, notebook, guide.sourceId);
-    writeFileSync(file, JSON.stringify(guide, null, 2), 'utf8');
+    writeJsonAtomicSync(file, guide);
 }
 
 // ── Notebook config ──────────────────────────────────────────────────────────
@@ -766,7 +767,7 @@ export function nbGetConfig(workDir: string, notebook: string, stateDir = workDi
 export function nbSetConfig(workDir: string, notebook: string, config: NotebookConfig, stateDir = workDir): void {
     const dir = notebookMetaDir(stateDir, notebook);
     ensureDir(dir);
-    writeFileSync(notebookConfigFilePath(stateDir, notebook), JSON.stringify(config, null, 2), 'utf8');
+    writeJsonAtomicSync(notebookConfigFilePath(stateDir, notebook), config);
 }
 
 // ── Notes ────────────────────────────────────────────────────────────────────
@@ -824,7 +825,7 @@ export function nbSaveNote(workDir: string, notebook: string, data: NoteSaveInpu
         date: String(now),
         author: source,   // reuse author field to tag source
     };
-    writeFileSync(notebookNoteFilePath(stateDir, notebook, id), serializeFrontmatter(meta, data.content), 'utf8');
+    writeFileAtomicSync(notebookNoteFilePath(stateDir, notebook, id), serializeFrontmatter(meta, data.content));
     scheduleNotebookNoteUpsert(workDir, notebook, {
         id,
         title: data.title,
@@ -901,7 +902,7 @@ function readAnnotationFile(stateDir: string, notebook: string, articleId: strin
 function writeAnnotationFile(stateDir: string, notebook: string, articleId: string, annotations: NotebookAnnotation[]): void {
     const dir = notebookAnnotationsDir(stateDir, notebook);
     ensureDir(dir);
-    writeFileSync(notebookAnnotationsFilePath(stateDir, notebook, articleId), JSON.stringify(annotations, null, 2), 'utf8');
+    writeJsonAtomicSync(notebookAnnotationsFilePath(stateDir, notebook, articleId), annotations);
 }
 
 export function nbListAnnotations(workDir: string, notebook: string, articleId: string, stateDir = workDir): NotebookAnnotation[] {
@@ -1045,7 +1046,7 @@ export function nbSaveArtifact(workDir: string, notebook: string, input: Artifac
         ...(input.sourceIds?.length ? { sourceIds: [...new Set(input.sourceIds.filter(Boolean))] } : {}),
         ...(input.primaryArticleId ? { primaryArticleId: input.primaryArticleId } : {}),
     };
-    writeFileSync(notebookArtifactFilePath(stateDir, notebook, id), JSON.stringify(artifact, null, 2), 'utf8');
+    writeJsonAtomicSync(notebookArtifactFilePath(stateDir, notebook, id), artifact);
     return artifact;
 }
 
@@ -1083,7 +1084,7 @@ export function nbAppendChatMessage(workDir: string, notebook: string, msg: Note
     const file = join(dir, 'history.jsonl');
     const existing = existsSync(file) ? readFileSync(file, 'utf8') : '';
     const line = JSON.stringify(msg);
-    writeFileSync(file, existing + (existing && !existing.endsWith('\n') ? '\n' : '') + line + '\n', 'utf8');
+    writeFileAtomicSync(file, existing + (existing && !existing.endsWith('\n') ? '\n' : '') + line + '\n');
 }
 
 export function nbClearChatHistory(workDir: string, notebook: string, stateDir = workDir): void {
@@ -1104,6 +1105,6 @@ export function nbForkChatHistory(workDir: string, notebook: string, messageId: 
     const dir = notebookChatDir(stateDir, notebook);
     ensureDir(dir);
     const file = join(dir, 'history.jsonl');
-    writeFileSync(file, kept.map(m => JSON.stringify(m)).join('\n') + '\n', 'utf8');
+    writeFileAtomicSync(file, kept.map(m => JSON.stringify(m)).join('\n') + '\n');
     return kept;
 }

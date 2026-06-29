@@ -1,8 +1,9 @@
 import type Router from '@koa/router';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { calcUser, invalidateUserCache } from '@neo/agent/services/user-service.js';
 import { parseJsonOr } from '@neo/agent/utils/json.js';
+import { writeJsonAtomic } from '@neo/agent/utils/atomic-file.js';
 import { listConnectorTemplates, expandTemplate, type ExpandedServerConfig } from '@neo/agent/mcp/connector-templates.js';
 import { testMcpConnection } from '@neo/agent/mcp/test-connection.js';
 
@@ -29,12 +30,11 @@ async function readConfig(workDir: string): Promise<McpConfigFile> {
 }
 
 async function writeConfig(workDir: string, config: McpConfigFile): Promise<void> {
-    await mkdir(workDir, { recursive: true });
     const out: McpConfigFile = { mcpServers: config.mcpServers ?? {} };
     if (config.disabledTools && Object.keys(config.disabledTools).length > 0) {
         out.disabledTools = config.disabledTools;
     }
-    await writeFile(join(workDir, 'mcp.json'), JSON.stringify(out, null, 2), 'utf8');
+    await writeJsonAtomic(join(workDir, 'mcp.json'), out);
 }
 
 function normalizeServer(value: unknown): McpServerConfig | null {

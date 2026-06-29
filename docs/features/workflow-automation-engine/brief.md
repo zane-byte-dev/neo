@@ -20,9 +20,9 @@ Neo 已经具备自动化的基础底座：Webhook 可以主动触发 Agent，Cr
 
 ### 1. 现有自动化能力只有单步触发
 
-- [../../src/services/cron-agent.ts](../../../src/services/cron-agent.ts) 当前从 `memory/schedule.json` 读取任务，并在到点时调用一次 `runAgentTurn(...)`。
+- [../../src/services/cron-agent.ts](../../../packages/app/src/services/cron-agent.ts) 当前从 `memory/schedule.json` 读取任务，并在到点时调用一次 `runAgentTurn(...)`。
 - 每个 Cron 任务当前只有一条 `message`，本质上是“定时发一段话给 Agent”，不是多步骤流程。
-- [../../src/routes/webhook.ts](../../../src/routes/webhook.ts) 当前也只是接收 `message + secret + sessionId`，然后触发一次 Agent turn。
+- [../../src/routes/webhook.ts](../../../packages/app/src/routes/webhook.ts) 当前也只是接收 `message + secret + sessionId`，然后触发一次 Agent turn。
 
 结论：当前自动化是“单条指令触发 Agent”，不是“工作流执行引擎”。
 
@@ -35,7 +35,7 @@ Neo 已经具备自动化的基础底座：Webhook 可以主动触发 Agent，Cr
 
 ### 3. 任务历史字段目前只是占位，没有真实执行历史
 
-- [../../src/routes/cron.ts](../../../src/routes/cron.ts) 的 `GET /api/crons` 已返回 `last_status / last_error / last_finished_at` 等字段。
+- [../../src/routes/cron.ts](../../../packages/app/src/routes/cron.ts) 的 `GET /api/crons` 已返回 `last_status / last_error / last_finished_at` 等字段。
 - 但这些字段当前是固定 `null` 或 `0`，并没有真实持久化的任务执行状态。
 
 结论：产品已经隐约需要“执行历史 / 日志”这层能力，但实现尚未补上。

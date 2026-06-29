@@ -8,10 +8,10 @@ Goal: let the Agent turn the current conversation into a reusable Skill without 
 
 ## Current System
 
-- [src/routes/skills.ts](../../../src/routes/skills.ts) already exposes REST CRUD for per-user Skills.
+- [src/routes/skills.ts](../../../packages/app/src/routes/skills.ts) already exposes REST CRUD for per-user Skills.
 - [web/src/components/SkillsPanel.tsx](../../../web/src/components/SkillsPanel.tsx) already uses those routes in Settings / Skills.
-- [src/tools/executor.ts](../../../src/tools/executor.ts) intentionally restricts generic file tools to `workDir`.
-- [src/skills/skill-registry.ts](../../../src/skills/skill-registry.ts) loads enabled Skills from `{stateDir}/skills/` into the current user context.
+- [src/tools/executor.ts](../../../packages/agent/src/tools/executor.ts) intentionally restricts generic file tools to `workDir`.
+- [src/skills/skill-registry.ts](../../../packages/agent/src/skills/skill-registry.ts) loads enabled Skills from `{stateDir}/skills/` into the current user context.
 
 ## Design
 
@@ -53,13 +53,13 @@ Extend `SkillRegistry` with `unregister(name)` so disabling or deleting a Skill 
 
 ## Files Changed
 
-- [src/skills/skill-store.ts](../../../src/skills/skill-store.ts)
-- [src/skills/skill-registry.ts](../../../src/skills/skill-registry.ts)
-- [src/tools/internal/manage-skill.ts](../../../src/tools/internal/manage-skill.ts)
-- [src/routes/skills.ts](../../../src/routes/skills.ts)
-- [src/tools/builtin-guide.ts](../../../src/tools/builtin-guide.ts)
-- [src/skills/__tests__/skill-store.test.ts](../../../src/skills/__tests__/skill-store.test.ts)
-- [src/tools/internal/__tests__/manage-skill.test.ts](../../../src/tools/internal/__tests__/manage-skill.test.ts)
+- [src/skills/skill-store.ts](../../../packages/agent/src/skills/skill-store.ts)
+- [src/skills/skill-registry.ts](../../../packages/agent/src/skills/skill-registry.ts)
+- [src/tools/internal/manage-skill.ts](../../../packages/agent/src/tools/internal/manage-skill.ts)
+- [src/routes/skills.ts](../../../packages/app/src/routes/skills.ts)
+- [src/tools/builtin-guide.ts](../../../packages/agent/src/tools/builtin-guide.ts)
+- [src/skills/__tests__/skill-store.test.ts](../../../packages/agent/src/skills/__tests__/skill-store.test.ts)
+- [src/tools/internal/__tests__/manage-skill.test.ts](../../../packages/agent/src/tools/internal/__tests__/manage-skill.test.ts)
 
 ## Test Plan
 

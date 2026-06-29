@@ -13,10 +13,10 @@
 
 ## 实现
 
-- 新增 [src/llm/tool-error-classifier.ts](../../../src/llm/tool-error-classifier.ts)：`classifyToolError()` / `isFailureResult()` / `formatErrorHint()`。
-- 扩展 `ToolMeta`（[src/llm/types.ts](../../../src/llm/types.ts)）新增可选 `classifyError(result, error?)` 覆盖钩子。
-- 接入 [src/llm/ai-tools.ts](../../../src/llm/ai-tools.ts) 的 `wrapExecute()`：顺序为 `shortCircuit`（前）→ run → classify+annotate → `record`（后）；记录用原始未标注结果，保证 loop-guard 签名稳定。
-- 迁移示例：[src/tools/internal/fetch-url.ts](../../../src/tools/internal/fetch-url.ts) 增加 `meta.classifyError`，把“所有镜像均失败”显式标为 `permanent`。
+- 新增 [src/llm/tool-error-classifier.ts](../../../packages/agent/src/llm/tool-error-classifier.ts)：`classifyToolError()` / `isFailureResult()` / `formatErrorHint()`。
+- 扩展 `ToolMeta`（[src/llm/types.ts](../../../packages/agent/src/llm/types.ts)）新增可选 `classifyError(result, error?)` 覆盖钩子。
+- 接入 [src/llm/ai-tools.ts](../../../packages/agent/src/llm/ai-tools.ts) 的 `wrapExecute()`：顺序为 `shortCircuit`（前）→ run → classify+annotate → `record`（后）；记录用原始未标注结果，保证 loop-guard 签名稳定。
+- 迁移示例：[src/tools/internal/fetch-url.ts](../../../packages/agent/src/tools/internal/fetch-url.ts) 增加 `meta.classifyError`，把“所有镜像均失败”显式标为 `permanent`。
 
 ## 测试结果
 
@@ -39,8 +39,8 @@ npx vitest run src/llm src/tools src/services   # 43 files / 427 tests passed
 
 新增测试：
 
-- [src/llm/__tests__/tool-error-classifier.test.ts](../../../src/llm/__tests__/tool-error-classifier.test.ts)
-- [src/llm/__tests__/ai-tools.test.ts](../../../src/llm/__tests__/ai-tools.test.ts)（新增 hint 注入 / override 集成用例）
+- [src/llm/__tests__/tool-error-classifier.test.ts](../../../packages/agent/src/llm/__tests__/tool-error-classifier.test.ts)
+- [src/llm/__tests__/ai-tools.test.ts](../../../packages/agent/src/llm/__tests__/ai-tools.test.ts)（新增 hint 注入 / override 集成用例）
 
 ## 备注 / Deferred
 

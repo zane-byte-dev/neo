@@ -4,23 +4,33 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/test-helpers.js';
+import { aiProvider, type AiProviderRouteDeps } from '../ai-provider.js';
 
 const getModelsMock = vi.fn();
 const createOpenAIChatCompletionMock = vi.fn();
 const streamOpenAIChatCompletionMock = vi.fn();
 const createAnthropicMessageMock = vi.fn();
 const streamAnthropicMessageMock = vi.fn();
+const countAnthropicTokensMock = vi.fn();
 
-vi.mock('@neo/agent/services/ai-provider-service.js', () => ({
+const deps: AiProviderRouteDeps = {
     getModels: getModelsMock,
     createOpenAIChatCompletion: createOpenAIChatCompletionMock,
     streamOpenAIChatCompletion: streamOpenAIChatCompletionMock,
     createAnthropicMessage: createAnthropicMessageMock,
     streamAnthropicMessage: streamAnthropicMessageMock,
-}));
+    countAnthropicTokens: countAnthropicTokensMock,
+};
 
 async function* chunks(...items: string[]): AsyncGenerator<string> {
     for (const item of items) yield item;
+}
+
+function mountProvider(options?: Parameters<typeof createTestApp>[0]) {
+    const { app, router, mount } = createTestApp(options);
+    aiProvider(router, deps);
+    mount();
+    return app;
 }
 
 let previousUsers: string | undefined;
@@ -35,6 +45,7 @@ beforeEach(() => {
     streamOpenAIChatCompletionMock.mockReturnValue(chunks('data: {"ok":true}\n\n', 'data: [DONE]\n\n'));
     createAnthropicMessageMock.mockResolvedValue({ id: 'msg_test', type: 'message' });
     streamAnthropicMessageMock.mockReturnValue(chunks('event: message_stop\ndata: {"type":"message_stop"}\n\n'));
+    countAnthropicTokensMock.mockReturnValue({ input_tokens: 7 });
 });
 
 afterEach(() => {
@@ -47,9 +58,7 @@ afterEach(() => {
 describe('/v1 provider routes', () => {
     it('returns 403 when API token is not configured', async () => {
         process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', workDir, stateDir: workDir }]);
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp();
-        aiProvider(router); mount();
+        const app = mountProvider();
 
         const res = await request(app.callback()).get('/v1/models').set('Authorization', 'Bearer gw-token');
         expect(res.status).toBe(403);
@@ -58,9 +67,7 @@ describe('/v1 provider routes', () => {
     });
 
     it('requires a Bearer token', async () => {
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp();
-        aiProvider(router); mount();
+        const app = mountProvider();
 
         const res = await request(app.callback()).get('/v1/models');
         expect(res.status).toBe(401);
@@ -68,9 +75,7 @@ describe('/v1 provider routes', () => {
     });
 
     it('rejects an invalid Bearer token', async () => {
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp();
-        aiProvider(router); mount();
+        const app = mountProvider();
 
         const res = await request(app.callback()).get('/v1/models').set('Authorization', 'Bearer wrong');
         expect(res.status).toBe(401);
@@ -78,9 +83,7 @@ describe('/v1 provider routes', () => {
     });
 
     it('returns model list with a valid API token', async () => {
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp();
-        aiProvider(router); mount();
+        const app = mountProvider();
 
         const res = await request(app.callback()).get('/v1/models').set('Authorization', 'Bearer gw-token');
         expect(res.status).toBe(200);
@@ -89,18 +92,14 @@ describe('/v1 provider routes', () => {
     });
 
     it('does not require Basic Auth on provider routes', async () => {
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp({ basicAuthUser: 'admin', basicAuthPass: 'secret' });
-        aiProvider(router); mount();
+        const app = mountProvider({ basicAuthUser: 'admin', basicAuthPass: 'secret' });
 
         const res = await request(app.callback()).get('/v1/models').set('Authorization', 'Bearer gw-token');
         expect(res.status).toBe(200);
     });
 
     it('routes OpenAI non-streaming requests to the provider service', async () => {
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp();
-        aiProvider(router); mount();
+        const app = mountProvider();
 
         const body = { model: 'auto', messages: [{ role: 'user', content: 'hi' }] };
         const res = await request(app.callback())
@@ -113,9 +112,7 @@ describe('/v1 provider routes', () => {
     });
 
     it('streams OpenAI SSE chunks', async () => {
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp();
-        aiProvider(router); mount();
+        const app = mountProvider();
 
         const res = await request(app.callback())
             .post('/v1/chat/completions')
@@ -129,9 +126,7 @@ describe('/v1 provider routes', () => {
     });
 
     it('routes Anthropic non-streaming requests to the provider service', async () => {
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp();
-        aiProvider(router); mount();
+        const app = mountProvider();
 
         const body = { model: 'deepseek', messages: [{ role: 'user', content: 'hi' }] };
         const res = await request(app.callback())
@@ -144,9 +139,7 @@ describe('/v1 provider routes', () => {
     });
 
     it('streams Anthropic SSE events', async () => {
-        const { aiProvider } = await import('../ai-provider.js');
-        const { app, router, mount } = createTestApp();
-        aiProvider(router); mount();
+        const app = mountProvider();
 
         const res = await request(app.callback())
             .post('/v1/messages')
@@ -157,5 +150,19 @@ describe('/v1 provider routes', () => {
         expect(res.headers['content-type']).toContain('text/event-stream');
         expect(res.text).toContain('event: message_stop');
         expect(streamAnthropicMessageMock).toHaveBeenCalled();
+    });
+
+    it('routes Anthropic token counting requests to the provider service', async () => {
+        const app = mountProvider();
+        const body = { model: 'deepseek', messages: [{ role: 'user', content: 'hi' }] };
+
+        const res = await request(app.callback())
+            .post('/v1/messages/count_tokens')
+            .set('Authorization', 'Bearer gw-token')
+            .send(body);
+
+        expect(res.status).toBe(200);
+        expect(res.body.input_tokens).toBe(7);
+        expect(countAnthropicTokensMock).toHaveBeenCalledWith(body);
     });
 });

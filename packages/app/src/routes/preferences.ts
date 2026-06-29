@@ -11,14 +11,30 @@ import { calcUser, invalidateUserCache } from '@neo/agent/services/user-service.
 import { saveUserPreferences, type UserPreferences } from '@neo/agent/services/user-prefs.js';
 import { AVAILABLE_MODEL_ALIASES, isSelectableModelAlias } from '@neo/agent/llm/model-registry.js';
 
-function sanitizeIncoming(body: unknown): UserPreferences {
+export interface PreferencesRouteDeps {
+    calcUser: typeof calcUser;
+    invalidateUserCache: typeof invalidateUserCache;
+    saveUserPreferences: typeof saveUserPreferences;
+    availableModelAliases: readonly string[];
+    isSelectableModelAlias: typeof isSelectableModelAlias;
+}
+
+const defaultDeps: PreferencesRouteDeps = {
+    calcUser,
+    invalidateUserCache,
+    saveUserPreferences,
+    availableModelAliases: AVAILABLE_MODEL_ALIASES,
+    isSelectableModelAlias,
+};
+
+function sanitizeIncoming(body: unknown, isSelectable: typeof isSelectableModelAlias): UserPreferences {
     const out: UserPreferences = {};
     if (!body || typeof body !== 'object') return out;
     const b = body as Record<string, unknown>;
 
     if (typeof b.defaultModel === 'string') {
         const m = b.defaultModel.trim();
-        if (m && (m === 'auto' || isSelectableModelAlias(m))) {
+        if (m && (m === 'auto' || isSelectable(m))) {
             // 'auto' clears the preference; anything else must be a known alias.
             if (m !== 'auto') out.defaultModel = m;
         }
@@ -27,13 +43,13 @@ function sanitizeIncoming(body: unknown): UserPreferences {
         const list = b.enabledModels
             .filter((m): m is string => typeof m === 'string')
             .map((m) => m.trim())
-            .filter((m) => m && isSelectableModelAlias(m));
+            .filter((m) => m && isSelectable(m));
         if (list.length) out.enabledModels = [...new Set(list)];
     }
     return out;
 }
 
-export function preferences(router: Router): void {
+export function preferences(router: Router, deps: PreferencesRouteDeps = defaultDeps): void {
     router.get('/api/preferences', async (ctx) => {
         const userId = ctx.state.userId as string | undefined;
         if (!userId) {
@@ -41,10 +57,10 @@ export function preferences(router: Router): void {
             ctx.body = { error: 'Not authenticated' };
             return;
         }
-        const userCtx = await calcUser(userId);
+        const userCtx = await deps.calcUser(userId);
         ctx.body = {
             preferences: userCtx.preferences,
-            availableModels: AVAILABLE_MODEL_ALIASES,
+            availableModels: deps.availableModelAliases,
         };
     });
 
@@ -55,10 +71,10 @@ export function preferences(router: Router): void {
             ctx.body = { error: 'Not authenticated' };
             return;
         }
-        const incoming = sanitizeIncoming(ctx.request.body);
-        const userCtx = await calcUser(userId);
-        const saved = await saveUserPreferences(userCtx.stateDir ?? userCtx.workDir, incoming);
-        invalidateUserCache(userId);
+        const incoming = sanitizeIncoming(ctx.request.body, deps.isSelectableModelAlias);
+        const userCtx = await deps.calcUser(userId);
+        const saved = await deps.saveUserPreferences(userCtx.stateDir ?? userCtx.workDir, incoming);
+        deps.invalidateUserCache(userId);
         ctx.body = { preferences: saved };
     });
 }

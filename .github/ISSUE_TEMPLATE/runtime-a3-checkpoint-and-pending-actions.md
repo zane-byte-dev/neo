@@ -12,7 +12,7 @@ assignees: []
 
 相关锚点：
 
-- [src/utils/pending-confirm.ts](../../src/utils/pending-confirm.ts)
+- [src/utils/pending-confirm.ts](../../packages/app/src/utils/pending-confirm.ts)
 - [docs/features/agent-runtime/plan.md](../../docs/features/agent-runtime/plan.md)
 
 ## 里程碑
@@ -32,8 +32,8 @@ M1 Runtime Foundation
 
 ### In scope
 
-- 新增 [src/runtime/checkpoint.ts](../../src/runtime/checkpoint.ts)
-- 新增 [src/runtime/pending-actions.ts](../../src/runtime/pending-actions.ts)
+- 新增 [src/runtime/checkpoint.ts](../../packages/runtime/src/checkpoint.ts)
+- 新增 [src/runtime/pending-actions.ts](../../packages/runtime/src/pending-actions.ts)
 - 实现 `saveCheckpoint()`、`loadCheckpoint()`
 - 实现 `savePendingAction()`、`resolvePendingAction()`
 - 约定 timeout、resolvedAt、resolution 等字段

@@ -15,7 +15,7 @@
  *   SESSION_SECRET   — required when EVAL_MODE=true (needed by config.ts)
  */
 
-import { readdir, readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,6 +29,7 @@ import type {
     EvalTagStats,
 } from './eval-types.js';
 import { scoreEvalCase, PASS_THRESHOLD } from './eval-scorer.js';
+import { writeJsonAtomic } from '../utils/atomic-file.js';
 
 // ── Path constants ────────────────────────────────────────────────────────────
 
@@ -187,8 +188,7 @@ async function runEval(modelAlias: string): Promise<void> {
         },
     };
 
-    await mkdir(REPORTS_DIR, { recursive: true });
-    await writeFile(LATEST_REPORT, JSON.stringify(report, null, 2), 'utf8');
+    await writeJsonAtomic(LATEST_REPORT, report);
 
     console.log('\n─────────────────────────────────────────');
     console.log(`  Total   : ${results.length + skipped} (${skipped} skipped)`);
@@ -308,7 +308,7 @@ async function compareToBaseline(): Promise<void> {
 
     // Write comparison JSON alongside the latest report
     const comparisonFile = join(REPORTS_DIR, 'comparison.json');
-    await writeFile(comparisonFile, JSON.stringify(comparison, null, 2), 'utf8');
+    await writeJsonAtomic(comparisonFile, comparison);
     console.log(`\n  Comparison written to: ${comparisonFile}\n`);
 
     if (regressions.length > 0) process.exit(1);
@@ -325,8 +325,7 @@ async function updateBaseline(): Promise<void> {
     const report   = JSON.parse(await readFile(LATEST_REPORT, 'utf8')) as EvalReport;
     const baseline = buildBaseline(report);
 
-    await mkdir(BASELINES_DIR, { recursive: true });
-    await writeFile(BASELINE_FILE, JSON.stringify(baseline, null, 2), 'utf8');
+    await writeJsonAtomic(BASELINE_FILE, baseline);
 
     console.log(`\n✅ Baseline updated:`);
     console.log(`   Model     : ${baseline.model}`);

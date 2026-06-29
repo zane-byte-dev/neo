@@ -11,7 +11,7 @@ chat turns; full mode remains available as a per-user fallback.
 prompt-side injection point) is **not wired into the live system prompt** — it is
 only exercised by tests, and per-user `TOOLS.md` files carry tool docs instead.
 The real per-request tool-context token lever is `buildAiTools()` in
-[src/llm/ai-tools.ts](../../../src/llm/ai-tools.ts), which hands every tool's full
+[src/llm/ai-tools.ts](../../../packages/agent/src/llm/ai-tools.ts), which hands every tool's full
 `description` + `inputSchema` to the AI SDK on each turn.
 
 The first slice therefore applies lazy documentation at that real lever: in lazy

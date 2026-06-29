@@ -8,7 +8,7 @@ assignees: []
 
 ## 背景
 
-当前 [src/services/agent-runner.ts](../../src/services/agent-runner.ts) 仍然是单函数串行执行模型：加载用户、准备 session、读取历史、调用 LLM、保存 assistant 消息全部在一个流程中完成。这种结构不利于注入 runtime store、写 checkpoint 和实现 resume。
+当前 [src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts) 仍然是单函数串行执行模型：加载用户、准备 session、读取历史、调用 LLM、保存 assistant 消息全部在一个流程中完成。这种结构不利于注入 runtime store、写 checkpoint 和实现 resume。
 
 ## 里程碑
 
@@ -33,8 +33,8 @@ M2 Evented Executor
 
 ### In scope
 
-- 重构 [src/services/agent-runner.ts](../../src/services/agent-runner.ts)
-- 新增或引入 [src/runtime/executor.ts](../../src/runtime/executor.ts)
+- 重构 [src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts)
+- 新增或引入 [src/runtime/executor.ts](../../packages/runtime/src/executor.ts)
 - 将用户上下文装配、history 读取、消息持久化、LLM 调用从单个函数中分层
 - 让执行器内部能接受 `runId` 和 runtime store
 

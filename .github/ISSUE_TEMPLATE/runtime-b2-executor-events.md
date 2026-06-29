@@ -12,8 +12,8 @@ assignees: []
 
 相关锚点：
 
-- [src/services/agent-runner.ts](../../src/services/agent-runner.ts)
-- [src/routes/chat.ts](../../src/routes/chat.ts)
+- [src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts)
+- [src/routes/chat.ts](../../packages/app/src/routes/chat.ts)
 
 ## 里程碑
 
@@ -41,7 +41,7 @@ M2 Evented Executor
 
 ### In scope
 
-- 在 [src/services/agent-runner.ts](../../src/services/agent-runner.ts) 发模型路由和消息事件
+- 在 [src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts) 发模型路由和消息事件
 - 在 LLM chunk 回调处发 `llm_chunk`
 - 在工具执行路径补工具开始/结束事件
 - 在 todo 和 artifact 回调处发事件

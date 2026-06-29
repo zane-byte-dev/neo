@@ -35,20 +35,38 @@ async function writeStream(ctx: Koa.Context, stream: AsyncGenerator<string>, onE
     }
 }
 
-export function aiProvider(router: Router): void {
+export interface AiProviderRouteDeps {
+    getModels: typeof getModels;
+    createOpenAIChatCompletion: typeof createOpenAIChatCompletion;
+    streamOpenAIChatCompletion: typeof streamOpenAIChatCompletion;
+    createAnthropicMessage: typeof createAnthropicMessage;
+    streamAnthropicMessage: typeof streamAnthropicMessage;
+    countAnthropicTokens: typeof countAnthropicTokens;
+}
+
+const defaultDeps: AiProviderRouteDeps = {
+    getModels,
+    createOpenAIChatCompletion,
+    streamOpenAIChatCompletion,
+    createAnthropicMessage,
+    streamAnthropicMessage,
+    countAnthropicTokens,
+};
+
+export function aiProvider(router: Router, deps: AiProviderRouteDeps = defaultDeps): void {
     router.get('/v1/models', async (ctx) => {
-        ctx.body = await getModels();
+        ctx.body = await deps.getModels();
     });
 
     router.post('/v1/chat/completions', async (ctx) => {
         const body = requestBody(ctx);
         const callCtx = callContext(ctx);
         if (body.stream === true) {
-            await writeStream(ctx, streamOpenAIChatCompletion(body, callCtx), encodeOpenAIErrorEvent);
+            await writeStream(ctx, deps.streamOpenAIChatCompletion(body, callCtx), encodeOpenAIErrorEvent);
             return;
         }
         try {
-            ctx.body = await createOpenAIChatCompletion(body, callCtx);
+            ctx.body = await deps.createOpenAIChatCompletion(body, callCtx);
         } catch (err) {
             const e = toGatewayError(err);
             ctx.status = e.status;
@@ -60,11 +78,11 @@ export function aiProvider(router: Router): void {
         const body = requestBody(ctx);
         const callCtx = callContext(ctx);
         if (body.stream === true) {
-            await writeStream(ctx, streamAnthropicMessage(body, callCtx), encodeAnthropicErrorEvent);
+            await writeStream(ctx, deps.streamAnthropicMessage(body, callCtx), encodeAnthropicErrorEvent);
             return;
         }
         try {
-            ctx.body = await createAnthropicMessage(body, callCtx);
+            ctx.body = await deps.createAnthropicMessage(body, callCtx);
         } catch (err) {
             const e = toGatewayError(err);
             ctx.status = e.status;
@@ -74,7 +92,7 @@ export function aiProvider(router: Router): void {
 
     router.post('/v1/messages/count_tokens', (ctx) => {
         try {
-            ctx.body = countAnthropicTokens(requestBody(ctx));
+            ctx.body = deps.countAnthropicTokens(requestBody(ctx));
         } catch (err) {
             const e = toGatewayError(err);
             ctx.status = e.status;

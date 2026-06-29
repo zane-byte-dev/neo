@@ -13,10 +13,10 @@ Neo 已经具备个人本地 AI gateway 的大部分底座：
 
 相关当前代码锚点：
 
-- [src/llm/client.ts](../../../src/llm/client.ts)：当前 AI SDK 模型调用、streaming、fallback、usage 记录集中在这里。
-- [src/config.ts](../../../src/config.ts)：模型别名、provider key accessor、Ollama / ACP 配置集中在这里。
-- [src/routes/model.ts](../../../src/routes/model.ts)：模型列表、provider 状态、路由配置 API。
-- [src/server.ts](../../../src/server.ts)：当前 Web cookie 鉴权只覆盖 `/api/*` 与 `/apps/*`，新增 gateway 不能裸挂公开路由。
+- [src/llm/client.ts](../../../packages/agent/src/llm/client.ts)：当前 AI SDK 模型调用、streaming、fallback、usage 记录集中在这里。
+- [src/config.ts](../../../packages/agent/src/config.ts)：模型别名、provider key accessor、Ollama / ACP 配置集中在这里。
+- [src/routes/ai-provider.ts](../../../packages/app/src/routes/ai-provider.ts)：OpenAI / Anthropic 兼容 gateway API。
+- [src/server.ts](../../../packages/app/src/server.ts)：当前 Web cookie 鉴权只覆盖 `/api/*` 与 `/apps/*`，新增 gateway 不能裸挂公开路由。
 - [docs/product/ROADMAP.md](../../product/ROADMAP.md)：多模型支持已包含 Claude Code 兼容代理、fallback 和模型路由。
 
 ## User Problem

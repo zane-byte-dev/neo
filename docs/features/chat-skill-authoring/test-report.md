@@ -10,15 +10,15 @@
 
 - Agent 能在聊天里把一段对话沉淀成 Skill：已通过 `manage_skill` 工具单测覆盖 `save`。
 - 保存后当前上下文立即可见：已通过单测验证 `manage_skill.save` 后同一上下文内 `list_skills` 立刻能看到新 Skill。
-- Settings / Skills 与聊天共用同一份存储：已通过代码核验，[src/routes/skills.ts](../../../src/routes/skills.ts) 现复用共享 service。
-- 不放宽通用 `write_file` 到整个 `stateDir`：已通过代码核验，[src/tools/executor.ts](../../../src/tools/executor.ts) 仍保持 `workDir` 边界。
+- Settings / Skills 与聊天共用同一份存储：已通过代码核验，[src/routes/skills.ts](../../../packages/app/src/routes/skills.ts) 现复用共享 service。
+- 不放宽通用 `write_file` 到整个 `stateDir`：已通过代码核验，[src/tools/executor.ts](../../../packages/agent/src/tools/executor.ts) 仍保持 `workDir` 边界。
 - disabled / delete 能同步影响当前 registry：已通过 `manage_skill.set_enabled` 单测覆盖禁用后从当前 registry 消失。
 
 ## Tests Added Or Updated
 
-- [src/skills/__tests__/skill-store.test.ts](../../../src/skills/__tests__/skill-store.test.ts)
-- [src/skills/__tests__/skill-registry-loader.test.ts](../../../src/skills/__tests__/skill-registry-loader.test.ts)
-- [src/tools/internal/__tests__/manage-skill.test.ts](../../../src/tools/internal/__tests__/manage-skill.test.ts)
+- [src/skills/__tests__/skill-store.test.ts](../../../packages/agent/src/skills/__tests__/skill-store.test.ts)
+- [src/skills/__tests__/skill-registry-loader.test.ts](../../../packages/agent/src/skills/__tests__/skill-registry-loader.test.ts)
+- [src/tools/internal/__tests__/manage-skill.test.ts](../../../packages/agent/src/tools/internal/__tests__/manage-skill.test.ts)
 
 ## Commands Run
 

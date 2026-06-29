@@ -12,9 +12,9 @@ assignees: []
 
 相关锚点：
 
-- [src/services/agent-runner.ts](../../src/services/agent-runner.ts)
-- [src/routes/chat.ts](../../src/routes/chat.ts)
-- [src/services/cron-agent.ts](../../src/services/cron-agent.ts)
+- [src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts)
+- [src/routes/chat.ts](../../packages/app/src/routes/chat.ts)
+- [src/services/cron-agent.ts](../../packages/app/src/services/cron-agent.ts)
 - [docs/features/agent-runtime/plan.md](../../docs/features/agent-runtime/plan.md)
 
 ## 里程碑
@@ -41,7 +41,7 @@ M1 Runtime Foundation
 
 ### In scope
 
-- 新增 [src/runtime/types.ts](../../src/runtime/types.ts)
+- 新增 [src/runtime/types.ts](../../packages/runtime/src/types.ts)
 - 定义状态枚举：`queued`、`running`、`waiting_confirm`、`waiting_input`、`completed`、`failed`、`cancelled`、`expired`
 - 定义运行目录布局：`run.json`、`events.jsonl`、`checkpoint.json`、`pending.json`、`artifacts/`
 - 给出至少 1 份 JSON 示例，说明运行时对象的最小字段集合
@@ -54,7 +54,7 @@ M1 Runtime Foundation
 
 ## 完成条件
 
-- [ ] 类型定义能够覆盖 [src/services/agent-runner.ts](../../src/services/agent-runner.ts)、[src/routes/chat.ts](../../src/routes/chat.ts)、[src/services/cron-agent.ts](../../src/services/cron-agent.ts) 的最小运行时需求
+- [ ] 类型定义能够覆盖 [src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts)、[src/routes/chat.ts](../../packages/app/src/routes/chat.ts)、[src/services/cron-agent.ts](../../packages/app/src/services/cron-agent.ts) 的最小运行时需求
 - [ ] 文档中有明确 JSON 示例，后续 issue 不需要再次发明字段
 - [ ] 状态机与目录布局已在文档和代码中对齐
 

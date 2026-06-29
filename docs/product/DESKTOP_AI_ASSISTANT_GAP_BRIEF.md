@@ -18,15 +18,15 @@ Neo 已经具备个人 AI 运行时的核心底座：Web Chat、Notebook、Teleg
 ### 1. MCP 已有底座，但不是完整连接器体验
 
 - [../user-guide/MCP.md](../user-guide/MCP.md) 说明 Neo 当前通过 `{workDir}/mcp.json` 配置 MCP stdio server。
-- [../../src/mcp/stdio-client.ts](../../src/mcp/stdio-client.ts) 当前实现范围集中在 `initialize`、`tools/list`、`tools/call`，并明确未覆盖 resources、prompts、sampling 等高级能力。
-- [../../src/mcp/loader.ts](../../src/mcp/loader.ts) 会把 MCP 工具统一注册为 `mcp__<server>__<tool>`，并默认按 dangerous 工具处理。
+- [../../src/mcp/stdio-client.ts](../../packages/agent/src/mcp/stdio-client.ts) 当前实现范围集中在 `initialize`、`tools/list`、`tools/call`，并明确未覆盖 resources、prompts、sampling 等高级能力。
+- [../../src/mcp/loader.ts](../../packages/agent/src/mcp/loader.ts) 会把 MCP 工具统一注册为 `mcp__<server>__<tool>`，并默认按 dangerous 工具处理。
 
 结论：Neo 具备 MCP 工具调用能力，但缺少远程 HTTP MCP、OAuth、连接状态、工具启停、资源/Prompt 选择、连接器目录和一键安装。
 
 ### 2. Workflow 已有 MVP，但创建和调试门槛偏高
 
 - [../user-guide/AUTOMATION.md](../user-guide/AUTOMATION.md) 说明 Workflow 当前通过 JSON 编辑器维护，支持 `transform`、`agent`、`skill` 三类串行步骤。
-- [../../src/services/workflow-service.ts](../../src/services/workflow-service.ts) 当前类型模型也只覆盖这三类步骤，没有 branch、retry、parallel、approval 等流程控制。
+- [../../src/services/workflow-service.ts](../../packages/app/src/services/workflow-service.ts) 当前类型模型也只覆盖这三类步骤，没有 branch、retry、parallel、approval 等流程控制。
 - [PM_AUDIT_REPORT_2026-05-16.md](PM_AUDIT_REPORT_2026-05-16.md) 已把“Workflow JSON 编辑器门槛高，缺模板引导”列为高优先级体验问题。
 
 结论：Neo 的自动化方向正确，但还没有达到成熟工作台产品应有的“模板化、向导式、可排障”水平。
@@ -34,7 +34,7 @@ Neo 已经具备个人 AI 运行时的核心底座：Web Chat、Notebook、Teleg
 ### 3. 知识索引已落地，但语义记忆和 RAG 飞轮未形成
 
 - [ROADMAP.md](ROADMAP.md) 明确记录：统一知识索引、Notebook 精确引用已完成，但 Embedding、语义检索、自动记忆提取、记忆整合、对话摘要仍未完成。
-- [../../src/indexing/search.ts](../../src/indexing/search.ts) 当前检索以 FTS + LIKE fallback 为主，中文和语义相似内容仍依赖精确文本命中。
+- [../../src/indexing/search.ts](../../packages/agent/src/indexing/search.ts) 当前检索以 FTS + LIKE fallback 为主，中文和语义相似内容仍依赖精确文本命中。
 
 结论：Neo 已有知识库入口，但与成熟知识型 AI 助手相比，还缺“自动召回长期知识、自动沉淀用户事实、越用越懂用户”的核心体验。
 
