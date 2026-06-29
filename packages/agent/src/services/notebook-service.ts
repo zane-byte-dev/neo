@@ -8,10 +8,11 @@
  * IDs are "{notebookName}/{filename}" strings — no SQLite dependency.
  */
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync, rmSync, renameSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { parseJsonLines, readJsonFileSyncOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
 import { generateId } from '../utils/id-generator.js';
+import { isInsidePath } from '../utils/path-security.js';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -428,7 +429,7 @@ function ensureDir(dir: string): void {
 }
 
 function safeWithin(baseDir: string, target: string): boolean {
-    return resolve(target).startsWith(resolve(baseDir) + '/');
+    return isInsidePath(baseDir, target, { allowEqual: false });
 }
 
 function safeFilename(name: string): string {
@@ -676,7 +677,7 @@ export function nbGetSourceEntry(workDir: string, notebook: string, sourceId: st
 export function nbArchiveSource(workDir: string, notebook: string, sourceId: string): boolean {
     const entryId = `notebooks/${notebook}/${sourceId}.md`;
     const filePath = join(workDir, entryId);
-    if (!resolve(filePath).startsWith(resolve(workDir) + '/')) return false;
+    if (!safeWithin(workDir, filePath)) return false;
     if (!existsSync(filePath)) return false;
 
     const raw = readFileSync(filePath, 'utf8');

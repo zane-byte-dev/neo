@@ -6,6 +6,7 @@ import { join } from 'node:path';
 const mocks = vi.hoisted(() => ({
     generateText: vi.fn(),
     streamText: vi.fn(),
+    createLanguageModel: vi.fn((modelId: string) => ({ provider: 'mock', modelId })),
     recordTokenUsage: vi.fn(),
 }));
 
@@ -23,8 +24,7 @@ vi.mock('../../utils/token-tracker.js', () => ({
 }));
 
 vi.mock('../../llm/model-factory.js', () => ({
-    createLanguageModel: vi.fn(() => ({ provider: 'mock', modelId: 'mock' })),
-    isAcpModel: vi.fn((modelId: string) => modelId.startsWith('acp/')),
+    createLanguageModel: mocks.createLanguageModel,
     resolveModel: vi.fn((model: string) => model === 'deepseek' ? 'deepseek-chat' : model),
 }));
 
@@ -47,6 +47,7 @@ beforeEach(() => {
     process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', apiToken: 'gw-token', workDir, stateDir: workDir }]);
     mocks.generateText.mockReset();
     mocks.streamText.mockReset();
+    mocks.createLanguageModel.mockClear();
     mocks.recordTokenUsage.mockReset();
 });
 
@@ -92,6 +93,26 @@ describe('ai provider service', () => {
         const history = await fs.readFile(join(workDir, 'usage.jsonl'), 'utf8');
         expect(history).toContain('"caller":"provider:openai"');
         expect(history).toContain('"model":"deepseek-chat"');
+    });
+
+    it('honors the requested DeepSeek model alias', async () => {
+        mocks.generateText.mockResolvedValue({
+            text: 'reasoned',
+            content: [{ type: 'text', text: 'reasoned' }],
+            finishReason: 'stop',
+            usage: usage(),
+            totalUsage: usage(),
+        });
+        const { createOpenAIChatCompletion } = await import('../ai-provider-service.js');
+
+        const response = await createOpenAIChatCompletion({
+            model: 'deepseek-reasoner',
+            messages: [{ role: 'user', content: 'think' }],
+        }, { userId: 'u1' }) as { model: string };
+
+        expect(response.model).toBe('deepseek-reasoner');
+        expect(mocks.createLanguageModel).toHaveBeenCalledWith('deepseek-reasoner');
+        expect(mocks.recordTokenUsage).toHaveBeenCalledWith(expect.objectContaining({ model: 'deepseek-reasoner' }));
     });
 
     it('returns Anthropic tool_use blocks without executing tools', async () => {

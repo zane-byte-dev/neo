@@ -65,6 +65,10 @@ function resolveMinLevel(): Level {
 
 const MIN_LEVEL: Level = resolveMinLevel();
 
+function shouldWriteLogSinks(): boolean {
+    return !process.env.VITEST || process.env.NEO_TEST_LOGS === '1';
+}
+
 // ── File sink ─────────────────────────────────────────────────────────────────
 
 const LOG_DIR = join(process.cwd(), 'logs');
@@ -92,6 +96,7 @@ function writeEntry(entry: Record<string, unknown>): void {
 
 function emit(level: Level, module: string, msg: string, data?: Record<string, unknown>): void {
     if (LEVEL_RANK[level] < LEVEL_RANK[MIN_LEVEL]) return;
+    if (!shouldWriteLogSinks()) return;
 
     const ts = new Date().toISOString();
     const entry: Record<string, unknown> = { ts, level, module, msg };
@@ -142,6 +147,7 @@ function formatConsoleArgs(args: unknown[]): string {
 export function setupLogger(): void {
     if (loggerInitialized) return;
     loggerInitialized = true;
+    if (!shouldWriteLogSinks()) return;
 
     const orig = {
         log:   console.log.bind(console),

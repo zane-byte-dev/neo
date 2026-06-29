@@ -14,6 +14,7 @@ import { promises as fs } from 'node:fs';
 import { resolve, basename, join } from 'node:path';
 import { generateId } from '../utils/id-generator.js';
 import { parseJsonOr } from '../utils/json.js';
+import { writeJsonAtomic } from '../utils/atomic-file.js';
 import { userGetStateDir } from './user-service.js';
 
 export interface ProjectEntry {
@@ -43,7 +44,7 @@ async function readStore(userId: string): Promise<ProjectStore> {
 }
 
 async function writeStore(userId: string, store: ProjectStore): Promise<void> {
-    await fs.writeFile(storeFile(userId), JSON.stringify(store, null, 2), 'utf8');
+    await writeJsonAtomic(storeFile(userId), store);
 }
 
 export async function listProjects(userId: string): Promise<ProjectEntry[]> {

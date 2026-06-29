@@ -21,7 +21,7 @@ vi.mock('@neo/agent/services/user-service.js', () => ({
 }));
 
 // Mock AI functions to avoid real LLM calls
-vi.mock('@neo/agent/services/notebook-ai.js', () => ({
+vi.mock('../../services/notebook-ai.js', () => ({
     generateAndSaveSourceGuide: vi.fn(async () => ({
         sourceId: 'test',
         summary: 'Mocked summary',
@@ -53,17 +53,6 @@ vi.mock('@neo/agent/services/notebook-ai.js', () => ({
         createdAt: Date.now(),
     })),
     runNoteQuickAction: vi.fn(async () => 'Quick action result'),
-}));
-
-// Mock notebook-chat
-vi.mock('@neo/agent/services/notebook-chat.js', () => ({
-    streamNotebookChat: vi.fn(async (_w: string, _n: string, _m: string, _s: string[] | undefined, onEvent: (e: any) => void) => {
-        onEvent({ type: 'meta', sources: [] });
-        onEvent({ type: 'text', text: 'Mocked response' });
-        onEvent({ type: 'citations', citations: [] });
-        onEvent({ type: 'done' });
-        return { id: 'msg_1', role: 'assistant', content: 'Mocked response', timestamp: Date.now() };
-    }),
 }));
 
 const TEST_USER = 'test-user-123';

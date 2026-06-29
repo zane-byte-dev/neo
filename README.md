@@ -5,8 +5,8 @@
 [![Node ≥ 18](https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
-> 个人 AI 助手服务：Web Chat + Notebook 知识库 + Telegram Bot + 可扩展的 Tool/Skill 体系。
-> 多 LLM 后端（Gemini / DeepSeek / OpenAI / Anthropic / Claude Code 兼容代理 / Ollama），自托管，单用户为先。
+> 个人 AI 助手服务：Web Chat + Notebook 知识库 + 自动化运行 + 可扩展的 Tool/Skill 体系。
+> 当前模型运行时基于 DeepSeek + Vercel AI SDK，自托管，单用户为先。
 
 **English** · [Read in English →](README.en.md)
 
@@ -24,11 +24,11 @@ npm install && npm run web:install
 # 直接启动即可：首次运行会在 ~/.neo/config.json 自动生成默认用户
 # （随机 webToken / SESSION_SECRET，工作目录默认在 ~/.neo/{workspace,state}/default）
 # 启动后控制台会打印登录 webToken，复制到浏览器登录即可。
-npm run dev:bot              # 后端 + Telegram bot，监听 :3000
+npm run dev:bot              # 后端 HTTP 服务，监听 :3000
 npm run web:dev              # 另开终端，前端开发服务器 :5173
 ```
 
-打开 http://localhost:5173，首次进入 **Settings / Basic / Overview** 查看系统状态；如果 Models 显示未就绪，进入 **Settings / Basic / Models** 填入至少一个 LLM Provider 的 API Key / Token（Gemini / DeepSeek / OpenAI / Anthropic / Claude Code 兼容代理任一），即可开始对话。空 Chat 欢迎页现在会显示“开始使用 Neo”清单，引导你完成模型配置、第一条消息和第一条 Notebook 笔记。生产部署见下文「生产部署」一节，常见问题见 [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)。如果你想在这个仓库里用 GitHub Copilot 跑一轮文档驱动的 AI 开发流程，直接看 [docs/user-guide/AI_DEVELOPMENT.md](docs/user-guide/AI_DEVELOPMENT.md)。
+打开 http://localhost:5173，首次进入 **Settings / Basic / Overview** 查看系统状态；如果 Models 显示未就绪，配置 `DEEPSEEK_API_KEY` 后即可开始对话。空 Chat 欢迎页现在会显示“开始使用 Neo”清单，引导你完成模型配置、第一条消息和第一条 Notebook 笔记。生产部署见下文「生产部署」一节，常见问题见 [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)。如果你想在这个仓库里用 GitHub Copilot 跑一轮文档驱动的 AI 开发流程，直接看 [docs/user-guide/AI_DEVELOPMENT.md](docs/user-guide/AI_DEVELOPMENT.md)。
 
 > 想贡献代码？请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 > 发现安全问题？请走 [SECURITY.md](SECURITY.md) 中的私密披露流程，不要开公开 issue。
@@ -39,13 +39,12 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 
 | 模块 | 说明 |
 |------|------|
-| **AI 对话** | 基于 Gemini 的多轮对话，支持流式输出、函数调用、子 agent 派生和回复复制 |
+| **AI 对话** | 基于 DeepSeek 的多轮对话，支持流式输出、函数调用、子 agent 派生和回复复制 |
 | **Notebook** | 文章/知识条目管理，含全文搜索、文章批注和文章内资源预览 |
 | **Skills** | Markdown 定义的可复用 AI 技能，支持参数插值与代码块执行 |
 | **Tools** | 内置工具 + 用户自定义工具（`{stateDir}/tools/` 自动加载） |
 | **自动化** | Webhook / Cron / Workflow 触发 Agent，支持串行步骤、运行历史和手动运行 |
 | **Local AI Gateway** | OpenAI / Anthropic 兼容 `/v1` 本地入口，外部客户端可复用 Neo 的模型路由、密钥管理和 usage 记录 |
-| **Telegram Bot** | Telegraf 长轮询接入，支持 Markdown 渲染、图片发送 |
 | **浏览器扩展** | Chrome 划词保存，支持 X.com 推文、Gemini 对话、飞书 Wiki |
 | **Web UI** | React 前端，提供 Chat / Notebook 面板 |
 
@@ -54,9 +53,8 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 ## 技术栈
 
 - **运行时**：Node.js ≥ 18 (ESM) + TypeScript
-- **后端框架**：Koa 3 + better-sqlite3
-- **LLM**：Vercel AI SDK，统一接入 Google Gemini / DeepSeek / OpenAI / Anthropic / Claude Code 兼容代理 / 本地 Ollama（流式 + 函数调用）
-- **Telegram**：Telegraf 4
+- **后端框架**：Koa 3 + better-sqlite3（知识索引）
+- **LLM**：Vercel AI SDK + DeepSeek Anthropic-compatible API（流式 + 函数调用）
 - **前端**：React 19 + Vite + Tailwind CSS 4
 - **进程管理**：PM2
 
@@ -66,18 +64,10 @@ npm run web:dev              # 另开终端，前端开发服务器 :5173
 
 ```
 neo/
-├── src/                    # 后端 TypeScript 源码
-│   ├── main.ts             # 应用入口（启动 HTTP 服务 + Telegram Bot）
-│   ├── server.ts           # Koa HTTP 服务器
-│   ├── config.ts           # 集中配置（环境变量）
-│   ├── platforms/          # 平台接入（telegram-bot.ts）
-│   ├── llm/                # LLM 客户端（AI SDK + Gemini Provider）
-│   ├── routes/             # HTTP 路由
-│   ├── services/           # 业务逻辑层（agent-runner、chat、notebook、user…）
-│   ├── skills/             # Skill 定义、解析与执行
-│   ├── tools/              # 内置工具（internal/）+ 用户工具加载（user-tools/）
-│   ├── types/              # TypeScript 类型声明
-│   └── utils/              # 公共工具（logger、workspace…）
+├── packages/
+│   ├── app/                # Koa HTTP 服务、CLI、路由和自动化入口
+│   ├── agent/              # LLM、agent-runner、tools、skills、memory、notebook
+│   └── runtime/            # run/event/checkpoint/pending action 运行时契约
 ├── web/                    # React 前端
 │   └── src/
 │       ├── components/     # Chat / Notebook 面板
@@ -94,7 +84,7 @@ neo/
 
 - Node.js ≥ 18
 - npm ≥ 10
-- 至少一个 LLM Provider：Gemini / DeepSeek / OpenAI / Anthropic API Key，Claude Code 兼容代理地址 + Token，或本地 Ollama，或登录后的 Gemini CLI（OAuth 配额）
+- DeepSeek API Key（`DEEPSEEK_API_KEY`）
 
 ### 安装依赖
 
@@ -106,18 +96,18 @@ npm install
 npm run web:install
 ```
 
-### 配置：`~/.neo/config.json` 或 `src/config.local.ts`
+### 配置：`~/.neo/config.json` 或 `packages/agent/src/config.local.ts`
 
 首次启动时若两者都不存在，会在 `~/.neo/config.json` 自动生成单用户默认配置（随机 `webToken` / `SESSION_SECRET`，`workDir`/`stateDir` 落到 `~/.neo/{workspace,state}/default`），并把 webToken 打印到控制台。
 
 如需自定义（多用户、自定义路径、托管在仓库内等），仍可手动复制模板，`config.local.ts` 优先级高于 `~/.neo/config.json`：
 
 ```bash
-cp src/config.local.example.ts src/config.local.ts
+cp packages/agent/src/config.local.example.ts packages/agent/src/config.local.ts
 ```
 
 ```ts
-// src/config.local.ts
+// packages/agent/src/config.local.ts
 import type { LocalConfig } from './config.js';
 
 const config: LocalConfig = {
@@ -125,7 +115,7 @@ const config: LocalConfig = {
         {
             id: 'alice',
             name: 'Alice',
-            tenants: [],                     // 例如 ['telegram:123456789']
+            tenants: [],                     // 预留外部平台映射
             webToken: 'long-random-string',  // Web 登录 token
             gatewayToken: 'long-random-gateway-token', // 高级可选：静态 /v1 本地 AI Gateway token
             workDir:  '/abs/path/to/workspace',   // 个人工作区（AGENTS.md / notebooks / skills…）
@@ -138,7 +128,7 @@ const config: LocalConfig = {
 export default config;
 ```
 
-> ⚠️ **关于 API Key / Token**：Gemini / DeepSeek / OpenAI / Anthropic 等 Provider 的 API Key、Claude Code 兼容代理地址 + Token 与 Telegram Bot Token **不写在配置文件里**。启动后访问 Web UI **Settings / Basic / Models** 页填入即可，会以 AES-256-GCM 加密存到 `{stateDir}/secrets.json.enc`（密钥派生自 `SESSION_SECRET`）。
+> ⚠️ **关于 API Key / Token**：当前模型运行时读取 `DEEPSEEK_API_KEY` 环境变量；用户级 Web token、Gateway token 与 Session secret 可放在 `~/.neo/config.json` 或 `config.local.ts` 中。不要把真实 secret 提交到仓库。
 
 ### 可选环境变量
 
@@ -148,16 +138,8 @@ export default config;
 # Web 端口（默认 3000）
 WEB_PORT=3000
 
-# Gemini CLI ACP（用 Google One AI Premium 配额，无需 API Key）
-# 需先安装并 `gemini login`：https://github.com/google-gemini/gemini-cli
-GEMINI_CLI_PATH=gemini
-
-# 本地 Ollama（默认值如下）
-OLLAMA_BASE_URL=http://localhost:11434/v1
-
-# Claude Code 兼容代理（也可在 Settings / Basic / Models 中加密保存）
-CLAUDE_CODE_BASE_URL=https://your-claude-code-proxy.example.com/v1
-CLAUDE_CODE_TOKEN=your-token
+# DeepSeek API Key
+DEEPSEEK_API_KEY=sk-...
 
 # 日志级别
 LOG_LEVEL=info                  # debug | info | warn | error
@@ -176,7 +158,7 @@ OPENAI_API_KEY=<neo-gateway-token>
 
 ANTHROPIC_BASE_URL=http://localhost:3000/v1
 ANTHROPIC_AUTH_TOKEN=<neo-gateway-token>
-ANTHROPIC_MODEL=claude
+ANTHROPIC_MODEL=deepseek
 ```
 
 首版支持 `GET /v1/models`、`POST /v1/chat/completions` 和 `POST /v1/messages`。Gateway 不注入 Web Chat 的系统提示、记忆或 Neo tools；Anthropic 工具调用只按协议透传给客户端。`gatewayToken` 配置字段仍可作为高级静态 token 回退。详细配置见 [docs/user-guide/LOCAL_AI_GATEWAY.md](docs/user-guide/LOCAL_AI_GATEWAY.md)。
@@ -184,7 +166,7 @@ ANTHROPIC_MODEL=claude
 ### 开发模式
 
 ```bash
-# 编译并启动后端（包含 HTTP 服务 + Telegram Bot）
+# 编译并启动后端 HTTP 服务
 npm run dev:bot
 
 # 启动前端开发服务器（另开终端）
@@ -192,6 +174,14 @@ npm run web:dev
 ```
 
 前端默认运行在 `http://localhost:5173`，后端默认运行在 `http://localhost:3000`。
+
+### 验证
+
+```bash
+npm run verify
+```
+
+该命令会依次运行 runtime、agent、app、web 的 TypeScript 检查，然后执行完整 Vitest 套件。只想快速跑类型检查时可用 `npm run typecheck`。
 
 ### 生产部署（Mac Mini / 长期运行）
 
@@ -255,7 +245,7 @@ brew services start caddy
 #### 架构示意
 
 ```
-[浏览器 / Telegram]
+[浏览器 / 外部 Webhook]
         │
   your-domain.com
         │  (Caddy HTTPS 反代，可选)
@@ -321,28 +311,16 @@ Neo 会自动向 Agent 注入内置工具，也会从 `{stateDir}/tools/` 加载
 
 ---
 
-## 多模型支持
+## 模型支持
 
-Neo 支持多种 LLM 提供商，通过统一的别名系统切换：
+当前代码路径保留了统一别名与路由边界，但实际模型工厂只创建 DeepSeek 的 Anthropic 兼容模型：
 
 | 别名 | 实际模型 | 提供商 | 说明 |
 |------|---------|--------|------|
-| `gemini-acp` | Gemini (via CLI) | Gemini CLI OAuth | 使用 Google One AI Premium 配额，无需 API Key |
 | `deepseek` | deepseek-chat | DeepSeek API | 成本低，工具调用可靠 |
 | `deepseek-reasoner` | deepseek-reasoner | DeepSeek API | 深度推理 |
-| `gpt-4o` / `gpt-4o-mini` / `gpt-5` / `gpt-5-mini` | OpenAI 同名模型 | OpenAI API | 完整的 GPT 系列 |
-| `claude-sonnet` / `claude-opus` / `claude-haiku` | claude-*-4-5 | Anthropic API | Claude 4.5 系列 |
-| `claude-code` / `claude-code-sonnet` / `claude-code-opus` / `claude-code-haiku` | claude-code/claude-*-4-5 | Claude Code 兼容代理 | 使用自有代理地址 + Token（Bearer） |
-| `gemma` | ollama/gemma4:e4b | 本地 Ollama | 离线 / 隐私场景 |
 
-**智能路由（auto 模式）**：当用户选择 `auto` 时，`model-router.ts` 会先用 `scorer.ts` 对任务复杂度打分，再映射到 `simple` / `standard` / `complex` 三档：
-- `simple` 默认链：`gemma` → `flash` → `gemini-acp`
-- `standard` 默认链：`gemini-acp` → `flash` → `deepseek`
-- `complex` 默认链：`deepseek-reasoner` → `deepseek`
-- 工具任务至少提升到 `standard`；超大上下文任务至少提升到 `complex`
-- fallback 链长度受 `ROUTING_CONFIG.fallback.maxRetries` 控制，默认只追加 1 个重试目标
-
-路由默认值可在 Web UI **Models 页 → 路由配置** 中覆盖保存。
+`auto` 会解析为 `deepseek`；如果要恢复更多 provider，需要扩展 `packages/agent/src/llm/model-factory.ts` 和 `packages/agent/src/config.ts` 中的 `MODEL_ALIASES`。
 
 ---
 
@@ -358,7 +336,7 @@ Notebook 知识库、Webhook/Cron 自动化和可恢复 Agent 运行时分别见
 
 ## 用户与工作区
 
-用户信息定义在 `src/config.local.ts` 的 `USERS` 数组中，每个用户拥有两个独立目录：
+用户信息定义在 `packages/agent/src/config.local.ts` 的 `USERS` 数组中，每个用户拥有两个独立目录：
 
 - **`workDir`**：个人工作区，存放你自己的内容与配置（AGENTS.md / SOUL.md / notebooks…）。
 - **`stateDir`**：运行态数据目录，由 Neo 自动维护（runs / secrets / usage / projects / skills / tools…）。
@@ -386,35 +364,32 @@ Notebook 知识库、Webhook/Cron 自动化和可恢复 Agent 运行时分别见
 
 > 💡 仓库内已附最小可运行的 [examples/workspace/](examples/workspace) 模板（AGENTS.md / SOUL.md / USER.md / TOOLS.md）。复制到你的 `workDir` 即可作为起点。
 
-**Telegram 绑定** 通过 `tenants` 声明：
+**外部触发** 可通过 Webhook、Cron 和 Workflow 使用同一套 Agent Runtime：
 
-```ts
-USERS: [{ id: 'alice', name: 'Alice', tenants: ['telegram:123456789'], /* ... */ }]
-```
-
-Bot Token 在 Web UI **Models 页 → Credentials** 填入后，Telegram 运行时会自动重启。不知道自己的 Telegram userId 时，可以用 Telegram 的 user-info bot 查询，或临时开启 `LOG_LEVEL=debug` 查看收到的 update 日志。
+- Webhook：`POST /api/webhook/:userId`，使用用户级 `webhookSecret` 认证。
+- Cron：从 `{stateDir}/memory/schedule.json` 读取定时任务。
+- Workflow：通过 `/api/workflows` 管理串行步骤、运行历史和手动运行。
 
 ---
 
 ## 核心架构
 
 ```
-用户消息 → [HTTP SSE / Telegram Bot]
+用户消息 → [HTTP SSE / CLI / Webhook / Cron / Workflow]
               ↓
          agent-runner.ts（共享一轮对话逻辑）
               ↓
     calcUser → session → run(event log) → history → LLM streaming → save
               ↓
-         LLM Client (AI SDK + Gemini)
+       LLM Client (AI SDK + DeepSeek)
               ↓
       Tool calls → executor.ts → internal tools / user tools
                                 → subagent（递归调用）
 ```
 
-- `src/services/agent-runner.ts`：封装完整的「一次对话轮次」生命周期，HTTP 和 Telegram 共用
-- `src/runtime/`：保存 run 元数据、事件流、checkpoint、pending action 和 artifacts，支持断线追补与工具确认后恢复
-- `src/platforms/telegram-bot.ts`：Telegraf 长轮询，fire-and-forget 模式避免 90 秒超时，Markdown→HTML 渲染
-- `src/routes/chat.ts`：SSE 流式推送，通过 `onChunk` / `onImage` / `onTodo` 回调接收输出
+- `packages/agent/src/services/agent-runner.ts`：封装完整的「一次对话轮次」生命周期，HTTP、CLI 与自动化入口共用
+- `packages/runtime/src/`：保存 run 元数据、事件流、checkpoint、pending action 和 artifacts，支持断线追补与工具确认后恢复
+- `packages/app/src/routes/chat.ts`：SSE 流式推送，通过 run event bridge 接收文本、工具、artifact 与 todo 事件
 
 ---
 

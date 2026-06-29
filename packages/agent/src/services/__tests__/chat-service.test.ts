@@ -30,7 +30,7 @@ function git(...args: string[]): string {
 }
 
 function initGitRepo(): void {
-    git('init');
+    git('-c', 'init.defaultBranch=main', 'init', '-q');
     git('config', 'user.name', 'Test User');
     git('config', 'user.email', 'test@example.com');
     writeFileSync(join(testSpaceDir, 'README.md'), 'seed\n', 'utf8');

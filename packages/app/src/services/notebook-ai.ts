@@ -9,7 +9,7 @@
  *   - Audio script: 2-speaker podcast-style dialogue
  *
  * All generations use non-streaming `LLMClient.generate()` and prefer the
- * ACP (free-quota) or Gemini model — falls back through the model router.
+ * configured DeepSeek model, falling back through the model router.
  */
 
 import { LLMClient } from '@neo/agent/llm/client.js';

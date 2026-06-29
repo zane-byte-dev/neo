@@ -177,7 +177,7 @@ const en = {
     voiceErrorNoSupport: 'Your browser does not support audio recording.',
     voiceErrorPermission: 'Microphone access denied. Please allow it in your browser site settings.',
     voiceErrorInsecure: 'Voice input requires a secure connection (HTTPS or localhost).',
-    voiceErrorNoProvider: 'No transcription provider configured. Please add an OpenAI or Gemini API key in Settings.',
+    voiceErrorNoProvider: 'No transcription provider configured. Please add a Gemini API key in Settings.',
     voiceErrorTooLong: 'Recording too long. Please keep it under {max} seconds.',
     voiceErrorGeneric: 'Transcription failed. Please try again.',
 

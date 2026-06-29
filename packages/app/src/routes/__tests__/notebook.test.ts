@@ -56,7 +56,7 @@ vi.mock('../../services/trash-service.js', () => ({
 }));
 
 // Mock AI/chat/parser modules so the route file imports succeed (they're not exercised here)
-vi.mock('@neo/agent/services/notebook-ai.js', () => ({
+vi.mock('../../services/notebook-ai.js', () => ({
     generateAndSaveSourceGuide: vi.fn(),
     generateNotebookOverview: vi.fn(),
     generateMindMap: vi.fn(),

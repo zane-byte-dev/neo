@@ -9,6 +9,10 @@ describe('resolveModel', () => {
         expect(resolveModel('deepseek')).toBe('deepseek-chat');
     });
 
+    it('"deepseek-reasoner" stays on the reasoner model', () => {
+        expect(resolveModel('deepseek-reasoner')).toBe('deepseek-reasoner');
+    });
+
     it('unknown alias returned as-is', () => {
         expect(resolveModel('my-custom-model')).toBe('my-custom-model');
     });

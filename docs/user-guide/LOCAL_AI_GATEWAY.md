@@ -1,6 +1,6 @@
 # Local AI Gateway
 
-Neo 可以作为本机 OpenAI / Anthropic 兼容模型入口。外部客户端只需要配置 Neo 的本地 base URL 和 gateway token，由 Neo 负责隐藏真实 provider key、选择模型、fallback，并把调用写入 Models 使用记录。
+Neo 可以作为本机 OpenAI / Anthropic 兼容模型入口。外部客户端只需要配置 Neo 的本地 base URL 和 gateway token，由 Neo 负责隐藏真实模型 key，并把调用写入 Models 使用记录。当前模型运行时接入 DeepSeek。
 
 ## 启用方式
 
@@ -10,12 +10,12 @@ Gateway 默认关闭。推荐在 Web UI 中开启：
 2. 在 **Local AI Gateway** 卡片打开开关。
 3. 复制生成的 token 和 Base URL。完整 token 只会在生成 / 重置后显示一次，之后页面只显示脱敏尾号。
 
-Provider API Key 仍在同一个 **Models** 页面中配置；不要把 Gemini、DeepSeek、OpenAI、Anthropic 等真实 key 发给外部客户端。
+当前模型运行时读取 `DEEPSEEK_API_KEY` 环境变量；不要把真实 key 发给外部客户端。
 
 如果需要用文件托管或自动化部署，也可以给某个用户配置 `gatewayToken`。只要不存在 UI 写入的 `{stateDir}/gateway.json` 覆盖项，`/v1/*` 会继续识别这个字段：
 
 ```ts
-// src/config.local.ts
+// packages/agent/src/config.local.ts
 import type { LocalConfig } from './config.js';
 
 const config: LocalConfig = {
@@ -56,7 +56,7 @@ OPENAI_API_KEY=<neo-gateway-token>
 | `GET /v1/models` | 返回 `auto`、当前可用 Neo 模型别名，以及对应 provider model id |
 | `POST /v1/chat/completions` | OpenAI Chat Completions 文本接口，支持非流式和 SSE 流式 |
 
-有些客户端会先做 model discovery，并把不认识的短别名过滤掉。如果看到类似 “Gateway returned no usable models. Set inferenceModels to test inference.”，可以在客户端里手动指定推理模型，例如 `auto`、`deepseek`、`gemma`、`claude`，或 `/v1/models` 返回的 provider model id（例如 `ollama/gemma4:e4b`）。
+有些客户端会先做 model discovery，并把不认识的短别名过滤掉。如果看到类似 “Gateway returned no usable models. Set inferenceModels to test inference.”，可以在客户端里手动指定推理模型，例如 `auto`、`deepseek`、`deepseek-reasoner`，或 `/v1/models` 返回的 provider model id。
 
 非流式 curl：
 
@@ -101,7 +101,7 @@ Base URL：
 ```bash
 ANTHROPIC_BASE_URL=http://localhost:3000/v1
 ANTHROPIC_AUTH_TOKEN=<neo-gateway-token>
-ANTHROPIC_MODEL=claude
+ANTHROPIC_MODEL=deepseek
 ```
 
 支持接口：
@@ -118,13 +118,13 @@ ANTHROPIC_MODEL=claude
 curl http://localhost:3000/v1/messages \
   -H "Authorization: Bearer $NEO_GATEWAY_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"model":"claude","max_tokens":256,"messages":[{"role":"user","content":"Reply with one short sentence."}]}'
+  -d '{"model":"deepseek","max_tokens":256,"messages":[{"role":"user","content":"Reply with one short sentence."}]}'
 ```
 
 ## 模型选择与 fallback
 
 - `model: "auto"` 使用 Neo 的智能路由和 fallback chain。
-- 指定 Neo alias，例如 `deepseek`、`claude`、`gemma`、`gemini-acp`，默认只使用该模型。
+- 指定 Neo alias，例如 `deepseek` 或 `deepseek-reasoner`，默认只使用该模型。
 - 如需允许显式模型 fallback，增加请求头 `x-neo-allow-fallback: true`。
 - Gateway 也接受 canonical provider model id，但推荐外部客户端使用 Neo alias。
 

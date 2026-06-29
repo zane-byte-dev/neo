@@ -2,7 +2,7 @@
  * tool-executor.ts — Built-in tool declarations, security checks, and tool execution.
  */
 
-import { join, dirname, isAbsolute, resolve } from 'node:path';
+import { join, dirname } from 'node:path';
 import { promises as fs } from 'node:fs';
 import { logDangerousCommand } from '../utils/audit-logger.js';
 import { log } from '../utils/logger.js';
@@ -12,6 +12,7 @@ import { matchToolApprovalScope } from '@neo/runtime';
 import { resolveToolPermission } from './tool-permissions.js';
 import { DANGEROUS_PATTERNS, READ_FILE_CHAR_LIMIT } from '../config.js';
 import { formatSandboxResult, runInSandbox } from '../sandbox/index.js';
+import { resolveInside } from '../utils/path-security.js';
 import type { Tool, FunctionDeclaration, ToolContext } from '../llm/types.js';
 
 /**
@@ -19,11 +20,7 @@ import type { Tool, FunctionDeclaration, ToolContext } from '../llm/types.js';
  * Throws if the resolved path escapes the sandbox.
  */
 export function safePath(filePath: string, workDir: string): string {
-    const resolved = isAbsolute(filePath) ? resolve(filePath) : resolve(workDir, filePath);
-    if (!resolved.startsWith(resolve(workDir))) {
-        throw new Error(`Path traversal blocked: ${filePath} resolves outside workDir`);
-    }
-    return resolved;
+    return resolveInside(workDir, filePath, { label: filePath });
 }
 
 // ── Built-in tool declarations ────────────────────────────────────────────────

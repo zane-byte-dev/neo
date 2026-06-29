@@ -17,7 +17,7 @@ vi.mock('node-cron', () => ({
     }),
 }));
 
-vi.mock('@neo/agent/app/agent-runtime.js', () => ({
+vi.mock('../../app/agent-runtime.js', () => ({
     neoAgentRuntime: {
         startRun: vi.fn(),
     },

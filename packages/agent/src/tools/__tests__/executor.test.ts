@@ -26,7 +26,7 @@ function git(...args: string[]): string {
 }
 
 function initGitRepo(): void {
-    git('init');
+    git('-c', 'init.defaultBranch=main', 'init', '-q');
     git('config', 'user.name', 'Test User');
     git('config', 'user.email', 'test@example.com');
     writeFileSync(join(workDir, 'README.md'), 'seed\n', 'utf8');
@@ -54,6 +54,19 @@ describe('executeTool', () => {
             const result = await executeTool('read_file', { path: '../../etc/passwd' }, workDir, emptyRegistry);
             expect(result).toContain('[Error]');
             expect(result).toContain('Path traversal blocked');
+        });
+
+        it('blocks absolute sibling paths with the same prefix', async () => {
+            const sibling = `${workDir}-sibling`;
+            mkdirSync(sibling);
+            try {
+                writeFileSync(join(sibling, 'secret.txt'), 'do not read', 'utf8');
+                const result = await executeTool('read_file', { path: join(sibling, 'secret.txt') }, workDir, emptyRegistry);
+                expect(result).toContain('[Error]');
+                expect(result).toContain('Path traversal blocked');
+            } finally {
+                rmSync(sibling, { recursive: true, force: true });
+            }
         });
     });
 

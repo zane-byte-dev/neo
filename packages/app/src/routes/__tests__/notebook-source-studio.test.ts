@@ -52,9 +52,10 @@ vi.mock('@neo/agent/services/notebook-service.js', () => ({
     nbDeleteArtifact: nbDeleteArtifactMock,
     nbListNotes: vi.fn(() => []),
     nbSaveNote: vi.fn((_w, _n, x) => ({ id: 'n1', ...x })),
+    sourceIdFromEntryId: vi.fn((id: string) => id),
 }));
 
-vi.mock('@neo/agent/services/notebook-ai.js', () => ({
+vi.mock('../../services/notebook-ai.js', () => ({
     generateAndSaveSourceGuide: vi.fn(async () => ({ summary: 's' })),
     generateNotebookOverview: vi.fn(async () => 'overview'),
     generateMindMap: vi.fn(async () => ({ id: 'm1', type: 'mindmap' })),

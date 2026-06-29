@@ -1,7 +1,8 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { generateId } from '@neo/agent/utils/id-generator.js';
 import { parseJsonOr } from '@neo/agent/utils/json.js';
+import { writeJsonAtomic } from '@neo/agent/utils/atomic-file.js';
 
 export interface CronRunRecord {
     id: string;
@@ -31,9 +32,8 @@ async function readRuns(stateDir: string): Promise<CronRunRecord[]> {
 }
 
 async function writeRuns(stateDir: string, runs: CronRunRecord[]): Promise<void> {
-    await mkdir(join(stateDir, 'memory'), { recursive: true });
     const sorted = [...runs].sort((a, b) => b.started_at - a.started_at).slice(0, MAX_CRON_RUNS);
-    await writeFile(runsPath(stateDir), JSON.stringify(sorted, null, 2), 'utf8');
+    await writeJsonAtomic(runsPath(stateDir), sorted);
 }
 
 export async function startCronRun(stateDir: string, jobName: string): Promise<CronRunRecord> {

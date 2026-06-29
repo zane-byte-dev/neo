@@ -9,7 +9,7 @@
 import type Router from '@koa/router';
 import { calcUser, invalidateUserCache } from '@neo/agent/services/user-service.js';
 import { saveUserPreferences, type UserPreferences } from '@neo/agent/services/user-prefs.js';
-import { MODEL_ALIASES } from '@neo/agent/config.js';
+import { AVAILABLE_MODEL_ALIASES, isSelectableModelAlias } from '@neo/agent/llm/model-registry.js';
 
 function sanitizeIncoming(body: unknown): UserPreferences {
     const out: UserPreferences = {};
@@ -18,7 +18,7 @@ function sanitizeIncoming(body: unknown): UserPreferences {
 
     if (typeof b.defaultModel === 'string') {
         const m = b.defaultModel.trim();
-        if (m && (m === 'auto' || MODEL_ALIASES[m])) {
+        if (m && (m === 'auto' || isSelectableModelAlias(m))) {
             // 'auto' clears the preference; anything else must be a known alias.
             if (m !== 'auto') out.defaultModel = m;
         }
@@ -27,7 +27,7 @@ function sanitizeIncoming(body: unknown): UserPreferences {
         const list = b.enabledModels
             .filter((m): m is string => typeof m === 'string')
             .map((m) => m.trim())
-            .filter((m) => m && MODEL_ALIASES[m]);
+            .filter((m) => m && isSelectableModelAlias(m));
         if (list.length) out.enabledModels = [...new Set(list)];
     }
     return out;
@@ -44,7 +44,7 @@ export function preferences(router: Router): void {
         const userCtx = await calcUser(userId);
         ctx.body = {
             preferences: userCtx.preferences,
-            availableModels: Object.keys(MODEL_ALIASES),
+            availableModels: AVAILABLE_MODEL_ALIASES,
         };
     });
 

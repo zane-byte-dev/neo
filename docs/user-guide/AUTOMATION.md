@@ -136,8 +136,7 @@ Cron 任务保存于 `{stateDir}/memory/schedule.json`，也可以在 Web UI 的
     "cron": "0 8 * * *",
     "message": "给我今天的天气和日程摘要",
     "enabled": true,
-    "timezone": "Asia/Shanghai",
-    "telegramChatId": "123456789"
+    "timezone": "Asia/Shanghai"
   }
 ]
 ```
@@ -151,7 +150,6 @@ Cron 任务保存于 `{stateDir}/memory/schedule.json`，也可以在 Web UI 的
 | `message` | 是 | 到点后发送给 Agent 的任务指令 |
 | `enabled` | 否 | `false` 时不调度，默认启用 |
 | `timezone` | 否 | IANA 时区，默认 `Asia/Shanghai` |
-| `telegramChatId` | 否 | 配置后把结果发送到对应 Telegram chat |
 
 内置系统任务会每天 08:00 Asia/Shanghai 刷新用户 NOW 状态。
 
@@ -173,4 +171,3 @@ Cron 任务保存于 `{stateDir}/memory/schedule.json`，也可以在 Web UI 的
 - Webhook 返回 404：检查 `userId` 是否存在、是否配置 `webhookSecret`。
 - Webhook 返回 401：检查请求体里的 `secret`。
 - Cron 不执行：检查 cron 表达式、`enabled`、时区，以及后端进程是否正在运行。
-- Telegram 不推送：先看 `Settings / Basic / Overview` 的 Automation 卡片是否异常，再到 `Settings / Basic / Models` 确认 Telegram Bot Token 已配置，并检查 `telegramChatId` 是否正确。

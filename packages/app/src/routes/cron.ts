@@ -1,11 +1,12 @@
 import type Router from '@koa/router';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { validate as cronValidate } from 'node-cron';
 import { calcUser } from '@neo/agent/services/user-service.js';
 import { reloadSchedules, runScheduledTask } from '../services/cron-agent.js';
 import { listCronRuns } from '../services/cron-history.js';
 import { parseJsonOr } from '@neo/agent/utils/json.js';
+import { writeJsonAtomic } from '@neo/agent/utils/atomic-file.js';
 
 interface ScheduledTask {
     id: string;
@@ -32,8 +33,7 @@ async function readSchedule(stateDir: string): Promise<ScheduledTask[]> {
 }
 
 async function writeSchedule(stateDir: string, tasks: ScheduledTask[]): Promise<void> {
-    await mkdir(join(stateDir, 'memory'), { recursive: true });
-    await writeFile(schedulePath(stateDir), JSON.stringify(tasks, null, 2), 'utf8');
+    await writeJsonAtomic(schedulePath(stateDir), tasks);
 }
 
 function normalizeTask(id: string, body: Record<string, unknown>, existing?: ScheduledTask): ScheduledTask | null {

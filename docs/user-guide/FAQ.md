@@ -2,46 +2,25 @@
 
 ## 首次启动没有配置文件怎么办？
 
-直接启动即可。Neo 会在 `~/.neo/config.json` 自动生成单用户配置，并在后端控制台打印登录 `webToken`。如果你需要多用户或自定义路径，再复制 `src/config.local.example.ts` 到 `src/config.local.ts`。
+直接启动即可。Neo 会在 `~/.neo/config.json` 自动生成单用户配置，并在后端控制台打印登录 `webToken`。如果你需要多用户或自定义路径，再复制 `packages/agent/src/config.local.example.ts` 到 `packages/agent/src/config.local.ts`。
 
 ## 登录 token 忘了怎么办？
 
-查看 `~/.neo/config.json` 或 `src/config.local.ts` 中对应用户的 `webToken`。如果要重置，修改该字段并重启后端。
+查看 `~/.neo/config.json` 或 `packages/agent/src/config.local.ts` 中对应用户的 `webToken`。如果要重置，修改该字段并重启后端。
 
 ## API Key 在哪里填写？
 
-打开 Web UI 后进入 Models 页，添加 Gemini / DeepSeek / OpenAI / Anthropic 等 Provider 的 API Key，或 Claude Code 兼容代理的地址 + Token。凭据会加密保存到 `{stateDir}/secrets.json.enc`，不会写入仓库。
+当前模型运行时读取 `DEEPSEEK_API_KEY` 环境变量。设置后重启后端即可：
 
-## Claude Code 代理怎么接入？
-
-在 **Settings / Basic / Models → Add Model** 里分别保存：
-
-- `Claude Code Proxy URL`：你的代理地址，通常以 `/v1` 结尾。
-- `Claude Code Token`：代理给你的访问 Token，Neo 会按 Bearer Token 发送。
-
-两项都配置后，模型列表会显示 `claude-code`、`claude-code-sonnet`、`claude-code-opus`、`claude-code-haiku`。也可以通过环境变量 `CLAUDE_CODE_BASE_URL` 和 `CLAUDE_CODE_TOKEN` 配置。
+```bash
+DEEPSEEK_API_KEY=sk-... npm run dev:bot
+```
 
 ## 首次使用清单在哪里？
 
 登录后进入空 Chat 欢迎页，会看到“开始使用 Neo”清单。它会引导你完成三件事：配置一个模型、发送第一条消息、创建一条 Notebook 笔记。
 
 其中模型配置和 Notebook 条目会根据当前状态自动判断是否完成；如果你手动关闭了这个清单，当前浏览器里的关闭状态会被记住，现阶段还没有单独的“重新打开 checklist”入口。
-
-## Gemini CLI 怎么用？
-
-先安装 Gemini CLI 并完成登录：
-
-```bash
-gemini login
-```
-
-然后设置：
-
-```bash
-GEMINI_CLI_PATH=gemini
-```
-
-重启 Neo 后，Models 页会显示 Gemini ACP 可用状态。
 
 ## 端口冲突怎么办？
 
@@ -53,13 +32,11 @@ WEB_PORT=3001 npm run dev:bot
 
 前端端口由 Vite 自动选择，或在 `web/vite.config.ts` 中调整。
 
-## Telegram Bot 无响应怎么办？
+## 外部系统怎么触发 Neo？
 
-1. 先打开 `Settings / Basic / Overview`，确认 Automation 卡片是否显示错误或未配置。
-2. 在 `Settings / Basic / Models` 确认 Telegram Bot Token 已配置。
-3. 在 `USERS[].tenants` 中加入 `telegram:<userId>`。
-4. 给 bot 发消息后查看 `logs/YYYY-MM-DD.jsonl`。
-5. 不知道自己的 Telegram userId 时，可以先给任意 user-info bot 发消息查询，或临时查看 Neo 后端收到的 Telegram update 日志。
+- Webhook：调用 `POST /api/webhook/:userId`，请求体包含 `message` 和用户的 `webhookSecret`。
+- Cron：在 `{stateDir}/memory/schedule.json` 中配置定时任务。
+- Workflow：通过 `/api/workflows` 管理串行步骤、运行历史和手动运行。
 
 ## 如何判断 Neo 是否已经准备好？
 

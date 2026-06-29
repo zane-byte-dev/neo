@@ -2,12 +2,13 @@
  * src/config.ts — Centralized configuration.
  *
  * Single source of truth for runtime constants. No .env loading.
- * Personal/secret values (USERS, SESSION_SECRET) live in src/config.local.ts
- * which is gitignored — copy src/config.local.example.ts to bootstrap.
+ * Personal/secret values (USERS, SESSION_SECRET) live in packages/agent/src/config.local.ts
+ * which is gitignored — copy packages/agent/src/config.local.example.ts to bootstrap.
  */
 
 import { loadOrBootstrapHomeConfig, printBootstrapBanner } from './services/bootstrap-config.js';
 import type { AgentProfile, EntrypointProfileBindings } from './agent/profiles/types.js';
+export { AVAILABLE_MODEL_ALIASES, MODEL_ALIASES } from './llm/model-registry.js';
 
 // ── Local config (gitignored) ────────────────────────────────────────────────
 
@@ -122,13 +123,6 @@ export const GENERATE_TIMEOUT_MS = envInt('GENERATE_TIMEOUT_MS', 120_000);
 /** Read-file content cap to prevent context flooding (chars) */
 export const READ_FILE_CHAR_LIMIT = 50_000;
 
-/** Model short-name aliases → real API IDs */
-export const MODEL_ALIASES: Record<string, string> = {
-    deepseek: 'deepseek-chat',
-    'deepseek-chat': 'deepseek-chat',
-    'deepseek-reasoner': 'deepseek-reasoner',
-};
-
 // ── Security ─────────────────────────────────────────────────────────────────
 
 export const DANGEROUS_PATTERNS = [
@@ -148,7 +142,7 @@ export const MAX_INPUT_LENGTH = 50_000;
 export const SESSION_SECRET: string | undefined =
     localConfig.SESSION_SECRET ?? process.env.SESSION_SECRET;
 if (!SESSION_SECRET) {
-    console.error('[Config] FATAL: SESSION_SECRET is not set in src/config.local.ts (or SESSION_SECRET env). Refusing to start.');
+    console.error('[Config] FATAL: SESSION_SECRET is not set in packages/agent/src/config.local.ts (or SESSION_SECRET env). Refusing to start.');
     process.exit(1);
 }
 process.env.SESSION_SECRET = SESSION_SECRET;

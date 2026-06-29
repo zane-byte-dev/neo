@@ -13,8 +13,9 @@
  *     {custom}.md    — any other memory files
  */
 import { promises as fs } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { join, dirname } from 'node:path';
 import type { Tool } from '../_base.js';
+import { tryResolveInside } from '../../utils/path-security.js';
 
 export const saveMemoryTool: Tool = {
     meta: { category: 'utility', version: '1.0.0', permission: 'write' },
@@ -100,11 +101,7 @@ export const saveMemoryTool: Tool = {
 
 /** Ensure path stays within memDir (prevent path traversal). */
 function safePath(memDir: string, relative: string): string | null {
-    const full = resolve(memDir, relative);
-    if (!full.startsWith(resolve(memDir) + '/') && full !== resolve(memDir)) {
-        return null;
-    }
-    return full;
+    return tryResolveInside(memDir, relative);
 }
 
 /** Recursively list files in memory directory. */

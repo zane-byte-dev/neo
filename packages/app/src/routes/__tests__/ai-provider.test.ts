@@ -133,7 +133,7 @@ describe('/v1 provider routes', () => {
         const { app, router, mount } = createTestApp();
         aiProvider(router); mount();
 
-        const body = { model: 'claude', messages: [{ role: 'user', content: 'hi' }] };
+        const body = { model: 'deepseek', messages: [{ role: 'user', content: 'hi' }] };
         const res = await request(app.callback())
             .post('/v1/messages')
             .set('Authorization', 'Bearer gw-token')
@@ -151,7 +151,7 @@ describe('/v1 provider routes', () => {
         const res = await request(app.callback())
             .post('/v1/messages')
             .set('Authorization', 'Bearer gw-token')
-            .send({ model: 'claude', stream: true, messages: [{ role: 'user', content: 'hi' }] });
+            .send({ model: 'deepseek', stream: true, messages: [{ role: 'user', content: 'hi' }] });
 
         expect(res.status).toBe(200);
         expect(res.headers['content-type']).toContain('text/event-stream');

@@ -1190,7 +1190,7 @@ const FileAttachmentIcon: React.FC<{ filename: string; className?: string }> = (
     return <FileIcon size={14} className={className ?? 'text-text-tertiary'} />
 }
 
-const COMMON_MODEL_ALIASES = ['deepseek', 'gemma', 'gemini-acp']
+const COMMON_MODEL_ALIASES = ['deepseek', 'deepseek-reasoner']
 
 const MODEL_PRESENTATION: Record<string, { label: string; badge?: string }> = {
     deepseek: { label: 'DeepSeek Chat', badge: 'DeepSeek' },

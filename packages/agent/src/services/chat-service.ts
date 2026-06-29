@@ -15,6 +15,7 @@ import { generateId } from '../utils/id-generator.js';
 import { deriveChatTitleFromMessage } from '../utils/chat-title.js';
 import { withGitAutoCommit } from '../utils/git-auto-commit.js';
 import { parseJsonLines, parseJsonOr } from '../utils/json.js';
+import { writeJsonAtomic } from '../utils/atomic-file.js';
 import { userGetStateDir } from './user-service.js';
 
 // ── Path helpers ──────────────────────────────────────────────────────────────
@@ -106,8 +107,7 @@ async function readSessionsStore(userId: string): Promise<SessionsStore> {
 }
 
 async function writeSessionsStore(userId: string, store: SessionsStore): Promise<void> {
-    await fs.mkdir(tmpDir(userId), { recursive: true });
-    await fs.writeFile(sessionsFile(userId), JSON.stringify(store, null, 2), 'utf8');
+    await writeJsonAtomic(sessionsFile(userId), store);
 }
 
 async function readMessages(userId: string, sessionId: string): Promise<MessageRow[]> {

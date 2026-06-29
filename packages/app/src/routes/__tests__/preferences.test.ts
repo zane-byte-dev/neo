@@ -8,15 +8,9 @@ import { createTestApp, signedCookie } from '../../__tests__/test-helpers.js';
 const {
     calcUserMock,
     saveUserPreferencesMock,
-    ensureTelegramBotStartedMock,
-    getTelegramRuntimeStateMock,
-    syncTelegramBotStateMock,
 } = vi.hoisted(() => ({
     calcUserMock: vi.fn(),
     saveUserPreferencesMock: vi.fn(),
-    ensureTelegramBotStartedMock: vi.fn(),
-    getTelegramRuntimeStateMock: vi.fn(),
-    syncTelegramBotStateMock: vi.fn(),
 }));
 
 vi.mock('@neo/agent/services/user-service.js', () => ({
@@ -28,20 +22,6 @@ vi.mock('@neo/agent/services/user-prefs.js', () => ({
     saveUserPreferences: saveUserPreferencesMock,
 }));
 
-vi.mock('../../services/telegram-runtime.js', () => ({
-    ensureTelegramBotStarted: ensureTelegramBotStartedMock,
-    getTelegramRuntimeState: getTelegramRuntimeStateMock,
-    syncTelegramBotState: syncTelegramBotStateMock,
-}));
-
-vi.mock('@neo/agent/config.js', async () => {
-    const actual = await vi.importActual<Record<string, unknown>>('@neo/agent/config.js');
-    return {
-        ...actual,
-        MODEL_ALIASES: { deepseek: 'deepseek-chat', claude: 'claude-sonnet-4-5' },
-    };
-});
-
 beforeEach(() => {
     calcUserMock.mockResolvedValue({
         workDir: '/tmp/work',
@@ -49,9 +29,6 @@ beforeEach(() => {
         preferences: { defaultModel: 'deepseek' },
     });
     saveUserPreferencesMock.mockImplementation(async (_dir: string, p: unknown) => p);
-    getTelegramRuntimeStateMock.mockReturnValue({ active: false, reason: 'not_started' });
-    syncTelegramBotStateMock.mockResolvedValue({ active: false, reason: 'not_started' });
-    ensureTelegramBotStartedMock.mockResolvedValue({ active: true, reason: 'ok' });
 });
 
 describe('/api/preferences', () => {
@@ -72,7 +49,7 @@ describe('/api/preferences', () => {
             .set('Cookie', signedCookie('u1'));
         expect(res.status).toBe(200);
         expect(res.body.preferences.defaultModel).toBe('deepseek');
-        expect(res.body.availableModels).toEqual(['deepseek', 'claude']);
+        expect(res.body.availableModels).toEqual(['deepseek', 'deepseek-reasoner']);
     });
 
     it('POST sanitizes incoming preferences and saves them', async () => {
@@ -84,14 +61,14 @@ describe('/api/preferences', () => {
             .set('Cookie', signedCookie('u1'))
             .send({
                 defaultModel: 'deepseek',
-                enabledModels: ['deepseek', 'unknown-model', 'claude'],
+                enabledModels: ['deepseek', 'unknown-model', 'deepseek-reasoner'],
                 garbage: true,
             });
         expect(res.status).toBe(200);
         expect(saveUserPreferencesMock).toHaveBeenCalled();
         const saved = saveUserPreferencesMock.mock.calls[0][1];
         expect(saved.defaultModel).toBe('deepseek');
-        expect(saved.enabledModels).toEqual(['deepseek', 'claude']);
+        expect(saved.enabledModels).toEqual(['deepseek', 'deepseek-reasoner']);
         expect((saved as Record<string, unknown>).garbage).toBeUndefined();
     });
 

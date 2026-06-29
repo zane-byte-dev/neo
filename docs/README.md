@@ -17,7 +17,7 @@ docs/
 | 文件 | 说明 | 状态 |
 |------|------|------|
 | [AI_DEVELOPMENT.md](user-guide/AI_DEVELOPMENT.md) | 如何在 GitHub Copilot 中按 Product Brief→Dev Plan→Implementation→Test Review→Closeout 开发 Neo | ✅ 已落地 |
-| [FAQ.md](user-guide/FAQ.md) | 安装、登录、API Key、Telegram、MCP、`code_exec` 常见问题 | ✅ 已落地 |
+| [FAQ.md](user-guide/FAQ.md) | 安装、登录、DeepSeek API Key、外部触发、MCP、`code_exec` 常见问题 | ✅ 已落地 |
 | [TOOLS.md](user-guide/TOOLS.md) | 内置工具、自定义工具协议、脚本输入输出 | ✅ 已落地 |
 | [SKILLS.md](user-guide/SKILLS.md) | Skill frontmatter、参数插值、可执行代码块 | ✅ 已落地 |
 | [SANDBOX.md](user-guide/SANDBOX.md) | `code_exec`、Docker / host 沙箱、资源限制、产物收集 | ✅ 已落地 |

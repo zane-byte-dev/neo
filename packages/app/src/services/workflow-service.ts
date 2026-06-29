@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { neoAgentRuntime } from '../app/agent-runtime.js';
 import { calcUser } from '@neo/agent/services/user-service.js';
@@ -6,6 +6,7 @@ import { executeSkill } from '@neo/agent/skills/skill-executor.js';
 import { newRunId, persistImageArtifact, pruneTextChunkEventsSafe, readRunOutcome } from '@neo/runtime';
 import { generateId } from '@neo/agent/utils/id-generator.js';
 import { parseJsonOr } from '@neo/agent/utils/json.js';
+import { writeJsonAtomic } from '@neo/agent/utils/atomic-file.js';
 import type { ToolContext } from '@neo/agent/llm/types.js';
 
 export type WorkflowTrigger =
@@ -88,8 +89,7 @@ async function readStore(stateDir: string): Promise<WorkflowStore> {
 }
 
 async function writeStore(stateDir: string, store: WorkflowStore): Promise<void> {
-    await mkdir(workflowsDir(stateDir), { recursive: true });
-    await writeFile(workflowsPath(stateDir), JSON.stringify(store, null, 2), 'utf8');
+    await writeJsonAtomic(workflowsPath(stateDir), store);
 }
 
 async function readRuns(stateDir: string): Promise<WorkflowRunRecord[]> {
@@ -103,11 +103,10 @@ async function readRuns(stateDir: string): Promise<WorkflowRunRecord[]> {
 }
 
 async function writeRuns(stateDir: string, runs: WorkflowRunRecord[]): Promise<void> {
-    await mkdir(workflowsDir(stateDir), { recursive: true });
     const sorted = [...runs]
         .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
         .slice(0, MAX_WORKFLOW_RUNS);
-    await writeFile(runsPath(stateDir), JSON.stringify(sorted, null, 2), 'utf8');
+    await writeJsonAtomic(runsPath(stateDir), sorted);
 }
 
 async function saveRun(stateDir: string, run: WorkflowRunRecord): Promise<void> {

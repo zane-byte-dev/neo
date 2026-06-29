@@ -1,5 +1,5 @@
 /**
- * run-skill.ts — Tool that exposes the skill system to the Gemini agent.
+ * run-skill.ts — Tool that exposes the skill system to the agent runtime.
  *
  * The agent can call `run_skill` to execute any Markdown-defined skill
  * registered in the user's skills directory.
@@ -52,7 +52,7 @@ export const runSkillTool: Tool = {
 
         if (!context) return '[run_skill] Missing tool context';
 
-        // Parse args: accept either a JSON string or a raw object (in case Gemini deep-parses it)
+        // Parse args: accept either a JSON string or a raw object when the model deep-parses it.
         let args: Record<string, unknown> = {};
         const rawArgsValue = rawArgs['args'];
         if (rawArgsValue) {

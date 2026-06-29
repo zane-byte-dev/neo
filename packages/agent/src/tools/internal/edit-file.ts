@@ -5,16 +5,10 @@
  * leaving the rest of the file untouched. Essential for large files.
  */
 import { promises as fs } from 'fs';
-import { dirname, isAbsolute, resolve } from 'path';
+import { dirname } from 'path';
 import type { Tool } from '../_base.js';
-
-function safePath(filePath: string, workDir: string): string {
-    const resolved = isAbsolute(filePath) ? resolve(filePath) : resolve(workDir, filePath);
-    if (!resolved.startsWith(resolve(workDir))) {
-        throw new Error(`Path traversal blocked: ${filePath} resolves outside workDir`);
-    }
-    return resolved;
-}
+import { writeFileAtomic } from '../../utils/atomic-file.js';
+import { resolveInside } from '../../utils/path-security.js';
 
 export const editFileTool: Tool = {
     meta: { category: 'workspace', version: '1.0.0', permission: 'write' },
@@ -53,7 +47,7 @@ export const editFileTool: Tool = {
 
         if (!filePath) return '[Error] path is required';
 
-        const resolved = safePath(filePath, workDir);
+        const resolved = resolveInside(workDir, filePath, { label: filePath });
 
         // Append / create mode (old_str is empty)
         if (oldStr === '') {
@@ -64,7 +58,7 @@ export const editFileTool: Tool = {
                 if (err.code !== 'ENOENT') return `[Error] Cannot read file: ${err.message}`;
             }
             await fs.mkdir(dirname(resolved), { recursive: true });
-            await fs.writeFile(resolved, existing + newStr, 'utf8');
+            await writeFileAtomic(resolved, existing + newStr);
             return `OK: ${existing ? 'appended' : 'created'} file ${resolved} (${newStr.length} chars)`;
         }
 
@@ -84,7 +78,7 @@ export const editFileTool: Tool = {
         }
 
         const updated = content.replace(oldStr, newStr);
-        await fs.writeFile(resolved, updated, 'utf8');
+        await writeFileAtomic(resolved, updated);
 
         const oldLines = oldStr.split('\n').length;
         const newLines = newStr.split('\n').length;

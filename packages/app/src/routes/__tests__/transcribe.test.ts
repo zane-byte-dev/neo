@@ -93,7 +93,7 @@ describe('POST /api/transcribe', () => {
 
     it('returns 503 when transcription service throws (no provider)', async () => {
         mockTranscribeAudio.mockRejectedValueOnce(
-            new Error('No transcription provider configured. Please add an OpenAI or Gemini API key.'),
+            new Error('No transcription provider configured. Please add a Gemini API key.'),
         );
         const app = buildApp();
         const res = await request(app.callback())

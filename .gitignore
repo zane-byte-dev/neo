@@ -26,8 +26,8 @@ yarn-error.log*
 .env.local
 .env.save
 
-# Local config (personal paths, session secret) — copy from src/config.local.example.ts
-src/config.local.ts
+# Local config (personal paths, session secret) — copy from packages/agent/src/config.local.example.ts
+packages/agent/src/config.local.ts
 
 # IDE
 .vscode/

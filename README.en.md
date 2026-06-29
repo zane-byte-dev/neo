@@ -6,8 +6,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 > A self-hosted personal AI assistant: web chat + notebook knowledge base +
-> Telegram bot, with a pluggable tool/skill system and multi-LLM routing
-> (Gemini, DeepSeek, OpenAI, Anthropic, Ollama).
+> automation runtime, with a pluggable tool/skill system.
+> The current model runtime uses DeepSeek through the Vercel AI SDK.
 
 [中文版 README →](README.md)
 
@@ -17,8 +17,8 @@
 
 - **Single-tenant by design** — your conversations, notebooks, and tool runs
   live on disk in your own workspace directory. No vendor lock-in.
-- **Multi-LLM routing** — automatically picks the best model for the task
-  (tool-heavy → DeepSeek, reasoning → Gemini Pro, offline → Ollama).
+- **Agent runtime** — web chat, CLI, webhooks, cron jobs, and workflows all
+  share the same resumable run/event model.
 - **Tools and skills are just files** — drop tools into `{stateDir}/tools/`
   and Markdown skills into `{stateDir}/skills/`; Neo discovers them on reload.
 - **Runs anywhere** — a Mac mini under your desk, a $5 VPS, or your laptop.
@@ -33,15 +33,14 @@
 | **Skills** | Markdown-defined reusable AI skills with parameter interpolation |
 | **Tools** | Built-in tools + user-defined tools auto-loaded from `{stateDir}/tools/` |
 | **Automation** | Webhook / Cron / Workflow triggers with serial steps, run history, and manual runs |
-| **Telegram bot** | Telegraf long-polling, Markdown rendering, image / video sending |
 | **Browser extension** | Chrome extension for clipping selections, X.com threads, Gemini chats, Lark wiki pages |
 | **Web UI** | React 19 + Vite + Tailwind CSS, Chat / Notebook panels |
 
 ## Tech Stack
 
 - **Runtime:** Node.js ≥ 18 (ESM) + TypeScript
-- **Backend:** Koa 3, better-sqlite3
-- **LLM:** Vercel AI SDK with Google Gemini / DeepSeek / OpenAI / Anthropic / Ollama
+- **Backend:** Koa 3, better-sqlite3 for the knowledge index
+- **LLM:** Vercel AI SDK + DeepSeek Anthropic-compatible API
 - **Frontend:** React 19 + Vite + Tailwind CSS 4
 - **Process manager (prod):** PM2
 
@@ -57,14 +56,12 @@ npm install && npm run web:install
 # directories under ~/.neo/{workspace,state}/default. The login webToken is
 # printed in the backend console.
 
-npm run dev:bot          # backend + Telegram bot on :3000
+npm run dev:bot          # backend HTTP server on :3000
 npm run web:dev          # frontend dev server on :5173 (separate terminal)
 ```
 
-Open http://localhost:5173, then go to the **Models** page and add at least
-one provider API key (Gemini / DeepSeek / OpenAI / Anthropic). Keys are
-stored encrypted under `{stateDir}/secrets.json.enc` — they never touch the
-repository. See [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md) for common setup issues.
+Open http://localhost:5173 and configure `DEEPSEEK_API_KEY` for model calls.
+See [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md) for common setup issues.
 
 ### Production (single Node process behind Caddy)
 
@@ -82,10 +79,10 @@ same port (default `3000`). Put it behind Caddy / Nginx / Cloudflare for HTTPS.
 
 By default, first launch creates `~/.neo/config.json`. For multi-user setups,
 custom paths, or repo-local development, you can still create
-`src/config.local.ts` (gitignored). It takes precedence over the home config:
+`packages/agent/src/config.local.ts` (gitignored). It takes precedence over the home config:
 
 ```bash
-cp src/config.local.example.ts src/config.local.ts
+cp packages/agent/src/config.local.example.ts packages/agent/src/config.local.ts
 ```
 
 ```ts
@@ -96,7 +93,7 @@ const config: LocalConfig = {
         {
             id: 'alice',
             name: 'Alice',
-            tenants: [],                       // e.g. ['telegram:123456789']
+            tenants: [],                       // reserved for platform mappings
             webToken: 'long-random-string',    // for web sign-in
             workDir:  '/abs/path/to/workspace',  // your stuff (notebooks, AGENTS.md…)
             stateDir: '/abs/path/to/state',      // managed by Neo (runs, secrets, usage…)
@@ -108,15 +105,11 @@ const config: LocalConfig = {
 export default config;
 ```
 
-**API keys are managed in the UI**, not in config files. Open the **Models**
-page after first launch and add Gemini / DeepSeek / OpenAI / Anthropic keys
-or a Telegram bot token there — they are encrypted with AES-256-GCM under
-`{stateDir}/secrets.json.enc` (the encryption key is derived from
-`SESSION_SECRET`).
+The current model runtime reads `DEEPSEEK_API_KEY` from the environment.
+Do not commit real web tokens, gateway tokens, or session secrets.
 
 A few optional environment variables are still respected when set:
-`WEB_PORT`, `LOG_LEVEL`, `DAILY_COST_LIMIT`, `OLLAMA_BASE_URL`,
-`GEMINI_CLI_PATH`. None are required for a default setup.
+`WEB_PORT`, `LOG_LEVEL`, and `DAILY_COST_LIMIT`.
 
 ## Workspace Layout
 
@@ -167,22 +160,22 @@ More user guides:
 - [docs/user-guide/AGENT_RUNTIME.md](docs/user-guide/AGENT_RUNTIME.md) — runs, event logs, resume, cancellation
 - [docs/user-guide/BROWSER_EXTENSION.md](docs/user-guide/BROWSER_EXTENSION.md) — Chrome extension
 
+## Verification
+
+```bash
+npm run verify
+```
+
+This runs TypeScript checks for runtime, agent, app, and web, then executes the full Vitest suite. Use `npm run typecheck` for a faster type-only pass.
+
 ## Project Structure
 
 ```
 neo/
-├── src/                 # Backend (TypeScript, ESM)
-│   ├── main.ts          # Process entry (HTTP + Telegram)
-│   ├── server.ts        # Koa app
-│   ├── services/        # agent-runner, chat, notebook, user…
-│   ├── routes/          # HTTP routes
-│   ├── llm/             # Multi-provider LLM client + router
-│   ├── tools/           # Built-in tools + user-tool loader
-│   ├── skills/          # Skill loader and executor
-│   ├── indexing/        # SQLite FTS5 knowledge index
-│   ├── memory/          # Episodic + semantic memory
-│   ├── runtime/         # Resumable agent run state
-│   └── utils/           # Logger, file-search, git-auto-commit…
+├── packages/
+│   ├── app/             # Koa HTTP server, CLI, routes, automation entrypoints
+│   ├── agent/           # LLM, agent-runner, tools, skills, memory, notebook
+│   └── runtime/         # run/event/checkpoint/pending-action contracts
 ├── web/                 # React frontend
 ├── extension/           # Chrome browser extension
 └── docs/                # Design docs and roadmap

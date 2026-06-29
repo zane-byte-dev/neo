@@ -30,10 +30,10 @@ Agent Profile 把「能力边界 + 行为风格」打包成一个声明式对象
 
 ## 配置
 
-profile 与入口绑定可写在 `src/config.local.ts`（`LocalConfig`）里，或用同名环境变量（JSON 字符串）覆盖。缺省时只有内置 profile 生效，行为与现状一致。
+profile 与入口绑定可写在 `packages/agent/src/config.local.ts`（`LocalConfig`）里，或用同名环境变量（JSON 字符串）覆盖。缺省时只有内置 profile 生效，行为与现状一致。
 
 ```ts
-// src/config.local.ts
+// packages/agent/src/config.local.ts
 export default {
     USERS: [/* … */],
     SESSION_SECRET: '…',
@@ -52,7 +52,7 @@ export default {
 
     // 把入口绑定到某个 profile id
     ENTRYPOINT_PROFILES: {
-        telegram: 'research',
+        webhook: 'research',
         cron: 'ops',
     },
 };
@@ -62,7 +62,7 @@ export default {
 
 ```bash
 export PROFILES='[{"id":"ops","memory":"read","tools":{"maxTier":"write","deny":["bash"]}}]'
-export ENTRYPOINT_PROFILES='{"telegram":"research","cron":"ops"}'
+export ENTRYPOINT_PROFILES='{"webhook":"research","cron":"ops"}'
 ```
 
 ## 字段校验

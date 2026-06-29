@@ -24,14 +24,14 @@ describe('loadUserPreferences', () => {
             join(dir, 'preferences.json'),
             JSON.stringify({
                 defaultModel: '  deepseek  ',
-                enabledModels: ['deepseek', 'claude', 'deepseek', '', 5],
+                enabledModels: ['deepseek', 'deepseek-reasoner', 'deepseek', '', 5],
                 extra: 'ignored',
             }),
             'utf8',
         );
         const p = await loadUserPreferences(dir);
         expect(p.defaultModel).toBe('deepseek');
-        expect(p.enabledModels).toEqual(['deepseek', 'claude']);
+        expect(p.enabledModels).toEqual(['deepseek', 'deepseek-reasoner']);
         expect((p as Record<string, unknown>).extra).toBeUndefined();
     });
 });
@@ -40,10 +40,10 @@ describe('saveUserPreferences', () => {
     it('writes sanitized JSON and returns the cleaned object', async () => {
         const out = await saveUserPreferences(dir, {
             defaultModel: 'deepseek',
-            enabledModels: ['deepseek', '', 'claude'],
+            enabledModels: ['deepseek', '', 'deepseek-reasoner'],
         });
         expect(out.defaultModel).toBe('deepseek');
-        expect(out.enabledModels).toEqual(['deepseek', 'claude']);
+        expect(out.enabledModels).toEqual(['deepseek', 'deepseek-reasoner']);
         const raw = JSON.parse(await fs.readFile(join(dir, 'preferences.json'), 'utf8'));
         expect(raw.defaultModel).toBe('deepseek');
     });

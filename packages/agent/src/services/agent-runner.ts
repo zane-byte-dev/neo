@@ -10,7 +10,7 @@
  *   5. Save assistant message, finalise checkpoint + metrics
  *   6. Return the full response text
  *
- * Callers (HTTP route, Telegram bot, …) only supply IO-specific callbacks
+ * Callers (HTTP route, CLI, webhook, cron, workflow, …) only supply IO-specific callbacks
  * and (optionally) a pre-allocated `runId` so they can subscribe to the
  * run from elsewhere.
  */

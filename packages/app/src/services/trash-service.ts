@@ -12,9 +12,11 @@
  * Items are auto-expired after TRASH_TTL_MS (30 days).
  */
 import { promises as fs, existsSync, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { generateId } from '@neo/agent/utils/id-generator.js';
 import { parseJsonOr } from '@neo/agent/utils/json.js';
+import { isInsidePath } from '@neo/agent/utils/path-security.js';
+import { writeJsonAtomic } from '@neo/agent/utils/atomic-file.js';
 
 const TRASH_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -71,8 +73,7 @@ async function readManifest(stateDir: string): Promise<TrashManifest> {
 }
 
 async function writeManifest(stateDir: string, manifest: TrashManifest): Promise<void> {
-    mkdirSync(trashDir(stateDir), { recursive: true });
-    await fs.writeFile(manifestPath(stateDir), JSON.stringify(manifest, null, 2), 'utf8');
+    await writeJsonAtomic(manifestPath(stateDir), manifest);
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ export async function trashArticle(
 ): Promise<TrashItem | null> {
     const srcPath = join(workDir, entryId);
     // Security: ensure entryId stays within workDir
-    if (!resolve(srcPath).startsWith(resolve(workDir) + '/')) return null;
+    if (!isInsidePath(workDir, srcPath, { allowEqual: false })) return null;
     if (!existsSync(srcPath)) return null;
 
     const trashId = generateId();

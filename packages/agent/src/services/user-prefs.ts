@@ -9,6 +9,7 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { parseJsonOr } from '../utils/json.js';
 import { log } from '../utils/logger.js';
+import { writeJsonAtomic } from '../utils/atomic-file.js';
 
 export interface UserPreferences {
     /** Preferred default model alias (applied when the request does not override). */
@@ -38,8 +39,7 @@ export async function loadUserPreferences(workDir: string): Promise<UserPreferen
 export async function saveUserPreferences(workDir: string, prefs: UserPreferences): Promise<UserPreferences> {
     const clean = sanitize(prefs);
     const target = join(workDir, FILE_NAME);
-    await fs.mkdir(workDir, { recursive: true });
-    await fs.writeFile(target, JSON.stringify(clean, null, 2), 'utf8');
+    await writeJsonAtomic(target, clean);
     log.info('UserPrefs', `Saved preferences for ${workDir}: ${JSON.stringify(clean)}`);
     return clean;
 }

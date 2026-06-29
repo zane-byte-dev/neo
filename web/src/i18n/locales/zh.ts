@@ -179,7 +179,7 @@ const zh: Record<TranslationKeys, string> = {
     voiceErrorNoSupport: '当前浏览器不支持录音功能。',
     voiceErrorPermission: '麦克风权限被拒绝，请在浏览器网站设置中开启。',
     voiceErrorInsecure: '语音输入需要安全连接（HTTPS 或 localhost）。',
-    voiceErrorNoProvider: '没有可用的转写服务，请在设置中添加 OpenAI 或 Gemini API Key。',
+    voiceErrorNoProvider: '没有可用的转写服务，请在设置中添加 Gemini API Key。',
     voiceErrorTooLong: '录音超时，请控制在 {max} 秒以内。',
     voiceErrorGeneric: '转写失败，请重试。',
 

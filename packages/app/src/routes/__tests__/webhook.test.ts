@@ -12,7 +12,7 @@ const { mockWorkDir, mockSecret } = vi.hoisted(() => ({
     mockSecret: { value: 'secret-123' },
 }));
 
-vi.mock('@neo/agent/app/agent-runtime.js', () => ({
+vi.mock('../../app/agent-runtime.js', () => ({
     neoAgentRuntime: {
         startRun: vi.fn(),
     },

@@ -1,6 +1,7 @@
 import { generateText, streamText, type ModelMessage, type ToolSet } from 'ai';
-import { MODEL_ALIASES, GENERATE_TIMEOUT_MS, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
+import { GENERATE_TIMEOUT_MS, STREAM_FIRST_CHUNK_TIMEOUT_MS } from '../config.js';
 import { createLanguageModel, resolveModel } from '../llm/model-factory.js';
+import { isSupportedModelName, listGatewayModels } from '../llm/model-registry.js';
 import { GatewayError, toGatewayError } from '../llm/protocol/errors.js';
 import { extractUsageNumbers, recordUsage } from '../llm/invoke.js';
 import {
@@ -40,21 +41,11 @@ function getUserDirs(userId: string): UserDirs {
     return { workDir, stateDir };
 }
 
-function isKnownAlias(model: string): boolean {
-    return Object.prototype.hasOwnProperty.call(MODEL_ALIASES, model);
-}
-
-function isSupportedModelName(model: string): boolean {
-    if (model === 'deepseek' || isKnownAlias(model)) return true;
-    if (Object.values(MODEL_ALIASES).includes(model)) return true;
-    return model.startsWith('deepseek');
-}
-
 function selectModel(requestedModel: string): { requestedModel: string; modelId: string } {
     if (!isSupportedModelName(requestedModel)) {
         throw new GatewayError(404, 'unknown_model', `Unknown model: ${requestedModel}`);
     }
-    return { requestedModel, modelId: resolveModel('deepseek') };
+    return { requestedModel, modelId: resolveModel(requestedModel) };
 }
 
 async function generateWithModel(args: {
@@ -115,15 +106,10 @@ function modelListEntry(id: string, modelId: string, alias?: string): object {
 }
 
 export async function getModels(): Promise<object> {
-    const entries = new Map<string, object>();
-    entries.set('deepseek', modelListEntry('deepseek', resolveModel('deepseek')));
-    for (const [alias, modelId] of Object.entries(MODEL_ALIASES)) {
-        entries.set(alias, modelListEntry(alias, modelId, alias));
-        if (modelId !== alias && !entries.has(modelId)) {
-            entries.set(modelId, modelListEntry(modelId, modelId, alias));
-        }
-    }
-    return { object: 'list', data: [...entries.values()] };
+    return {
+        object: 'list',
+        data: listGatewayModels().map((entry) => modelListEntry(entry.id, entry.modelId, entry.alias)),
+    };
 }
 
 export async function createOpenAIChatCompletion(body: OpenAIChatRequest, ctx: ProviderCallContext): Promise<object> {

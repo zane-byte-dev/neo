@@ -102,7 +102,7 @@ describe('generateAndSaveSourceGuide', () => {
         const entry = nbGetSourceEntry(workDir, 'test-nb', imported.id);
         expect(entry).toBeDefined();
 
-        const guide = await generateAndSaveSourceGuide(workDir, 'test-nb', entry!, 'gemma');
+        const guide = await generateAndSaveSourceGuide(workDir, 'test-nb', entry!, 'deepseek');
         expect(guide.summary).toBe('持久化测试摘要');
     });
 });
@@ -184,7 +184,7 @@ describe('generateReport', () => {
         }
     });
 
-    it('prefers a configured provider before the local gemma fallback', async () => {
+    it('prefers a configured provider before the fallback model', async () => {
         process.env.DEEPSEEK_API_KEY = 'deepseek-test';
         mockGenerate('报告内容');
 

@@ -231,6 +231,18 @@ describe('edit_file tool', () => {
         ).rejects.toThrow(/Path traversal/);
     });
 
+    it('blocks absolute sibling-prefix paths', async () => {
+        const sibling = `${tmp}-sibling`;
+        await fs.mkdir(sibling, { recursive: true });
+        try {
+            await expect(
+                editFileTool.handler({ path: join(sibling, 'escape.txt'), old_str: '', new_str: 'x' }, tmp),
+            ).rejects.toThrow(/Path traversal/);
+        } finally {
+            rmSync(sibling, { recursive: true, force: true });
+        }
+    });
+
     it('errors when path is empty', async () => {
         const out = await editFileTool.handler({ path: '', old_str: 'a', new_str: 'b' }, tmp);
         expect(out).toContain('[Error]');
@@ -369,6 +381,14 @@ describe('save_memory tool', () => {
     it('blocks path traversal', async () => {
         const out = await saveMemoryTool.handler(
             { action: 'write', file: '../escape.md', content: 'pwn' },
+            tmp, ctx(),
+        );
+        expect(out).toContain('[Error]');
+    });
+
+    it('blocks sibling-prefix memory paths', async () => {
+        const out = await saveMemoryTool.handler(
+            { action: 'write', file: '../memory-sibling/escape.md', content: 'pwn' },
             tmp, ctx(),
         );
         expect(out).toContain('[Error]');

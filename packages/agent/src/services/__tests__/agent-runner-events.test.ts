@@ -192,7 +192,7 @@ describe('runAgentTurn — runtime event emission', () => {
             triggerType: 'user_message',
             sessionId: 's1',
             status: 'waiting_confirm',
-            request: { message: 'hi', model: 'gemma' },
+            request: { message: 'hi', model: 'deepseek' },
         });
         await saveCheckpoint(workDir, {
             runId: run.id,
