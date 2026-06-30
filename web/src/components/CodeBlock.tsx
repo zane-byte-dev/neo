@@ -1,5 +1,15 @@
 import React from 'react'
 import { Check, Copy, ChevronDown, ChevronUp } from 'lucide-react'
+import hljs from 'highlight.js/lib/core'
+import bash from 'highlight.js/lib/languages/bash'
+import css from 'highlight.js/lib/languages/css'
+import javascript from 'highlight.js/lib/languages/javascript'
+import json from 'highlight.js/lib/languages/json'
+import markdown from 'highlight.js/lib/languages/markdown'
+import python from 'highlight.js/lib/languages/python'
+import typescript from 'highlight.js/lib/languages/typescript'
+import xml from 'highlight.js/lib/languages/xml'
+import yaml from 'highlight.js/lib/languages/yaml'
 import { cn } from '../lib/utils'
 
 interface CodeBlockProps {
@@ -10,6 +20,42 @@ interface CodeBlockProps {
 /** Threshold for collapsing long code blocks — keeps initial view compact while allowing expansion */
 const MAX_LINES_COLLAPSED = 30
 
+const LANGUAGE_ALIASES: Record<string, string> = {
+    cjs: 'javascript',
+    html: 'xml',
+    js: 'javascript',
+    jsx: 'javascript',
+    mjs: 'javascript',
+    md: 'markdown',
+    py: 'python',
+    sh: 'bash',
+    shell: 'bash',
+    ts: 'typescript',
+    tsx: 'typescript',
+    yml: 'yaml',
+    zsh: 'bash',
+}
+
+function registerLanguage(name: string, grammar: Parameters<typeof hljs.registerLanguage>[1]) {
+    if (!hljs.getLanguage(name)) hljs.registerLanguage(name, grammar)
+}
+
+registerLanguage('bash', bash)
+registerLanguage('css', css)
+registerLanguage('javascript', javascript)
+registerLanguage('json', json)
+registerLanguage('markdown', markdown)
+registerLanguage('python', python)
+registerLanguage('typescript', typescript)
+registerLanguage('xml', xml)
+registerLanguage('yaml', yaml)
+
+function normalizeLanguage(language: string | undefined): string | undefined {
+    if (!language) return undefined
+    const normalized = language.toLowerCase().replace(/^language-/, '')
+    return LANGUAGE_ALIASES[normalized] ?? normalized
+}
+
 export const CodeBlock: React.FC<CodeBlockProps> = ({ language, children }) => {
     const [copied, setCopied] = React.useState(false)
     const [expanded, setExpanded] = React.useState(false)
@@ -19,6 +65,15 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, children }) => {
     const displayCode = isLong && !expanded
         ? lines.slice(0, MAX_LINES_COLLAPSED).join('\n')
         : children
+    const normalizedLanguage = normalizeLanguage(language)
+    const highlightedHtml = React.useMemo(() => {
+        if (!normalizedLanguage || !hljs.getLanguage(normalizedLanguage)) return null
+        try {
+            return hljs.highlight(displayCode, { language: normalizedLanguage, ignoreIllegals: true }).value
+        } catch {
+            return null
+        }
+    }, [displayCode, normalizedLanguage])
 
     const handleCopy = async () => {
         try {
@@ -56,9 +111,16 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ language, children }) => {
 
             {/* Code content */}
             <pre className="!m-0 !rounded-none !border-none overflow-x-auto p-4 text-[13px] leading-[1.7] bg-fill-secondary/40">
-                <code className={language ? `hljs language-${language}` : ''}>
-                    {displayCode}
-                </code>
+                {highlightedHtml ? (
+                    <code
+                        className={`hljs language-${normalizedLanguage}`}
+                        dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+                    />
+                ) : (
+                    <code className={normalizedLanguage ? `hljs language-${normalizedLanguage}` : ''}>
+                        {displayCode}
+                    </code>
+                )}
             </pre>
 
             {/* Expand/collapse for long code */}

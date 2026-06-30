@@ -7,8 +7,6 @@
  */
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { Node as TiptapNode } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import {
@@ -45,7 +43,9 @@ import {
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { NotebookAnnotation } from '../types'
-import { MindMap } from './notebook/MindMap'
+
+const MindMap = React.lazy(() => import('./notebook/MindMap').then((mod) => ({ default: mod.MindMap })))
+const MarkdownRenderer = React.lazy(() => import('./chat/MarkdownRenderer').then((mod) => ({ default: mod.MarkdownRenderer })))
 
 const ANNOTATION_CONTEXT_LENGTH = 200
 const ANNOTATION_HIGHLIGHT_COLOR = 'neo-annotation'
@@ -95,11 +95,15 @@ const GeneratedResourceBlockPreview: React.FC<{ attrs: GeneratedResourceBlockAtt
             >
                 {isMindMap ? (
                     <div className="neo-generated-block-mindmap">
-                        <MindMap markdown={body} />
+                        <React.Suspense fallback={<div className="neo-generated-block-body-text">思维导图加载中...</div>}>
+                            <MindMap markdown={body} />
+                        </React.Suspense>
                     </div>
                 ) : isReport ? (
                     <div className="neo-generated-block-markdown markdown-content text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+                        <React.Suspense fallback={<pre className="neo-generated-block-body-text">{body}</pre>}>
+                            <MarkdownRenderer content={body} />
+                        </React.Suspense>
                     </div>
                 ) : (
                     <pre className="neo-generated-block-body-text">{body}</pre>

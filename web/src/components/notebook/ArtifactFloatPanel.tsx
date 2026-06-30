@@ -5,11 +5,12 @@
 import React from 'react'
 import { Brain, Volume2, FileText, Sparkles, Trash2, ArrowLeft } from 'lucide-react'
 import { notebookListArtifacts, notebookDeleteArtifact } from '../../api'
-import { ArtifactViewer } from './studio/ArtifactViewer'
-import { StudioActionModal } from './StudioActionModal'
 import { confirm } from '../ConfirmDialog'
 import { cn } from '../../lib/utils'
 import type { Artifact } from '../../types'
+
+const ArtifactViewer = React.lazy(() => import('./studio/ArtifactViewer').then((mod) => ({ default: mod.ArtifactViewer })))
+const StudioActionModal = React.lazy(() => import('./StudioActionModal').then((mod) => ({ default: mod.StudioActionModal })))
 
 interface Props {
     notebook: string
@@ -47,26 +48,30 @@ export const ArtifactFloatPanel: React.FC<Props> = ({ notebook, artifacts, onArt
                     <span className="text-xs font-medium flex-1 truncate">{viewing.title}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    <ArtifactViewer
-                        artifact={viewing}
-                        onBack={() => setViewing(null)}
-                        onRegenerate={(type) => {
-                            setViewing(null)
-                            setRegenerating(type as 'audio' | 'mindmap' | 'report')
-                        }}
-                    />
+                    <React.Suspense fallback={<div className="py-8 text-center text-xs text-text-tertiary">加载内容...</div>}>
+                        <ArtifactViewer
+                            artifact={viewing}
+                            onBack={() => setViewing(null)}
+                            onRegenerate={(type) => {
+                                setViewing(null)
+                                setRegenerating(type as 'audio' | 'mindmap' | 'report')
+                            }}
+                        />
+                    </React.Suspense>
                 </div>
                 {regenerating && (
-                    <StudioActionModal
-                        notebook={notebook}
-                        type={regenerating}
-                        open
-                        onClose={() => setRegenerating(null)}
-                        onGenerated={(a) => {
-                            setRegenerating(null)
-                            onArtifactsChange([a, ...artifacts.filter((x) => x.id !== a.id)])
-                        }}
-                    />
+                    <React.Suspense fallback={null}>
+                        <StudioActionModal
+                            notebook={notebook}
+                            type={regenerating}
+                            open
+                            onClose={() => setRegenerating(null)}
+                            onGenerated={(a) => {
+                                setRegenerating(null)
+                                onArtifactsChange([a, ...artifacts.filter((x) => x.id !== a.id)])
+                            }}
+                        />
+                    </React.Suspense>
                 )}
             </div>
         )

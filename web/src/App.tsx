@@ -3,15 +3,16 @@ import { BrowserRouter, Routes, Route, Navigate, useSearchParams, useParams, use
 import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from 'react-resizable-panels'
 import { PanelLeftOpen } from 'lucide-react'
 import { Sidebar } from './components/Sidebar'
-import { ChatArea } from './components/ChatArea'
-import { NoteEditor } from './components/NoteEditor'
-import { NotebookWorkspace } from './components/notebook/NotebookWorkspace'
 import { Login } from './components/Login'
-import { SettingsPanel } from './components/SettingsPanel'
 import { useAppStore } from './stores/useAppStore'
 import { checkAuth, type AuthResult } from './api'
 import { ToastContainer } from './components/Toast'
 import { ConfirmDialogContainer } from './components/ConfirmDialog'
+
+const ChatArea = React.lazy(() => import('./components/ChatArea').then((mod) => ({ default: mod.ChatArea })))
+const NoteEditor = React.lazy(() => import('./components/NoteEditor').then((mod) => ({ default: mod.NoteEditor })))
+const NotebookWorkspace = React.lazy(() => import('./components/notebook/NotebookWorkspace').then((mod) => ({ default: mod.NotebookWorkspace })))
+const SettingsPanel = React.lazy(() => import('./components/SettingsPanel').then((mod) => ({ default: mod.SettingsPanel })))
 
 const ResizeHandle: React.FC = () => (
     <PanelResizeHandle className="w-1 bg-transparent hover:bg-primary-mint/30 transition-all duration-200 cursor-col-resize group">
@@ -19,6 +20,16 @@ const ResizeHandle: React.FC = () => (
             <div className="w-px h-8 bg-border group-hover:bg-primary-mint/60 transition-colors rounded-full" />
         </div>
     </PanelResizeHandle>
+)
+
+const PageLoading: React.FC = () => (
+    <div className="flex-1 flex items-center justify-center bg-bg-container">
+        <div className="flex items-center gap-1.5">
+            <span className="typing-dot" />
+            <span className="typing-dot" />
+            <span className="typing-dot" />
+        </div>
+    </div>
 )
 
 // ── /chat page ──────────────────────────────────────────────────────────────────
@@ -121,14 +132,16 @@ const MainLayout: React.FC = () => {
 
     // Single Routes instance shared between mobile and desktop layouts
     const pageRoutes = (
-        <Routes>
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/notebook/article/new" element={<NewNotePage />} />
-            <Route path="/notebook/:notebookName" element={<NotebookPage />} />
-            <Route path="/settings" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><SettingsPanel /></div>} />
-            <Route path="/settings/:tab" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><SettingsPanel /></div>} />
-            <Route path="*" element={<Navigate to="/chat" replace />} />
-        </Routes>
+        <React.Suspense fallback={<PageLoading />}>
+            <Routes>
+                <Route path="/chat" element={<ChatPage />} />
+                <Route path="/notebook/article/new" element={<NewNotePage />} />
+                <Route path="/notebook/:notebookName" element={<NotebookPage />} />
+                <Route path="/settings" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><SettingsPanel /></div>} />
+                <Route path="/settings/:tab" element={<div className="flex-1 overflow-hidden flex flex-col min-h-0"><SettingsPanel /></div>} />
+                <Route path="*" element={<Navigate to="/chat" replace />} />
+            </Routes>
+        </React.Suspense>
     )
 
     return (

@@ -1,7 +1,5 @@
 import React from 'react'
 import { StickyNote, Plus, Trash2, Loader2, ArrowLeft } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { useAppStore } from '../../../stores/useAppStore'
 import {
     notebookListNotes, notebookSaveNote, notebookDeleteNote, notebookConvertNoteToSource, notebookNoteQuickAction,
@@ -10,6 +8,8 @@ import {
 import type { NotebookNote } from '../../../types'
 import { toast } from '../../Toast'
 import { confirm } from '../../ConfirmDialog'
+
+const MarkdownRenderer = React.lazy(() => import('../../chat/MarkdownRenderer').then((mod) => ({ default: mod.MarkdownRenderer })))
 
 interface Props { notebook: string }
 
@@ -157,7 +157,9 @@ const NoteDetailView: React.FC<{ note: NotebookNote; onEdit: () => void; onBack:
                 <button onClick={onEdit} className="text-xs px-2.5 py-1.5 bg-fill-secondary hover:bg-fill rounded-lg">编辑</button>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 prose prose-sm prose-invert max-w-none text-text">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
+                <React.Suspense fallback={<pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{note.content}</pre>}>
+                    <MarkdownRenderer content={note.content} />
+                </React.Suspense>
             </div>
         </div>
     )

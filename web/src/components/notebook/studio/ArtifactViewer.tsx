@@ -1,11 +1,11 @@
 import React from 'react'
 import { Download, RefreshCw } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import type { Artifact } from '../../../types'
-import { MindMap } from '../MindMap'
 import { AudioOverview } from '../AudioOverview'
 import { getArtifactMarkdown, getAudioDurationSeconds, getAudioScript, getMindMapMarkdown } from '../artifact-utils'
+
+const MindMap = React.lazy(() => import('../MindMap').then((mod) => ({ default: mod.MindMap })))
+const MarkdownRenderer = React.lazy(() => import('../../chat/MarkdownRenderer').then((mod) => ({ default: mod.MarkdownRenderer })))
 
 // ── Markdown → HTML export utilities ────────────────────────────────────────
 
@@ -173,11 +173,17 @@ ${htmlContent}
                 </div>
             </div>
             <div className="flex-1 overflow-hidden">
-                {artifact.type === 'mindmap' && <MindMap markdown={mindMapMarkdown} />}
+                {artifact.type === 'mindmap' && (
+                    <React.Suspense fallback={<div className="h-full flex items-center justify-center text-sm text-text-tertiary">思维导图加载中...</div>}>
+                        <MindMap markdown={mindMapMarkdown} />
+                    </React.Suspense>
+                )}
                 {artifact.type === 'audio' && <AudioOverview script={script} title={artifact.title} durationSeconds={durationSeconds} />}
                 {artifact.type === 'report' && (
                     <div className="h-full overflow-y-auto custom-scrollbar p-4 md:p-6 markdown-content text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+                        <React.Suspense fallback={<pre className="whitespace-pre-wrap">{markdown}</pre>}>
+                            <MarkdownRenderer content={markdown} />
+                        </React.Suspense>
                     </div>
                 )}
             </div>

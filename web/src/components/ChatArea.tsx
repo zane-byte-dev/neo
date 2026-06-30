@@ -1,6 +1,6 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
-import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Search, Plus, MoreHorizontal, Pin, PinOff, PenLine, BookOpen, Trash2, FolderOpen, Mic, MicOff, Terminal, Globe, Wrench, BrainCircuit, Copy, Check } from 'lucide-react'
+import { Send, Square, CheckCircle2, Circle, Loader2, ChevronRight, ChevronDown, ImagePlus, X, Download, Paperclip, FileText, FileSpreadsheet, File as FileIcon, Volume2, ShieldCheck, ShieldOff, Plus, FolderOpen, Mic, MicOff, Terminal, Globe, Wrench, BrainCircuit, Copy, Check, AlertCircle, RefreshCw } from 'lucide-react'
 import { useAppStore } from '../stores/useAppStore'
 import { cn } from '../lib/utils'
 import { WelcomeScreen } from './WelcomeScreen'
@@ -13,28 +13,19 @@ import {
     confirmTool,
     fetchToolResult,
     cancelRun,
-    fetchToolApprovals,
-    deleteToolApproval as deleteToolApprovalApi,
     patchSession,
-    deleteSessionApi,
-    notebookListNotebooks,
-    notebookImportSource,
-    type ToolApprovalRule,
 } from '../api'
 import { t } from '../i18n'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeHighlight from 'rehype-highlight'
-import rehypeKatex from 'rehype-katex'
-import 'katex/dist/katex.min.css'
 import type { ActivityItem, AgentTodoItem, FileAttachment, Message, MessagePart } from '../types'
-import { CodeBlock, InlineCode } from './CodeBlock'
-import { MermaidBlock } from './MermaidBlock'
 import { toast } from './Toast'
-import { confirm as confirmDialog } from './ConfirmDialog'
 import { ProjectPicker } from './ProjectPicker'
-import { CitationRenderer } from './notebook/CitationRenderer'
+import { ChatActionsMenu } from './chat/ChatActionsMenu'
+import { ModelPicker } from './chat/ModelPicker'
+import { ToolApprovalsModal } from './chat/ToolApprovalsModal'
+
+const MarkdownRenderer = React.lazy(() => import('./chat/MarkdownRenderer').then((mod) => ({ default: mod.MarkdownRenderer })))
+const MarkdownMathRenderer = React.lazy(() => import('./chat/MarkdownMathRenderer').then((mod) => ({ default: mod.MarkdownMathRenderer })))
+const CitationRenderer = React.lazy(() => import('./notebook/CitationRenderer').then((mod) => ({ default: mod.CitationRenderer })))
 
 // ── Tool display name map ────────────────────────────────────────────────────
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
@@ -238,67 +229,6 @@ function mergeMessageParts(parts: MessagePart[]): RenderPart[] {
         }
         return p
     })
-}
-
-// ── Export chat as Markdown ───────────────────────────────────────────────────
-
-const MAX_EXPORT_FILENAME_LENGTH = 50
-
-function exportChatAsMarkdown(title: string, messages: Message[]) {
-    const lines = [`# ${title}\n`]
-    const fmt = (ts: number) => new Date(ts).toLocaleString()
-    for (const msg of messages) {
-        const role = msg.role === 'user' ? t('you') : t('neo')
-        const ts = msg.timestamp ? ` *(${fmt(msg.timestamp)})*` : ''
-        lines.push(`### ${role}${ts}\n`)
-        if (msg.thinking) {
-            lines.push(`> 💭 ${msg.thinking.replace(/\n/g, '\n> ')}\n`)
-        }
-        if (msg.content) lines.push(msg.content + '\n')
-        if (msg.activityLog?.length) {
-            for (const act of msg.activityLog) {
-                if (act.type === 'tool_call') {
-                    lines.push(`\n> **[Tool call]** \`${act.toolName}\``)
-                    if (act.args && Object.keys(act.args).length > 0) {
-                        lines.push(`\n> \`\`\`json\n> ${JSON.stringify(act.args, null, 2).replace(/\n/g, '\n> ')}\n> \`\`\``)
-                    }
-                    lines.push('')
-                } else if (act.type === 'tool_result') {
-                    lines.push(`> **[Tool result]** \`${act.toolName}\``)
-                    if (act.result) {
-                        const preview = act.truncated ? act.result + '\n*(truncated)*' : act.result
-                        lines.push(`> \`\`\`\n> ${preview.replace(/\n/g, '\n> ')}\n> \`\`\`\n`)
-                    }
-                }
-            }
-        }
-        if (msg.parts?.length) {
-            for (const part of msg.parts) {
-                if (part.type !== 'activity') continue
-                const act = part.item
-                if (act.type === 'tool_call') {
-                    lines.push(`\n> **[Tool call]** \`${act.toolName}\``)
-                    if (act.args && Object.keys(act.args).length > 0) {
-                        lines.push(`\n> \`\`\`json\n> ${JSON.stringify(act.args, null, 2).replace(/\n/g, '\n> ')}\n> \`\`\``)
-                    }
-                    lines.push('')
-                } else if (act.type === 'tool_result') {
-                    lines.push(`> **[Tool result]** \`${act.toolName}\``)
-                    if (act.result) {
-                        const preview = act.truncated ? act.result + '\n*(truncated)*' : act.result
-                        lines.push(`> \`\`\`\n> ${preview.replace(/\n/g, '\n> ')}\n> \`\`\`\n`)
-                    }
-                }
-            }
-        }
-    }
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]+/g, '_').slice(0, MAX_EXPORT_FILENAME_LENGTH)}.md`
-    a.click()
-    URL.revokeObjectURL(url)
 }
 
 // ── Text-to-speech ────────────────────────────────────────────────────────────
@@ -520,6 +450,39 @@ function SpeakButton({ text }: { text: string }) {
     )
 }
 
+// ── Error message helpers ────────────────────────────────────────────────────
+
+function isErrorMessage(content: string | undefined): boolean {
+    if (!content) return false
+    const trimmed = content.trim()
+    return trimmed.startsWith('⚠️') ||
+           trimmed.startsWith('Stream error:')
+}
+
+const ErrorMessageCard: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => {
+    const clean = message.trim().replace(/^⚠️\s*/, '')
+    return (
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
+            <div className="flex items-start gap-2.5">
+                <AlertCircle size={14} className="shrink-0 mt-0.5 text-destructive/70" />
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm text-destructive/80 leading-relaxed break-words">{clean}</p>
+                    {onRetry && (
+                        <button
+                            type="button"
+                            onClick={onRetry}
+                            className="mt-2 inline-flex items-center gap-1.5 text-xs text-destructive/60 hover:text-destructive transition-colors cursor-pointer"
+                        >
+                            <RefreshCw size={11} />
+                            <span>重试</span>
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}
+
 // ── User message bubble (collapsible for long content) ───────────────────────
 
 const COLLAPSE_CHAR_THRESHOLD = 350
@@ -564,39 +527,36 @@ const UserMessageBubble: React.FC<{ content: string }> = ({ content }) => {
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
-const markdownComponents: import('react-markdown').Components = {
-    pre({ children }) {
-        return <>{children}</>
-    },
-    code({ className, children, ...rest }) {
-        const match = /language-(\w+)/.exec(className || '')
-        const text = String(children).replace(/\n$/, '')
+const MarkdownLoading: React.FC = () => (
+    <div className="space-y-2 animate-fade-in">
+        <div className="skeleton h-4 w-5/6" />
+        <div className="skeleton h-4 w-2/3" />
+    </div>
+)
 
-        // Mermaid diagrams — render as SVG
-        if (match?.[1] === 'mermaid') {
-            return <MermaidBlock>{text}</MermaidBlock>
-        }
-
-        // Block code (inside pre) — detect by the presence of language class or multiline content
-        if (match || text.includes('\n')) {
-            return <CodeBlock language={match?.[1]}>{text}</CodeBlock>
-        }
-
-        // Inline code
-        return <InlineCode {...rest}>{children}</InlineCode>
-    },
+function contentMayContainMath(content: string): boolean {
+    return /(^|[^\\])\$\$[\s\S]+?\$\$/.test(content)
+        || /\\\(|\\\[|\\begin\{/.test(content)
+        || /(^|[^\\])\$[^\s$](?:[^$\n]*[^\s$])?\$/.test(content)
 }
 
 const MD: React.FC<{ content: string }> = ({ content }) => (
-    <div className="markdown-content max-w-none break-words">
-        <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeHighlight, rehypeKatex]}
-            components={markdownComponents}
-        >
-            {content}
-        </ReactMarkdown>
-    </div>
+    <React.Suspense fallback={<MarkdownLoading />}>
+        {contentMayContainMath(content) ? (
+            <MarkdownMathRenderer content={content} />
+        ) : (
+            <MarkdownRenderer content={content} />
+        )}
+    </React.Suspense>
+)
+
+const CitedMD: React.FC<{
+    content: string
+    sources?: Message['citations']
+}> = ({ content, sources }) => (
+    <React.Suspense fallback={<MarkdownLoading />}>
+        <CitationRenderer content={content} sources={sources} />
+    </React.Suspense>
 )
 
 // ── Skeleton loading ──────────────────────────────────────────────────────────
@@ -989,182 +949,6 @@ const TodoPanel: React.FC<{ todos: AgentTodoItem[] }> = ({ todos }) => {
     )
 }
 
-const ToolApprovalBadge: React.FC<{
-    scope: ToolApprovalRule['scope']
-    currentSessionId?: string | null
-    ruleSessionId?: string
-}> = ({ scope, currentSessionId, ruleSessionId }) => {
-    const label = scope === 'always'
-        ? t('toolApprovalScopeAlways')
-        : ruleSessionId && currentSessionId && ruleSessionId === currentSessionId
-            ? t('toolApprovalScopeCurrentChat')
-            : t('toolApprovalScopeSession')
-    const tone = scope === 'always'
-        ? 'bg-primary-mint/10 text-primary-mint border-primary-mint/20'
-        : 'bg-fill-tertiary text-text-secondary border-border'
-
-    return (
-        <span className={cn('px-2 py-0.5 rounded-full border text-[10px] font-medium', tone)}>
-            {label}
-        </span>
-    )
-}
-
-const ToolApprovalsModal: React.FC<{
-    open: boolean
-    onClose: () => void
-    currentSessionId?: string | null
-}> = ({ open, onClose, currentSessionId }) => {
-    const [rules, setRules] = React.useState<ToolApprovalRule[]>([])
-    const [loading, setLoading] = React.useState(false)
-    const [error, setError] = React.useState<string | null>(null)
-    const [deletingRuleId, setDeletingRuleId] = React.useState<string | null>(null)
-
-    const loadRules = React.useCallback(async () => {
-        setLoading(true)
-        setError(null)
-        try {
-            const res = await fetchToolApprovals()
-            setRules(res.rules)
-        } catch (err) {
-            setError(err instanceof Error ? err.message : t('loadToolApprovalsFailed'))
-        } finally {
-            setLoading(false)
-        }
-    }, [])
-
-    React.useEffect(() => {
-        if (!open) return
-        void loadRules()
-    }, [open, loadRules])
-
-    React.useEffect(() => {
-        if (!open) return
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose()
-        }
-        window.addEventListener('keydown', onKeyDown)
-        return () => window.removeEventListener('keydown', onKeyDown)
-    }, [open, onClose])
-
-    const handleDelete = async (rule: ToolApprovalRule) => {
-        const description = compactPreview(
-            typeof rule.args?.command === 'string'
-                ? rule.args.command
-                : JSON.stringify(rule.args ?? {}),
-            160,
-        )
-        const ok = await confirmDialog(t('removeToolApprovalConfirm'), {
-            description,
-            confirmText: t('delete'),
-            cancelText: t('cancel'),
-            destructive: true,
-        })
-        if (!ok) return
-
-        setDeletingRuleId(rule.id)
-        try {
-            await deleteToolApprovalApi(rule.id)
-            setRules((prev) => prev.filter((entry) => entry.id !== rule.id))
-            toast.success(t('removeToolApprovalSuccess'))
-        } catch (err) {
-            toast.error(err instanceof Error ? err.message : t('removeToolApprovalFailed'))
-        } finally {
-            setDeletingRuleId(null)
-        }
-    }
-
-    if (!open) return null
-
-    return (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/40 animate-fade-in" onClick={onClose}>
-            <div
-                className="bg-bg-container rounded-2xl shadow-2xl w-[720px] max-w-[94vw] max-h-[78vh] overflow-hidden animate-slide-up"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
-                    <div>
-                        <h3 className="text-sm font-semibold text-text">{t('toolApprovalsTitle')}</h3>
-                        <p className="text-xs text-text-tertiary mt-1">{t('toolApprovalsSubtitle')}</p>
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-fill transition-colors"
-                        title={t('close')}
-                    >
-                        <X size={16} />
-                    </button>
-                </div>
-
-                <div className="p-5 overflow-y-auto custom-scrollbar max-h-[calc(78vh-72px)]">
-                    {loading ? (
-                        <div className="flex items-center gap-2 text-sm text-text-tertiary">
-                            <Loader2 size={16} className="animate-spin" />
-                            <span>{t('toolApprovalsLoading')}</span>
-                        </div>
-                    ) : error ? (
-                        <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                            {t('loadToolApprovalsFailed')}: {error}
-                        </div>
-                    ) : rules.length === 0 ? (
-                        <div className="rounded-xl border border-border bg-fill-secondary/40 px-4 py-6 text-center text-sm text-text-tertiary">
-                            {t('toolApprovalsEmpty')}
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {rules.map((rule) => {
-                                const preview = compactPreview(
-                                    typeof rule.args?.command === 'string'
-                                        ? rule.args.command
-                                        : JSON.stringify(rule.args ?? {}),
-                                    180,
-                                )
-                                return (
-                                    <div key={rule.id} className="rounded-2xl border border-border bg-fill-secondary/35 px-4 py-3" style={{ boxShadow: 'var(--shadow-soft)' }}>
-                                        <div className="flex items-start gap-3 justify-between">
-                                            <div className="min-w-0 flex-1">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <span className="text-sm font-semibold text-text">{rule.toolName}</span>
-                                                    <ToolApprovalBadge scope={rule.scope} currentSessionId={currentSessionId} ruleSessionId={rule.sessionId} />
-                                                    {rule.matchMode === 'tool' && (
-                                                        <span className="px-2 py-0.5 rounded-full border border-primary-mint/20 bg-primary-mint/8 text-[10px] font-medium text-primary-mint">
-                                                            {t('toolApprovalMatchTool')}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {preview && (
-                                                    <div className="mt-2 font-mono text-xs text-text-secondary whitespace-pre-wrap break-words">
-                                                        {preview}
-                                                    </div>
-                                                )}
-                                                <div className="mt-2 text-[11px] text-text-tertiary flex flex-wrap gap-x-3 gap-y-1">
-                                                    <span>{t('toolApprovalUpdatedAt')}: {new Date(rule.updatedAt).toLocaleString()}</span>
-                                                    {rule.scope === 'session' && rule.sessionId && rule.sessionId !== currentSessionId && (
-                                                        <span>{t('toolApprovalChatLabel')}: {rule.sessionId}</span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={() => void handleDelete(rule)}
-                                                disabled={deletingRuleId === rule.id}
-                                                className="px-3 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:bg-fill transition-colors disabled:opacity-60"
-                                            >
-                                                {deletingRuleId === rule.id ? t('deleting') : t('removeToolApproval')}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    )
-}
-
 // ── Scroll to bottom button ───────────────────────────────────────────────────
 
 const ScrollToBottom: React.FC<{ onClick: () => void; visible: boolean }> = ({ onClick, visible }) => (
@@ -1188,288 +972,6 @@ const FileAttachmentIcon: React.FC<{ filename: string; className?: string }> = (
     if (ext === 'docx' || ext === 'doc') return <FileText size={14} className={className ?? 'text-blue-400'} />
     if (ext === 'xlsx' || ext === 'xls') return <FileSpreadsheet size={14} className={className ?? 'text-green-400'} />
     return <FileIcon size={14} className={className ?? 'text-text-tertiary'} />
-}
-
-const COMMON_MODEL_ALIASES = ['deepseek', 'deepseek-reasoner']
-
-const MODEL_PRESENTATION: Record<string, { label: string; badge?: string }> = {
-    deepseek: { label: 'DeepSeek Chat', badge: 'DeepSeek' },
-    'deepseek-chat': { label: 'DeepSeek Chat', badge: 'DeepSeek' },
-    'deepseek-reasoner': { label: 'DeepSeek Reasoner', badge: 'DeepSeek' },
-    gemma: { label: 'Gemma', badge: 'Local' },
-    'gemini-acp': { label: 'Gemini CLI', badge: 'CLI' },
-    gpt: { label: 'GPT-4o', badge: 'OpenAI' },
-    'gpt-4o': { label: 'GPT-4o', badge: 'OpenAI' },
-    'gpt-4o-mini': { label: 'GPT-4o mini', badge: 'OpenAI' },
-    'gpt-5': { label: 'GPT-5', badge: 'OpenAI' },
-    'gpt-5-mini': { label: 'GPT-5 mini', badge: 'OpenAI' },
-    claude: { label: 'Claude Sonnet', badge: 'Anthropic' },
-    'claude-sonnet': { label: 'Claude Sonnet', badge: 'Anthropic' },
-    'claude-opus': { label: 'Claude Opus', badge: 'Anthropic' },
-    'claude-haiku': { label: 'Claude Haiku', badge: 'Anthropic' },
-}
-
-function titleizeAlias(alias: string): string {
-    return alias
-        .split('-')
-        .map((part) => {
-            if (!part) return part
-            if (/^\d/.test(part)) return part.toUpperCase()
-            return part.length <= 3 ? part.toUpperCase() : `${part[0].toUpperCase()}${part.slice(1)}`
-        })
-        .join(' ')
-}
-
-function inferModelBadge(alias: string): string | undefined {
-    if (alias === 'gemma') return 'Local'
-    if (alias === 'gemini-acp') return 'CLI'
-    if (alias.startsWith('gemini-')) return 'Google'
-    if (alias === 'deepseek' || alias.startsWith('deepseek-')) return 'DeepSeek'
-    if (alias === 'gpt' || alias.startsWith('gpt-')) return 'OpenAI'
-    if (alias === 'claude' || alias.startsWith('claude-')) return 'Anthropic'
-    return undefined
-}
-
-function getModelPresentation(alias: string): { label: string; subtitle: string; badge?: string } {
-    if (alias === 'auto') {
-        return { label: 'Auto', subtitle: t('smartRouting') }
-    }
-    const preset = MODEL_PRESENTATION[alias]
-    return {
-        label: preset?.label ?? titleizeAlias(alias),
-        subtitle: alias,
-        badge: preset?.badge ?? inferModelBadge(alias),
-    }
-}
-
-type ModelPickerProps = {
-    selectedModel: string
-    onSelect: (model: string) => void
-    availableModels: string[]
-}
-
-const ModelPicker: React.FC<ModelPickerProps> = ({ selectedModel, onSelect, availableModels }) => {
-    const triggerRef = React.useRef<HTMLButtonElement>(null)
-    const panelRef = React.useRef<HTMLDivElement>(null)
-    const searchRef = React.useRef<HTMLInputElement>(null)
-    const [open, setOpen] = React.useState(false)
-    const [query, setQuery] = React.useState('')
-    const [showOtherModels, setShowOtherModels] = React.useState(false)
-    const [panelStyle, setPanelStyle] = React.useState<React.CSSProperties>({})
-
-    const commonModels = React.useMemo(() => {
-        const set = new Set(availableModels)
-        return COMMON_MODEL_ALIASES.filter((alias) => set.has(alias))
-    }, [availableModels])
-
-    const uncommonModels = React.useMemo(
-        () => availableModels.filter((alias) => !COMMON_MODEL_ALIASES.includes(alias)),
-        [availableModels],
-    )
-
-    const selectedPresentation = React.useMemo(
-        () => getModelPresentation(selectedModel === 'auto' ? 'auto' : selectedModel),
-        [selectedModel],
-    )
-
-    const updatePanelPosition = React.useCallback(() => {
-        const rect = triggerRef.current?.getBoundingClientRect()
-        if (!rect) return
-        const width = Math.min(272, window.innerWidth - 12)
-        const left = Math.min(Math.max(8, rect.left), window.innerWidth - width - 8)
-        const bottom = Math.max(10, window.innerHeight - rect.top + 8)
-        setPanelStyle({
-            position: 'fixed',
-            left,
-            bottom,
-            width,
-        })
-    }, [])
-
-    React.useLayoutEffect(() => {
-        if (!open) return
-        updatePanelPosition()
-    }, [open, updatePanelPosition])
-
-    React.useEffect(() => {
-        if (!open) return
-        const handleViewportChange = () => updatePanelPosition()
-        window.addEventListener('resize', handleViewportChange)
-        window.addEventListener('scroll', handleViewportChange, true)
-        return () => {
-            window.removeEventListener('resize', handleViewportChange)
-            window.removeEventListener('scroll', handleViewportChange, true)
-        }
-    }, [open, updatePanelPosition])
-
-    React.useEffect(() => {
-        if (!open) {
-            setQuery('')
-            return
-        }
-        const handlePointerDown = (event: MouseEvent) => {
-            const target = event.target as Node
-            if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return
-            setOpen(false)
-        }
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') setOpen(false)
-        }
-        document.addEventListener('mousedown', handlePointerDown)
-        document.addEventListener('keydown', handleKeyDown)
-        return () => {
-            document.removeEventListener('mousedown', handlePointerDown)
-            document.removeEventListener('keydown', handleKeyDown)
-        }
-    }, [open])
-
-    React.useEffect(() => {
-        if (!open) return
-        if (selectedModel !== 'auto' && uncommonModels.includes(selectedModel)) {
-            setShowOtherModels(true)
-        }
-        searchRef.current?.focus()
-    }, [open, selectedModel, uncommonModels])
-
-    const normalizedQuery = query.trim().toLowerCase()
-
-    const matchesQuery = React.useCallback((alias: string) => {
-        if (!normalizedQuery) return true
-        const presentation = getModelPresentation(alias)
-        return [presentation.label, presentation.subtitle, presentation.badge, alias]
-            .filter((value): value is string => typeof value === 'string')
-            .some((value) => value.toLowerCase().includes(normalizedQuery))
-    }, [normalizedQuery])
-
-    const filteredCommon = commonModels.filter(matchesQuery)
-    const filteredOther = uncommonModels.filter(matchesQuery)
-    const showExpandedOther = showOtherModels || Boolean(normalizedQuery)
-    const hasMatchedModels = filteredCommon.length > 0 || filteredOther.length > 0 || 'auto'.includes(normalizedQuery)
-
-    const renderOption = (alias: string) => {
-        const presentation = getModelPresentation(alias)
-        const isSelected = selectedModel === alias
-        return (
-            <button
-                key={alias}
-                type="button"
-                onClick={() => {
-                    onSelect(alias)
-                    setOpen(false)
-                }}
-                className={cn(
-                    'w-full flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-all duration-150 cursor-pointer',
-                    isSelected
-                        ? 'bg-fill text-text shadow-sm'
-                        : 'text-text-secondary hover:bg-fill-secondary/90'
-                )}
-            >
-                <div className="w-3 shrink-0 flex items-center justify-center">
-                    {isSelected ? (
-                        <CheckCircle2 size={12} className="text-primary-mint" />
-                    ) : (
-                        <Circle size={9} className="text-text-quaternary" />
-                    )}
-                </div>
-                <div className="min-w-0 flex-1 truncate text-[12px] font-medium leading-[18px] text-text">
-                    {presentation.label}
-                </div>
-                {presentation.badge && (
-                    <span className={cn(
-                        'shrink-0 rounded-full border px-1.25 py-0.5 text-[8px] font-medium leading-none',
-                        isSelected
-                            ? 'border-primary-mint/30 bg-primary-mint/10 text-primary-mint'
-                            : 'border-border bg-fill-secondary/70 text-text-tertiary'
-                    )}>
-                        {presentation.badge}
-                    </span>
-                )}
-            </button>
-        )
-    }
-
-    return (
-        <>
-            <button
-                ref={triggerRef}
-                type="button"
-                onClick={() => {
-                    if (!open) updatePanelPosition()
-                    setOpen((value) => !value)
-                }}
-                className={cn(
-                    'group flex items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-all duration-150 cursor-pointer shrink-0 min-w-0',
-                    open
-                        ? 'border-primary-mint/35 bg-fill text-text'
-                        : 'border-transparent bg-fill/60 text-text-secondary hover:border-border hover:bg-fill'
-                )}
-                style={{ boxShadow: open ? 'var(--shadow-soft)' : undefined }}
-            >
-                <div className="min-w-0 max-w-[112px]">
-                    <div className="truncate text-[11px] font-medium leading-4">{selectedPresentation.label}</div>
-                </div>
-                <ChevronDown size={12} className={cn('shrink-0 transition-transform duration-150', open && 'rotate-180')} />
-            </button>
-
-            {open && typeof document !== 'undefined' && createPortal(
-                <div
-                    ref={panelRef}
-                    className="glass z-[120] overflow-hidden rounded-[3px] border border-border bg-bg-elevated/95"
-                    style={{ ...panelStyle, boxShadow: 'var(--shadow-float)' }}
-                >
-                    <div className="border-b border-border/80 px-2 py-2">
-                        <div className="flex items-center gap-1.5 rounded-lg border border-border bg-fill-secondary/85 px-2 py-1.5">
-                            <Search size={12} className="shrink-0 text-text-quaternary" />
-                            <input
-                                ref={searchRef}
-                                value={query}
-                                onChange={(event) => setQuery(event.target.value)}
-                                placeholder={t('searchModels')}
-                                className="w-full bg-transparent text-[11px] text-text placeholder:text-text-quaternary focus:outline-none"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="max-h-[min(48vh,18rem)] overflow-y-auto custom-scrollbar p-1.5">
-                        {(!normalizedQuery || 'auto'.includes(normalizedQuery)) && renderOption('auto')}
-
-                        {filteredCommon.length > 0 && (
-                            <div className="mt-1 space-y-0.5">
-                                {filteredCommon.map((alias) => renderOption(alias))}
-                            </div>
-                        )}
-
-                        {uncommonModels.length > 0 && (
-                            <div className="mt-2 border-t border-border/70 pt-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowOtherModels((value) => !value)}
-                                    className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.25 text-left text-[10px] font-medium text-text-secondary hover:bg-fill-secondary/80 transition-colors cursor-pointer"
-                                >
-                                    <ChevronRight size={12} className={cn('transition-transform duration-150', showExpandedOther && 'rotate-90')} />
-                                    <span>{t('otherModels')}</span>
-                                    <span className="ml-auto rounded-full bg-fill px-1.5 py-0.5 text-[9px] text-text-tertiary">{filteredOther.length || uncommonModels.length}</span>
-                                </button>
-
-                                {showExpandedOther && filteredOther.length > 0 && (
-                                    <div className="mt-1 space-y-0.5">
-                                        {filteredOther.map((alias) => renderOption(alias))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {!hasMatchedModels && (
-                            <div className="px-3 py-5 text-center text-[11px] text-text-tertiary">
-                                {t('noMatchingModels')}
-                            </div>
-                        )}
-                    </div>
-                </div>,
-                document.body,
-            )}
-        </>
-    )
 }
 
 // ── Chat input ────────────────────────────────────────────────────────────────
@@ -2522,193 +2024,13 @@ const ChatInput: React.FC<{
     )
 }
 
-// ── Chat actions "…" dropdown ────────────────────────────────────────────────
-
-const ChatActionsMenu: React.FC<{
-    chat: { id: string; title: string; isPinned: boolean }
-    messages: Message[]
-}> = ({ chat, messages }) => {
-    const { pinChat, renameChat, deleteChat, selectChat, chats } = useAppStore()
-    const [open, setOpen] = React.useState(false)
-    const [notebooks, setNotebooks] = React.useState<string[]>([])
-    const [showRenameModal, setShowRenameModal] = React.useState(false)
-    const [showNotebookModal, setShowNotebookModal] = React.useState(false)
-    const [renameValue, setRenameValue] = React.useState(chat.title)
-    const menuRef = React.useRef<HTMLDivElement>(null)
-    const renameInputRef = React.useRef<HTMLInputElement>(null)
-
-    React.useEffect(() => {
-        notebookListNotebooks().then(setNotebooks).catch(() => setNotebooks([]))
-    }, [])
-
-    React.useEffect(() => {
-        const onDown = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setOpen(false)
-            }
-        }
-        if (open) document.addEventListener('mousedown', onDown)
-        return () => document.removeEventListener('mousedown', onDown)
-    }, [open])
-
-    React.useEffect(() => {
-        if (showRenameModal) setTimeout(() => renameInputRef.current?.select(), 40)
-    }, [showRenameModal])
-
-    const handlePin = () => {
-        patchSession(chat.id, { isPinned: !chat.isPinned }).catch(() => {})
-        pinChat(chat.id)
-        setOpen(false)
-    }
-
-    const handleRename = () => {
-        setRenameValue(chat.title)
-        setOpen(false)
-        setShowRenameModal(true)
-    }
-
-    const commitRename = () => {
-        const v = renameValue.trim()
-        if (!v) return
-        renameChat(chat.id, v)
-        patchSession(chat.id, { title: v }).catch(() => {})
-        setShowRenameModal(false)
-    }
-
-    const handleAddToNotebook = async (notebook: string) => {
-        setShowNotebookModal(false)
-        try {
-            const md = messages
-                .map((m) => `### ${m.role === 'user' ? t('you') : t('neo')}\n\n${m.content}`)
-                .join('\n\n---\n\n')
-            await notebookImportSource({
-                notebook,
-                kind: 'text',
-                title: chat.title,
-                content: md,
-                source: 'ai-chat',
-            })
-            toast.success(`已添加到笔记本「${notebook}」`)
-        } catch {
-            toast.error('添加笔记本失败')
-        }
-    }
-
-    const handleExport = () => {
-        exportChatAsMarkdown(chat.title, messages)
-        setOpen(false)
-    }
-
-    const handleDelete = async () => {
-        setOpen(false)
-        const ok = await confirmDialog(t('deleteChatConfirm'), { confirmText: t('delete'), destructive: true })
-        if (!ok) return
-        const remaining = chats.filter((c) => c.id !== chat.id)
-        if (remaining.length > 0) selectChat(remaining[0].id)
-        deleteSessionApi(chat.id).catch(() => {})
-        deleteChat(chat.id)
-    }
-
-    return (
-        <div ref={menuRef} className="relative ml-auto shrink-0">
-            <button
-                onClick={() => setOpen((v) => !v)}
-                className="p-1.5 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-fill transition-colors cursor-pointer"
-                title="更多操作"
-            >
-                <MoreHorizontal size={16} />
-            </button>
-
-            {open && (
-                <div className="absolute right-0 top-full mt-1 w-44 rounded-xl border border-border bg-bg-container shadow-lg z-50 py-1 overflow-hidden text-sm">
-                    <button onClick={handlePin} className="w-full flex items-center gap-2.5 px-3 py-2 text-text hover:bg-fill-secondary/60 transition-colors">
-                        {chat.isPinned ? <PinOff size={13} className="text-text-tertiary shrink-0" /> : <Pin size={13} className="text-text-tertiary shrink-0" />}
-                        <span>{chat.isPinned ? t('unpin') : t('pin')}</span>
-                    </button>
-                    <button onClick={handleRename} className="w-full flex items-center gap-2.5 px-3 py-2 text-text hover:bg-fill-secondary/60 transition-colors">
-                        <PenLine size={13} className="text-text-tertiary shrink-0" />
-                        <span>{t('rename')}</span>
-                    </button>
-                    {notebooks.length > 0 && (
-                        <button
-                            onClick={() => { setOpen(false); setShowNotebookModal(true) }}
-                            className="w-full flex items-center gap-2.5 px-3 py-2 text-text hover:bg-fill-secondary/60 transition-colors"
-                        >
-                            <BookOpen size={13} className="text-text-tertiary shrink-0" />
-                            <span>添加至笔记本</span>
-                        </button>
-                    )}
-                    <button onClick={handleExport} className="w-full flex items-center gap-2.5 px-3 py-2 text-text hover:bg-fill-secondary/60 transition-colors">
-                        <Download size={13} className="text-text-tertiary shrink-0" />
-                        <span>{t('exportMarkdown')}</span>
-                    </button>
-                    <div className="my-1 border-t border-border" />
-                    <button onClick={handleDelete} className="w-full flex items-center gap-2.5 px-3 py-2 text-text hover:bg-fill-secondary/60 transition-colors">
-                        <Trash2 size={13} className="text-text-tertiary shrink-0" />
-                        <span>{t('delete')}</span>
-                    </button>
-                </div>
-            )}
-
-            {/* Rename modal — portal to avoid clipping */}
-            {showRenameModal && createPortal(
-                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40" onClick={() => setShowRenameModal(false)}>
-                    <div className="bg-bg-container border border-border rounded-2xl p-5 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
-                        <h3 className="text-sm font-semibold mb-3">{t('renameChat')}</h3>
-                        <input
-                            ref={renameInputRef}
-                            value={renameValue}
-                            onChange={(e) => setRenameValue(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setShowRenameModal(false) }}
-                            className="w-full bg-fill border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-mint/30 focus:border-primary-mint/40"
-                        />
-                        <div className="flex justify-end gap-2 mt-4">
-                            <button onClick={() => setShowRenameModal(false)} className="px-3 py-1.5 rounded-lg text-sm text-text-secondary hover:bg-fill transition-colors cursor-pointer">{t('cancel')}</button>
-                            <button onClick={commitRename} className="px-3 py-1.5 rounded-lg text-sm bg-primary-mint text-white hover:opacity-90 transition-colors cursor-pointer">{t('save')}</button>
-                        </div>
-                    </div>
-                </div>,
-                document.body,
-            )}
-
-            {/* Add to notebook modal — portal */}
-            {showNotebookModal && createPortal(
-                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40" onClick={() => setShowNotebookModal(false)}>
-                    <div className="bg-bg-container border border-border rounded-2xl p-5 w-80 shadow-xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-1">
-                            <h3 className="text-sm font-semibold">移动对话</h3>
-                            <button onClick={() => setShowNotebookModal(false)} className="p-1 rounded-lg text-text-tertiary hover:text-text hover:bg-fill transition-colors cursor-pointer">
-                                <X size={14} />
-                            </button>
-                        </div>
-                        <p className="text-xs text-text-tertiary mb-4">选择要将此对话移入的笔记本</p>
-                        <div className="space-y-0.5 max-h-64 overflow-y-auto custom-scrollbar">
-                            {notebooks.map((nb) => (
-                                <button
-                                    key={nb}
-                                    onClick={() => handleAddToNotebook(nb)}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-text hover:bg-fill-secondary/60 transition-colors text-left"
-                                >
-                                    <BookOpen size={14} className="text-text-tertiary shrink-0" />
-                                    <span className="truncate">{nb}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>,
-                document.body,
-            )}
-        </div>
-    )
-}
-
 // ── Chat area ─────────────────────────────────────────────────────────────────
 
 export const ChatArea: React.FC<{
     slashCommands?: SlashCommand[]
     onSlashCommand?: (id: string) => void
 }> = ({ slashCommands, onSlashCommand }) => {
-    const { chats, activeChatId, messages, setMessages } = useAppStore()
+    const { chats, activeChatId, messages, setMessages, setPendingQuickReply } = useAppStore()
     const isGenerating = useAppStore(s => activeChatId ? !!s.generatingBySession[activeChatId] : false)
     const thinkingStatus = useAppStore(s => activeChatId ? (s.thinkingStatusBySession[activeChatId] ?? '') : '')
     const activeChat = chats.find((c) => c.id === activeChatId)
@@ -2849,7 +2171,7 @@ export const ChatArea: React.FC<{
                                                 if (part.type === 'text') return (
                                                     <div key={`${msg.id}-text-${idx}`} className="mb-3 last:mb-0">
                                                         {activeChat?.mode === 'notebook' ? (
-                                                            <CitationRenderer content={part.content} sources={msg.citations} />
+                                                            <CitedMD content={part.content} sources={msg.citations} />
                                                         ) : (
                                                             <MD content={part.content} />
                                                         )}
@@ -2887,8 +2209,15 @@ export const ChatArea: React.FC<{
                                                 <TypingIndicator />
                                             )}
                                             {msg.content ? (
-                                                activeChat?.mode === 'notebook' ? (
-                                                    <CitationRenderer content={msg.content} sources={msg.citations} />
+                                                isErrorMessage(msg.content) ? (
+                                                    <ErrorMessageCard
+                                                        message={msg.content}
+                                                        onRetry={chatMessages[msgIdx - 1]?.role === 'user' && chatMessages[msgIdx - 1]?.content
+                                                            ? () => setPendingQuickReply(chatMessages[msgIdx - 1].content)
+                                                            : undefined}
+                                                    />
+                                                ) : activeChat?.mode === 'notebook' ? (
+                                                    <CitedMD content={msg.content} sources={msg.citations} />
                                                 ) : (
                                                     <MD content={msg.content} />
                                                 )
@@ -2939,6 +2268,7 @@ export const ChatArea: React.FC<{
                                     {(() => {
                                         const isLast = msgIdx === chatMessages.length - 1
                                         if (isGenerating && isLast) return null
+                                        if (isErrorMessage(msg.content)) return null
                                         const actionText = messageMainText(msg)
                                         if (!actionText.trim()) return null
                                         return (

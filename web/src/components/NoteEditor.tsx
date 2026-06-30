@@ -7,12 +7,13 @@ import { t } from '../i18n'
 import { NovelEditor, type GeneratedResourceBlockData, type GeneratedResourceType, type NovelEditorHandle } from './NovelEditor'
 import { HistoryDrawer } from './notebook/HistoryDrawer'
 import { DocDiffModal } from './notebook/DocDiffModal'
-import { ResourcesPanel } from './notebook/ResourcesPanel'
-import { ArtifactViewer } from './notebook/studio/ArtifactViewer'
 import { EDIT_ACTIONS, INSIGHT_ACTIONS, type DocEditAction } from './notebook/docActions'
 import { getArtifactMarkdown, getMindMapMarkdown } from './notebook/artifact-utils'
 import { useAppStore } from '../stores/useAppStore'
 import { toast } from './Toast'
+
+const ArtifactViewer = React.lazy(() => import('./notebook/studio/ArtifactViewer').then((mod) => ({ default: mod.ArtifactViewer })))
+const ResourcesPanel = React.lazy(() => import('./notebook/ResourcesPanel').then((mod) => ({ default: mod.ResourcesPanel })))
 
 interface NoteEditorProps {
     note: NoteEntry | null             // null = create new
@@ -927,10 +928,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                     />
                     {/* Panel */}
                     <div className="absolute right-0 top-0 h-full w-[320px] z-40 shadow-2xl animate-slide-in-right">
-                        <ResourcesPanel
-                            notebook={note.notebook ?? notebook}
-                            onClose={() => setResourcesOpen(false)}
-                        />
+                        <React.Suspense fallback={<div className="h-full bg-bg-container border-l border-border flex items-center justify-center text-xs text-text-tertiary">加载资源...</div>}>
+                            <ResourcesPanel
+                                notebook={note.notebook ?? notebook}
+                                onClose={() => setResourcesOpen(false)}
+                            />
+                        </React.Suspense>
                     </div>
                 </>
             )}
@@ -941,10 +944,12 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({ note, notebook = 'person
                         onClick={() => setViewingArticleArtifact(null)}
                     />
                     <div className="absolute right-0 top-0 h-full w-full sm:w-[640px] z-40 shadow-2xl animate-slide-in-right bg-bg-container">
-                        <ArtifactViewer
-                            artifact={viewingArticleArtifact}
-                            onBack={() => setViewingArticleArtifact(null)}
-                        />
+                        <React.Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-text-tertiary">加载内容...</div>}>
+                            <ArtifactViewer
+                                artifact={viewingArticleArtifact}
+                                onBack={() => setViewingArticleArtifact(null)}
+                            />
+                        </React.Suspense>
                     </div>
                 </>
             )}

@@ -6,11 +6,12 @@
  */
 import React from 'react'
 import { X, FileText, Sparkles, ChevronDown, ChevronUp, Volume2, Brain } from 'lucide-react'
-import { ChatArea } from '../ChatArea'
-import { StudioActionModal } from './StudioActionModal'
-import { ArtifactFloatPanel } from './ArtifactFloatPanel'
 import { useAppStore } from '../../stores/useAppStore'
 import type { Artifact, NoteEntry } from '../../types'
+
+const ArtifactFloatPanel = React.lazy(() => import('./ArtifactFloatPanel').then((mod) => ({ default: mod.ArtifactFloatPanel })))
+const ChatArea = React.lazy(() => import('../ChatArea').then((mod) => ({ default: mod.ChatArea })))
+const StudioActionModal = React.lazy(() => import('./StudioActionModal').then((mod) => ({ default: mod.StudioActionModal })))
 
 export interface SlashCommand {
     id: 'audio' | 'mindmap' | 'report' | 'overview'
@@ -79,10 +80,12 @@ export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, on
 
             {/* ── Chat area ───────────────────────────────────────────────── */}
             <div className="flex-1 overflow-hidden min-h-0">
-                <ChatArea
-                    slashCommands={NOTEBOOK_SLASH_COMMANDS}
-                    onSlashCommand={handleSlashCommand}
-                />
+                <React.Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-text-tertiary">加载对话...</div>}>
+                    <ChatArea
+                        slashCommands={NOTEBOOK_SLASH_COMMANDS}
+                        onSlashCommand={handleSlashCommand}
+                    />
+                </React.Suspense>
             </div>
 
             {/* ── Artifact strip ──────────────────────────────────────────── */}
@@ -97,24 +100,28 @@ export const NotebookChatDrawer: React.FC<Props> = ({ notebook, selectedNote, on
                         {artifactsExpanded ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
                     </button>
                     {artifactsExpanded && (
-                        <ArtifactFloatPanel
-                            notebook={notebook}
-                            artifacts={artifacts}
-                            onArtifactsChange={setArtifacts}
-                        />
+                        <React.Suspense fallback={<div className="py-4 text-center text-xs text-text-tertiary">加载生成内容...</div>}>
+                            <ArtifactFloatPanel
+                                notebook={notebook}
+                                artifacts={artifacts}
+                                onArtifactsChange={setArtifacts}
+                            />
+                        </React.Suspense>
                     )}
                 </div>
             )}
 
             {/* ── Studio action modal ─────────────────────────────────────── */}
             {modalAction && (
-                <StudioActionModal
-                    notebook={notebook}
-                    type={modalAction}
-                    open={!!modalAction}
-                    onClose={() => setModalAction(null)}
-                    onGenerated={handleArtifactGenerated}
-                />
+                <React.Suspense fallback={null}>
+                    <StudioActionModal
+                        notebook={notebook}
+                        type={modalAction}
+                        open={!!modalAction}
+                        onClose={() => setModalAction(null)}
+                        onGenerated={handleArtifactGenerated}
+                    />
+                </React.Suspense>
             )}
         </div>
     )

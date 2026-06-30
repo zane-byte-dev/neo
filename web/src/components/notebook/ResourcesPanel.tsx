@@ -9,10 +9,11 @@ import React from 'react'
 import { X, Volume2, Brain, FileText, Sparkles, ChevronRight, StickyNote, ArrowLeft } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { Artifact } from '../../types'
-import { StudioActionModal } from './StudioActionModal'
-import { StudioOutputs } from './studio/StudioOutputs'
-import { ArtifactViewer } from './studio/ArtifactViewer'
-import { NotesTab } from './studio/NotesTab'
+
+const ArtifactViewer = React.lazy(() => import('./studio/ArtifactViewer').then((mod) => ({ default: mod.ArtifactViewer })))
+const NotesTab = React.lazy(() => import('./studio/NotesTab').then((mod) => ({ default: mod.NotesTab })))
+const StudioActionModal = React.lazy(() => import('./StudioActionModal').then((mod) => ({ default: mod.StudioActionModal })))
+const StudioOutputs = React.lazy(() => import('./studio/StudioOutputs').then((mod) => ({ default: mod.StudioOutputs })))
 
 type ModalAction = 'audio' | 'mindmap' | 'report' | null
 type View = 'home' | 'artifact' | 'notes'
@@ -62,23 +63,27 @@ export const ResourcesPanel: React.FC<Props> = ({ notebook, onClose }) => {
     if (view === 'artifact' && viewingArtifact) {
         return (
             <PanelShell onClose={onClose}>
-                <ArtifactViewer
-                    artifact={viewingArtifact}
-                    onBack={() => { setViewingArtifact(null); setView('home') }}
-                    onRegenerate={(type) => {
-                        setViewingArtifact(null)
-                        setView('home')
-                        setModalAction(type)
-                    }}
-                />
-                {modalAction && (
-                    <StudioActionModal
-                        notebook={notebook}
-                        type={modalAction}
-                        open={true}
-                        onClose={() => setModalAction(null)}
-                        onGenerated={handleGenerated}
+                <React.Suspense fallback={<PanelFallback label="加载内容..." />}>
+                    <ArtifactViewer
+                        artifact={viewingArtifact}
+                        onBack={() => { setViewingArtifact(null); setView('home') }}
+                        onRegenerate={(type) => {
+                            setViewingArtifact(null)
+                            setView('home')
+                            setModalAction(type)
+                        }}
                     />
+                </React.Suspense>
+                {modalAction && (
+                    <React.Suspense fallback={null}>
+                        <StudioActionModal
+                            notebook={notebook}
+                            type={modalAction}
+                            open={true}
+                            onClose={() => setModalAction(null)}
+                            onGenerated={handleGenerated}
+                        />
+                    </React.Suspense>
                 )}
             </PanelShell>
         )
@@ -97,7 +102,9 @@ export const ResourcesPanel: React.FC<Props> = ({ notebook, onClose }) => {
                     <span className="text-xs font-semibold">笔记</span>
                 </div>
                 <div className="flex-1 overflow-hidden">
-                    <NotesTab notebook={notebook} />
+                    <React.Suspense fallback={<PanelFallback label="加载笔记..." />}>
+                        <NotesTab notebook={notebook} />
+                    </React.Suspense>
                 </div>
             </PanelShell>
         )
@@ -136,11 +143,13 @@ export const ResourcesPanel: React.FC<Props> = ({ notebook, onClose }) => {
                 <div className="px-3 pt-2 pb-2">
                     <SectionLabel icon={<FileText size={10} />} label="已生成" />
                     <div className="mt-2">
-                        <StudioOutputs
-                            key={refreshKey}
-                            notebook={notebook}
-                            onViewArtifact={(a) => { setViewingArtifact(a); setView('artifact') }}
-                        />
+                        <React.Suspense fallback={<PanelFallback label="加载生成内容..." compact />}>
+                            <StudioOutputs
+                                key={refreshKey}
+                                notebook={notebook}
+                                onViewArtifact={(a) => { setViewingArtifact(a); setView('artifact') }}
+                            />
+                        </React.Suspense>
                     </div>
                 </div>
 
@@ -160,13 +169,15 @@ export const ResourcesPanel: React.FC<Props> = ({ notebook, onClose }) => {
 
             {/* Generation modals — portal to body, no z-index conflict */}
             {modalAction && (
-                <StudioActionModal
-                    notebook={notebook}
-                    type={modalAction}
-                    open={true}
-                    onClose={() => setModalAction(null)}
-                    onGenerated={handleGenerated}
-                />
+                <React.Suspense fallback={null}>
+                    <StudioActionModal
+                        notebook={notebook}
+                        type={modalAction}
+                        open={true}
+                        onClose={() => setModalAction(null)}
+                        onGenerated={handleGenerated}
+                    />
+                </React.Suspense>
             )}
         </PanelShell>
     )
@@ -189,6 +200,12 @@ const PanelShell: React.FC<{ onClose: () => void; children: React.ReactNode }> =
             </button>
         </div>
         {children}
+    </div>
+)
+
+const PanelFallback: React.FC<{ label: string; compact?: boolean }> = ({ label, compact }) => (
+    <div className={`flex items-center justify-center text-xs text-text-tertiary ${compact ? 'py-8' : 'h-full'}`}>
+        {label}
     </div>
 )
 

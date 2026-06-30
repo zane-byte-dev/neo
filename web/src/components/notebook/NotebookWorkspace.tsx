@@ -7,7 +7,6 @@
  */
 import React from 'react'
 import { ArrowLeft, BookOpen, MessageSquare, Plus, Search, X, MoreHorizontal, Settings } from 'lucide-react'
-import { NotebookChatDrawer } from './NotebookChatDrawer'
 import { NoteEditor } from '../NoteEditor'
 import { useAppStore } from '../../stores/useAppStore'
 import { cn } from '../../lib/utils'
@@ -15,6 +14,8 @@ import { notebookList, notebookRead, notebookSearch, notebookDelete } from '../.
 import { NotebookSettingsModal, getNotebookSort, setNotebookSort } from './NotebookSettingsModal'
 import { confirm } from '../ConfirmDialog'
 import type { NoteEntry } from '../../types'
+
+const NotebookChatDrawer = React.lazy(() => import('./NotebookChatDrawer').then((mod) => ({ default: mod.NotebookChatDrawer })))
 
 const LIST_WIDTH = 280
 
@@ -286,7 +287,9 @@ export const NotebookWorkspace: React.FC<Props> = ({ notebook, onBack, startColl
                     className="absolute bottom-16 right-4 flex flex-col rounded-2xl border border-border bg-bg-container shadow-2xl z-30 overflow-hidden"
                     style={{ width: 340, height: 500 }}
                 >
-                    <NotebookChatDrawer notebook={notebook} selectedNote={selectedNote} fullContent={fullContent} onClose={() => setChatOpen(false)} />
+                    <React.Suspense fallback={<div className="h-full flex items-center justify-center text-xs text-text-tertiary">加载助手...</div>}>
+                        <NotebookChatDrawer notebook={notebook} selectedNote={selectedNote} fullContent={fullContent} onClose={() => setChatOpen(false)} />
+                    </React.Suspense>
                 </div>
             )}
 
