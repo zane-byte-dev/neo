@@ -69,7 +69,7 @@ describe('E2E chat smoke test', () => {
     });
 
     it('POST /api/chat returns SSE with text and done', async () => {
-        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: Function) => {
+        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: (chunk: unknown) => void) => {
             onChunk({ type: 'text', text: 'Hello from LLM!' });
             return 'Hello from LLM!';
         });
@@ -92,7 +92,7 @@ describe('E2E chat smoke test', () => {
     });
 
     it('new session → send message → session title auto-generated via onChunk', async () => {
-        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: Function) => {
+        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: (chunk: unknown) => void) => {
             onChunk({ type: 'text', text: 'Response text' });
             return 'Response text';
         });
@@ -121,7 +121,7 @@ describe('E2E chat smoke test', () => {
 
     it('conversation history is passed to LLM on subsequent messages', async () => {
         let capturedHistory: any = null;
-        mockChat.mockImplementation(async (_msg: string, hist: any, _ctx: any, onChunk: Function) => {
+        mockChat.mockImplementation(async (_msg: string, hist: any, _ctx: any, onChunk: (chunk: unknown) => void) => {
             capturedHistory = hist;
             onChunk({ type: 'text', text: 'Turn 2 response' });
             return 'Turn 2 response';

@@ -6,6 +6,7 @@
  */
 
 import { tool, jsonSchema, type ToolSet } from 'ai';
+import type { JSONSchema7 } from 'json-schema';
 import { executeTool, TOOL_DECLARATIONS } from '../tools/executor.js';
 import { isAllowedInPlanMode } from '../tools/tool-permissions.js';
 import { summaryFor } from '../tools/tool-catalog.js';
@@ -82,7 +83,7 @@ export function buildAiTools(
         if (profile && !isAllowedByProfile(decl.name, undefined, profile)) continue;
         tools[decl.name] = tool({
             description: describe(decl),
-            inputSchema: jsonSchema(decl.parameters),
+            inputSchema: jsonSchema(decl.parameters as unknown as JSONSchema7),
             execute: wrapExecute(decl.name, (args) =>
                 context?.toolExecutor
                     ? context.toolExecutor.execute({ name: decl.name, args, workDir, context })
@@ -97,7 +98,7 @@ export function buildAiTools(
         if (profile && !isAllowedByProfile(name, t, profile)) continue;
         tools[name] = tool({
             description: describe(t.declaration),
-            inputSchema: jsonSchema(t.declaration.parameters),
+            inputSchema: jsonSchema(t.declaration.parameters as unknown as JSONSchema7),
             execute: wrapExecute(
                 name,
                 (args) => context?.toolExecutor
@@ -116,7 +117,7 @@ export function buildAiTools(
             if (profile && !isAllowedByProfile(name, t, profile)) continue;
             tools[name] = tool({
                 description: describe(t.declaration),
-                inputSchema: jsonSchema(t.declaration.parameters),
+                inputSchema: jsonSchema(t.declaration.parameters as unknown as JSONSchema7),
                 execute: wrapExecute(
                     name,
                     (args) => context?.toolExecutor

@@ -49,7 +49,7 @@ describe('runAgentTurn', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
     it('normal flow: loads user → get session → read history → call LLM → save messages', async () => {
-        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: Function) => {
+        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: (chunk: unknown) => void) => {
             onChunk({ type: 'text', text: 'Hello!' });
             return 'Hello!';
         });
@@ -68,7 +68,7 @@ describe('runAgentTurn', () => {
 
     it('auto-creates session when not found', async () => {
         vi.mocked(sessionGet).mockResolvedValueOnce(null);
-        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: Function) => {
+        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: (chunk: unknown) => void) => {
             onChunk({ type: 'text', text: 'ok' });
             return 'ok';
         });
@@ -79,7 +79,7 @@ describe('runAgentTurn', () => {
 
     it('onChunk callback receives correct chunks', async () => {
         const chunks: any[] = [];
-        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: Function) => {
+        mockChat.mockImplementation(async (_msg: string, _hist: any, _ctx: any, onChunk: (chunk: unknown) => void) => {
             onChunk({ type: 'text', text: 'A' });
             onChunk({ type: 'text', text: 'B' });
             return 'AB';

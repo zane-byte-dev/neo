@@ -1,0 +1,9 @@
+dist/
+node_modules/
+coverage/
+logs/
+web/dist/
+**/*.d.ts
+package-lock.json
+CHANGELOG.md
+packages/agent/src/config.local.ts

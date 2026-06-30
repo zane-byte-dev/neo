@@ -23,8 +23,8 @@ function clampTitle(title: string, max = MAX_TITLE_CHARS): string {
 function normalizeCandidate(raw: string): string {
     let candidate = raw
         .replace(/^[\s>*#\-+•\d.)]+/gu, '')
-        .replace(/^[\s"'“”‘’「」『』（）()【】\[\]<>]+/gu, '')
-        .replace(/[\s"'“”‘’「」『』（）()【】\[\]<>]+$/gu, '')
+        .replace(/^[\s"'“”‘’「」『』（）()【】[\]<>]+/gu, '')
+        .replace(/[\s"'“”‘’「」『』（）()【】[\]<>]+$/gu, '')
         .replace(/\s+/g, ' ')
         .trim();
 

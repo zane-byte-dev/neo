@@ -25,7 +25,11 @@
         "typecheck:app": "tsc -p packages/app/tsconfig.json",
         "typecheck:web": "npm --prefix web run typecheck",
         "typecheck": "npm run typecheck:runtime && npm run typecheck:agent && npm run typecheck:app && npm run typecheck:web",
-        "verify": "npm run typecheck && npm test",
+        "lint": "eslint \"packages/*/src/**/*.{ts,tsx}\" \"web/src/**/*.{ts,tsx}\"",
+        "lint:fix": "eslint \"packages/*/src/**/*.{ts,tsx}\" \"web/src/**/*.{ts,tsx}\" --fix",
+        "format": "prettier --write \"packages/*/src/**/*.{ts,tsx}\" \"web/src/**/*.{ts,tsx}\"",
+        "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx}\" \"web/src/**/*.{ts,tsx}\"",
+        "verify": "npm run lint && npm run typecheck && npm test",
         "pretest": "npm run build:runtime",
         "test": "vitest run",
         "pretest:coverage": "npm run build:runtime",
@@ -80,6 +84,7 @@
         "xlsx": "^0.18.5"
     },
     "devDependencies": {
+        "@eslint/js": "^9.39.4",
         "@types/better-sqlite3": "^7.6.13",
         "@types/koa": "^3.0.2",
         "@types/koa-static": "^4.0.4",
@@ -87,9 +92,15 @@
         "@types/node-cron": "^3.0.11",
         "@types/supertest": "^7.2.0",
         "@vitest/coverage-v8": "^4.1.4",
+        "eslint": "^9.39.4",
+        "eslint-config-prettier": "^9.1.2",
+        "eslint-plugin-react-hooks": "^5.2.0",
+        "globals": "^15.15.0",
+        "prettier": "^3.9.4",
         "supertest": "^7.2.2",
         "tsx": "^4.7.0",
         "typescript": "^5.3.3",
+        "typescript-eslint": "^8.62.1",
         "vitest": "^4.1.4"
     },
     "engines": {

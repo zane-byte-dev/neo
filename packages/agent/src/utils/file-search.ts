@@ -101,10 +101,10 @@ export function expandBraces(pattern: string): string[] {
 function globToRegex(pattern: string, options: { matchAnywhere?: boolean } = {}): RegExp {
     const regexStr = pattern
         .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*\*/g, '\x00')
+        .replace(/\*\*/g, '\uFFFF')
         .replace(/\*/g, '[^/]*')
         .replace(/\?/g, '[^/]')
-        .replace(/\x00/g, '.*');
+        .replace(/\uFFFF/g, '.*');
 
     const prefix = options.matchAnywhere ? '(^|/)' : '^';
     return new RegExp(`${prefix}${regexStr}$`);
