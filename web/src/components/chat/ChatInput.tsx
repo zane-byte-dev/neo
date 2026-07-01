@@ -65,14 +65,14 @@ export const ChatInput: React.FC<{
     }, [activeChatId, chats, setSelectedModel])
 
     const handleModelSelect = React.useCallback((model: string) => {
-        setSelectedModel(model as typeof selectedModel)
+        setSelectedModel(model as Parameters<typeof setSelectedModel>[0])
         if (activeChatId) {
             setChatModel(activeChatId, model)
             patchSession(activeChatId, { chatModel: model === 'auto' ? null : model }).catch(() => {
                 toast.error(t('chatModelSaveFailed'))
             })
         }
-    }, [activeChatId, selectedModel, setChatModel, setSelectedModel])
+    }, [activeChatId, setChatModel, setSelectedModel])
 
     const textareaRef = React.useRef<HTMLTextAreaElement>(null)
     const fileInputRef = React.useRef<HTMLInputElement>(null)

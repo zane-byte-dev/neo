@@ -41,7 +41,8 @@ export const ChatArea: React.FC<{
     const isGenerating = useAppStore(s => activeChatId ? !!s.generatingBySession[activeChatId] : false)
     const thinkingStatus = useAppStore(s => activeChatId ? (s.thinkingStatusBySession[activeChatId] ?? '') : '')
     const activeChat = chats.find((c) => c.id === activeChatId)
-    const chatMessages = messages[activeChatId ?? ''] ?? []
+    const chatMessages = React.useMemo(() => messages[activeChatId ?? ''] ?? [], [messages, activeChatId])
+    const hasLoadedMessages = chatMessages.length > 0
     const scrollRef = React.useRef<HTMLDivElement>(null)
     const [showScrollBtn, setShowScrollBtn] = React.useState(false)
     const [showToolApprovals, setShowToolApprovals] = React.useState(false)
@@ -50,7 +51,7 @@ export const ChatArea: React.FC<{
     React.useEffect(() => {
         if (!activeChatId) return
         // Only load from server if we have no messages in memory yet
-        if (messages[activeChatId]?.length) return
+        if (hasLoadedMessages) return
         fetchMessages(activeChatId)
             .then((rows) => {
                 if (rows.length > 0) {
@@ -65,7 +66,7 @@ export const ChatArea: React.FC<{
                 }
             })
             .catch(() => { /* session may not exist yet */ })
-    }, [activeChatId])
+    }, [activeChatId, hasLoadedMessages, setMessages])
 
     // Auto-scroll and track scroll position
     const scrollToBottom = React.useCallback(() => {
