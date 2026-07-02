@@ -185,7 +185,7 @@ npm run verify
 
 ### 生产部署（Mac Mini / 长期运行）
 
-生产环境只需运行一个进程。Koa 后端在同一端口（默认 3000）同时提供 API 和前端静态文件（`web/dist/`），无需额外的静态服务器。
+生产环境只需运行一个进程。Koa 后端在同一端口（默认 3000）同时提供 API 和前端静态文件（`packages/web/dist/`），无需额外的静态服务器。
 
 #### 首次部署
 
@@ -252,7 +252,7 @@ brew services start caddy
         ▼
   Koa Server :3000  ← PM2 守护
   ├── /api/*        → 路由处理（AI 对话 / Notebook / 文件上传…）
-  └── /*            → web/dist/ 静态文件
+  └── /*            → packages/web/dist/ 静态文件
 ```
 
 ---

@@ -49,21 +49,21 @@
 
 ## Frontend Changes
 
-- `web/src/components/notebook/StudioActionModal.tsx`
+- `packages/web/src/components/notebook/StudioActionModal.tsx`
   - 支持 `sourceIdsOverride` 与 `primaryArticleIdOverride`，供文章内入口强制基于当前文章生成。
   - 资源库入口仍沿用当前 `selectedSourceIds` 行为。
-- `web/src/components/notebook/studio/ArtifactViewer.tsx`
+- `packages/web/src/components/notebook/studio/ArtifactViewer.tsx`
   - audio viewer 同时支持 `data.script` 与旧 `data.segments`。
   - mindmap / report viewer 兼容多种内容字段，音频 viewer 显示估算时长。
-- `web/src/components/NovelEditor.tsx`
+- `packages/web/src/components/NovelEditor.tsx`
   - 新增可序列化的折叠生成模块节点，使用 `<details data-neo-generated-block>` 持久化。
   - slash command 新增“生成思维导图”“生成报告”，先插入生成中模块，再用生成结果替换。
-- `web/src/components/NoteEditor.tsx`
+- `packages/web/src/components/NoteEditor.tsx`
   - 保留摘要块，隐藏后以轻量“摘要”按钮恢复。
   - 新增文章工具栏音频 icon，直接基于当前文章生成单人朗读音频。
   - 向 `NovelEditor` 注入导图 / 报告生成回调，生成结果插入正文折叠模块。
   - 不再渲染“相关资源”状态带和正文底部资源预览区。
-- `web/src/index.css`
+- `packages/web/src/index.css`
   - 为生成插入模块补充轻量折叠样式。
 
 ## Documentation Updates
@@ -78,7 +78,7 @@
 
 - 后端单测：扩展 notebook artifact primitive，覆盖 `sourceIds` / `primaryArticleId` 持久化。
 - 后端路由单测：覆盖 artifact 生成请求可携带 `primaryArticleId` 的传递路径。
-- 前端构建：`npm --prefix web run build` 覆盖 TypeScript 与 Vite bundle，包含自定义 Tiptap 节点与 slash 命令。
+- 前端构建：`npm --workspace neo-web run build` 覆盖 TypeScript 与 Vite bundle，包含自定义 Tiptap 节点与 slash 命令。
 - 后端构建：`npm run build` 覆盖服务端 TypeScript。
 - 文档链接：`npm run docs:check`。
 

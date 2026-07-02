@@ -34,7 +34,7 @@
   - 覆盖默认模型会优先选择已配置 provider 而不是盲目回退 `gemma`。
   - 覆盖 prompt 组装时会剥离已插入正文的生成资源块。
   - 覆盖文章工具栏音频入口会切到单人朗读 prompt。
-- `npm --prefix web run build`
+- `npm --workspace neo-web run build`
   - 覆盖 `NoteEditor`、`NovelEditor` 自定义生成模块节点、slash command、`ArtifactViewer` 的 TypeScript 与 Vite 构建。
 
 ## Validation Commands
@@ -42,7 +42,7 @@
 - ✅ `npm run build -- --pretty false`
 - ✅ `npx vitest run src/services/__tests__/notebook-service.test.ts src/routes/__tests__/notebook-source-studio.test.ts -t "artifact primitives|POST /api/notebook/artifact"`
 - ✅ `npx vitest run src/services/__tests__/notebook-ai.test.ts src/routes/__tests__/notebook-source-studio.test.ts`
-- ✅ `npm --prefix web run build`
+- ✅ `npm --workspace neo-web run build`
 - ⚠️ `npm run docs:check` 当前被既有 `docs/product/DOC_REVIEW.md` 相对链接阻塞，共 13 个 broken links；本轮新增的 `article-embedded-resources` 链接未出现在失败列表中。
 
 ## Browser Regression Validation

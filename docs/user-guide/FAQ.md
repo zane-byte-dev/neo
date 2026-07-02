@@ -30,7 +30,7 @@ DEEPSEEK_API_KEY=sk-... npm run dev:bot
 WEB_PORT=3001 npm run dev:bot
 ```
 
-前端端口由 Vite 自动选择，或在 `web/vite.config.ts` 中调整。
+前端端口由 Vite 自动选择，或在 `packages/web/vite.config.ts` 中调整。
 
 ## 外部系统怎么触发 Neo？
 

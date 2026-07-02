@@ -16,7 +16,7 @@ Neo 已经支持两套 Skill 管理路径：
 本 Brief 基于 2026-05-13 的当前代码和界面状态核验，不只依赖历史文档：
 
 - [src/routes/skills.ts](../../../packages/app/src/routes/skills.ts) 已经提供 Skill 的 REST CRUD。
-- [web/src/components/SkillsPanel.tsx](../../../web/src/components/SkillsPanel.tsx) 已支持在 Settings / Skills 中创建、编辑、启用和删除 Skill。
+- [packages/web/src/components/SkillsPanel.tsx](../../../packages/web/src/components/SkillsPanel.tsx) 已支持在 Settings / Skills 中创建、编辑、启用和删除 Skill。
 - [src/tools/executor.ts](../../../packages/agent/src/tools/executor.ts) 的通用 `read_file` / `write_file` 仍被限制在 `workDir`，不能直接写默认 `stateDir`。
 - [src/services/bootstrap-config.ts](../../../packages/agent/src/services/bootstrap-config.ts) 默认把 `stateDir` 放在 `~/.neo/state/default`。
 

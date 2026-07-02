@@ -47,11 +47,11 @@ Suggested files:
 
 Suggested files:
 
-- `web/src/components/RunConsole.tsx`
-- `web/src/components/RunTimeline.tsx`
-- `web/src/lib/runEvents.ts`
-- `web/src/api.ts`
-- `web/src/components/SettingsPanel.tsx`
+- `packages/web/src/components/RunConsole.tsx`
+- `packages/web/src/components/RunTimeline.tsx`
+- `packages/web/src/lib/runEvents.ts`
+- `packages/web/src/api.ts`
+- `packages/web/src/components/SettingsPanel.tsx`
 
 UI steps:
 
@@ -79,14 +79,14 @@ Backend:
 
 Frontend:
 
-- If no component test harness exists, run `npm --prefix web run build` and browser smoke.
+- If no component test harness exists, run `npm --workspace neo-web run build` and browser smoke.
 - Browser smoke should cover list load, detail load, failed run view and cancel button disabled/enabled state.
 
 Validation commands:
 
 ```bash
 npm run build
-npm --prefix web run build
+npm --workspace neo-web run build
 npm run docs:check
 ```
 

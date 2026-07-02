@@ -43,7 +43,7 @@ Freshness Check -> Implementation -> Test Review
 - GitHub Copilot Chat 可用，并能读取 `.github/prompts/` 下的 prompt 文件。
 - 你知道这次改动更接近产品问题、实现问题还是测试问题。
 - 如果要改 UI，最好能本地启动：`npm run dev:bot` 和 `npm run web:dev`。
-- 如果要改代码，准备好验证命令：`npm run build`、`npm test`、`npm --prefix web run build`、`npm run docs:check`。
+- 如果要改代码，准备好验证命令：`npm run build`、`npm test`、`npm --workspace neo-web run build`、`npm run docs:check`。
 
 仓库级约束已经写在 [../../.github/copilot-instructions.md](../../.github/copilot-instructions.md)；提交代码前的通用约束见 [../../CONTRIBUTING.md](../../CONTRIBUTING.md)。
 
@@ -200,7 +200,7 @@ docs/features/first-run-checklist/plan.md
 
 ### 没有把验证命令跑完
 
-对 Neo 来说，文档更新至少要跑 `npm run docs:check`；前端改动至少要跑 `npm --prefix web run build`；后端改动通常要跑 `npm run build` 和相关 `npx vitest run ...`。没有验证结果的“已完成”，可信度很低。
+对 Neo 来说，文档更新至少要跑 `npm run docs:check`；前端改动至少要跑 `npm --workspace neo-web run build`；后端改动通常要跑 `npm run build` 和相关 `npx vitest run ...`。没有验证结果的“已完成”，可信度很低。
 
 ### 测试报告只写总结，不写问题
 

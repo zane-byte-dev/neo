@@ -100,7 +100,7 @@ Suggested files:
 - `src/memory/candidate-store.ts`
 - `src/memory/extractor.ts`
 - `src/routes/memory-candidates.ts`
-- `web/src/components/MemoryCandidatesPanel.tsx`
+- `packages/web/src/components/MemoryCandidatesPanel.tsx`
 
 Candidate states:
 
@@ -158,7 +158,7 @@ Validation commands:
 ```bash
 npm run build
 npx vitest run src/indexing src/memory src/llm
-npm --prefix web run build
+npm --workspace neo-web run build
 npm run docs:check
 ```
 

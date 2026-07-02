@@ -23,7 +23,7 @@
 
 ## Commands Run
 
-- `npm --prefix web run build`：通过。
+- `npm --workspace neo-web run build`：通过。
 - `npm run docs:check`：通过。
 
 ## Browser Smoke

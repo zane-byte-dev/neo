@@ -24,14 +24,14 @@ Neo 已经在文章编辑器里完成了一轮“编辑器优先”重构：摘�
 
 ### 1. 文章页已经有内嵌摘要，但资源仍然是 overlay
 
-- `web/src/components/NoteEditor.tsx` 当前已经把 `summaryState` 和摘要卡片直接渲染在文章内容区域。
+- `packages/web/src/components/NoteEditor.tsx` 当前已经把 `summaryState` 和摘要卡片直接渲染在文章内容区域。
 - 同一个组件里，资源仍然通过 `resourcesOpen` + `ResourcesPanel` 以右侧叠加浮层方式出现。
 
 结论：当前产品已经接受“正文内摘要”这个方向，但还没有把资源也按同样原则内嵌进文章。
 
 ### 2. ResourcesPanel 仍然以“资源库”方式组织内容
 
-- `web/src/components/notebook/ResourcesPanel.tsx` 当前结构是“内容生成 / 已生成 / 笔记”三段式。
+- `packages/web/src/components/notebook/ResourcesPanel.tsx` 当前结构是“内容生成 / 已生成 / 笔记”三段式。
 - 它包含生成入口、Artifact 列表、笔记入口，本质上更像一个 notebook 侧资源工作台，而不是某篇文章的资源视图。
 
 结论：当前组织方式更适合“浏览和管理资源”，不适合“贴着文章消费资源”。

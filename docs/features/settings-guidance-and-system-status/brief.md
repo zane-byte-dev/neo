@@ -25,22 +25,22 @@ Neo 当前已经具备较完整的模型配置、技能、应用、MCP、自动�
 
 ### 1. 危险确认并未完全统一
 
-- `web/src/components/ConfirmDialog.tsx` 已经是应用级确认弹窗基础设施，且 `ChatArea`、`SettingsPanel`、Notebook 相关组件都在复用。
-- 但 `web/src/components/Sidebar.tsx` 当前批量删除会话仍直接调用 `window.confirm(...)`，说明危险确认链路仍有遗漏。
+- `packages/web/src/components/ConfirmDialog.tsx` 已经是应用级确认弹窗基础设施，且 `ChatArea`、`SettingsPanel`、Notebook 相关组件都在复用。
+- 但 `packages/web/src/components/Sidebar.tsx` 当前批量删除会话仍直接调用 `window.confirm(...)`，说明危险确认链路仍有遗漏。
 
 ### 2. 设置页仍是扁平结构，没有基础 / 高级分层
 
-- `web/src/components/SettingsPanel.tsx` 当前顶层 tab 仍是并列的 `models / skills / apps / mcp / automations`。
+- `packages/web/src/components/SettingsPanel.tsx` 当前顶层 tab 仍是并列的 `models / skills / apps / mcp / automations`。
 - 当前结构默认把高级能力与核心入门能力并列展示，对首次配置用户不够友好。
 
 ### 3. 错误展示大多还是“报错即结束”，缺少修复动作
 
-- `web/src/components/SettingsPanel.tsx`、`SkillsPanel.tsx`、`Sidebar.tsx`、多个 Notebook 组件里仍大量直接显示 `err.message` 或通用失败 toast。
+- `packages/web/src/components/SettingsPanel.tsx`、`SkillsPanel.tsx`、`Sidebar.tsx`、多个 Notebook 组件里仍大量直接显示 `err.message` 或通用失败 toast。
 - 这些错误通常没有告诉用户下一步该去哪个页面、改哪个字段、是否可以重试。
 
 ### 4. 系统状态已有零散数据源，但没有统一状态面板
 
-- `web/src/components/ModelPanel.tsx` 已有 provider health 卡片，数据来自 `GET /api/models` 的 `providerStatus`。
+- `packages/web/src/components/ModelPanel.tsx` 已有 provider health 卡片，数据来自 `GET /api/models` 的 `providerStatus`。
 - `GET /api/preferences` 已返回 Telegram 运行态。
 - `GET /api/me` 当前只返回 `userId / displayName / profile`，没有工作目录、后端健康、自动化最近状态等更完整的系统 readiness 信息。
 - 说明状态能力不是完全没有，而是还停留在分散展示，尚未形成统一的“系统是否准备好”表达。

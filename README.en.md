@@ -72,7 +72,7 @@ npm run deploy           # tsc + web build + pm2 start
 pm2 startup && pm2 save  # auto-start on boot
 ```
 
-The Koa backend serves both `/api/*` and the static `web/dist/` frontend on the
+The Koa backend serves both `/api/*` and the static `packages/web/dist/` frontend on the
 same port (default `3000`). Put it behind Caddy / Nginx / Cloudflare for HTTPS.
 
 ## Configuration

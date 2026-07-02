@@ -26,7 +26,7 @@
 ## Validation Commands
 
 - ✅ `npm run build`
-- ✅ `npm --prefix web run build`
+- ✅ `npm --workspace neo-web run build`
 - ✅ `npx vitest run src/routes/__tests__/notebook-routes.test.ts src/routes/__tests__/notebook.test.ts src/routes/__tests__/session.test.ts`
 - ✅ `npx vitest run src/services/__tests__/notebook-service.test.ts -t 'article annotations'`
 - ✅ `npx vitest run src/routes/__tests__/notebook-routes.test.ts -t 'article annotation routes'`

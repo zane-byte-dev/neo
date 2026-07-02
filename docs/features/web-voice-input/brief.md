@@ -18,13 +18,13 @@ Neo 的 Web Chat 已经具备较完整的文本输入、文件上传、图片理
 
 ### 1. Web Chat 当前没有语音输入入口
 
-- `web/src/components/ChatArea.tsx` 的输入区底栏当前只有附件、项目、模型和发送相关入口，没有麦克风按钮，也没有录音状态机。
+- `packages/web/src/components/ChatArea.tsx` 的输入区底栏当前只有附件、项目、模型和发送相关入口，没有麦克风按钮，也没有录音状态机。
 - 当前聊天输入支持文本、图片、文档上传和拖拽粘贴，但没有录音或音频文件转写流程。
 
 ### 2. 产品已有语音播放能力，但不是语音输入
 
-- `web/src/components/ChatArea.tsx` 已实现基于 Web Speech API 的文本朗读。
-- `web/src/components/notebook/AudioOverview.tsx` 也已实现基于 Web Speech API 的双人脚本播放。
+- `packages/web/src/components/ChatArea.tsx` 已实现基于 Web Speech API 的文本朗读。
+- `packages/web/src/components/notebook/AudioOverview.tsx` 也已实现基于 Web Speech API 的双人脚本播放。
 
 结论：当前产品在“音频输出”层面已经有基础，但“音频输入”仍是缺口。
 

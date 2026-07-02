@@ -29,8 +29,8 @@ Phase 1 MVP 聚焦把现有 Cron / Webhook / Agent Runtime / Skill 底座升级�
 - 后端服务：[../../../src/services/workflow-service.ts](../../../packages/app/src/services/workflow-service.ts)
 - HTTP 路由：[../../../src/routes/workflows.ts](../../../packages/app/src/routes/workflows.ts)
 - Cron 历史：[../../../src/services/cron-history.ts](../../../packages/app/src/services/cron-history.ts)
-- Automations UI：[../../../web/src/components/SettingsPanel.tsx](../../../web/src/components/SettingsPanel.tsx)
-- JSON 编辑器保存前校验：[../../../web/src/lib/workflow-validation.ts](../../../web/src/lib/workflow-validation.ts)
+- Automations UI：[../../../packages/web/src/components/SettingsPanel.tsx](../../../packages/web/src/components/SettingsPanel.tsx)
+- JSON 编辑器保存前校验：[../../../packages/web/src/lib/workflow-validation.ts](../../../packages/web/src/lib/workflow-validation.ts)
 
 ## Deferred
 

@@ -14,7 +14,7 @@
 
 ### 前端（React 19 + Zustand 5 + Tailwind 4）
 
-- **API 层**：`web/src/api.ts` 所有 notebook AI 接口都支持 `model` 参数；新增 `notebookArchiveSource`、`notebookRenameSource`。
+- **API 层**：`packages/web/src/api.ts` 所有 notebook AI 接口都支持 `model` 参数；新增 `notebookArchiveSource`、`notebookRenameSource`。
 - **三栏工作台** `NotebookWorkspace.tsx`：桌面端 Source | Chat | Studio，移动端底部 Tab；顶栏统一模型选择器（Auto / DeepSeek / Gemma / Gemini CLI）。
 - **新弹窗组件**：
   - `AddSourceModal.tsx` — 拖拽上传、URL、文本三种导入方式，统一入口。
@@ -136,7 +136,7 @@
 - [x] **日志分级**：全项目 `console.log/warn/error` 统一替换为 `log.info/warn/error(module, msg, data?)` 结构化日志（`src/utils/logger.ts`），输出至 `logs/YYYY-MM-DD.jsonl` + 彩色 stderr。
 - [x] **前端代码拆分**：`StudioPanel.tsx` 拆出 `StudioOutputs`、`OverviewTab`、`NotesTab`、`NoteEditorInline`、`ArtifactViewer`；`SourcePanel.tsx` 拆出 `SourceRow`，各放独立文件。
 - [x] **Store 模块化**：`useAppStore.ts` 按 Zustand slice 模式拆成 `chatSlice`、`notebookSlice`、`uiSlice`，主 store 组合三者。
-- [x] **Tailwind Design Tokens**：`web/src/index.css` 的 `@theme {}` 块补全语义颜色（`--color-surface`、`--color-border` 等）、间距（`--spacing-*`）、圆角（`--radius-*`）CSS 变量。
+- [x] **Tailwind Design Tokens**：`packages/web/src/index.css` 的 `@theme {}` 块补全语义颜色（`--color-surface`、`--color-border` 等）、间距（`--spacing-*`）、圆角（`--radius-*`）CSS 变量。
 - [ ] **E2E 测试**：浏览器自动化覆盖"导入 → 摘要 → 对话 → 生成报告"主流程。
 - [x] **SSE / WebSocket 统一**：新建 `src/utils/sse.ts` 提供 `createSSEResponse(ctx)` → `{ send, signal, close }`；`chat.ts` 和 `notebook.ts` 的 SSE 样板统一使用该接口；前端 `api.ts` 的 `streamChat` / `streamNotebookChat` 改为 `yield*` 委托 `lib/stream-transport.ts` 的 `createSSEStream<T>()`。
 
@@ -162,5 +162,5 @@
 - 现有代码锚点：
   - 服务 / agent 层：[src/services/notebook-service.ts](../../packages/agent/src/services/notebook-service.ts)、[src/services/notebook-ai.ts](../../packages/app/src/services/notebook-ai.ts)、[src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts)
   - 路由：[src/routes/notebook.ts](../../packages/app/src/routes/notebook.ts)、[src/routes/chat.ts](../../packages/app/src/routes/chat.ts)
-  - 前端入口：[web/src/components/notebook/NotebookWorkspace.tsx](../../web/src/components/notebook/NotebookWorkspace.tsx)
+  - 前端入口：[packages/web/src/components/notebook/NotebookWorkspace.tsx](../../packages/web/src/components/notebook/NotebookWorkspace.tsx)
   - 模型路由：[src/llm/model-router.ts](../../packages/agent/src/llm/model-router.ts)

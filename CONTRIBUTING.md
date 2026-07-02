@@ -38,7 +38,7 @@ key entry points are:
 - `src/main.ts` — process entry (HTTP server + optional Telegram bot)
 - `src/services/agent-runner.ts` — the shared "one chat turn" lifecycle
 - `src/tools/` — built-in tools and the user-tool loader
-- `web/src/` — React frontend
+- `packages/web/src/` — React frontend
 - `extension/` — Chrome browser extension
 
 ## Development Workflow
@@ -50,7 +50,7 @@ key entry points are:
    ```bash
    npm run build              # TypeScript type-check
    npm test                   # Vitest suite
-   npm --prefix web run build # Frontend build
+   npm --workspace neo-web run build # Frontend build
    ```
 
 4. **Open a pull request** against `main` and fill in the PR template.

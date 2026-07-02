@@ -605,8 +605,8 @@ C1
 相关锚点：
 
 - [src/routes/tool-confirm.ts](../../../packages/app/src/routes/tool-confirm.ts)
-- [web/src/api.ts](../../../web/src/api.ts)
-- [web/src/components/ChatArea.tsx](../../../web/src/components/ChatArea.tsx)
+- [packages/web/src/api.ts](../../../packages/web/src/api.ts)
+- [packages/web/src/components/ChatArea.tsx](../../../packages/web/src/components/ChatArea.tsx)
 
 ## 目标
 
@@ -617,9 +617,9 @@ C1
 ### In scope
 
 - 改造 [src/routes/tool-confirm.ts](../../../packages/app/src/routes/tool-confirm.ts)
-- 改造 [web/src/api.ts](../../../web/src/api.ts) 中的 `confirmTool()`
-- 改造 [web/src/types/index.ts](../../../web/src/types/index.ts) 的 `tool_confirm` 结构
-- 改造 [web/src/components/ChatArea.tsx](../../../web/src/components/ChatArea.tsx) 的 Approve/Deny 流程
+- 改造 [packages/web/src/api.ts](../../../packages/web/src/api.ts) 中的 `confirmTool()`
+- 改造 [packages/web/src/types/index.ts](../../../packages/web/src/types/index.ts) 的 `tool_confirm` 结构
+- 改造 [packages/web/src/components/ChatArea.tsx](../../../packages/web/src/components/ChatArea.tsx) 的 Approve/Deny 流程
 
 ### Out of scope
 
@@ -949,10 +949,10 @@ C2, D2
 
 相关锚点：
 
-- [web/src/api.ts](../../../web/src/api.ts)
-- [web/src/lib/stream-transport.ts](../../../web/src/lib/stream-transport.ts)
-- [web/src/components/ChatArea.tsx](../../../web/src/components/ChatArea.tsx)
-- [web/src/stores/slices/chatSlice.ts](../../../web/src/stores/slices/chatSlice.ts)
+- [packages/web/src/api.ts](../../../packages/web/src/api.ts)
+- [packages/web/src/lib/stream-transport.ts](../../../packages/web/src/lib/stream-transport.ts)
+- [packages/web/src/components/ChatArea.tsx](../../../packages/web/src/components/ChatArea.tsx)
+- [packages/web/src/stores/slices/chatSlice.ts](../../../packages/web/src/stores/slices/chatSlice.ts)
 
 ## 目标
 
@@ -962,10 +962,10 @@ C2, D2
 
 ### In scope
 
-- 改造 [web/src/api.ts](../../../web/src/api.ts) 的 `streamChat()` 和 `confirmTool()`
-- 改造 [web/src/lib/stream-transport.ts](../../../web/src/lib/stream-transport.ts)
-- 改造 [web/src/components/ChatArea.tsx](../../../web/src/components/ChatArea.tsx)
-- 改造 [web/src/stores/slices/chatSlice.ts](../../../web/src/stores/slices/chatSlice.ts)
+- 改造 [packages/web/src/api.ts](../../../packages/web/src/api.ts) 的 `streamChat()` 和 `confirmTool()`
+- 改造 [packages/web/src/lib/stream-transport.ts](../../../packages/web/src/lib/stream-transport.ts)
+- 改造 [packages/web/src/components/ChatArea.tsx](../../../packages/web/src/components/ChatArea.tsx)
+- 改造 [packages/web/src/stores/slices/chatSlice.ts](../../../packages/web/src/stores/slices/chatSlice.ts)
 
 ### Out of scope
 

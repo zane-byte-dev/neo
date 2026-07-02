@@ -11,7 +11,7 @@ agent: "agent"
 1. **理解需求**：读用户提供的需求描述或 feature brief（如有）
 2. **快速plan**：列出要改的文件和方案（10行以内，不需要单独文档）
 3. **实现**：代码改动 + 测试补充
-4. **验证**：npm run build && npm test，前端改动加 npm --prefix web run build
+4. **验证**：npm run build && npm test，前端改动加 npm --workspace neo-web run build
 5. **文档**：更新受影响的 user-guide/README/CHANGELOG
 
 ## 约束

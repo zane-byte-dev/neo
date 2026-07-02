@@ -29,8 +29,8 @@
 
 - ✅ `npx vitest run src/services/__tests__/workflow-service.test.ts src/routes/__tests__/workflows.test.ts src/routes/__tests__/cron.test.ts src/services/__tests__/cron-agent-runtime.test.ts`
 - ✅ `npm run build -- --pretty false`
-- ✅ `npm --prefix web run build`
-- ✅ `npm --prefix web run build`（2026-05-19：复验 Workflow 编辑器本地校验与 i18n 改动）
+- ✅ `npm --workspace neo-web run build`
+- ✅ `npm --workspace neo-web run build`（2026-05-19：复验 Workflow 编辑器本地校验与 i18n 改动）
 
 ## Residual Risk
 

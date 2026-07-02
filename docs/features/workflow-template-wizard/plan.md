@@ -66,10 +66,10 @@ Suggested files:
 
 Suggested files:
 
-- `web/src/components/WorkflowTemplateWizard.tsx`
-- `web/src/lib/workflowTemplates.ts`
-- `web/src/lib/workflow-validation.ts`
-- `web/src/components/SettingsPanel.tsx`
+- `packages/web/src/components/WorkflowTemplateWizard.tsx`
+- `packages/web/src/lib/workflowTemplates.ts`
+- `packages/web/src/lib/workflow-validation.ts`
+- `packages/web/src/components/SettingsPanel.tsx`
 
 UI steps:
 
@@ -111,13 +111,13 @@ Backend:
 Frontend:
 
 - Unit test `buildWorkflow` template functions if the web test stack supports it.
-- Otherwise validate through `npm --prefix web run build` and browser smoke.
+- Otherwise validate through `npm --workspace neo-web run build` and browser smoke.
 
 Validation commands:
 
 ```bash
 npm run build
-npm --prefix web run build
+npm --workspace neo-web run build
 npm run docs:check
 ```
 

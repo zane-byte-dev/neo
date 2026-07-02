@@ -13,7 +13,7 @@
 ### 前端构建
 
 ```
-npm --prefix web run build
+npm --workspace neo-web run build
 ```
 
 | 结果 | 详情 |
@@ -104,7 +104,7 @@ npx vitest run
 
 | 验收项 | 状态 | 备注 |
 |--------|------|------|
-| 文件存在且导出 `EDIT_ACTIONS` / `INSIGHT_ACTIONS` | ✅ | `web/src/components/notebook/docActions.ts` |
+| 文件存在且导出 `EDIT_ACTIONS` / `INSIGHT_ACTIONS` | ✅ | `packages/web/src/components/notebook/docActions.ts` |
 | `EDIT_ACTIONS` 含 polish / format / expand | ✅ | 3 项，含 `editInstruction` |
 | `INSIGHT_ACTIONS` 含 translate | ✅ | 含 `buildPrompt` |
 | NoteEditor 正确 import 并使用 | ✅ | 构建通过 |

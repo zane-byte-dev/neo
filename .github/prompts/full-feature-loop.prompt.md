@@ -17,7 +17,7 @@ agent: "agent"
    - 严格按 plan 推进，偏离需记录理由
    - 用户可见行为变化同步更新文档
 4. **Verification**
-   - npm run build && npm test && npm --prefix web run build
+   - npm run build && npm test && npm --workspace neo-web run build
    - 对照验收标准逐项检查
 5. **Closeout**
    - 更新 ROADMAP/CHANGELOG/user-guide/feature brief 状态

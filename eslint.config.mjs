@@ -12,7 +12,7 @@ export default tseslint.config(
             '**/dist/**',
             '**/node_modules/**',
             '**/*.d.ts',
-            'web/dist/**',
+            'packages/web/dist/**',
             'coverage/**',
             'logs/**',
             'extension/**',
@@ -57,7 +57,7 @@ export default tseslint.config(
 
     // Frontend (React) specific config
     {
-        files: ['web/src/**/*.{ts,tsx}'],
+        files: ['packages/web/src/**/*.{ts,tsx}'],
         plugins: {
             'react-hooks': reactHooks,
         },

@@ -243,9 +243,9 @@
 **主要改动点**：
 
 - 改造 [src/routes/tool-confirm.ts](../../../packages/app/src/routes/tool-confirm.ts)
-- 改造 [web/src/api.ts](../../../web/src/api.ts) 中的 `confirmTool()`
-- 改造 [web/src/types/index.ts](../../../web/src/types/index.ts) 的 `tool_confirm` 结构
-- 改造 [web/src/components/ChatArea.tsx](../../../web/src/components/ChatArea.tsx) 的 Approve/Deny 流程
+- 改造 [packages/web/src/api.ts](../../../packages/web/src/api.ts) 中的 `confirmTool()`
+- 改造 [packages/web/src/types/index.ts](../../../packages/web/src/types/index.ts) 的 `tool_confirm` 结构
+- 改造 [packages/web/src/components/ChatArea.tsx](../../../packages/web/src/components/ChatArea.tsx) 的 Approve/Deny 流程
 
 **依赖**：C1
 
@@ -361,10 +361,10 @@
 
 **主要改动点**：
 
-- 改造 [web/src/api.ts](../../../web/src/api.ts) 的 `streamChat()` 和 `confirmTool()`
-- 改造 [web/src/lib/stream-transport.ts](../../../web/src/lib/stream-transport.ts) 支持 cursor 或重连语义
-- 改造 [web/src/components/ChatArea.tsx](../../../web/src/components/ChatArea.tsx)
-- 改造 [web/src/stores/slices/chatSlice.ts](../../../web/src/stores/slices/chatSlice.ts)
+- 改造 [packages/web/src/api.ts](../../../packages/web/src/api.ts) 的 `streamChat()` 和 `confirmTool()`
+- 改造 [packages/web/src/lib/stream-transport.ts](../../../packages/web/src/lib/stream-transport.ts) 支持 cursor 或重连语义
+- 改造 [packages/web/src/components/ChatArea.tsx](../../../packages/web/src/components/ChatArea.tsx)
+- 改造 [packages/web/src/stores/slices/chatSlice.ts](../../../packages/web/src/stores/slices/chatSlice.ts)
 
 **依赖**：C2、D2
 

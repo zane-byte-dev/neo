@@ -101,7 +101,7 @@ empty → generating → done
 
 ### 3.4 共享 Action 定义
 
-将 `DOC_ACTIONS`（优化、格式化、扩写）的定义迁移到单独文件 `web/src/components/notebook/docActions.ts`（或 `docActions.tsx`），供：
+将 `DOC_ACTIONS`（优化、格式化、扩写）的定义迁移到单独文件 `packages/web/src/components/notebook/docActions.ts`（或 `docActions.tsx`），供：
 - NoteEditor 更多菜单 import
 - NotebookChatDrawer（如后续需要扩展）import
 
@@ -199,13 +199,13 @@ empty → generating → done
 
 | 文件 | 变更类型 | 说明 |
 |------|----------|------|
-| `web/src/components/NoteEditor.tsx` | 修改 | 新增摘要模块渲染；更多菜单新增 AI 操作区；新增 `diffAction` state + `DocDiffModal`；新增「资源」图标 + `ResourcesPanel` toggle |
-| `web/src/components/notebook/NotebookChatDrawer.tsx` | 修改 | 删除快捷操作按钮区；迁出 `DOC_ACTIONS` 定义 |
-| `web/src/components/notebook/docActions.ts` | 新建 | 共享 `DOC_ACTIONS` 常量（edit 类） |
-| `web/src/components/notebook/ResourcesPanel.tsx` | 新建 | 内容生成卡片 + Artifact 列表 + 笔记入口；复用 `StudioOutputs`、`StudioActionModal`、`ArtifactViewer`、`NotesTab` |
-| `web/src/api.ts` | 可能修改 | 新增 `notebookGenerateSummary` 或复用现有 `/api/generate` |
-| `web/src/i18n/locales/zh.ts` | 修改 | 新增摘要、资源面板相关 i18n key |
-| `web/src/i18n/locales/en.ts` | 修改 | 对应英文 key |
+| `packages/web/src/components/NoteEditor.tsx` | 修改 | 新增摘要模块渲染；更多菜单新增 AI 操作区；新增 `diffAction` state + `DocDiffModal`；新增「资源」图标 + `ResourcesPanel` toggle |
+| `packages/web/src/components/notebook/NotebookChatDrawer.tsx` | 修改 | 删除快捷操作按钮区；迁出 `DOC_ACTIONS` 定义 |
+| `packages/web/src/components/notebook/docActions.ts` | 新建 | 共享 `DOC_ACTIONS` 常量（edit 类） |
+| `packages/web/src/components/notebook/ResourcesPanel.tsx` | 新建 | 内容生成卡片 + Artifact 列表 + 笔记入口；复用 `StudioOutputs`、`StudioActionModal`、`ArtifactViewer`、`NotesTab` |
+| `packages/web/src/api.ts` | 可能修改 | 新增 `notebookGenerateSummary` 或复用现有 `/api/generate` |
+| `packages/web/src/i18n/locales/zh.ts` | 修改 | 新增摘要、资源面板相关 i18n key |
+| `packages/web/src/i18n/locales/en.ts` | 修改 | 对应英文 key |
 
 ---
 

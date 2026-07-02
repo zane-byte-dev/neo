@@ -24,7 +24,7 @@ For larger changes, please open an issue first to discuss the approach.
 
 - [ ] `npm run build` passes
 - [ ] `npm test` passes
-- [ ] `npm --prefix web run build` passes (if frontend changed)
+- [ ] `npm --workspace neo-web run build` passes (if frontend changed)
 - [ ] Added/updated tests for new behavior
 
 ## Screenshots / Recordings

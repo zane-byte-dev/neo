@@ -22,11 +22,11 @@
 ## Commands Run
 
 - `npm run docs:check`：通过，`OK: checked 57 Markdown files.`
-- `npm --prefix web run build`：通过。
+- `npm --workspace neo-web run build`：通过。
 
 ## Findings
 
-- 首次运行前端 dev server 时，root 脚本参数被错误传递为 `vite 127.0.0.1`，导致 `/chat` 返回 404；已改用 `cd web && npm run dev -- --host 127.0.0.1` 进行冒烟验证。
+- 首次运行前端 dev server 时，root 脚本参数被错误传递为 `vite 127.0.0.1`，导致 `/chat` 返回 404；已改用 `npm --workspace neo-web run dev -- --host 127.0.0.1` 进行冒烟验证。
 - `DocDiffModal.tsx` 存在既有 TypeScript 构建阻塞：未定义 `buildChunks` 且保留未使用 LLM 分段函数；已做最小修复以恢复 web build。
 
 ## Regression Risks

@@ -26,7 +26,7 @@
 
 ### 新建文件
 
-#### `web/src/components/notebook/docActions.ts`
+#### `packages/web/src/components/notebook/docActions.ts`
 共享 AI 操作定义，供 NoteEditor 更多菜单使用。
 
 - `DocEditAction` 接口：`id / label / icon / iconColor / desc / category:'edit' / editInstruction`
@@ -34,7 +34,7 @@
 - `EDIT_ACTIONS: DocEditAction[]`：polish（优化文档）、format（格式化）、expand（扩写改写）
 - `INSIGHT_ACTIONS: DocInsightAction[]`：translate（翻译英文）
 
-#### `web/src/components/notebook/ResourcesPanel.tsx`
+#### `packages/web/src/components/notebook/ResourcesPanel.tsx`
 编辑器顶栏「资源」图标触发的右侧浮层面板。
 
 - `PanelShell`：内部 shell 组件，带薄荷色 Sparkles 头部 + X 关闭按钮
@@ -46,7 +46,7 @@
 
 ### 修改文件
 
-#### `web/src/components/NoteEditor.tsx`
+#### `packages/web/src/components/NoteEditor.tsx`
 
 **新增 import：**
 - `Layers, Languages, Sparkles, RefreshCw, EyeOff`（lucide-react）
@@ -81,7 +81,7 @@ const [summaryCollapsed, setSummaryCollapsed]// 折叠（localStorage 持久化�
 **Bug 修复：**
 - `toggleFullWidth` 中移除无意义的 `localStorage.getItem` 调用
 
-#### `web/src/components/notebook/NotebookChatDrawer.tsx`
+#### `packages/web/src/components/notebook/NotebookChatDrawer.tsx`
 
 **移除：**
 - `DOC_ACTIONS` 数组定义（共 6 个 action）
@@ -101,7 +101,7 @@ const [summaryCollapsed, setSummaryCollapsed]// 折叠（localStorage 持久化�
 - 生成内容折叠条（ArtifactFloatPanel）
 - StudioActionModal
 
-#### `web/src/components/notebook/NotebookWorkspace.tsx`
+#### `packages/web/src/components/notebook/NotebookWorkspace.tsx`
 
 - 移除 `onNoteApply` prop 传入
 - 移除 `handleNoteApply` callback

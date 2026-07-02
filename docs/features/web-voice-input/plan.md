@@ -36,11 +36,11 @@ POST /api/transcribe  (multipart/form-data)
 
 ### 前端
 
-#### `web/src/api.ts`
+#### `packages/web/src/api.ts`
 
 新增 `transcribeAudio(blob: Blob, filename?: string): Promise<string>`，调用 `POST /api/transcribe`。
 
-#### `web/src/components/ChatArea.tsx`
+#### `packages/web/src/components/ChatArea.tsx`
 
 `ChatInput` 组件内新增：
 
@@ -54,7 +54,7 @@ POST /api/transcribe  (multipart/form-data)
 - 输入区底部新增状态条：录音中（含计时、取消）/ 转写中 / 错误提示
 - 最大录音 90 秒，超时自动停止
 
-#### `web/src/i18n/locales/en.ts` / `zh.ts`
+#### `packages/web/src/i18n/locales/en.ts` / `zh.ts`
 
 新增 `voiceInput`, `voiceRecording`, `voiceTranscribing`, `voiceCancel`, `voiceStop`, `voiceErrorNoSupport`, `voiceErrorPermission`, `voiceErrorInsecure`, `voiceErrorNoProvider`, `voiceErrorTooLong`, `voiceErrorGeneric` 共 11 个 key。
 
@@ -82,7 +82,7 @@ POST /api/transcribe  (multipart/form-data)
 ## 验证记录
 
 - `npm run build`：通过（后端 tsc）
-- `npm --prefix web run build`：通过（前端 vite build）
+- `npm --workspace neo-web run build`：通过（前端 vite build）
 - `npm run docs:check`：通过
 
 ## 待办 / 已知限制

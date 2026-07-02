@@ -5,7 +5,7 @@
 2. 产品文档只是线索，以当前代码行为为准
 3. 变更保持聚焦，不做无关重构
 4. 用户可见行为变化必须同步更新对应的 user-guide/README/CHANGELOG
-5. 完成前必须运行验证（npm run build / npm test / npm --prefix web run build）
+5. 完成前必须运行验证（npm run build / npm test / npm --workspace neo-web run build）
 6. 不要提交 git commit 除非用户要求
 
 ## 任务分级

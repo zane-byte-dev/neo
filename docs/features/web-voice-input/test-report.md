@@ -32,7 +32,7 @@ npm run build
 ### 2. 前端 Vite 构建
 
 ```
-npm --prefix web run build
+npm --workspace neo-web run build
 ```
 
 结果：通过，无构建错误。

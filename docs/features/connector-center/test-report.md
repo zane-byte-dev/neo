@@ -11,7 +11,7 @@ Frontend UI is deferred to slice 2.
 ```bash
 npm run build          # tsc — clean, no type errors
 npx vitest run src/mcp # 18 tests passed (4 files)
-npm --prefix web run build  # clean for connector files (pre-existing MermaidBlock mermaid-types error is unrelated)
+npm --workspace neo-web run build  # clean for connector files (pre-existing MermaidBlock mermaid-types error is unrelated)
 ```
 
 ## Automated Tests
@@ -45,9 +45,9 @@ All 18 MCP tests pass; full `tsc` build is clean.
 
 ## Frontend (slice 2)
 
-- `web/src/components/SettingsPanel.tsx` MCP tab: template picker (Manual / Filesystem / GitHub / Custom stdio), draft + per-server connection test with structured status badges, per-tool enable/disable toggles.
-- `web/src/api.ts`: `mcpTemplates` / `mcpTestDraft` / `mcpTestServer` / `mcpToggleTool`; `mcpList` returns `disabledTools`.
-- `npm --prefix web run build` is clean for these files (only a pre-existing `MermaidBlock.tsx` mermaid-types error remains, unrelated).
+- `packages/web/src/components/SettingsPanel.tsx` MCP tab: template picker (Manual / Filesystem / GitHub / Custom stdio), draft + per-server connection test with structured status badges, per-tool enable/disable toggles.
+- `packages/web/src/api.ts`: `mcpTemplates` / `mcpTestDraft` / `mcpTestServer` / `mcpToggleTool`; `mcpList` returns `disabledTools`.
+- `npm --workspace neo-web run build` is clean for these files (only a pre-existing `MermaidBlock.tsx` mermaid-types error remains, unrelated).
 
 ## Not Covered (follow-up)
 

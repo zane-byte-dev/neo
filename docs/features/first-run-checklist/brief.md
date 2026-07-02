@@ -16,8 +16,8 @@ Neo 已经具备 Chat、Notebook、Skills、Tools、MCP、Automations、Apps、T
 
 本 Brief 不直接把 2026-05-10 的体验报告当作事实结论，而是用当前代码做了二次核验：
 
-- `web/src/components/WelcomeScreen.tsx` 当前只实现了三个欢迎快捷卡片：文件整理、内容创作、文档处理；未发现 onboarding checklist、进度状态或关闭入口。
-- `web/src/components/ChatArea.tsx` 在 `chatMessages.length === 0` 时渲染 `WelcomeScreen`，没有额外的新手任务模块。
+- `packages/web/src/components/WelcomeScreen.tsx` 当前只实现了三个欢迎快捷卡片：文件整理、内容创作、文档处理；未发现 onboarding checklist、进度状态或关闭入口。
+- `packages/web/src/components/ChatArea.tsx` 在 `chatMessages.length === 0` 时渲染 `WelcomeScreen`，没有额外的新手任务模块。
 - 代码搜索未发现 `first-run`、`onboarding`、`checklist`、`首次使用` 等实现关键词。
 - `src/routes/preferences.ts` 和 `src/services/user-prefs.ts` 当前偏好字段主要覆盖模型偏好和 Telegram 开关；若要把 checklist 关闭状态存入用户偏好，需要扩展偏好 schema。
 - 当前共享浏览器页面的 Vite WebSocket 显示 `ERR_CONNECTION_REFUSED`，说明实时开发服务可能未运行；因此本次 UI 核验主要依据源码，而非完整实时交互。

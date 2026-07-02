@@ -23,7 +23,7 @@
       ],
       "ignoreFiles": ["src/config.local.example.ts"]
     },
-    "web": {
+    "packages/web": {
       "project": ["src/**/*.{ts,tsx}"]
     }
   }

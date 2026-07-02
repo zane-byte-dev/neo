@@ -278,7 +278,7 @@ searchKnowledge({
 2. 直接返回 `char_start / char_end`
 3. LLM 回复后的 citation 绑定到 chunk 级别，而不是只到 source 级别
 
-这样 [web/src/components/notebook/NotebookWorkspace.tsx](../../../web/src/components/notebook/NotebookWorkspace.tsx) 后续就能更稳定地滚动到命中位置。
+这样 [packages/web/src/components/notebook/NotebookWorkspace.tsx](../../../packages/web/src/components/notebook/NotebookWorkspace.tsx) 后续就能更稳定地滚动到命中位置。
 
 ### 8.2 Memory recall
 

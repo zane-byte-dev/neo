@@ -37,7 +37,7 @@ Still out of scope for this slice:
 
 ### Settings IA
 
-`web/src/components/SettingsPanel.tsx` owns the top-level settings routes.
+`packages/web/src/components/SettingsPanel.tsx` owns the top-level settings routes.
 
 The implemented route set is:
 
@@ -84,7 +84,7 @@ Implemented initial coverage:
 
 Automated coverage for Web components is not currently configured in this repo. Phase 1 verification used:
 
-- `npm --prefix web run build`: passed.
+- `npm --workspace neo-web run build`: passed.
 - `npm run docs:check`: passed.
 - Browser smoke check on `/settings`, `/settings/models`, and `/settings/automations`: passed for rendering and error recovery states.
 

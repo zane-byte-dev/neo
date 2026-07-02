@@ -56,7 +56,7 @@ npm run docs:check
 已执行：
 
 ```bash
-npm --prefix web run build
+npm --workspace neo-web run build
 ```
 
 结果：通过。Vite 输出了既有 chunk size / Rollup PURE annotation 警告，不影响构建结果。

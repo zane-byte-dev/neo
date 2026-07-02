@@ -16,8 +16,8 @@ Storage decision: `disabledTools` is stored as a top-level map in `{workDir}/mcp
 
 Frontend (slice 2):
 
-- `web/src/components/SettingsPanel.tsx` (MCP tab) — template picker (Manual / Filesystem / GitHub / Custom stdio) that renders template fields, a **Test connection** action for both draft configs and saved servers showing the structured status code + tool count, and per-tool enable/disable toggles backed by `disabledTools`.
-- `web/src/api.ts` — `mcpTemplates()`, `mcpTestDraft()`, `mcpTestServer()`, `mcpToggleTool()`; `mcpList()` now returns `disabledTools`.
+- `packages/web/src/components/SettingsPanel.tsx` (MCP tab) — template picker (Manual / Filesystem / GitHub / Custom stdio) that renders template fields, a **Test connection** action for both draft configs and saved servers showing the structured status code + tool count, and per-tool enable/disable toggles backed by `disabledTools`.
+- `packages/web/src/api.ts` — `mcpTemplates()`, `mcpTestDraft()`, `mcpTestServer()`, `mcpToggleTool()`; `mcpList()` now returns `disabledTools`.
 - `POST /api/mcp/test` echoes the resolved config so the UI can save a template-expanded server without re-implementing expansion client-side.
 
 Deferred:
@@ -89,11 +89,11 @@ Compatibility:
 
 Suggested files:
 
-- `web/src/components/ConnectorCenter.tsx`
-- `web/src/components/ConnectorTemplateForm.tsx`
-- `web/src/lib/connectorTemplates.ts`
-- `web/src/api.ts`
-- `web/src/components/SettingsPanel.tsx`
+- `packages/web/src/components/ConnectorCenter.tsx`
+- `packages/web/src/components/ConnectorTemplateForm.tsx`
+- `packages/web/src/lib/connectorTemplates.ts`
+- `packages/web/src/api.ts`
+- `packages/web/src/components/SettingsPanel.tsx`
 
 UI steps:
 
@@ -141,7 +141,7 @@ Validation commands:
 
 ```bash
 npm run build
-npm --prefix web run build
+npm --workspace neo-web run build
 npm run docs:check
 ```
 

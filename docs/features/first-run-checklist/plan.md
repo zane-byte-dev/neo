@@ -8,11 +8,11 @@ Goal: add a lightweight, dismissible onboarding checklist to the empty Chat welc
 
 ## Current System
 
-- `web/src/components/WelcomeScreen.tsx` renders the empty-chat welcome state and three quick-start cards.
-- `web/src/components/ChatArea.tsx` renders `WelcomeScreen` whenever `chatMessages.length === 0`.
-- `web/src/api.ts` already exposes `fetchModels()`, `notebookListNotebooks()`, and `notebookList()`.
-- `web/src/stores/useAppStore.ts` uses Zustand persist for selected UI state.
-- `web/src/i18n/locales/en.ts` and `zh.ts` define shared translation keys.
+- `packages/web/src/components/WelcomeScreen.tsx` renders the empty-chat welcome state and three quick-start cards.
+- `packages/web/src/components/ChatArea.tsx` renders `WelcomeScreen` whenever `chatMessages.length === 0`.
+- `packages/web/src/api.ts` already exposes `fetchModels()`, `notebookListNotebooks()`, and `notebookList()`.
+- `packages/web/src/stores/useAppStore.ts` uses Zustand persist for selected UI state.
+- `packages/web/src/i18n/locales/en.ts` and `zh.ts` define shared translation keys.
 
 ## Target Design
 
@@ -50,12 +50,12 @@ Out of scope:
 
 ## Files To Change
 
-- `web/src/types/index.ts`
-- `web/src/stores/slices/uiSlice.ts`
-- `web/src/stores/useAppStore.ts`
-- `web/src/components/WelcomeScreen.tsx`
-- `web/src/i18n/locales/en.ts`
-- `web/src/i18n/locales/zh.ts`
+- `packages/web/src/types/index.ts`
+- `packages/web/src/stores/slices/uiSlice.ts`
+- `packages/web/src/stores/useAppStore.ts`
+- `packages/web/src/components/WelcomeScreen.tsx`
+- `packages/web/src/i18n/locales/en.ts`
+- `packages/web/src/i18n/locales/zh.ts`
 - `docs/README.md`
 
 ## Data Model / API / UI Changes
@@ -87,7 +87,7 @@ UI actions:
 ## Test Plan
 
 - Run `npm run docs:check` for documentation links.
-- Run `npm --prefix web run build` for TypeScript and Vite build verification.
+- Run `npm --workspace neo-web run build` for TypeScript and Vite build verification.
 - Manual smoke checks once dev server is available:
   - Empty Chat shows checklist.
   - Dismiss hides checklist after refresh.

@@ -19,26 +19,26 @@ Neo 当前已经在文章阅读体验上做了一轮“编辑器优先”重构�
 
 ### 1. 摘要已经进入正文，说明文章内呈现是被验证过的方向
 
-- `web/src/components/NoteEditor.tsx` 当前已经内置 `summaryState`、`handleGenerateSummary()` 和摘要卡片状态，摘要直接显示在文章标题下方。
+- `packages/web/src/components/NoteEditor.tsx` 当前已经内置 `summaryState`、`handleGenerateSummary()` 和摘要卡片状态，摘要直接显示在文章标题下方。
 - 这说明团队已经接受一个关键判断：与文章理解强相关的信息，应该优先在正文中出现，而不是继续藏在侧边抽屉里。
 
 ### 2. 笔记入口仍然在资源面板里，不在正文阅读流中
 
-- `web/src/components/notebook/ResourcesPanel.tsx` 当前通过“添加笔记”按钮跳转到 `NotesTab`。
-- `web/src/components/notebook/studio/NotesTab.tsx` 当前主要是“新建独立笔记 / 编辑笔记 / 合并 / 大纲 / 反馈 / 学习指南”。
+- `packages/web/src/components/notebook/ResourcesPanel.tsx` 当前通过“添加笔记”按钮跳转到 `NotesTab`。
+- `packages/web/src/components/notebook/studio/NotesTab.tsx` 当前主要是“新建独立笔记 / 编辑笔记 / 合并 / 大纲 / 反馈 / 学习指南”。
 
 结论：当前笔记系统更像“附属卡片集合”，不是“对这篇文章某一段内容的批注”。
 
 ### 3. 当前笔记数据模型没有正文锚点
 
-- `web/src/types/index.ts` 里的 `NotebookNote` 当前只有 `id / title / content / source / createdAt / updatedAt`。
+- `packages/web/src/types/index.ts` 里的 `NotebookNote` 当前只有 `id / title / content / source / createdAt / updatedAt`。
 - `src/services/notebook-service.ts` 中的 `NotebookNote` 也仅围绕独立 markdown 文件保存，没有 `articleId`、`paragraphId`、`quote`、`anchor`、`resolved` 等字段。
 
 结论：从数据层看，当前系统存的是“独立笔记文档”，不是“正文内批注”。
 
 ### 4. 编辑器已经有高亮能力，但高亮还不是批注系统
 
-- `web/src/components/NovelEditor.tsx` 当前的气泡菜单里已支持 `toggleHighlight()`。
+- `packages/web/src/components/NovelEditor.tsx` 当前的气泡菜单里已支持 `toggleHighlight()`。
 - 但这只是编辑器格式能力，尚未与笔记实体、评论内容、跳转定位或批注列表关联。
 
 结论：前端交互并非从零开始，但缺少一层“持久化批注模型”。

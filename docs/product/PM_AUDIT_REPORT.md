@@ -18,14 +18,14 @@ Neo 是一款「本地运行、自主规划、安全可控的 AI 工作搭子」
 
 | # | 严重级别 | 模块 | 问题描述 | 代码定位 | 状态 |
 |---|--------|------|---------|---------|------|
-| B1 | 🔴 高 | 设置-使用记录 | `timeAgo()` 函数输出硬编码英文（"2h ago", "5d ago"），中文模式下显示混乱 | `web/src/components/ModelPanel.tsx:61-67` | ✅ 已修复：改用 `t('timeAgoHours')` 等 i18n key |
-| B2 | 🔴 高 | 国际化 | `ToolApprovalsModal` 使用 `t('toolApprovalsSubtitle')` key，但 `en.ts`/`zh.ts` 均未定义，会直接渲染 key 名 | `web/src/components/ChatArea.tsx` + `web/src/i18n/locales/en.ts` | ✅ 已修复：`toolApprovalsSubtitle` 已加入两个 locale 文件 |
-| B3 | 🟡 中 | 聊天输入 | 附件按钮 `title="添加附件"` 硬编码中文，切英文界面后依然显示中文 | `web/src/components/ChatArea.tsx:ChatInput` | ✅ 已修复：改用 `t('addAttachment')` |
-| B4 | 🟡 中 | 聊天输入 | 安全确认 toggle 文案 `'安全确认：开/关'` 硬编码中文，未使用 `t()` | `web/src/components/ChatArea.tsx:ChatInput` | ✅ 已修复：改用 `t('safeConfirmOn')` / `t('safeConfirmOff')` |
-| B5 | 🟡 中 | 导出功能 | 「导出 Markdown」只导出 `msg.content`，工具调用记录、思考内容（thinking）全部丢失，导出文件信息量不完整 | `web/src/components/ChatArea.tsx:exportChatAsMarkdown` | ✅ 已修复：`exportChatAsMarkdown` 现已导出 thinking、tool_call、tool_result |
-| B6 | 🟡 中 | 笔记本侧边栏 | 添加笔记本输入框触发 `onBlur` 即取消，点击输入框外部（如误触）会导致创建流程被中断且无任何提示 | `web/src/components/Sidebar.tsx` | ✅ 已修复：非空名称 blur 时直接提交，Escape 才取消 |
-| B7 | 🟢 低 | 笔记本 | 无日期的笔记渲染时日期列空白，布局有轻微错位 | `web/src/components/NotebookPanel.tsx` | ✅ 已修复：无日期 / 来源时不渲染空元信息行 |
-| B8 | 🟢 低 | 设置 | 设置页用 hash 而非路由（`#skills` / `#apps`），浏览器后退按钮无法精确回到对应 tab | `web/src/components/SettingsPanel.tsx` | ✅ 已修复：改用 `useNavigate('/settings/:tab')` 路由导航 |
+| B1 | 🔴 高 | 设置-使用记录 | `timeAgo()` 函数输出硬编码英文（"2h ago", "5d ago"），中文模式下显示混乱 | `packages/web/src/components/ModelPanel.tsx:61-67` | ✅ 已修复：改用 `t('timeAgoHours')` 等 i18n key |
+| B2 | 🔴 高 | 国际化 | `ToolApprovalsModal` 使用 `t('toolApprovalsSubtitle')` key，但 `en.ts`/`zh.ts` 均未定义，会直接渲染 key 名 | `packages/web/src/components/ChatArea.tsx` + `packages/web/src/i18n/locales/en.ts` | ✅ 已修复：`toolApprovalsSubtitle` 已加入两个 locale 文件 |
+| B3 | 🟡 中 | 聊天输入 | 附件按钮 `title="添加附件"` 硬编码中文，切英文界面后依然显示中文 | `packages/web/src/components/ChatArea.tsx:ChatInput` | ✅ 已修复：改用 `t('addAttachment')` |
+| B4 | 🟡 中 | 聊天输入 | 安全确认 toggle 文案 `'安全确认：开/关'` 硬编码中文，未使用 `t()` | `packages/web/src/components/ChatArea.tsx:ChatInput` | ✅ 已修复：改用 `t('safeConfirmOn')` / `t('safeConfirmOff')` |
+| B5 | 🟡 中 | 导出功能 | 「导出 Markdown」只导出 `msg.content`，工具调用记录、思考内容（thinking）全部丢失，导出文件信息量不完整 | `packages/web/src/components/ChatArea.tsx:exportChatAsMarkdown` | ✅ 已修复：`exportChatAsMarkdown` 现已导出 thinking、tool_call、tool_result |
+| B6 | 🟡 中 | 笔记本侧边栏 | 添加笔记本输入框触发 `onBlur` 即取消，点击输入框外部（如误触）会导致创建流程被中断且无任何提示 | `packages/web/src/components/Sidebar.tsx` | ✅ 已修复：非空名称 blur 时直接提交，Escape 才取消 |
+| B7 | 🟢 低 | 笔记本 | 无日期的笔记渲染时日期列空白，布局有轻微错位 | `packages/web/src/components/NotebookPanel.tsx` | ✅ 已修复：无日期 / 来源时不渲染空元信息行 |
+| B8 | 🟢 低 | 设置 | 设置页用 hash 而非路由（`#skills` / `#apps`），浏览器后退按钮无法精确回到对应 tab | `packages/web/src/components/SettingsPanel.tsx` | ✅ 已修复：改用 `useNavigate('/settings/:tab')` 路由导航 |
 
 ---
 

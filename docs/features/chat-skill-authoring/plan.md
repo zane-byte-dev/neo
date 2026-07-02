@@ -9,7 +9,7 @@ Goal: let the Agent turn the current conversation into a reusable Skill without 
 ## Current System
 
 - [src/routes/skills.ts](../../../packages/app/src/routes/skills.ts) already exposes REST CRUD for per-user Skills.
-- [web/src/components/SkillsPanel.tsx](../../../web/src/components/SkillsPanel.tsx) already uses those routes in Settings / Skills.
+- [packages/web/src/components/SkillsPanel.tsx](../../../packages/web/src/components/SkillsPanel.tsx) already uses those routes in Settings / Skills.
 - [src/tools/executor.ts](../../../packages/agent/src/tools/executor.ts) intentionally restricts generic file tools to `workDir`.
 - [src/skills/skill-registry.ts](../../../packages/agent/src/skills/skill-registry.ts) loads enabled Skills from `{stateDir}/skills/` into the current user context.
 
