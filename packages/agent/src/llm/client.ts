@@ -265,6 +265,15 @@ export class LLMClient {
                 stopWhen: stepCountIs(MAX_TOOL_ITERATIONS),
                 abortSignal: streamSignal,
                 temperature: 0.7,
+                // Route SDK stream errors to our logger instead of the SDK's
+                // default `console.error(error)`, which dumps a full stack trace
+                // to the terminal. The error is still surfaced to the user via
+                // the 'error' part in fullStream below.
+                onError: ({ error }: { error: unknown }) => {
+                    log.debug('AgentRuntime', 'stream onError', {
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                },
             };
 
             const result = useMessages

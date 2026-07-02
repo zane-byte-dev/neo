@@ -28,6 +28,8 @@ npm run dev:bot              # 后端 HTTP 服务，监听 :3000
 npm run web:dev              # 另开终端，前端开发服务器 :5173
 ```
 
+> 想要「像 Claude Code 那样」在终端里直接跟 Neo 多轮对话？运行 `npm run repl`：常驻交互式会话，流式输出、内置工具调用与危险操作确认，支持 `/new`、`/model`、`/session`、`/help`、`/exit` 等斜杠命令，Ctrl+C 取消当前回合、Ctrl+D 退出。单次命令仍可用 `npm run cli -- <message>`。
+
 打开 http://localhost:5173，首次进入 **Settings / Basic / Overview** 查看系统状态；如果 Models 显示未就绪，配置 `DEEPSEEK_API_KEY` 后即可开始对话。空 Chat 欢迎页现在会显示“开始使用 Neo”清单，引导你完成模型配置、第一条消息和第一条 Notebook 笔记。生产部署见下文「生产部署」一节，常见问题见 [docs/user-guide/FAQ.md](docs/user-guide/FAQ.md)。如果你想在这个仓库里用 GitHub Copilot 跑一轮文档驱动的 AI 开发流程，直接看 [docs/user-guide/AI_DEVELOPMENT.md](docs/user-guide/AI_DEVELOPMENT.md)。
 
 > 想贡献代码？请阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
