@@ -43,6 +43,7 @@
         "prerepl": "npm run build:runtime",
         "repl": "tsx packages/app/src/repl.ts",
         "start:repl": "node packages/app/dist/repl.js",
+        "tui:demo": "tsx packages/app/src/tui-diff-demo.ts",
         "predev:bot": "npm run build:runtime",
         "dev:bot": "tsx packages/app/src/main.ts",
         "start:bot": "node packages/app/dist/main.js",

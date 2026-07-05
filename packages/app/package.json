@@ -13,7 +13,9 @@
         "start": "node dist/main.js"
     },
     "dependencies": {
+        "@earendil-works/pi-tui": "^0.80.3",
         "@neo/agent": "*",
-        "@neo/runtime": "*"
+        "@neo/runtime": "*",
+        "diff": "^9.0.0"
     }
 }
