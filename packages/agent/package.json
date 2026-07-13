@@ -1,7 +1,7 @@
 {
     "name": "@neo/agent",
     "version": "0.1.0",
-    "description": "Neo agent core: LLM client, tools, skills, memory, profiles, and executor.",
+    "description": "Neo file-backed user, session, and Notebook data adapters.",
     "type": "module",
     "private": true,
     "main": "./dist/index.js",
@@ -27,8 +27,5 @@
     "scripts": {
         "build": "tsc -p tsconfig.json",
         "clean": "rm -rf dist"
-    },
-    "dependencies": {
-        "@neo/runtime": "*"
     }
 }

@@ -1,5 +1,7 @@
 # Neo 文档深度体验报告
 
+> 历史资料：本文审查的是 2026-05 的旧 Neo agent runtime。当前 Pi / ATM 架构请以根目录 `PLAN.md`、Neo `README.md` 和 `docs/user-guide/AGENT_RUNTIME.md` 为准。
+
 **审查人角色：** 资深文档工作者（技术写作 + 产品体验双视角）  
 **体验日期：** 2026-05-10  
 **体验范围：** README.md / README.en.md / docs/ 全部文件 / CONTRIBUTING.md / SECURITY.md / examples/workspace / 源码结构  

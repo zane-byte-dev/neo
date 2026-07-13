@@ -10,6 +10,7 @@ import {
     nbDeleteArtifact,
     nbListNotes,
     nbSaveNote,
+    nbSaveArtifact,
     type ArtifactType,
 } from '@neo/agent/services/notebook-service.js';
 import {
@@ -22,6 +23,8 @@ import {
     type NoteQuickAction,
 } from '../services/notebook-ai.js';
 import { calcUser } from '@neo/agent/services/user-service.js';
+import { promises as fs } from 'node:fs';
+import { isPiRpcChatEnabled, runPiContentSkill } from '../services/pi-chat.js';
 
 function extractModel(body: Record<string, unknown>): string | undefined {
     return typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
@@ -107,7 +110,28 @@ export function notebookGenerateArtifact(router: Router): void {
                 const subtype = (typeof body.subtype === 'string' ? body.subtype : 'briefing') as ReportType;
                 const customPrompt = typeof body.customPrompt === 'string' ? body.customPrompt : undefined;
                 const title = typeof body.title === 'string' ? body.title : undefined;
-                artifact = await generateReport(workDir, notebook, subtype, { sourceIds, customPrompt, title, model: extractModel(body), primaryArticleId }, stateDir);
+                if (isPiRpcChatEnabled(body.runtime)) {
+                    const saved = await runPiContentSkill({
+                        stateDir,
+                        workspaceRoot: workDir,
+                        sessionId: `studio:${notebook}:report`,
+                        skill: 'notebook-report',
+                        model: extractModel(body),
+                        request: `为 Notebook“${notebook}”生成 ${subtype} 报告。${title ? `标题偏好：${title}。` : ''}${customPrompt ? `补充要求：${customPrompt}` : ''}${sourceIds?.length ? `优先使用来源 ID：${sourceIds.join(', ')}。` : ''}`,
+                    });
+                    const markdown = stripAtmArtifactFrontmatter(await fs.readFile(saved.path, 'utf8'));
+                    artifact = nbSaveArtifact(workDir, notebook, {
+                        id: saved.metadata.id,
+                        type: 'report',
+                        subtype,
+                        title: saved.metadata.title,
+                        data: { markdown, artifactPath: saved.path },
+                        sourceIds,
+                        primaryArticleId,
+                    }, stateDir);
+                } else {
+                    artifact = await generateReport(workDir, notebook, subtype, { sourceIds, customPrompt, title, model: extractModel(body), primaryArticleId }, stateDir);
+                }
             } else if (type === 'audio') {
                 const customPrompt = typeof body.customPrompt === 'string' ? body.customPrompt : undefined;
                 const audioMode = body.audioMode === 'single' || body.audioMode === 'dialogue'
@@ -123,6 +147,12 @@ export function notebookGenerateArtifact(router: Router): void {
             ctx.body = { error: err instanceof Error ? err.message : String(err) };
         }
     });
+}
+
+function stripAtmArtifactFrontmatter(markdown: string): string {
+    if (!markdown.startsWith('---\n')) return markdown;
+    const end = markdown.indexOf('\n---\n', 4);
+    return end >= 0 ? markdown.slice(end + 5).trimStart() : markdown;
 }
 
 // ── DELETE /api/notebook/artifact — Delete artifact ─────────────────────────
@@ -158,7 +188,12 @@ export function notebookNoteQuickAction(router: Router): void {
         if (!selected.length) { ctx.status = 404; ctx.body = { error: 'No matching notes' }; return; }
 
         try {
-            const result = await runNoteQuickAction(action, selected.map(n => ({ title: n.title, content: n.content })), extractModel(body));
+            const result = await runNoteQuickAction(
+                action,
+                selected.map(n => ({ title: n.title, content: n.content })),
+                extractModel(body),
+                { workDir, stateDir, sessionId: `studio:${notebook}:note:${action}` },
+            );
             const saved = nbSaveNote(workDir, notebook, {
                 title: `${action} · ${new Date().toLocaleString('zh-CN')}`,
                 content: result,

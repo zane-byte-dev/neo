@@ -5,8 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { log } from '../utils/logger.js';
 
 const TEMPLATE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../../examples/workspace');
-const STATE_SUBDIRS = ['skills', 'tools'];
-
 export async function ensureUserWorkspaceInitialized(workDir: string, stateDir: string): Promise<void> {
     await mkdir(workDir, { recursive: true });
     await mkdir(stateDir, { recursive: true });
@@ -14,18 +12,10 @@ export async function ensureUserWorkspaceInitialized(workDir: string, stateDir: 
     const createdWorkspaceEntries: string[] = [];
     await copyMissingTree(TEMPLATE_DIR, workDir, workDir, createdWorkspaceEntries);
 
-    const createdStateDirs: string[] = [];
-    for (const name of STATE_SUBDIRS) {
-        const targetDir = join(stateDir, name);
-        const existed = await pathExists(targetDir);
-        await mkdir(targetDir, { recursive: true });
-        if (!existed) createdStateDirs.push(name);
-    }
-
-    if (createdWorkspaceEntries.length || createdStateDirs.length) {
+    if (createdWorkspaceEntries.length) {
         log.info(
             'UserWorkspace',
-            `Bootstrapped user workspace (${createdWorkspaceEntries.length} template entries, ${createdStateDirs.length} state dirs): ${workDir}`,
+            `Bootstrapped user workspace (${createdWorkspaceEntries.length} template entries): ${workDir}`,
         );
     }
 }

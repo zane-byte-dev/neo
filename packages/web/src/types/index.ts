@@ -95,77 +95,53 @@ export interface NoteEntry {
     content?: string
 }
 
-// ── Cron ─────────────────────────────────────────────────────────────────────
+// ── ATM automation ──────────────────────────────────────────────────────────
 
-export interface CronJobInfo {
-    name: string
-    schedule: string
-    description: string | null
-    enabled: number          // 0 | 1
-    updated_at: number
-    last_status: string | null
-    last_started_at: number | null
-    last_finished_at: number | null
-    last_duration_ms: number | null
-    last_error: string | null
-    last_summary: string | null
-}
-
-// ── Workflows ────────────────────────────────────────────────────────────────
-
-export type WorkflowTrigger =
-    | { type: 'manual' }
-    | { type: 'webhook'; secret?: string }
-    | { type: 'cron'; cron: string; timezone?: string; enabled?: boolean }
-
-export type WorkflowStep =
-    | { id: string; name?: string; type: 'transform'; template: string }
-    | { id: string; name?: string; type: 'agent'; message: string }
-    | { id: string; name?: string; type: 'skill'; skillName: string; args?: Record<string, unknown> }
-
-export interface WorkflowRunInfo {
-    id: string
-    workflowId: string
-    workflowName: string
-    triggerType: WorkflowTrigger['type']
-    status: 'running' | 'success' | 'error'
-    startedAt: string
-    finishedAt?: string
-    durationMs?: number
-    input?: unknown
-    output?: unknown
-    error?: string
-    steps: Array<{
-        id: string
-        name?: string
-        type: WorkflowStep['type']
-        status: 'running' | 'success' | 'error'
-        startedAt: string
-        finishedAt?: string
-        durationMs?: number
-        output?: unknown
-        error?: string
-    }>
-}
-
-export interface WorkflowDefinition {
+export interface AtmSchedule {
+    schemaVersion: 1
     id: string
     name: string
-    description?: string
     enabled: boolean
-    trigger: WorkflowTrigger
-    steps: WorkflowStep[]
+    trigger: {
+        type: 'manual' | 'cron' | 'webhook'
+        cron?: string
+        timezone?: string
+        /** Write-only in ATM HTTP responses. */
+        webhookSecret?: string
+    }
+    task: {
+        message: string
+        workDir: string
+        model?: string
+        skill?: string
+        tools?: string[]
+    }
+    policy?: {
+        timeoutSeconds?: number
+        maxRetries?: number
+        retryBackoffSeconds?: number
+        concurrency?: 'forbid' | 'replace' | 'allow'
+        missedRun?: 'skip' | 'run_once'
+        notifyUrl?: string
+    }
     createdAt: string
     updatedAt: string
-    lastRun?: {
-        id: string
-        status: WorkflowRunInfo['status']
-        startedAt: string
-        finishedAt: string | null
-        durationMs: number | null
-        error: string | null
-        summary: string | null
-    } | null
+}
+
+export interface AtmRun {
+    schemaVersion: 1
+    id: string
+    scheduleId: string
+    trigger: string
+    scheduledFor: string
+    status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out'
+    attempt: number
+    queuedAt: string
+    startedAt?: string
+    finishedAt?: string
+    piSessionId?: string
+    piSessionFile?: string
+    error?: string
 }
 
 export interface AppState {

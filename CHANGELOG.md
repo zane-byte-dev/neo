@@ -8,11 +8,11 @@ The format follows Keep a Changelog, and this project uses semantic versioning w
 
 ### Added
 
-- **终端交互式 REPL（`npm run repl`）**：新增类似 Claude Code 的常驻终端对话入口 [packages/app/src/repl.ts](packages/app/src/repl.ts)（核心逻辑 [packages/app/src/cli/repl.ts](packages/app/src/cli/repl.ts)，依赖注入、可单测）。复用 `@neo/runtime` 直接进程内跑 Agent，无需 HTTP：多轮持续会话、流式输出、工具调用展示、危险工具的交互式 y/N 确认；支持 `/help`、`/new`、`/model [id]`、`/session`、`/clear`、`/exit` 斜杠命令，Ctrl+C 取消当前回合（空闲时退出）、Ctrl+D 退出。可用 `--user` / `--model` 指定用户与模型。为保持终端可读，REPL 默认把应用日志静音（等价 `LOG_LEVEL=critical`），只渲染对话；用 `LOG_LEVEL=debug`（或 `DEBUG_LLM=1`）可恢复完整日志。现有的一次性 `npm run cli -- <message>` 保持不变。
+- **终端交互式 REPL（历史）**：旧 Neo runtime 曾提供常驻终端入口；该入口已随 agent-core 退役，终端交互统一使用 pi。
 
 ### Fixed
 
-- **LLM 流式错误不再向终端/日志倾泻原始堆栈**：为 `streamText` 显式提供 `onError`，取代 AI SDK 默认的 `console.error(error)`（会打印整段 stack trace 与请求体）。真正的错误信息仍通过 `fullStream` 的 `error` part 走 `log.error` 并回传给用户，堆栈仅在 `LOG_LEVEL=debug` 时记录。详见 [packages/agent/src/llm/client.ts](packages/agent/src/llm/client.ts)。
+- **LLM 流式错误（历史）**：旧 AI SDK runtime 的错误处理已随 agent-core 退役；当前流式错误由 pi RPC bridge 映射。
 
 - **Connector Center 后端 MVP**：把 MCP server 管理升级为「连接器」模型。`Settings / Advanced / MCP Servers` 新增：基于模板创建连接器（`filesystem` / `github` / `custom-stdio`，敏感字段以 password 输入）、保存前 / 已保存 server 的**连通性测试**（展示结构化状态码与工具数量）、以及连接成功后按工具的启用 / 禁用开关。新增内置连接器模板与结构化连通性测试，把启动失败归一成可定位的状态码（`missing_secret` / `cwd_not_found` / `command_not_found` / `process_exited` / `timeout` / `invalid_rpc` / `no_tools` 等），并改进 `stdio-client` 让 spawn 失败（ENOENT）立即冒泡而非超时；工具开关在 `loader` 中**服务端强制生效**（`mcp.json` 顶层新增 `disabledTools` 字段，被禁用工具不会注册给 Agent）。新增路由 `GET /api/mcp/templates`、`POST /api/mcp/test`、`POST /api/mcp/:name/test`、`PATCH /api/mcp/:name/tools/:tool`。详见 [user-guide/MCP.md](docs/user-guide/MCP.md)。
 - **工具上下文懒加载 MVP**：默认对话不再把每个工具的完整说明注入模型，而是只给一句话用途摘要（参数 schema 保持完整，工具仍可直接调用）；新增 `search_tools` 工具，模型可按 `name` / `query` / `category` 按需展开某个工具的完整说明与参数 schema。新增统一工具元数据来源 `src/tools/tool-catalog.ts` 与精简目录渲染（`builtin-guide.ts` 的 `compact` 模式），并新增用户偏好 `toolContext: 'lazy' | 'full'`（默认 `lazy`，可切回 `full` 复现旧行为）。`search_tools` 在 plan / notebook 只读模式下不会暴露写 / 危险工具。详见 [user-guide/TOOLS.md](docs/user-guide/TOOLS.md)。

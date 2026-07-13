@@ -20,14 +20,13 @@ afterEach(() => {
 });
 
 describe('ensureUserWorkspaceInitialized', () => {
-    it('copies the example workspace and creates required state directories', async () => {
+    it('copies the example workspace and creates the state root', async () => {
         await ensureUserWorkspaceInitialized(workDir, stateDir);
 
         await expect(fs.readFile(join(workDir, 'AGENTS.md'), 'utf8')).resolves.toContain('# AGENTS');
         await expect(fs.readFile(join(workDir, 'USER.md'), 'utf8')).resolves.toContain('# USER');
         await expect(fs.readFile(join(workDir, 'notebooks', 'welcome.md'), 'utf8')).resolves.toContain('欢迎使用 Neo');
-        await expect(fs.stat(join(stateDir, 'skills'))).resolves.toBeDefined();
-        await expect(fs.stat(join(stateDir, 'tools'))).resolves.toBeDefined();
+        await expect(fs.stat(stateDir)).resolves.toBeDefined();
     });
 
     it('does not overwrite files that already exist in the workspace', async () => {

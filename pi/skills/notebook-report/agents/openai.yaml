@@ -1,0 +1,4 @@
+interface:
+  display_name: "Notebook Report"
+  short_description: "Generate cited reports from Notebook sources"
+  default_prompt: "Use $notebook-report to create a cited report from my selected Notebook sources."

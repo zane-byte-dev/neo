@@ -339,8 +339,6 @@ export function nbDelete(workDir: string, id: string): boolean {
     if (!safeWithin(workDir, filePath)) return false;
     if (!existsSync(filePath)) return false;
     unlinkSync(filePath);
-    const notebook = notebookFromEntryId(id);
-    if (notebook) scheduleNotebookSourceRemoval(workDir, notebook, sourceIdFromEntryId(id));
     return true;
 }
 
@@ -437,106 +435,29 @@ function safeFilename(name: string): string {
     return name.replace(/[<>:"/\\|?*\n\r]/g, '').replace(/\s+/g, '_').slice(0, 100);
 }
 
-function notebookFromEntryId(id: string): string {
-    const parts = id.split('/');
-    if (parts[0] === 'notebooks') return parts[1] ?? '';
-    return parts[0] ?? '';
-}
-
-const _pendingNotebookIndexTasks = new Set<Promise<void>>();
-
-function trackNotebookIndexTask(task: Promise<void>): void {
-    _pendingNotebookIndexTasks.add(task);
-    void task.finally(() => {
-        _pendingNotebookIndexTasks.delete(task);
-    });
-}
-
 export async function waitForNotebookIndexIdle(): Promise<void> {
-    if (_pendingNotebookIndexTasks.size === 0) return;
-    await Promise.allSettled([..._pendingNotebookIndexTasks]);
+    // Compatibility shim for callers written before the SQLite knowledge
+    // index was retired. Markdown is now the only Notebook fact source.
 }
 
-function scheduleNotebookSourceIndexFromEntryId(workDir: string, entryId: string): void {
-    const notebook = notebookFromEntryId(entryId);
-    if (!notebook) return;
-
-    const task = import('../indexing/writers.js')
-        .then(({ upsertNotebookSourceIndex }) => {
-            const entry = nbGet(workDir, entryId);
-            if (!entry?.content) return;
-            upsertNotebookSourceIndex(workDir, {
-                notebook,
-                entryId,
-                title: entry.title,
-                source: entry.source,
-                summary: entry.summary,
-                tagsJson: entry.tags,
-                content: entry.content,
-            });
-        })
-        .catch((err) => {
-            log.warn('NotebookIndex', 'Failed to index notebook source', {
-                entryId,
-                error: err instanceof Error ? err.message : String(err),
-            });
-        });
-    trackNotebookIndexTask(task);
+function scheduleNotebookSourceIndexFromEntryId(_workDir: string, _entryId: string): void {
+    // No-op: ATM searches workspace Markdown directly.
 }
 
-function scheduleNotebookSourceRemoval(workDir: string, notebook: string, sourceId: string): void {
-    const task = import('../indexing/writers.js')
-        .then(({ removeNotebookSourceIndex }) => {
-            removeNotebookSourceIndex(workDir, notebook, sourceId);
-        })
-        .catch((err) => {
-            log.warn('NotebookIndex', 'Failed to remove notebook source index', {
-                notebook,
-                sourceId,
-                error: err instanceof Error ? err.message : String(err),
-            });
-        });
-    trackNotebookIndexTask(task);
+function scheduleNotebookSourceRemoval(_workDir: string, _notebook: string, _sourceId: string): void {
+    // No-op: ATM searches workspace Markdown directly.
 }
 
 function scheduleNotebookNoteUpsert(
-    workDir: string,
-    notebook: string,
-    note: { id: string; title: string; content: string; createdAt: number; updatedAt: number },
+    _workDir: string,
+    _notebook: string,
+    _note: { id: string; title: string; content: string; createdAt: number; updatedAt: number },
 ): void {
-    const task = import('../indexing/writers.js')
-        .then(({ upsertNotebookNoteIndex }) => {
-            upsertNotebookNoteIndex(workDir, {
-                notebook,
-                noteId: note.id,
-                title: note.title,
-                content: note.content,
-                createdAt: note.createdAt,
-                updatedAt: note.updatedAt,
-            });
-        })
-        .catch((err) => {
-            log.warn('NotebookIndex', 'Failed to index notebook notes', {
-                notebook,
-                error: err instanceof Error ? err.message : String(err),
-            });
-        });
-    trackNotebookIndexTask(task);
+    // No-op: ATM searches workspace Markdown directly.
 }
 
-function scheduleNotebookNoteRemoval(workDir: string, notebook: string, noteId: string): void {
-    const task = import('../indexing/writers.js')
-        .then(({ removeNotebookNoteIndex }) => {
-            removeNotebookNoteIndex(workDir, notebook, noteId);
-        })
-        .catch((err) => {
-            log.warn('NotebookIndex', 'Failed to remove notebook note index', {
-                notebook,
-                noteId,
-                error: err instanceof Error ? err.message : String(err),
-            });
-        });
-    trackNotebookIndexTask(task);
+function scheduleNotebookNoteRemoval(_workDir: string, _notebook: string, _noteId: string): void {
+    // No-op: ATM searches workspace Markdown directly.
 }
 
 function inferSourceType(source: string | null | undefined): SourceMeta['type'] {

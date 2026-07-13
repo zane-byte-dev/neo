@@ -1,0 +1,4 @@
+interface:
+  display_name: "Article Draft"
+  short_description: "Draft sourced articles for editing and publishing"
+  default_prompt: "Use $article-draft to turn my topic and sources into an editable article."

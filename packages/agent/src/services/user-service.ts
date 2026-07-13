@@ -6,15 +6,8 @@
  */
 import { UserProfileManager } from './user-profile.js';
 import { loadUserPreferences, type UserPreferences } from './user-prefs.js';
-import { hasApiTokenSync, matchesApiTokenSync } from './api-auth.js';
-import { loadUserSkills } from '../skills/skill-registry.js';
-import { loadUserTools } from '../tools/user-tools/loader.js';
-import { loadMcpTools } from '../mcp/loader.js';
-import { buildTenantSystemInstruction } from '../llm/client.js';
 import { ensureUserWorkspaceInitialized } from './workspace-bootstrap.js';
 import type { UserId } from '../types/platform.js';
-import type { SkillRegistry } from '../skills/skill-registry.js';
-import type { Tool } from '../llm/types.js';
 import { log } from '../utils/logger.js';
 
 export interface UserRow {
@@ -91,34 +84,14 @@ export function userGetByWebToken(token: string): UserRow | null {
     return toUserRow(u);
 }
 
-export function hasApiTokenConfigured(): boolean {
-    return _readConfigUsers().some((u) => hasApiTokenSync(u));
-}
-
-export function userGetByApiToken(token: string): UserRow | null {
-    if (!token) return null;
-    for (const user of _readConfigUsers()) {
-        if (matchesApiTokenSync(user, token)) {
-            return toUserRow(user);
-        }
-    }
-    return null;
-}
-
 export interface UserContext {
     userId: UserId;
     /** Per-user workspace root directory (absolute path). */
     workDir: string;
     /** Per-user runtime/state directory (absolute path). */
     stateDir: string;
-    /** Per-user system instruction (loaded from workspace config/) */
-    systemInstruction: string;
     /** File-based user profile manager */
     userProfile: UserProfileManager;
-    /** Per-user skill registry, populated from stateDir/skills/ */
-    skillRegistry: SkillRegistry;
-    /** Per-user tools loaded from stateDir/tools/ */
-    userTools: Map<string, Tool>;
     /** Per-user runtime preferences (default model, enabled models, …) */
     preferences: UserPreferences;
 }
@@ -157,19 +130,7 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
 
     await ensureUserWorkspaceInitialized(workDir, stateDir);
 
-    const [systemInstruction, skillRegistry, userTools, mcpTools, preferences] = await Promise.all([
-        buildTenantSystemInstruction(workDir),
-        loadUserSkills(stateDir, userId),
-        loadUserTools(stateDir),
-        loadMcpTools(workDir),
-        loadUserPreferences(stateDir),
-    ]);
-
-    // Merge MCP tools into userTools (later tools win on name clash, but the
-    // mcp__ prefix makes collisions extremely unlikely).
-    for (const [name, tool] of mcpTools) {
-        userTools.set(name, tool);
-    }
+    const preferences = await loadUserPreferences(stateDir);
 
     const userProfile = new UserProfileManager(workDir);
     await userProfile.init();
@@ -178,10 +139,7 @@ export async function calcUser(userId: UserId, force = false): Promise<UserConte
         userId,
         workDir,
         stateDir,
-        systemInstruction,
         userProfile,
-        skillRegistry,
-        userTools,
         preferences,
     };
     _contextCache.set(userId, ctx);

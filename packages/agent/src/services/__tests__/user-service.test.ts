@@ -1,7 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import {
     userList,
     userGetByTenant,
@@ -9,8 +6,6 @@ import {
     userGetWorkDir,
     userGetWorkspaceDir,
     userGetStateDir,
-    hasApiTokenConfigured,
-    userGetByApiToken,
     getWebhookSecret,
 } from '../user-service.js';
 
@@ -20,7 +15,6 @@ const SAMPLE = [
         name: 'Alice',
         tenants: ['tg:111'],
         webToken: 'tok-alice',
-        apiToken: 'gw-alice',
         webhookSecret: 'whk-alice',
         workDir: '/tmp/alice/proj',
         stateDir: '/tmp/alice/state',
@@ -34,18 +28,14 @@ const SAMPLE = [
 ];
 
 let prevUsers: string | undefined;
-let tempDirs: string[];
-
 beforeEach(() => {
     prevUsers = process.env.USERS;
-    tempDirs = [];
     process.env.USERS = JSON.stringify(SAMPLE);
 });
 
 afterEach(() => {
     if (prevUsers === undefined) delete process.env.USERS;
     else process.env.USERS = prevUsers;
-    for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
 });
 
 describe('userList', () => {
@@ -84,23 +74,6 @@ describe('userGetByWebToken', () => {
     });
     it('returns null on miss', () => {
         expect(userGetByWebToken('nope')).toBeNull();
-    });
-});
-
-describe('API token helpers', () => {
-    it('detects configured API tokens', () => {
-        expect(hasApiTokenConfigured()).toBe(true);
-    });
-
-    it('matches API token with timing-safe lookup', () => {
-        expect(userGetByApiToken('gw-alice')?.id).toBe('alice');
-        expect(userGetByApiToken('wrong')).toBeNull();
-    });
-
-    it('reports not configured when no user has apiToken', () => {
-        process.env.USERS = JSON.stringify([{ id: 'u1', name: 'User', workDir: '/tmp' }]);
-        expect(hasApiTokenConfigured()).toBe(false);
-        expect(userGetByApiToken('any')).toBeNull();
     });
 });
 

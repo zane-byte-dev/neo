@@ -503,72 +503,6 @@ export async function fetchToolResult(resultId: string): Promise<{ id: string; t
     return apiGet(`/api/tool-result/${encodeURIComponent(resultId)}`)
 }
 
-// ── Skills API ────────────────────────────────────────────────────────────────
-
-export interface SkillSummary {
-    name: string
-    description: string
-    tags: string[]
-    version: string | null
-    enabled: boolean
-    hasExecutable: boolean
-    filePath: string
-}
-
-export interface SkillDetail extends SkillSummary {
-    body: string
-    executableBlocks: Array<{ lang: string; code: string }>
-    rawContent: string
-}
-
-export interface SkillsResponse {
-    skills: SkillSummary[]
-}
-
-export function fetchSkills(): Promise<SkillsResponse> {
-    return apiGet<SkillsResponse>('/api/skills')
-}
-
-export function fetchSkill(name: string): Promise<SkillDetail> {
-    return apiGet<SkillDetail>(`/api/skills/${encodeURIComponent(name)}`)
-}
-
-export async function createSkill(rawContent: string): Promise<{ ok: boolean; name: string }> {
-    const res = await _post('/api/skills', { rawContent })
-    return _jsonOrThrow(res)
-}
-
-export async function toggleSkill(name: string, enabled: boolean): Promise<{ ok: boolean; name: string; enabled: boolean }> {
-    const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-    })
-    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
-    return _jsonOrThrow(res)
-}
-
-export async function updateSkill(name: string, rawContent: string): Promise<{ ok: boolean; name: string }> {
-    const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawContent }),
-    })
-    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
-    return _jsonOrThrow(res)
-}
-
-export async function deleteSkill(name: string): Promise<{ ok: boolean }> {
-    const res = await fetch(`/api/skills/${encodeURIComponent(name)}`, {
-        method: 'DELETE',
-        credentials: 'include',
-    })
-    if (res.status === 401) throw Object.assign(new Error('Unauthorized'), { status: 401 })
-    return _jsonOrThrow(res)
-}
-
 // ── User Apps API ─────────────────────────────────────────────────────────────
 
 export interface UserAppInfo {
@@ -987,143 +921,45 @@ export function emptyTrash() {
     }).then((r) => _jsonOrThrow<{ ok: boolean; count: number }>(r))
 }
 
-// ── Cron API ──────────────────────────────────────────────────────────────────
+// ── ATM automation API ───────────────────────────────────────────────────────
 
-import type { CronJobInfo, WorkflowDefinition, WorkflowRunInfo } from './types'
+import type { AtmRun, AtmSchedule } from './types'
 
-export function cronList() {
-    return apiGet<CronJobInfo[]>('/api/crons')
+export function atmHealth() {
+    return apiGet<{ ok: boolean; apiVersion: number }>('/api/atm/health')
 }
 
-export interface McpServerConfig {
-    command: string
-    args?: string[]
-    env?: Record<string, string>
-    cwd?: string
+export function atmScheduleList() {
+    return apiGet<AtmSchedule[]>('/api/atm/schedules')
 }
 
-export interface ConnectorTemplateField {
-    key: string
-    label: string
-    placeholder?: string
-    required: boolean
-    secret: boolean
-}
-
-export interface ConnectorTemplateSummary {
-    id: string
-    label: string
-    description: string
-    fields: ConnectorTemplateField[]
-}
-
-export type McpConnectionCode =
-    | 'ok'
-    | 'missing_secret'
-    | 'cwd_not_found'
-    | 'command_not_found'
-    | 'process_exited'
-    | 'timeout'
-    | 'invalid_rpc'
-    | 'no_tools'
-    | 'unknown'
-
-export interface McpConnectionResult {
-    ok: boolean
-    code: McpConnectionCode
-    message: string
-    toolCount?: number
-    tools?: Array<{ name: string; description?: string }>
-    /** Present on draft template tests — the resolved server config to save. */
-    config?: McpServerConfig
-}
-
-export function mcpList() {
-    return apiGet<{ servers: Record<string, McpServerConfig>; disabledTools: Record<string, string[]> }>('/api/mcp')
-}
-
-export function mcpTemplates() {
-    return apiGet<{ templates: ConnectorTemplateSummary[] }>('/api/mcp/templates')
-}
-
-export function mcpTestDraft(body: McpServerConfig | { templateId: string; inputs: Record<string, string> }) {
-    return _post('/api/mcp/test', body).then((r) => _jsonOrThrow<McpConnectionResult>(r))
-}
-
-export function mcpTestServer(name: string) {
-    return _post(`/api/mcp/${encodeURIComponent(name)}/test`).then((r) => _jsonOrThrow<McpConnectionResult>(r))
-}
-
-export function mcpToggleTool(name: string, tool: string, enabled: boolean) {
-    return fetch(`/api/mcp/${encodeURIComponent(name)}/tools/${encodeURIComponent(tool)}`, {
-        method: 'PATCH',
+export function atmScheduleSave(schedule: AtmSchedule) {
+    const path = schedule.createdAt
+        ? `/api/atm/schedules/${encodeURIComponent(schedule.id)}`
+        : '/api/atm/schedules'
+    return fetch(path, {
+        method: schedule.createdAt ? 'PUT' : 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-    }).then((r) => _jsonOrThrow<{ ok: true; name: string; tool: string; enabled: boolean }>(r))
+        body: JSON.stringify(schedule),
+    }).then((response) => _jsonOrThrow<AtmSchedule>(response))
 }
 
-export function mcpSave(name: string, server: McpServerConfig) {
-    return fetch(`/api/mcp/${encodeURIComponent(name)}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(server),
-    }).then((r) => _jsonOrThrow<{ ok: true; name: string; server: McpServerConfig }>(r))
-}
-
-export function mcpDelete(name: string) {
-    return fetch(`/api/mcp/${encodeURIComponent(name)}`, {
+export function atmScheduleDelete(id: string) {
+    return fetch(`/api/atm/schedules/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         credentials: 'include',
-    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+    }).then((response) => _jsonOrThrow<{ deleted: string }>(response))
 }
 
-export function cronSave(name: string, job: { cron: string; message: string; enabled: boolean; timezone?: string }) {
-    return fetch(`/api/crons/${encodeURIComponent(name)}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(job),
-    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
+export function atmScheduleRun(id: string) {
+    return _post(`/api/atm/schedules/${encodeURIComponent(id)}/run`).then((response) => _jsonOrThrow<AtmRun>(response))
 }
 
-export function cronDelete(name: string) {
-    return fetch(`/api/crons/${encodeURIComponent(name)}`, {
-        method: 'DELETE',
-        credentials: 'include',
-    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
-}
-
-// ── Workflow API ─────────────────────────────────────────────────────────────
-
-export function workflowList() {
-    return apiGet<{ workflows: WorkflowDefinition[] }>('/api/workflows')
-}
-
-export function workflowSave(id: string, workflow: Omit<WorkflowDefinition, 'id' | 'createdAt' | 'updatedAt' | 'lastRun'> & Partial<Pick<WorkflowDefinition, 'id'>>) {
-    return fetch(`/api/workflows/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(workflow),
-    }).then((r) => _jsonOrThrow<{ ok: true; workflow: WorkflowDefinition }>(r))
-}
-
-export function workflowDelete(id: string) {
-    return fetch(`/api/workflows/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        credentials: 'include',
-    }).then((r) => _jsonOrThrow<{ ok: true }>(r))
-}
-
-export function workflowRun(id: string, input: unknown = {}) {
-    return fetch(`/api/workflows/${encodeURIComponent(id)}/run`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input }),
-    }).then((r) => _jsonOrThrow<{ ok: boolean; run: WorkflowRunInfo }>(r))
+export function atmRunList(scheduleId = '', limit = 50) {
+    const query = new URLSearchParams({ limit: String(limit) })
+    if (scheduleId) query.set('scheduleId', scheduleId)
+    return apiGet<AtmRun[]>(`/api/atm/runs?${query.toString()}`)
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -1183,4 +1019,3 @@ export async function initializeWorkspace(): Promise<MeInfo & { ok: boolean }> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
 }
-

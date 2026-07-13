@@ -1,14 +1,10 @@
-import { promises as fs } from 'node:fs';
-import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import type Router from '@koa/router';
 import { calcUser } from '@neo/agent/services/user-service.js';
-import { neoAgentRuntime } from '../app/agent-runtime.js';
-import { startRunEventSseBridge } from '../app/run-event-sse.js';
 import { sessionGet, sessionGetByNotebook, sessionCreate, sessionPatch } from '@neo/agent/services/chat-service.js';
 import { MAX_INPUT_LENGTH } from '@neo/agent/config.js';
 import { createSSEResponse } from '../utils/sse.js';
-import { createConfirm } from '../utils/pending-confirm.js';
-import { newRunId, pruneTextChunkEventsSafe } from '@neo/runtime';
+import { runPiChat } from '../services/pi-chat.js';
 
 export function chatRoute(router: Router): void {
     router.post('/api/chat', async (ctx) => {
@@ -26,7 +22,6 @@ export function chatRoute(router: Router): void {
             ? (body.documents as unknown[]).filter((v): v is { filename: string; text: string } =>
                 typeof v === 'object' && v !== null && typeof (v as Record<string, unknown>).filename === 'string' && typeof (v as Record<string, unknown>).text === 'string')
             : undefined;
-        const confirmDangerous = body.confirmDangerous === true;
         if (!message && (!images || images.length === 0) && (!documents || documents.length === 0)) {
             ctx.status = 400;
             ctx.body = { error: 'message, images, or documents required' };
@@ -86,64 +81,36 @@ export function chatRoute(router: Router): void {
                     : docContext;
             }
 
+            if (notebookId) {
+                const selectedSourceIds = rawSourceIds ?? (await sessionGet(sessionId, userId))?.source_ids ?? [];
+                effectiveMessage = `[Neo Notebook Context]
+Notebook: ${notebookId}
+Selected source IDs: ${selectedSourceIds.length > 0 ? selectedSourceIds.join(', ') : '(all sources)'}
+Use knowledge_search and knowledge_get to ground the answer in workspace Markdown. The search results include citation labels such as 【1】; cite factual claims with those labels. Use artifact_save only when the user asks for a durable report/article/artifact.
+[/Neo Notebook Context]
+
+${effectiveMessage}`;
+            }
+
             // Pre-allocate a runId so the client receives it on the
             // first SSE frame and can later subscribe to events / cancel
             // the run via the /api/runs API.
-            const runId = newRunId();
+            const runId = `run_${Date.now()}_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
             // Notify client of the (possibly auto-resolved notebook) session id.
             if (notebookId) sse.send({ type: 'session', sessionId });
             sse.send({ type: 'run', runId });
 
-            const bridge = startRunEventSseBridge({
-                stateDir,
-                runId,
-                send: sse.send,
-                signal: sse.signal,
-            });
-
-            await neoAgentRuntime.startRun({
+            await runPiChat({
                 userId,
+                stateDir,
+                workspaceRoot: userCtx.workDir,
                 sessionId,
                 runId,
-                entrypoint: 'web-chat',
-                triggerType: 'user_message',
                 message: effectiveMessage,
                 model,
-                images: images?.length ? images : undefined,
-                confirmCallback: confirmDangerous
-                    ? async ({ toolName, args }) => {
-                        const { confirmId, promise } = createConfirm(userId, {
-                            runId,
-                            workDir: stateDir,
-                            request: { toolName, args },
-                        });
-                        return promise;
-                    }
-                    : undefined,
-                onImage: async (data, mimeType, caption) => {
-                    const ext = mimeType.includes('png') ? 'png' : 'jpg';
-                    const filename = `gen_${Date.now()}.${ext}`;
-                    const dir = join(stateDir, 'projects', sessionId);
-                    await fs.mkdir(dir, { recursive: true });
-                    await fs.writeFile(join(dir, filename), Buffer.from(data, 'base64'));
-                    const url = `/api/assets/${sessionId}/${filename}`;
-                    return {
-                        path: filename,
-                        url,
-                        mimeType,
-                        ...(caption ? { title: caption } : {}),
-                    };
-                },
-                onVideo: async (url) => ({ url }),
+                signal: sse.signal,
+                send: sse.send,
             });
-
-            await bridge.waitForTerminal();
-            // Bridge has finished; it's now safe to prune high-volume
-            // text/thought streaming events that are no longer needed.
-            await pruneTextChunkEventsSafe(stateDir, runId);
-            if (!bridge.terminalSent && !sse.signal.aborted) {
-                sse.send({ type: 'done' });
-            }
         } catch (err: unknown) {
             if (!(err instanceof Error && err.name === 'AbortError')) {
                 const text = err instanceof Error ? err.message : String(err);

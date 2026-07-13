@@ -7,8 +7,6 @@
  */
 
 import { loadOrBootstrapHomeConfig, printBootstrapBanner } from './services/bootstrap-config.js';
-import type { AgentProfile, EntrypointProfileBindings } from './agent/profiles/types.js';
-export { AVAILABLE_MODEL_ALIASES, MODEL_ALIASES } from './llm/model-registry.js';
 
 // ── Local config (gitignored) ────────────────────────────────────────────────
 
@@ -17,6 +15,7 @@ export interface ConfigUser {
     name: string;
     tenants?: string[];
     webToken?: string | null;
+    /** @deprecated Neo's local model gateway was retired; this value is ignored. */
     apiToken?: string | null;
     webhookSecret?: string;
     workDir?: string;
@@ -26,10 +25,6 @@ export interface ConfigUser {
 export interface LocalConfig {
     USERS?: ConfigUser[];
     SESSION_SECRET?: string;
-    /** Optional declarative agent profiles (override built-ins by id). */
-    PROFILES?: AgentProfile[];
-    /** Optional per-entrypoint default profile bindings. */
-    ENTRYPOINT_PROFILES?: EntrypointProfileBindings;
 }
 
 let localConfig: LocalConfig = {};
@@ -54,11 +49,6 @@ if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
     }
 }
 
-function envInt(key: string, fallback: number): number {
-    const v = process.env[key];
-    return v ? parseInt(v, 10) : fallback;
-}
-
 // ── Users ────────────────────────────────────────────────────────────────────
 
 export function getUsersConfig(): ConfigUser[] {
@@ -73,31 +63,6 @@ export function getUsersConfig(): ConfigUser[] {
     return [];
 }
 
-/** Optional declarative agent profiles from config (absent → built-ins only). */
-export function getProfilesConfig(): AgentProfile[] {
-    const raw = process.env.PROFILES;
-    if (raw) {
-        try {
-            const parsed = JSON.parse(raw) as unknown;
-            if (Array.isArray(parsed)) return parsed as AgentProfile[];
-        } catch { /* fall through to local config */ }
-    }
-    if (Array.isArray(localConfig.PROFILES)) return localConfig.PROFILES;
-    return [];
-}
-
-/** Optional per-entrypoint profile bindings from config (absent → default). */
-export function getEntrypointProfiles(): EntrypointProfileBindings {
-    const raw = process.env.ENTRYPOINT_PROFILES;
-    if (raw) {
-        try {
-            const parsed = JSON.parse(raw) as unknown;
-            if (parsed && typeof parsed === 'object') return parsed as EntrypointProfileBindings;
-        } catch { /* fall through to local config */ }
-    }
-    return localConfig.ENTRYPOINT_PROFILES ?? {};
-}
-
 if (!process.env.NEO_STATE_DIR) {
     const defaultStateDir = getUsersConfig().find((user) => typeof user.stateDir === 'string' && user.stateDir.trim())?.stateDir?.trim();
     if (defaultStateDir) process.env.NEO_STATE_DIR = defaultStateDir;
@@ -105,35 +70,7 @@ if (!process.env.NEO_STATE_DIR) {
 
 // ── Runtime accessors for credentials (read from process.env) ─
 
-export const getDeepseekApiKey = (): string => process.env.DEEPSEEK_API_KEY ?? '';
-
 export const getGeminiApiKey   = (): string => process.env.GEMINI_API_KEY ?? '';
-
-/** Maximum agentic tool-call iterations before forcing stop */
-export const MAX_TOOL_ITERATIONS = 25;
-
-/** Maximum tool-call iterations for subagent tasks */
-export const MAX_SUBAGENT_STEPS = 10;
-
-/** First-chunk timeout for streaming LLM requests (ms). */
-export const STREAM_FIRST_CHUNK_TIMEOUT_MS = envInt('STREAM_FIRST_CHUNK_TIMEOUT_MS', 90_000);
-/** Total timeout for non-streaming LLM requests (ms). */
-export const GENERATE_TIMEOUT_MS = envInt('GENERATE_TIMEOUT_MS', 120_000);
-
-/** Read-file content cap to prevent context flooding (chars) */
-export const READ_FILE_CHAR_LIMIT = 50_000;
-
-// ── Security ─────────────────────────────────────────────────────────────────
-
-export const DANGEROUS_PATTERNS = [
-    /\brm\s+(?:-[rf]*\s+)*\/\s*(?:[^/]|$)/,
-    /\brm\s+(?:-[rf]*\s+)*\/[a-z]/,
-    /\bdd\b/,
-    /\bchmod\s+(?:000|777)/,
-    /\bmkfs/,
-    /\b(?:sudo|su)\b/,
-    />\s*\/dev\/(?:sd[a-z]\d*|hd[a-z]\d*|vd[a-z]\d*|xvd[a-z]\d*|nvme\d+n\d+(?:p\d+)?|disk\d+|rdisk\d+|loop\d+)\b/,
-];
 
 /** Maximum character length for user text inputs (notes, todos, messages). */
 export const MAX_INPUT_LENGTH = 50_000;

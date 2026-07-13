@@ -1,0 +1,4 @@
+interface:
+  display_name: "News Brief"
+  short_description: "Create concise sourced intelligence briefs"
+  default_prompt: "Use $news-brief to summarize the latest selected sources into a concise brief."

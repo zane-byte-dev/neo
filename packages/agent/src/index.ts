@@ -1,9 +1,7 @@
 /**
- * @neo/agent — Core agent package.
+ * @neo/agent — Legacy package name for Neo's file-backed data adapters.
  *
- * Re-exports the primary public surface. App code that needs deeper access
- * can use subpath imports: `import { … } from '@neo/agent/llm/types.js'`.
+ * Agent execution belongs to pi; this package contains no model/tool loop.
  */
 
 export * from './config.js';
-export * from './llm/types.js';

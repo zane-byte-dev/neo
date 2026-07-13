@@ -9,6 +9,7 @@
     ],
     "exclude": [
         "dist",
+        "src/pi/extensions",
         "src/**/__tests__",
         "src/**/*.test.ts"
     ]

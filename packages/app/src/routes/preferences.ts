@@ -9,25 +9,33 @@
 import type Router from '@koa/router';
 import { calcUser, invalidateUserCache } from '@neo/agent/services/user-service.js';
 import { saveUserPreferences, type UserPreferences } from '@neo/agent/services/user-prefs.js';
-import { AVAILABLE_MODEL_ALIASES, isSelectableModelAlias } from '@neo/agent/llm/model-registry.js';
+
+const CONFIGURED_PI_MODELS = (process.env.NEO_PI_MODELS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+function isSelectablePiModel(model: string): boolean {
+    return CONFIGURED_PI_MODELS.length === 0 || CONFIGURED_PI_MODELS.includes(model);
+}
 
 export interface PreferencesRouteDeps {
     calcUser: typeof calcUser;
     invalidateUserCache: typeof invalidateUserCache;
     saveUserPreferences: typeof saveUserPreferences;
     availableModelAliases: readonly string[];
-    isSelectableModelAlias: typeof isSelectableModelAlias;
+    isSelectableModelAlias: (model: string) => boolean;
 }
 
 const defaultDeps: PreferencesRouteDeps = {
     calcUser,
     invalidateUserCache,
     saveUserPreferences,
-    availableModelAliases: AVAILABLE_MODEL_ALIASES,
-    isSelectableModelAlias,
+    availableModelAliases: CONFIGURED_PI_MODELS,
+    isSelectableModelAlias: isSelectablePiModel,
 };
 
-function sanitizeIncoming(body: unknown, isSelectable: typeof isSelectableModelAlias): UserPreferences {
+function sanitizeIncoming(body: unknown, isSelectable: (model: string) => boolean): UserPreferences {
     const out: UserPreferences = {};
     if (!body || typeof body !== 'object') return out;
     const b = body as Record<string, unknown>;

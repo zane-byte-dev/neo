@@ -9,7 +9,6 @@
 
 import { setupLogger } from '@neo/agent/utils/logger.js';
 import { CoreServer } from './server.js';
-import { startCronAgent, stopCronAgent } from './services/cron-agent.js';
 
 // Initialize Logger
 setupLogger();
@@ -19,12 +18,10 @@ setupLogger();
 
 const server = new CoreServer();
 await server.start();
-await startCronAgent();
 
 // ── Graceful shutdown ────────────────────────────────────────────────────────
 
 const shutdown = async () => {
-    stopCronAgent();
     await server.shutdown();
 };
 process.once('SIGINT', shutdown);

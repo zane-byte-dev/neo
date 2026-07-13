@@ -39,11 +39,7 @@ describe('calcUser workspace bootstrap', () => {
 
         expect(userCtx.workDir).toBe(workDir);
         expect(userCtx.stateDir).toBe(stateDir);
-        expect(userCtx.systemInstruction).toContain('# AGENTS');
-        expect(userCtx.systemInstruction).toContain('[用户档案]');
-
         await expect(fs.readFile(join(workDir, 'AGENTS.md'), 'utf8')).resolves.toContain('# AGENTS');
         await expect(fs.readFile(join(workDir, 'USER.md'), 'utf8')).resolves.toContain('# USER');
-        await expect(fs.stat(join(stateDir, 'skills'))).resolves.toBeDefined();
     });
 });

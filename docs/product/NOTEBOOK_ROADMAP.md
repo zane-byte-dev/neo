@@ -160,7 +160,7 @@
 
 - Google NotebookLM 产品文档：<https://notebooklm.google.com>
 - 现有代码锚点：
-  - 服务 / agent 层：[src/services/notebook-service.ts](../../packages/agent/src/services/notebook-service.ts)、[src/services/notebook-ai.ts](../../packages/app/src/services/notebook-ai.ts)、[src/services/agent-runner.ts](../../packages/agent/src/services/agent-runner.ts)
+  - 数据 / bridge 层：[src/services/notebook-service.ts](../../packages/agent/src/services/notebook-service.ts)、[src/services/notebook-ai.ts](../../packages/app/src/services/notebook-ai.ts)、[src/services/pi-chat.ts](../../packages/app/src/services/pi-chat.ts)
   - 路由：[src/routes/notebook.ts](../../packages/app/src/routes/notebook.ts)、[src/routes/chat.ts](../../packages/app/src/routes/chat.ts)
   - 前端入口：[packages/web/src/components/notebook/NotebookWorkspace.tsx](../../packages/web/src/components/notebook/NotebookWorkspace.tsx)
-  - 模型路由：[src/llm/model-router.ts](../../packages/agent/src/llm/model-router.ts)
+  - 模型选择：pi provider；ATX 可作为显式启用的 provider 插件

@@ -8,14 +8,9 @@
  *   - Report: FAQ / study-guide / briefing / timeline / outline / custom
  *   - Audio script: 2-speaker podcast-style dialogue
  *
- * All generations use non-streaming `LLMClient.generate()` and prefer the
- * configured DeepSeek model, falling back through the model router.
+ * All generations execute through the managed pi RPC bridge.
  */
 
-import { LLMClient } from '@neo/agent/llm/client.js';
-import {
-    getDeepseekApiKey,
-} from '@neo/agent/config.js';
 import {
     nbListSources,
     nbGetSourceEntry,
@@ -30,21 +25,22 @@ import {
     type NotebookEntry,
 } from '@neo/agent/services/notebook-service.js';
 import { parseJsonOr } from '@neo/agent/utils/json.js';
-
-const LAST_RESORT_MODEL = 'deepseek';
+import { runPiTextTask } from './pi-chat.js';
 
 const CTX_MAX = 60_000;
 const PER_SOURCE_SLICE = 8_000;
 const GENERATED_BLOCK_RE = /<details\b[^>]*data-neo-generated-block[^>]*>[\s\S]*?<\/details>/gi;
 
-let _client: LLMClient | null = null;
-function getClient(): LLMClient {
-    if (!_client) _client = new LLMClient();
-    return _client;
-}
+interface PiTaskContext { workDir: string; stateDir: string; sessionId: string }
 
-async function resolveNotebookModel(_model?: string): Promise<string> {
-    return getDeepseekApiKey() ? 'deepseek' : LAST_RESORT_MODEL;
+async function generateWithPi(prompt: string, model: string | undefined, context: PiTaskContext): Promise<string> {
+    return runPiTextTask({
+        stateDir: context.stateDir,
+        workspaceRoot: context.workDir,
+        sessionId: context.sessionId,
+        request: prompt,
+        model,
+    });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -211,9 +207,9 @@ function estimateAudioDurationSeconds(script: AudioSegment[]): number {
 export async function generateSourceGuide(
     entry: NotebookEntry,
     model?: string,
+    context?: PiTaskContext,
 ): Promise<SourceGuide> {
     const content = (entry.content ?? '').slice(0, CTX_MAX);
-    const resolvedModel = await resolveNotebookModel(model);
     const prompt = `你在分析一份用户导入的来源文档，请严格以 JSON 输出（不要任何额外说明文字、不要代码围栏）：
 
 {
@@ -229,10 +225,8 @@ export async function generateSourceGuide(
 ${content}
 """`;
 
-    const out = await getClient().generate(prompt, {
-        model: resolvedModel,
-        temperature: 0.3,
-    });
+    if (!context) throw new Error('pi task context required');
+    const out = await generateWithPi(prompt, model, context);
     const parsed = tryParseJson<{
         summary?: string;
         keyTopics?: string[];
@@ -256,7 +250,11 @@ export async function generateAndSaveSourceGuide(
     model?: string,
     stateDir = workDir,
 ): Promise<SourceGuide> {
-    const guide = await generateSourceGuide(entry, model);
+    const guide = await generateSourceGuide(entry, model, {
+        workDir,
+        stateDir,
+        sessionId: `studio:${notebook}:source-guide:${sourceIdFromEntryId(entry.id)}`,
+    });
     nbSaveSourceGuide(workDir, notebook, guide, stateDir);
     return guide;
 }
@@ -273,7 +271,6 @@ export async function generateNotebookOverview(
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     if (!sources.length) return '';
 
-    const resolvedModel = await resolveNotebookModel(model);
     const joined = joinSourcesForPrompt(sources);
     const prompt = `以下是笔记本【${notebook}】中的来源文档集合。请用中文生成一段综合性的笔记本概览（200-400 字），说明这些来源覆盖的主要议题、关联与脉络。
 
@@ -281,12 +278,11 @@ ${joined}
 
 请直接输出概览正文，不需要标题或格式化前缀。`;
 
-    const out = await getClient().generate(prompt, {
-        model: resolvedModel,
-        temperature: 0.4,
+    const overview = await generateWithPi(prompt, model, {
         workDir,
+        stateDir,
+        sessionId: `studio:${notebook}:overview`,
     });
-    const overview = (out ?? '').trim();
 
     // cache in notebook config
     const config = nbGetConfig(workDir, notebook, stateDir);
@@ -312,7 +308,6 @@ export async function generateMindMap(
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
-    const resolvedModel = await resolveNotebookModel(model);
 
     const prompt = `请基于以下来源文档生成一个思维导图。输出格式：纯 Markdown 标题层级（# / ## / ### / ####），不要代码围栏，不要额外说明。
 - 根节点用 # ，是笔记本/主题的标题
@@ -325,10 +320,10 @@ ${topic ? `- 重点围绕主题："${topic}"` : ''}
 来源内容：
 ${joined}`;
 
-    const out = await getClient().generate(prompt, {
-        model: resolvedModel,
-        temperature: 0.4,
+    const out = await generateWithPi(prompt, model, {
         workDir,
+        stateDir,
+        sessionId: `studio:${notebook}:mindmap`,
     });
 
     const fallbackTitle = topic?.trim() || notebook;
@@ -385,7 +380,6 @@ export async function generateReport(
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, options?.sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
-    const resolvedModel = await resolveNotebookModel(options?.model);
 
     const instruction = type === 'custom'
         ? (options?.customPrompt ?? '请基于来源生成一份结构化报告。')
@@ -401,10 +395,10 @@ export async function generateReport(
 来源内容：
 ${joined}`;
 
-    const out = await getClient().generate(prompt, {
-        model: resolvedModel,
-        temperature: 0.5,
+    const out = await generateWithPi(prompt, options?.model, {
         workDir,
+        stateDir,
+        sessionId: `studio:${notebook}:report:${type}`,
     });
     const markdown = stripGeneratedFence(out ?? '');
 
@@ -446,7 +440,6 @@ export async function generateAudioScript(
 ): Promise<Artifact> {
     const sources = loadSourceContents(workDir, notebook, sourceIds);
     const joined = sources.length ? joinSourcesForPrompt(sources) : '(无可用来源)';
-    const resolvedModel = await resolveNotebookModel(model);
     const audioMode = options?.audioMode === 'single' ? 'single' : 'dialogue';
 
     const prompt = audioMode === 'single'
@@ -489,10 +482,10 @@ ${options?.customPrompt ? `- 用户补充要求：${options.customPrompt}` : ''}
 来源内容：
 ${joined}`;
 
-    const out = await getClient().generate(prompt, {
-        model: resolvedModel,
-        temperature: 0.7,
+    const out = await generateWithPi(prompt, model, {
         workDir,
+        stateDir,
+        sessionId: `studio:${notebook}:audio`,
     });
 
     const parsed = tryParseJson<AudioSegment[]>(out ?? '');
@@ -524,9 +517,10 @@ export async function runNoteQuickAction(
     action: NoteQuickAction,
     notes: Array<{ title: string; content: string }>,
     model?: string,
+    context?: PiTaskContext,
 ): Promise<string> {
     if (!notes.length) return '';
-    const resolvedModel = await resolveNotebookModel(model);
+    if (!context) throw new Error('pi task context required');
     const joined = notes
         .map((n, i) => `[笔记 ${i + 1}: ${n.title}]\n${n.content}`)
         .join('\n\n---\n\n')
@@ -539,11 +533,7 @@ export async function runNoteQuickAction(
         'study-guide': `请基于以下笔记生成一份学习指南，包含核心概念、术语表、复习问题：\n\n${joined}`,
     };
 
-    const out = await getClient().generate(prompts[action], {
-        model: resolvedModel,
-        temperature: 0.5,
-    });
-    return (out ?? '').trim();
+    return generateWithPi(prompts[action], model, context);
 }
 
 // ── Source list helper (re-export for route convenience) ─────────────────────
