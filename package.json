@@ -43,8 +43,7 @@
         "pm2:status": "pm2 status",
         "web:dev": "npm --workspace neo-web run dev",
         "web:build": "npm --workspace neo-web run build",
-        "web:install": "npm install --workspace neo-web",
-        "spike:notebook-pi": "tsx packages/app/src/spikes/notebook-pi-spike.ts"
+        "web:install": "npm install --workspace neo-web"
     },
     "keywords": [
         "telegram",
@@ -56,7 +55,6 @@
     "author": "zane-byte-dev",
     "license": "MIT",
     "dependencies": {
-        "@google/genai": "^1.50.1",
         "@koa/bodyparser": "^6.1.0",
         "@koa/router": "^15.4.0",
         "koa": "^3.2.0",

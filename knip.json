@@ -1,30 +1,25 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreBinaries": ["pm2"],
-  "ignoreDependencies": ["@ai-sdk/openai"],
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      "entry": [
-        "src/main.ts",
-        "src/routes/**/*.ts",
-        "src/tools/**/*.ts",
-        "src/mcp/__tests__/fixtures/mock-server.mjs",
-        "ecosystem.config.cjs",
-        "extension/background.js",
-        "extension/content.js",
-        ".github/skills/**/*.mjs"
-      ],
-      "project": [
-        "src/**/*.ts",
-        "src/mcp/__tests__/fixtures/*.mjs",
-        "extension/**/*.js",
-        ".github/skills/**/*.mjs"
-      ],
-      "ignoreFiles": ["src/config.local.example.ts"]
+      "entry": ["ecosystem.config.cjs", "scripts/*.mjs"],
+      "project": ["scripts/**/*.mjs"]
+    },
+    "packages/agent": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/app": {
+      "entry": ["src/routes/**/*.ts", "src/pi/extensions/**/*.ts"],
+      "project": ["src/**/*.ts"]
     },
     "packages/web": {
       "project": ["src/**/*.{ts,tsx}"]
+    },
+    "extension": {
+      "entry": ["background.js", "content.js"],
+      "project": ["**/*.js"]
     }
   }
 }
