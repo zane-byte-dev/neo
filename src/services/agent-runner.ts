@@ -36,6 +36,7 @@ import {
     previewText,
     saveRunCheckpointSafe,
     startCancellationProbe,
+    truncateArgsForLog,
     updateRunStatusSafe,
 } from '../runtime/executor.js';
 import type {
@@ -412,7 +413,7 @@ async function executeRunLoop(prepared: PreparedTurnContext): Promise<string> {
             toolStarts.set(`${toolName ?? 'tool'}:${toolCallCount}`, Date.now());
             void appendRunEventSafe(stateDir, runId, 'tool_call_started', {
                 toolName: toolName ?? 'unknown',
-                ...(args !== undefined && { args: args as JsonObject }),
+                ...(args !== undefined && { args: truncateArgsForLog(args as JsonObject) }),
             });
         } else if (chunk.type === 'tool_result') {
             let startMs: number | undefined;

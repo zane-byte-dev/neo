@@ -226,6 +226,9 @@ export function chatRoute(router: Router): void {
 
         const sse = createSSEResponse(ctx);
 
+        // Hoist runId so the finally block can prune events even on failure.
+        let runId: string | undefined;
+
         try {
             // Build message with document context if present
             let effectiveMessage = message;
@@ -241,7 +244,7 @@ export function chatRoute(router: Router): void {
             // Pre-allocate a runId so the client receives it on the
             // first SSE frame and can later subscribe to events / cancel
             // the run via the /api/runs API.
-            const runId = newRunId();
+            runId = newRunId();
             // Notify client of the (possibly auto-resolved notebook) session id.
             if (notebookId) sse.send({ type: 'session', sessionId });
             sse.send({ type: 'run', runId });
@@ -296,9 +299,6 @@ export function chatRoute(router: Router): void {
             });
 
             await waitForBridgeTerminal(bridgePromise, sse.signal, bridgeState);
-            // Bridge has finished; it's now safe to prune high-volume
-            // text/thought streaming events that are no longer needed.
-            await pruneTextChunkEventsSafe(stateDir, runId);
             if (!bridgeState.terminalSent && !sse.signal.aborted) {
                 sse.send({ type: 'done' });
             }
@@ -310,6 +310,8 @@ export function chatRoute(router: Router): void {
                 }
             }
         } finally {
+            // Prune high-volume streaming events regardless of success or failure.
+            if (runId) await pruneTextChunkEventsSafe(stateDir, runId);
             sse.close();
         }
     });

@@ -15,7 +15,7 @@
  *   Stderr: coloured human-readable (levels >= LOG_LEVEL)
  */
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { inspect } from 'node:util';
@@ -179,4 +179,32 @@ export function setupLogger(): void {
         orig.error(prefix('ERROR'), ...args);
         toFile('ERROR', args);
     };
+
+    // Prune log files older than 30 days at startup (best-effort, sync).
+    pruneOldLogs();
+}
+
+/**
+ * Delete JSONL log files in the logs/ directory that are older than
+ * `maxAgeDays` days (default: 30).  Matches files of the form
+ * `YYYY-MM-DD.jsonl` and `token-usage-YYYY-MM.jsonl`.
+ */
+export function pruneOldLogs(maxAgeDays = 30): void {
+    try {
+        ensureLogDir();
+        const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+        for (const name of readdirSync(LOG_DIR)) {
+            // Daily log: YYYY-MM-DD.jsonl
+            let dateStr: string | undefined;
+            const daily = name.match(/^(\d{4}-\d{2}-\d{2})\.jsonl$/);
+            if (daily) dateStr = daily[1];
+            // Monthly token usage: token-usage-YYYY-MM.jsonl → treat as first of month
+            const monthly = name.match(/^token-usage-(\d{4}-\d{2})\.jsonl$/);
+            if (monthly) dateStr = `${monthly[1]}-01`;
+            if (!dateStr) continue;
+            if (Date.parse(dateStr) < cutoff) {
+                try { unlinkSync(join(LOG_DIR, name)); } catch { /* ignore */ }
+            }
+        }
+    } catch { /* never crash over log rotation */ }
 }

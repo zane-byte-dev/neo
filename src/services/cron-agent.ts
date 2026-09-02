@@ -75,8 +75,8 @@ export async function runScheduledTask(userId: string, task: ScheduledTask): Pro
     const history = stateDir ? await startCronRun(stateDir, task.id) : null;
     log.info(MODULE, 'Executing scheduled task', { userId, taskId: task.id, sessionId });
 
+    let runId: string | undefined;
     try {
-        let runId: string | undefined;
         const output = await runAgentTurn({
             userId,
             sessionId,
@@ -92,7 +92,6 @@ export async function runScheduledTask(userId: string, task: ScheduledTask): Pro
                 : undefined,
             onVideo: async (url) => ({ url }),
         });
-        if (stateDir && runId) await pruneTextChunkEventsSafe(stateDir, runId);
         const outcome = stateDir && runId
             ? await readRunOutcome(stateDir, runId, { fallbackText: output })
             : null;
@@ -114,6 +113,8 @@ export async function runScheduledTask(userId: string, task: ScheduledTask): Pro
         return stateDir && history
             ? finishCronRun(stateDir, history.id, { status: 'error', error: msg })
             : null;
+    } finally {
+        if (stateDir && runId) await pruneTextChunkEventsSafe(stateDir, runId);
     }
 }
 

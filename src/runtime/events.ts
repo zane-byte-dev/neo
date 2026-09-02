@@ -115,6 +115,10 @@ export async function lastEventIndex(workDir: string, runId: string): Promise<nu
  * streaming-only events account for the bulk of on-disk usage and are
  * not needed afterwards.
  *
+ * Also removes tool_call and tool_result llm_chunk events — the
+ * structured tool_call_started / tool_call_finished events already
+ * capture that information and are far more compact.
+ *
  * Uses atomic-replace so a crash mid-write never leaves a corrupt file.
  * Missing files are silently ignored.  Malformed lines are kept as-is.
  */
@@ -129,12 +133,12 @@ export async function pruneTextChunkEvents(workDir: string, runId: string): Prom
         if (!line) continue;
         try {
             const parsed = JSON.parse(line) as RunEvent;
-            if (
-                parsed.type === 'llm_chunk' &&
-                (parsed.payload.chunkType === 'text' || parsed.payload.chunkType === 'thought')
-            ) {
-                pruned += 1;
-                continue;
+            if (parsed.type === 'llm_chunk') {
+                const ct = parsed.payload.chunkType;
+                if (ct === 'text' || ct === 'thought' || ct === 'tool_call' || ct === 'tool_result') {
+                    pruned += 1;
+                    continue;
+                }
             }
         } catch {
             // Malformed line: keep it as-is.

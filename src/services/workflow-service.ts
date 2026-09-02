@@ -311,23 +311,27 @@ export async function runWorkflow(
             } else if (step.type === 'agent') {
                 const message = renderTemplate(step.message, variables);
                 let agentRunId: string | undefined;
-                const text = await runAgentTurn({
-                    userId,
-                    sessionId: `workflow-${workflow.id}-${run.id}-${step.id}`,
-                    message,
-                    entrypoint: 'workflow',
-                    triggerType: `workflow_${triggerType}`,
-                    metadata: { workflowId: workflow.id, workflowRunId: run.id, stepId: step.id },
-                    onRunCreated: (id) => { agentRunId = id; },
-                    onImage: async (data, mimeType, caption) => {
-                        if (!agentRunId) return undefined;
-                        return persistImageArtifact(userCtx.stateDir, agentRunId, data, mimeType, caption);
-                    },
-                    onVideo: async (url) => ({ url }),
-                });
-                if (agentRunId) await pruneTextChunkEventsSafe(userCtx.stateDir, agentRunId);
-                const outcome = agentRunId ? await readRunOutcome(userCtx.stateDir, agentRunId, { fallbackText: text }) : null;
-                output = outcome?.responseText ?? text;
+                let agentText: string;
+                try {
+                    agentText = await runAgentTurn({
+                        userId,
+                        sessionId: `workflow-${workflow.id}-${run.id}-${step.id}`,
+                        message,
+                        entrypoint: 'workflow',
+                        triggerType: `workflow_${triggerType}`,
+                        metadata: { workflowId: workflow.id, workflowRunId: run.id, stepId: step.id },
+                        onRunCreated: (id) => { agentRunId = id; },
+                        onImage: async (data, mimeType, caption) => {
+                            if (!agentRunId) return undefined;
+                            return persistImageArtifact(userCtx.stateDir, agentRunId, data, mimeType, caption);
+                        },
+                        onVideo: async (url) => ({ url }),
+                    });
+                } finally {
+                    if (agentRunId) await pruneTextChunkEventsSafe(userCtx.stateDir, agentRunId);
+                }
+                const outcome = agentRunId ? await readRunOutcome(userCtx.stateDir, agentRunId, { fallbackText: agentText! }) : null;
+                output = outcome?.responseText ?? agentText!;
             } else {
                 const skill = userCtx.skillRegistry.get(step.skillName);
                 if (!skill) throw new Error(`Skill "${step.skillName}" not found`);

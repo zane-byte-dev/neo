@@ -68,10 +68,11 @@ export function webhookRoute(router: Router): void {
 
         log.info(MODULE, 'Webhook received', { userId, sessionId, messageLen: message.length });
 
+        const userCtx = await calcUser(userId);
+        const stateDir = userCtx.stateDir ?? userCtx.workDir;
+        let runId: string | undefined;
+
         try {
-            const userCtx = await calcUser(userId);
-            const stateDir = userCtx.stateDir ?? userCtx.workDir;
-            let runId: string | undefined;
             const output = await runAgentTurn({
                 userId,
                 sessionId,
@@ -87,7 +88,6 @@ export function webhookRoute(router: Router): void {
                 },
                 onVideo: async (url) => ({ url }),
             });
-            if (stateDir && runId) await pruneTextChunkEventsSafe(stateDir, runId);
             const outcome = runId
                 ? await readRunOutcome(stateDir, runId, { fallbackText: output })
                 : null;
@@ -104,6 +104,8 @@ export function webhookRoute(router: Router): void {
             log.error(MODULE, 'Webhook turn failed', { userId, sessionId, error: msg });
             ctx.status = 500;
             ctx.body = { ok: false, error: msg };
+        } finally {
+            if (runId) await pruneTextChunkEventsSafe(stateDir, runId);
         }
     });
 }

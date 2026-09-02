@@ -185,6 +185,36 @@ export function previewText(text: string | undefined, maxLen = 200): string | un
     return `${head}…${tail}`;
 }
 
+/**
+ * Truncate large string values in a tool-call args object so that
+ * tool_call_started events stay compact.  Non-string scalar values are
+ * kept as-is.  String values longer than MAX_ARG_STR_LEN chars get a
+ * head+tail excerpt.  Object/array values whose JSON representation
+ * exceeds MAX_ARG_STR_LEN are replaced with a type-and-length hint.
+ */
+const MAX_ARG_STR_LEN = 400;
+export function truncateArgsForLog(args: JsonObject | undefined): JsonObject | undefined {
+    if (!args) return undefined;
+    const out: JsonObject = {};
+    for (const [k, v] of Object.entries(args)) {
+        if (typeof v === 'string' && v.length > MAX_ARG_STR_LEN) {
+            const head = v.slice(0, Math.floor(MAX_ARG_STR_LEN / 2));
+            const tail = v.slice(-Math.floor(MAX_ARG_STR_LEN / 4));
+            out[k] = `${head}…[${v.length} chars]…${tail}` as unknown as JsonObject[string];
+        } else if (v !== null && typeof v === 'object') {
+            const json = JSON.stringify(v);
+            if (json.length > MAX_ARG_STR_LEN) {
+                out[k] = `[${Array.isArray(v) ? 'Array' : 'Object'} ${json.length} chars]` as unknown as JsonObject[string];
+            } else {
+                out[k] = v;
+            }
+        } else {
+            out[k] = v;
+        }
+    }
+    return out;
+}
+
 export interface CancellationProbe {
     /** Returns true once a cancel-run signal has been recorded. */
     isCancelled(): boolean;

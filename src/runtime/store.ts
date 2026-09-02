@@ -13,7 +13,7 @@
  */
 
 import { existsSync, readdirSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { generateId } from '../utils/id-generator.js';
 import { runDir, runFilePath, runsRoot } from './paths.js';
@@ -156,6 +156,54 @@ const TERMINAL: ReadonlySet<RunStatus> = new Set([
 
 function _isTerminal(status: RunStatus): boolean {
     return TERMINAL.has(status);
+}
+
+/**
+ * Delete run directories that are older than `maxAgeMs` milliseconds
+ * (default: 30 days) and have reached a terminal state.  Active /
+ * non-terminal runs are never deleted.  Returns the count removed.
+ *
+ * Age is derived from the run id timestamp prefix (run_YYYYMMDD_…), so
+ * no disk read is needed for the fast path.  Only terminal runs whose
+ * `finishedAt` field confirms they completed are removed.
+ */
+export async function pruneOldRuns(
+    stateDir: string,
+    maxAgeMs = 30 * 24 * 60 * 60 * 1000,
+): Promise<number> {
+    const root = runsRoot(stateDir);
+    if (!existsSync(root)) return 0;
+    const entries = readdirSync(root, { withFileTypes: true })
+        .filter((e) => e.isDirectory());
+    const cutoff = Date.now() - maxAgeMs;
+    let removed = 0;
+    for (const entry of entries) {
+        // Quick age check via the embedded timestamp in the run id.
+        // Format: run_YYYYMMDD_HHMMSS_<random>
+        const m = entry.name.match(/^run_(\d{8})_(\d{6})_/);
+        if (!m) continue;
+        const [, date, time] = m;
+        const iso = `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}T${time.slice(0, 2)}:${time.slice(2, 4)}:${time.slice(4, 6)}Z`;
+        if (Date.parse(iso) >= cutoff) continue; // still within retention window
+
+        // Confirm terminal state before deleting.
+        const dir = runDir(stateDir, entry.name);
+        try {
+            const raw = await readFile(runFilePath(stateDir, entry.name), 'utf8');
+            const rec = JSON.parse(raw) as { status?: string };
+            const terminalStates = new Set(['completed', 'failed', 'cancelled', 'expired']);
+            if (!terminalStates.has(rec.status ?? '')) continue; // non-terminal, skip
+        } catch {
+            // Missing or corrupt run.json — safe to remove the directory.
+        }
+        try {
+            await rm(dir, { recursive: true, force: true });
+            removed++;
+        } catch {
+            // Best-effort: ignore individual removal errors.
+        }
+    }
+    return removed;
 }
 
 async function _atomicWriteJson(path: string, value: unknown): Promise<void> {
